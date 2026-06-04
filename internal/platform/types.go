@@ -9,6 +9,11 @@ type Session struct {
 	CSRF         string            `json:"csrf,omitempty"`
 	ExpiresAt    time.Time         `json:"expires_at"`
 	Fingerprint  string            `json:"fingerprint,omitempty"`
+	// AccountID is set by the scheduler/watcher before passing the
+	// session to backend methods. Not persisted — populated at use time
+	// so backends like the Twitch BrowserBackend can route per-account
+	// gRPC calls to the right sidecar tab.
+	AccountID string `json:"-"`
 }
 
 type Campaign struct {
@@ -43,8 +48,9 @@ type Progress struct {
 }
 
 type WatchHandle struct {
-	Channel  string
-	Internal any
+	Channel   string
+	AccountID string
+	Internal  any
 }
 
 type DeviceChallenge struct {

@@ -17,18 +17,23 @@ import (
 	"time"
 )
 
-// client is the low-level HTTP client. It handles header injection,
-// GraphQL persisted-query envelope marshaling, and response unmarshaling.
-//
-// Header set matches DevilXD/TwitchDropsMiner master @ 2026-06-04
-// (twitch.py::headers). Notably, Client-Integrity is NOT sent — the
-// upstream miner gets through Twitch's anti-bot checks with just the
-// device/session pair plus an Origin/Referer that match the web client.
+// gqlTransport sends a POST body to gql.twitch.tv/gql and returns the
+// raw response body + HTTP status. Two implementations:
+//   - direct via net/http (default; subject to Twitch's anti-bot
+//     integrity wall)
+//   - via the chromedp sidecar tab (browser-routed; bypasses integrity)
+type gqlTransport interface {
+	gqlPost(ctx context.Context, token, opName string, body []byte) ([]byte, int, error)
+}
+
+// client is the GraphQL client. It builds gql request envelopes and
+// hands them to a gqlTransport, then unmarshals the response.
 type client struct {
 	endpoint     string
 	homeURL      string
 	integrityURL string
 	http         *http.Client
+	transport    gqlTransport
 
 	// Per-process pseudo-browser identity.
 	//   deviceID  comes from the `unique_id` cookie Twitch sets when
@@ -49,26 +54,65 @@ type client struct {
 
 func newClient() *client {
 	jar, _ := cookiejar.New(nil)
-	return &client{
+	c := &client{
 		endpoint:     gqlEndpoint,
 		homeURL:      "https://www.twitch.tv",
 		integrityURL: "https://gql.twitch.tv/integrity",
 		http:         &http.Client{Timeout: 20 * time.Second, Jar: jar},
-		deviceID:     randomHex(16), // overwritten by bootstrap if Twitch sends unique_id
+		deviceID:     randomHex(16),
 		sessionID:    randomHex(16),
 	}
+	c.transport = httpTransport{c: c}
+	return c
 }
 
 func newTestClient(endpoint string) *client {
-	return &client{
+	c := &client{
 		endpoint:     endpoint,
 		homeURL:      "",
 		integrityURL: "",
 		http:         &http.Client{Timeout: 5 * time.Second},
 		deviceID:     randomHex(16),
 		sessionID:    randomHex(16),
-		idBootstrap:  true, // skip bootstrap in tests
+		idBootstrap:  true,
 	}
+	c.transport = httpTransport{c: c}
+	return c
+}
+
+// newBrowserClient builds a client whose gql calls go through the
+// chromedp sidecar tab keyed on accountID. Used by NewBrowserBackend.
+func newBrowserClient(send TwitchGQLSender, accountID string) *client {
+	c := &client{
+		endpoint:    gqlEndpoint,
+		http:        &http.Client{Timeout: 20 * time.Second},
+		deviceID:    randomHex(16),
+		sessionID:   randomHex(16),
+		idBootstrap: true,
+	}
+	c.transport = browserTransport{send: send, accountID: accountID}
+	return c
+}
+
+// TwitchGQLSender is the surface the browserTransport needs from the
+// sidecar gRPC client. Implemented by *browser.Client.
+type TwitchGQLSender interface {
+	TwitchGQL(ctx context.Context, accountID, opName string, body []byte) ([]byte, int, error)
+}
+
+type httpTransport struct{ c *client }
+
+func (t httpTransport) gqlPost(ctx context.Context, token, opName string, body []byte) ([]byte, int, error) {
+	return t.c.directPost(ctx, token, opName, body)
+}
+
+type browserTransport struct {
+	send      TwitchGQLSender
+	accountID string
+}
+
+func (t browserTransport) gqlPost(ctx context.Context, _ /*token, ignored*/, opName string, body []byte) ([]byte, int, error) {
+	return t.send.TwitchGQL(ctx, t.accountID, opName, body)
 }
 
 func randomHex(nBytes int) string {
@@ -196,12 +240,41 @@ func (c *client) gqlQuery(ctx context.Context, token, operationName, query strin
 }
 
 func (c *client) do(ctx context.Context, token, opName string, body []byte, out any) error {
+	rawBody, status, err := c.transport.gqlPost(ctx, token, opName, body)
+	if err != nil {
+		return err
+	}
+	if status >= 500 {
+		slog.Error("twitch gql 5xx", "op", opName, "status", status, "body", truncate(string(rawBody), 500))
+		return fmt.Errorf("twitch gql %s: status %d", opName, status)
+	}
+
+	var envelope gqlResponse
+	if err := json.Unmarshal(rawBody, &envelope); err != nil {
+		slog.Error("twitch gql decode failed", "op", opName, "status", status, "body", truncate(string(rawBody), 500))
+		return fmt.Errorf("decode gql response: %w", err)
+	}
+	if len(envelope.Errors) > 0 {
+		msgs := make([]string, 0, len(envelope.Errors))
+		for _, e := range envelope.Errors {
+			msgs = append(msgs, e.Message)
+		}
+		slog.Error("twitch gql application error", "op", opName, "status", status, "errors", msgs, "body", truncate(string(rawBody), 500))
+		return fmt.Errorf("twitch gql %s: %s", opName, strings.Join(msgs, "; "))
+	}
+	if out == nil {
+		return nil
+	}
+	return json.Unmarshal(envelope.Data, out)
+}
+
+// directPost is the original net/http path. Subject to Twitch's
+// anti-bot integrity check; useful for local testing or environments
+// without a sidecar.
+func (c *client) directPost(ctx context.Context, token, opName string, body []byte) ([]byte, int, error) {
 	c.bootstrapIdentity(ctx)
 
-	// DevilXD stores the OAuth access token in the cookie jar under
-	// `auth-token` so it goes out on both the Authorization header AND
-	// the Cookie header. Twitch's bot heuristics check the cookie.
-	if token != "" && c.http.Jar != nil {
+	if token != "" && c.http.Jar != nil && c.homeURL != "" {
 		if u, err := url.Parse(c.homeURL); err == nil && u != nil {
 			c.http.Jar.SetCookies(u, []*http.Cookie{{Name: "auth-token", Value: token, Domain: "twitch.tv", Path: "/"}})
 		}
@@ -209,7 +282,7 @@ func (c *client) do(ctx context.Context, token, opName string, body []byte, out 
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return nil, 0, err
 	}
 	c.setCommonHeaders(req, token)
 	req.Header.Set("Content-Type", "text/plain;charset=UTF-8")
@@ -221,31 +294,9 @@ func (c *client) do(ctx context.Context, token, opName string, body []byte, out 
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
-
-	rawBody, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 500 {
-		slog.Error("twitch gql 5xx", "op", opName, "status", resp.Status, "body", truncate(string(rawBody), 500))
-		return fmt.Errorf("twitch gql %s: %s", opName, resp.Status)
-	}
-
-	var envelope gqlResponse
-	if err := json.Unmarshal(rawBody, &envelope); err != nil {
-		slog.Error("twitch gql decode failed", "op", opName, "status", resp.Status, "body", truncate(string(rawBody), 500))
-		return fmt.Errorf("decode gql response: %w", err)
-	}
-	if len(envelope.Errors) > 0 {
-		msgs := make([]string, 0, len(envelope.Errors))
-		for _, e := range envelope.Errors {
-			msgs = append(msgs, e.Message)
-		}
-		slog.Error("twitch gql application error", "op", opName, "status", resp.Status, "errors", msgs, "body", truncate(string(rawBody), 500))
-		return fmt.Errorf("twitch gql %s: %s", opName, strings.Join(msgs, "; "))
-	}
-	if out == nil {
-		return nil
-	}
-	return json.Unmarshal(envelope.Data, out)
+	raw, _ := io.ReadAll(resp.Body)
+	return raw, resp.StatusCode, nil
 }

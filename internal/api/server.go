@@ -27,9 +27,14 @@ type Deps struct {
 	Registry        *platform.Registry
 	RootCtx         context.Context
 	BrowserClient   KickBrowserClient
+	TwitchBrowserClient TwitchBrowserClient
 	Registrar       KickChannelRegistrar
 	SettingsStore   *store.Settings
 	OnSettingsUpdate func()
+	// TwitchBrowser indicates the Twitch backend is the browser-routed
+	// variant; the login handler redirects to the cookie-paste page
+	// instead of the device-code flow when true.
+	TwitchBrowser bool
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -64,6 +69,14 @@ func NewRouter(d Deps) http.Handler {
 		registrar: d.Registrar,
 		reload:    d.Reload,
 	}
+	loginTwitchPaste := &loginTwitchPasteDeps{
+		q:        d.Q,
+		t:        d.Templates,
+		sm:       d.Session,
+		sessions: d.Sessions,
+		browser:  d.TwitchBrowserClient,
+		reload:   d.Reload,
+	}
 
 	withSession := func(h http.Handler) http.Handler { return d.Session.LoadAndSave(h) }
 
@@ -91,6 +104,10 @@ func NewRouter(d Deps) http.Handler {
 		}
 		switch acc.Platform {
 		case "twitch":
+			if d.TwitchBrowser {
+				http.Redirect(w, r, "/accounts/"+id+"/twitch/paste", http.StatusSeeOther)
+				return
+			}
 			loginTwitch.get(w, r)
 		case "kick":
 			loginKick.get(w, r)
@@ -98,6 +115,8 @@ func NewRouter(d Deps) http.Handler {
 			http.Error(w, "platform does not need login", http.StatusBadRequest)
 		}
 	})
+	authed.Get("/accounts/{id}/twitch/paste", loginTwitchPaste.get)
+	authed.Post("/accounts/{id}/twitch/paste", loginTwitchPaste.post)
 	authed.Get("/accounts/{id}/login/poll", loginTwitch.status)
 	authed.Post("/accounts/{id}/login", func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")

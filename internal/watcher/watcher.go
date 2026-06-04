@@ -39,6 +39,7 @@ func New(cfg Config) *Watcher {
 	if cfg.TickInterval == 0 {
 		cfg.TickInterval = time.Minute
 	}
+	cfg.Session.AccountID = cfg.AccountID
 	return &Watcher{cfg: cfg, state: StateIdle}
 }
 

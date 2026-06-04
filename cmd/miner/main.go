@@ -80,10 +80,10 @@ func run() error {
 
 	registry := platform.NewRegistry()
 	registry.Register(fake.New(fake.WithFastTime()))
-	registry.Register(twitch.New())
 
 	var browserClient *browser.Client
 	var kickBackend *kick.Backend
+	twitchBrowserEnabled := os.Getenv("MINER_TWITCH_BROWSER") == "1"
 	if cfg.BrowserURL != "" {
 		bc, err := browser.Dial(cfg.BrowserURL)
 		if err != nil {
@@ -96,6 +96,14 @@ func run() error {
 		logger.Info("kick backend enabled via sidecar", "url", cfg.BrowserURL)
 	} else {
 		logger.Info("MINER_BROWSER_URL empty, Kick backend disabled")
+	}
+
+	if twitchBrowserEnabled && browserClient != nil {
+		registry.Register(twitch.NewBrowserBackend(browserClient))
+		logger.Info("twitch backend: BROWSER (via sidecar)")
+	} else {
+		registry.Register(twitch.New())
+		logger.Info("twitch backend: HTTP (subject to Twitch integrity wall)")
 	}
 
 	resolver := func(accountID string) string {
@@ -221,9 +229,11 @@ func run() error {
 
 	// Avoid typed-nil-interface trap: only assign if the concrete pointer is non-nil.
 	var bc api.KickBrowserClient
+	var tbc api.TwitchBrowserClient
 	var reg api.KickChannelRegistrar
 	if browserClient != nil {
 		bc = browserClient  // *browser.Client satisfies KickBrowserClient
+		tbc = browserClient // *browser.Client satisfies TwitchBrowserClient
 		reg = kickBackend   // *kick.Backend satisfies KickChannelRegistrar
 	}
 
@@ -231,11 +241,13 @@ func run() error {
 		DB: db, Q: q, Templates: tmplSet, Session: sm,
 		Scheduler: sched, Reload: loadAndStart,
 		Sessions: sessions, Registry: registry,
-		RootCtx:          ctx,
-		BrowserClient:    bc,
-		Registrar:        reg,
-		SettingsStore:    settingsStore,
-		OnSettingsUpdate: onSettingsUpdate,
+		RootCtx:             ctx,
+		BrowserClient:       bc,
+		TwitchBrowserClient: tbc,
+		Registrar:           reg,
+		SettingsStore:       settingsStore,
+		OnSettingsUpdate:    onSettingsUpdate,
+		TwitchBrowser:       twitchBrowserEnabled && browserClient != nil,
 	}
 
 	srv := &http.Server{

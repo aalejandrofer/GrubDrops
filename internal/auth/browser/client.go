@@ -68,3 +68,38 @@ func (c *Client) Claim(ctx context.Context, s *pb.KickSession, benefitID string)
 	}
 	return resp.AlreadyClaimed, nil
 }
+
+// --- Twitch ---
+
+func (c *Client) TwitchAuthenticate(ctx context.Context, accountID string, s *pb.TwitchSession) (*pb.TwitchAuthenticateResponse, error) {
+	return c.api.TwitchAuthenticate(ctx, &pb.TwitchAuthenticateRequest{AccountId: accountID, Session: s})
+}
+
+func (c *Client) TwitchGQL(ctx context.Context, accountID, opName string, body []byte) ([]byte, int, error) {
+	resp, err := c.api.TwitchGQL(ctx, &pb.TwitchGQLRequest{AccountId: accountID, OperationName: opName, Body: body})
+	if err != nil {
+		return nil, 0, err
+	}
+	return resp.Body, int(resp.Status), nil
+}
+
+func (c *Client) TwitchOpenStream(ctx context.Context, accountID, channel string) (string, error) {
+	resp, err := c.api.TwitchOpenStream(ctx, &pb.TwitchOpenStreamRequest{AccountId: accountID, Channel: channel})
+	if err != nil {
+		return "", err
+	}
+	return resp.WatchHandle, nil
+}
+
+func (c *Client) TwitchHeartbeat(ctx context.Context, handle string) (bool, error) {
+	resp, err := c.api.TwitchHeartbeat(ctx, &pb.TwitchHeartbeatRequest{WatchHandle: handle})
+	if err != nil {
+		return false, err
+	}
+	return resp.Alive, nil
+}
+
+func (c *Client) TwitchStopWatch(ctx context.Context, handle string) error {
+	_, err := c.api.TwitchStopWatch(ctx, &pb.TwitchStopWatchRequest{WatchHandle: handle})
+	return err
+}

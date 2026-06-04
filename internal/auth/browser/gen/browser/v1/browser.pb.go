@@ -796,6 +796,580 @@ func (x *ClaimResponse) GetAlreadyClaimed() bool {
 	return false
 }
 
+type TwitchSession struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Cookies   []*Cookie `protobuf:"bytes,1,rep,name=cookies,proto3" json:"cookies,omitempty"`
+	UserAgent string    `protobuf:"bytes,2,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`
+}
+
+func (x *TwitchSession) Reset() {
+	*x = TwitchSession{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_browser_v1_browser_proto_msgTypes[15]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TwitchSession) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TwitchSession) ProtoMessage() {}
+
+func (x *TwitchSession) ProtoReflect() protoreflect.Message {
+	mi := &file_browser_v1_browser_proto_msgTypes[15]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TwitchSession.ProtoReflect.Descriptor instead.
+func (*TwitchSession) Descriptor() ([]byte, []int) {
+	return file_browser_v1_browser_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *TwitchSession) GetCookies() []*Cookie {
+	if x != nil {
+		return x.Cookies
+	}
+	return nil
+}
+
+func (x *TwitchSession) GetUserAgent() string {
+	if x != nil {
+		return x.UserAgent
+	}
+	return ""
+}
+
+type TwitchAuthenticateRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	AccountId string         `protobuf:"bytes,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	Session   *TwitchSession `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
+}
+
+func (x *TwitchAuthenticateRequest) Reset() {
+	*x = TwitchAuthenticateRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_browser_v1_browser_proto_msgTypes[16]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TwitchAuthenticateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TwitchAuthenticateRequest) ProtoMessage() {}
+
+func (x *TwitchAuthenticateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_browser_v1_browser_proto_msgTypes[16]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TwitchAuthenticateRequest.ProtoReflect.Descriptor instead.
+func (*TwitchAuthenticateRequest) Descriptor() ([]byte, []int) {
+	return file_browser_v1_browser_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *TwitchAuthenticateRequest) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
+func (x *TwitchAuthenticateRequest) GetSession() *TwitchSession {
+	if x != nil {
+		return x.Session
+	}
+	return nil
+}
+
+type TwitchAuthenticateResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Username string         `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
+	UserId   string         `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Session  *TwitchSession `protobuf:"bytes,3,opt,name=session,proto3" json:"session,omitempty"` // round-tripped, may have refreshed cookies
+}
+
+func (x *TwitchAuthenticateResponse) Reset() {
+	*x = TwitchAuthenticateResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_browser_v1_browser_proto_msgTypes[17]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TwitchAuthenticateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TwitchAuthenticateResponse) ProtoMessage() {}
+
+func (x *TwitchAuthenticateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_browser_v1_browser_proto_msgTypes[17]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TwitchAuthenticateResponse.ProtoReflect.Descriptor instead.
+func (*TwitchAuthenticateResponse) Descriptor() ([]byte, []int) {
+	return file_browser_v1_browser_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *TwitchAuthenticateResponse) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *TwitchAuthenticateResponse) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *TwitchAuthenticateResponse) GetSession() *TwitchSession {
+	if x != nil {
+		return x.Session
+	}
+	return nil
+}
+
+type TwitchGQLRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	AccountId     string `protobuf:"bytes,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	OperationName string `protobuf:"bytes,2,opt,name=operation_name,json=operationName,proto3" json:"operation_name,omitempty"`
+	// JSON body the miner already marshals. Sidecar evaluates fetch()
+	// from inside the twitch.tv tab and returns the raw response body.
+	Body []byte `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
+}
+
+func (x *TwitchGQLRequest) Reset() {
+	*x = TwitchGQLRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_browser_v1_browser_proto_msgTypes[18]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TwitchGQLRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TwitchGQLRequest) ProtoMessage() {}
+
+func (x *TwitchGQLRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_browser_v1_browser_proto_msgTypes[18]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TwitchGQLRequest.ProtoReflect.Descriptor instead.
+func (*TwitchGQLRequest) Descriptor() ([]byte, []int) {
+	return file_browser_v1_browser_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *TwitchGQLRequest) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
+func (x *TwitchGQLRequest) GetOperationName() string {
+	if x != nil {
+		return x.OperationName
+	}
+	return ""
+}
+
+func (x *TwitchGQLRequest) GetBody() []byte {
+	if x != nil {
+		return x.Body
+	}
+	return nil
+}
+
+type TwitchGQLResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Body   []byte `protobuf:"bytes,1,opt,name=body,proto3" json:"body,omitempty"`
+	Status int32  `protobuf:"varint,2,opt,name=status,proto3" json:"status,omitempty"`
+}
+
+func (x *TwitchGQLResponse) Reset() {
+	*x = TwitchGQLResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_browser_v1_browser_proto_msgTypes[19]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TwitchGQLResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TwitchGQLResponse) ProtoMessage() {}
+
+func (x *TwitchGQLResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_browser_v1_browser_proto_msgTypes[19]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TwitchGQLResponse.ProtoReflect.Descriptor instead.
+func (*TwitchGQLResponse) Descriptor() ([]byte, []int) {
+	return file_browser_v1_browser_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *TwitchGQLResponse) GetBody() []byte {
+	if x != nil {
+		return x.Body
+	}
+	return nil
+}
+
+func (x *TwitchGQLResponse) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+type TwitchOpenStreamRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	AccountId string `protobuf:"bytes,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	Channel   string `protobuf:"bytes,2,opt,name=channel,proto3" json:"channel,omitempty"`
+}
+
+func (x *TwitchOpenStreamRequest) Reset() {
+	*x = TwitchOpenStreamRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_browser_v1_browser_proto_msgTypes[20]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TwitchOpenStreamRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TwitchOpenStreamRequest) ProtoMessage() {}
+
+func (x *TwitchOpenStreamRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_browser_v1_browser_proto_msgTypes[20]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TwitchOpenStreamRequest.ProtoReflect.Descriptor instead.
+func (*TwitchOpenStreamRequest) Descriptor() ([]byte, []int) {
+	return file_browser_v1_browser_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *TwitchOpenStreamRequest) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
+func (x *TwitchOpenStreamRequest) GetChannel() string {
+	if x != nil {
+		return x.Channel
+	}
+	return ""
+}
+
+type TwitchOpenStreamResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	WatchHandle string `protobuf:"bytes,1,opt,name=watch_handle,json=watchHandle,proto3" json:"watch_handle,omitempty"`
+}
+
+func (x *TwitchOpenStreamResponse) Reset() {
+	*x = TwitchOpenStreamResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_browser_v1_browser_proto_msgTypes[21]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TwitchOpenStreamResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TwitchOpenStreamResponse) ProtoMessage() {}
+
+func (x *TwitchOpenStreamResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_browser_v1_browser_proto_msgTypes[21]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TwitchOpenStreamResponse.ProtoReflect.Descriptor instead.
+func (*TwitchOpenStreamResponse) Descriptor() ([]byte, []int) {
+	return file_browser_v1_browser_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *TwitchOpenStreamResponse) GetWatchHandle() string {
+	if x != nil {
+		return x.WatchHandle
+	}
+	return ""
+}
+
+type TwitchHeartbeatRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	WatchHandle string `protobuf:"bytes,1,opt,name=watch_handle,json=watchHandle,proto3" json:"watch_handle,omitempty"`
+}
+
+func (x *TwitchHeartbeatRequest) Reset() {
+	*x = TwitchHeartbeatRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_browser_v1_browser_proto_msgTypes[22]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TwitchHeartbeatRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TwitchHeartbeatRequest) ProtoMessage() {}
+
+func (x *TwitchHeartbeatRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_browser_v1_browser_proto_msgTypes[22]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TwitchHeartbeatRequest.ProtoReflect.Descriptor instead.
+func (*TwitchHeartbeatRequest) Descriptor() ([]byte, []int) {
+	return file_browser_v1_browser_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *TwitchHeartbeatRequest) GetWatchHandle() string {
+	if x != nil {
+		return x.WatchHandle
+	}
+	return ""
+}
+
+type TwitchHeartbeatResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Alive bool `protobuf:"varint,1,opt,name=alive,proto3" json:"alive,omitempty"`
+}
+
+func (x *TwitchHeartbeatResponse) Reset() {
+	*x = TwitchHeartbeatResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_browser_v1_browser_proto_msgTypes[23]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TwitchHeartbeatResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TwitchHeartbeatResponse) ProtoMessage() {}
+
+func (x *TwitchHeartbeatResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_browser_v1_browser_proto_msgTypes[23]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TwitchHeartbeatResponse.ProtoReflect.Descriptor instead.
+func (*TwitchHeartbeatResponse) Descriptor() ([]byte, []int) {
+	return file_browser_v1_browser_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *TwitchHeartbeatResponse) GetAlive() bool {
+	if x != nil {
+		return x.Alive
+	}
+	return false
+}
+
+type TwitchStopWatchRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	WatchHandle string `protobuf:"bytes,1,opt,name=watch_handle,json=watchHandle,proto3" json:"watch_handle,omitempty"`
+}
+
+func (x *TwitchStopWatchRequest) Reset() {
+	*x = TwitchStopWatchRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_browser_v1_browser_proto_msgTypes[24]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TwitchStopWatchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TwitchStopWatchRequest) ProtoMessage() {}
+
+func (x *TwitchStopWatchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_browser_v1_browser_proto_msgTypes[24]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TwitchStopWatchRequest.ProtoReflect.Descriptor instead.
+func (*TwitchStopWatchRequest) Descriptor() ([]byte, []int) {
+	return file_browser_v1_browser_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *TwitchStopWatchRequest) GetWatchHandle() string {
+	if x != nil {
+		return x.WatchHandle
+	}
+	return ""
+}
+
+type TwitchStopWatchResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *TwitchStopWatchResponse) Reset() {
+	*x = TwitchStopWatchResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_browser_v1_browser_proto_msgTypes[25]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *TwitchStopWatchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TwitchStopWatchResponse) ProtoMessage() {}
+
+func (x *TwitchStopWatchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_browser_v1_browser_proto_msgTypes[25]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TwitchStopWatchResponse.ProtoReflect.Descriptor instead.
+func (*TwitchStopWatchResponse) Descriptor() ([]byte, []int) {
+	return file_browser_v1_browser_proto_rawDescGZIP(), []int{25}
+}
+
 var File_browser_v1_browser_proto protoreflect.FileDescriptor
 
 var file_browser_v1_browser_proto_rawDesc = []byte{
@@ -872,7 +1446,61 @@ var file_browser_v1_browser_proto_rawDesc = []byte{
 	0x6c, 0x61, 0x69, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x27, 0x0a, 0x0f,
 	0x61, 0x6c, 0x72, 0x65, 0x61, 0x64, 0x79, 0x5f, 0x63, 0x6c, 0x61, 0x69, 0x6d, 0x65, 0x64, 0x18,
 	0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0e, 0x61, 0x6c, 0x72, 0x65, 0x61, 0x64, 0x79, 0x43, 0x6c,
-	0x61, 0x69, 0x6d, 0x65, 0x64, 0x32, 0xc5, 0x03, 0x0a, 0x07, 0x42, 0x72, 0x6f, 0x77, 0x73, 0x65,
+	0x61, 0x69, 0x6d, 0x65, 0x64, 0x22, 0x5c, 0x0a, 0x0d, 0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x53,
+	0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x2c, 0x0a, 0x07, 0x63, 0x6f, 0x6f, 0x6b, 0x69, 0x65,
+	0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x62, 0x72, 0x6f, 0x77, 0x73, 0x65,
+	0x72, 0x2e, 0x76, 0x31, 0x2e, 0x43, 0x6f, 0x6f, 0x6b, 0x69, 0x65, 0x52, 0x07, 0x63, 0x6f, 0x6f,
+	0x6b, 0x69, 0x65, 0x73, 0x12, 0x1d, 0x0a, 0x0a, 0x75, 0x73, 0x65, 0x72, 0x5f, 0x61, 0x67, 0x65,
+	0x6e, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x75, 0x73, 0x65, 0x72, 0x41, 0x67,
+	0x65, 0x6e, 0x74, 0x22, 0x6f, 0x0a, 0x19, 0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x41, 0x75, 0x74,
+	0x68, 0x65, 0x6e, 0x74, 0x69, 0x63, 0x61, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x12, 0x1d, 0x0a, 0x0a, 0x61, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x5f, 0x69, 0x64, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x61, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x49, 0x64, 0x12,
+	0x33, 0x0a, 0x07, 0x73, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b,
+	0x32, 0x19, 0x2e, 0x62, 0x72, 0x6f, 0x77, 0x73, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x77,
+	0x69, 0x74, 0x63, 0x68, 0x53, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x52, 0x07, 0x73, 0x65, 0x73,
+	0x73, 0x69, 0x6f, 0x6e, 0x22, 0x86, 0x01, 0x0a, 0x1a, 0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x41,
+	0x75, 0x74, 0x68, 0x65, 0x6e, 0x74, 0x69, 0x63, 0x61, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x6e, 0x73, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x75, 0x73, 0x65, 0x72, 0x6e, 0x61, 0x6d, 0x65, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x75, 0x73, 0x65, 0x72, 0x6e, 0x61, 0x6d, 0x65, 0x12,
+	0x17, 0x0a, 0x07, 0x75, 0x73, 0x65, 0x72, 0x5f, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x06, 0x75, 0x73, 0x65, 0x72, 0x49, 0x64, 0x12, 0x33, 0x0a, 0x07, 0x73, 0x65, 0x73, 0x73,
+	0x69, 0x6f, 0x6e, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x62, 0x72, 0x6f, 0x77,
+	0x73, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x53, 0x65, 0x73,
+	0x73, 0x69, 0x6f, 0x6e, 0x52, 0x07, 0x73, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x22, 0x6c, 0x0a,
+	0x10, 0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x47, 0x51, 0x4c, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x12, 0x1d, 0x0a, 0x0a, 0x61, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x5f, 0x69, 0x64, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x61, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x49, 0x64,
+	0x12, 0x25, 0x0a, 0x0e, 0x6f, 0x70, 0x65, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x5f, 0x6e, 0x61,
+	0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0d, 0x6f, 0x70, 0x65, 0x72, 0x61, 0x74,
+	0x69, 0x6f, 0x6e, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x62, 0x6f, 0x64, 0x79, 0x18,
+	0x03, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x04, 0x62, 0x6f, 0x64, 0x79, 0x22, 0x3f, 0x0a, 0x11, 0x54,
+	0x77, 0x69, 0x74, 0x63, 0x68, 0x47, 0x51, 0x4c, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65,
+	0x12, 0x12, 0x0a, 0x04, 0x62, 0x6f, 0x64, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x04,
+	0x62, 0x6f, 0x64, 0x79, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x02,
+	0x20, 0x01, 0x28, 0x05, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x22, 0x52, 0x0a, 0x17,
+	0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x4f, 0x70, 0x65, 0x6e, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1d, 0x0a, 0x0a, 0x61, 0x63, 0x63, 0x6f, 0x75,
+	0x6e, 0x74, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x61, 0x63, 0x63,
+	0x6f, 0x75, 0x6e, 0x74, 0x49, 0x64, 0x12, 0x18, 0x0a, 0x07, 0x63, 0x68, 0x61, 0x6e, 0x6e, 0x65,
+	0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x63, 0x68, 0x61, 0x6e, 0x6e, 0x65, 0x6c,
+	0x22, 0x3d, 0x0a, 0x18, 0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x4f, 0x70, 0x65, 0x6e, 0x53, 0x74,
+	0x72, 0x65, 0x61, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x21, 0x0a, 0x0c,
+	0x77, 0x61, 0x74, 0x63, 0x68, 0x5f, 0x68, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x0b, 0x77, 0x61, 0x74, 0x63, 0x68, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x22,
+	0x3b, 0x0a, 0x16, 0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x48, 0x65, 0x61, 0x72, 0x74, 0x62, 0x65,
+	0x61, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x21, 0x0a, 0x0c, 0x77, 0x61, 0x74,
+	0x63, 0x68, 0x5f, 0x68, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x0b, 0x77, 0x61, 0x74, 0x63, 0x68, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x22, 0x2f, 0x0a, 0x17,
+	0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x48, 0x65, 0x61, 0x72, 0x74, 0x62, 0x65, 0x61, 0x74, 0x52,
+	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x61, 0x6c, 0x69, 0x76, 0x65,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x05, 0x61, 0x6c, 0x69, 0x76, 0x65, 0x22, 0x3b, 0x0a,
+	0x16, 0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x53, 0x74, 0x6f, 0x70, 0x57, 0x61, 0x74, 0x63, 0x68,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x21, 0x0a, 0x0c, 0x77, 0x61, 0x74, 0x63, 0x68,
+	0x5f, 0x68, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x77,
+	0x61, 0x74, 0x63, 0x68, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x22, 0x19, 0x0a, 0x17, 0x54, 0x77,
+	0x69, 0x74, 0x63, 0x68, 0x53, 0x74, 0x6f, 0x70, 0x57, 0x61, 0x74, 0x63, 0x68, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x32, 0x8b, 0x07, 0x0a, 0x07, 0x42, 0x72, 0x6f, 0x77, 0x73, 0x65,
 	0x72, 0x12, 0x51, 0x0a, 0x0c, 0x41, 0x75, 0x74, 0x68, 0x65, 0x6e, 0x74, 0x69, 0x63, 0x61, 0x74,
 	0x65, 0x12, 0x1f, 0x2e, 0x62, 0x72, 0x6f, 0x77, 0x73, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x41,
 	0x75, 0x74, 0x68, 0x65, 0x6e, 0x74, 0x69, 0x63, 0x61, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65,
@@ -900,14 +1528,42 @@ var file_browser_v1_browser_proto_rawDesc = []byte{
 	0x3c, 0x0a, 0x05, 0x43, 0x6c, 0x61, 0x69, 0x6d, 0x12, 0x18, 0x2e, 0x62, 0x72, 0x6f, 0x77, 0x73,
 	0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x43, 0x6c, 0x61, 0x69, 0x6d, 0x52, 0x65, 0x71, 0x75, 0x65,
 	0x73, 0x74, 0x1a, 0x19, 0x2e, 0x62, 0x72, 0x6f, 0x77, 0x73, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e,
-	0x43, 0x6c, 0x61, 0x69, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x42, 0x5c, 0x5a,
-	0x5a, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x63, 0x68, 0x61, 0x6e,
-	0x6f, 0x2d, 0x66, 0x65, 0x72, 0x6e, 0x61, 0x6e, 0x64, 0x65, 0x7a, 0x2f, 0x72, 0x75, 0x73, 0x74,
-	0x2d, 0x64, 0x72, 0x6f, 0x70, 0x73, 0x2d, 0x6d, 0x69, 0x6e, 0x65, 0x72, 0x2f, 0x69, 0x6e, 0x74,
-	0x65, 0x72, 0x6e, 0x61, 0x6c, 0x2f, 0x61, 0x75, 0x74, 0x68, 0x2f, 0x62, 0x72, 0x6f, 0x77, 0x73,
-	0x65, 0x72, 0x2f, 0x67, 0x65, 0x6e, 0x2f, 0x62, 0x72, 0x6f, 0x77, 0x73, 0x65, 0x72, 0x2f, 0x76,
-	0x31, 0x3b, 0x62, 0x72, 0x6f, 0x77, 0x73, 0x65, 0x72, 0x76, 0x31, 0x62, 0x06, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x33,
+	0x43, 0x6c, 0x61, 0x69, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x63, 0x0a,
+	0x12, 0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x41, 0x75, 0x74, 0x68, 0x65, 0x6e, 0x74, 0x69, 0x63,
+	0x61, 0x74, 0x65, 0x12, 0x25, 0x2e, 0x62, 0x72, 0x6f, 0x77, 0x73, 0x65, 0x72, 0x2e, 0x76, 0x31,
+	0x2e, 0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x41, 0x75, 0x74, 0x68, 0x65, 0x6e, 0x74, 0x69, 0x63,
+	0x61, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x26, 0x2e, 0x62, 0x72, 0x6f,
+	0x77, 0x73, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x41, 0x75,
+	0x74, 0x68, 0x65, 0x6e, 0x74, 0x69, 0x63, 0x61, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
+	0x73, 0x65, 0x12, 0x48, 0x0a, 0x09, 0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x47, 0x51, 0x4c, 0x12,
+	0x1c, 0x2e, 0x62, 0x72, 0x6f, 0x77, 0x73, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x77, 0x69,
+	0x74, 0x63, 0x68, 0x47, 0x51, 0x4c, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1d, 0x2e,
+	0x62, 0x72, 0x6f, 0x77, 0x73, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x77, 0x69, 0x74, 0x63,
+	0x68, 0x47, 0x51, 0x4c, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x5d, 0x0a, 0x10,
+	0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x4f, 0x70, 0x65, 0x6e, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d,
+	0x12, 0x23, 0x2e, 0x62, 0x72, 0x6f, 0x77, 0x73, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x77,
+	0x69, 0x74, 0x63, 0x68, 0x4f, 0x70, 0x65, 0x6e, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x24, 0x2e, 0x62, 0x72, 0x6f, 0x77, 0x73, 0x65, 0x72, 0x2e,
+	0x76, 0x31, 0x2e, 0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x4f, 0x70, 0x65, 0x6e, 0x53, 0x74, 0x72,
+	0x65, 0x61, 0x6d, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x5a, 0x0a, 0x0f, 0x54,
+	0x77, 0x69, 0x74, 0x63, 0x68, 0x48, 0x65, 0x61, 0x72, 0x74, 0x62, 0x65, 0x61, 0x74, 0x12, 0x22,
+	0x2e, 0x62, 0x72, 0x6f, 0x77, 0x73, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x77, 0x69, 0x74,
+	0x63, 0x68, 0x48, 0x65, 0x61, 0x72, 0x74, 0x62, 0x65, 0x61, 0x74, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x1a, 0x23, 0x2e, 0x62, 0x72, 0x6f, 0x77, 0x73, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e,
+	0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x48, 0x65, 0x61, 0x72, 0x74, 0x62, 0x65, 0x61, 0x74, 0x52,
+	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x5a, 0x0a, 0x0f, 0x54, 0x77, 0x69, 0x74, 0x63,
+	0x68, 0x53, 0x74, 0x6f, 0x70, 0x57, 0x61, 0x74, 0x63, 0x68, 0x12, 0x22, 0x2e, 0x62, 0x72, 0x6f,
+	0x77, 0x73, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x77, 0x69, 0x74, 0x63, 0x68, 0x53, 0x74,
+	0x6f, 0x70, 0x57, 0x61, 0x74, 0x63, 0x68, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x23,
+	0x2e, 0x62, 0x72, 0x6f, 0x77, 0x73, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x77, 0x69, 0x74,
+	0x63, 0x68, 0x53, 0x74, 0x6f, 0x70, 0x57, 0x61, 0x74, 0x63, 0x68, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x6e, 0x73, 0x65, 0x42, 0x5a, 0x5a, 0x58, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f,
+	0x6d, 0x2f, 0x61, 0x61, 0x6c, 0x65, 0x6a, 0x61, 0x6e, 0x64, 0x72, 0x6f, 0x66, 0x65, 0x72, 0x2f,
+	0x72, 0x75, 0x73, 0x74, 0x2d, 0x64, 0x72, 0x6f, 0x70, 0x73, 0x2d, 0x6d, 0x69, 0x6e, 0x65, 0x72,
+	0x2f, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x2f, 0x61, 0x75, 0x74, 0x68, 0x2f, 0x62,
+	0x72, 0x6f, 0x77, 0x73, 0x65, 0x72, 0x2f, 0x67, 0x65, 0x6e, 0x2f, 0x62, 0x72, 0x6f, 0x77, 0x73,
+	0x65, 0x72, 0x2f, 0x76, 0x31, 0x3b, 0x62, 0x72, 0x6f, 0x77, 0x73, 0x65, 0x72, 0x76, 0x31, 0x62,
+	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -922,23 +1578,34 @@ func file_browser_v1_browser_proto_rawDescGZIP() []byte {
 	return file_browser_v1_browser_proto_rawDescData
 }
 
-var file_browser_v1_browser_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_browser_v1_browser_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_browser_v1_browser_proto_goTypes = []any{
-	(*Cookie)(nil),               // 0: browser.v1.Cookie
-	(*KickSession)(nil),          // 1: browser.v1.KickSession
-	(*AuthenticateRequest)(nil),  // 2: browser.v1.AuthenticateRequest
-	(*AuthenticateResponse)(nil), // 3: browser.v1.AuthenticateResponse
-	(*StartWatchRequest)(nil),    // 4: browser.v1.StartWatchRequest
-	(*StartWatchResponse)(nil),   // 5: browser.v1.StartWatchResponse
-	(*HeartbeatRequest)(nil),     // 6: browser.v1.HeartbeatRequest
-	(*HeartbeatResponse)(nil),    // 7: browser.v1.HeartbeatResponse
-	(*StopWatchRequest)(nil),     // 8: browser.v1.StopWatchRequest
-	(*StopWatchResponse)(nil),    // 9: browser.v1.StopWatchResponse
-	(*DropProgress)(nil),         // 10: browser.v1.DropProgress
-	(*InventoryRequest)(nil),     // 11: browser.v1.InventoryRequest
-	(*InventoryResponse)(nil),    // 12: browser.v1.InventoryResponse
-	(*ClaimRequest)(nil),         // 13: browser.v1.ClaimRequest
-	(*ClaimResponse)(nil),        // 14: browser.v1.ClaimResponse
+	(*Cookie)(nil),                     // 0: browser.v1.Cookie
+	(*KickSession)(nil),                // 1: browser.v1.KickSession
+	(*AuthenticateRequest)(nil),        // 2: browser.v1.AuthenticateRequest
+	(*AuthenticateResponse)(nil),       // 3: browser.v1.AuthenticateResponse
+	(*StartWatchRequest)(nil),          // 4: browser.v1.StartWatchRequest
+	(*StartWatchResponse)(nil),         // 5: browser.v1.StartWatchResponse
+	(*HeartbeatRequest)(nil),           // 6: browser.v1.HeartbeatRequest
+	(*HeartbeatResponse)(nil),          // 7: browser.v1.HeartbeatResponse
+	(*StopWatchRequest)(nil),           // 8: browser.v1.StopWatchRequest
+	(*StopWatchResponse)(nil),          // 9: browser.v1.StopWatchResponse
+	(*DropProgress)(nil),               // 10: browser.v1.DropProgress
+	(*InventoryRequest)(nil),           // 11: browser.v1.InventoryRequest
+	(*InventoryResponse)(nil),          // 12: browser.v1.InventoryResponse
+	(*ClaimRequest)(nil),               // 13: browser.v1.ClaimRequest
+	(*ClaimResponse)(nil),              // 14: browser.v1.ClaimResponse
+	(*TwitchSession)(nil),              // 15: browser.v1.TwitchSession
+	(*TwitchAuthenticateRequest)(nil),  // 16: browser.v1.TwitchAuthenticateRequest
+	(*TwitchAuthenticateResponse)(nil), // 17: browser.v1.TwitchAuthenticateResponse
+	(*TwitchGQLRequest)(nil),           // 18: browser.v1.TwitchGQLRequest
+	(*TwitchGQLResponse)(nil),          // 19: browser.v1.TwitchGQLResponse
+	(*TwitchOpenStreamRequest)(nil),    // 20: browser.v1.TwitchOpenStreamRequest
+	(*TwitchOpenStreamResponse)(nil),   // 21: browser.v1.TwitchOpenStreamResponse
+	(*TwitchHeartbeatRequest)(nil),     // 22: browser.v1.TwitchHeartbeatRequest
+	(*TwitchHeartbeatResponse)(nil),    // 23: browser.v1.TwitchHeartbeatResponse
+	(*TwitchStopWatchRequest)(nil),     // 24: browser.v1.TwitchStopWatchRequest
+	(*TwitchStopWatchResponse)(nil),    // 25: browser.v1.TwitchStopWatchResponse
 }
 var file_browser_v1_browser_proto_depIdxs = []int32{
 	0,  // 0: browser.v1.KickSession.cookies:type_name -> browser.v1.Cookie
@@ -948,23 +1615,36 @@ var file_browser_v1_browser_proto_depIdxs = []int32{
 	1,  // 4: browser.v1.InventoryRequest.session:type_name -> browser.v1.KickSession
 	10, // 5: browser.v1.InventoryResponse.drops:type_name -> browser.v1.DropProgress
 	1,  // 6: browser.v1.ClaimRequest.session:type_name -> browser.v1.KickSession
-	2,  // 7: browser.v1.Browser.Authenticate:input_type -> browser.v1.AuthenticateRequest
-	4,  // 8: browser.v1.Browser.StartWatch:input_type -> browser.v1.StartWatchRequest
-	6,  // 9: browser.v1.Browser.Heartbeat:input_type -> browser.v1.HeartbeatRequest
-	8,  // 10: browser.v1.Browser.StopWatch:input_type -> browser.v1.StopWatchRequest
-	11, // 11: browser.v1.Browser.Inventory:input_type -> browser.v1.InventoryRequest
-	13, // 12: browser.v1.Browser.Claim:input_type -> browser.v1.ClaimRequest
-	3,  // 13: browser.v1.Browser.Authenticate:output_type -> browser.v1.AuthenticateResponse
-	5,  // 14: browser.v1.Browser.StartWatch:output_type -> browser.v1.StartWatchResponse
-	7,  // 15: browser.v1.Browser.Heartbeat:output_type -> browser.v1.HeartbeatResponse
-	9,  // 16: browser.v1.Browser.StopWatch:output_type -> browser.v1.StopWatchResponse
-	12, // 17: browser.v1.Browser.Inventory:output_type -> browser.v1.InventoryResponse
-	14, // 18: browser.v1.Browser.Claim:output_type -> browser.v1.ClaimResponse
-	13, // [13:19] is the sub-list for method output_type
-	7,  // [7:13] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	0,  // 7: browser.v1.TwitchSession.cookies:type_name -> browser.v1.Cookie
+	15, // 8: browser.v1.TwitchAuthenticateRequest.session:type_name -> browser.v1.TwitchSession
+	15, // 9: browser.v1.TwitchAuthenticateResponse.session:type_name -> browser.v1.TwitchSession
+	2,  // 10: browser.v1.Browser.Authenticate:input_type -> browser.v1.AuthenticateRequest
+	4,  // 11: browser.v1.Browser.StartWatch:input_type -> browser.v1.StartWatchRequest
+	6,  // 12: browser.v1.Browser.Heartbeat:input_type -> browser.v1.HeartbeatRequest
+	8,  // 13: browser.v1.Browser.StopWatch:input_type -> browser.v1.StopWatchRequest
+	11, // 14: browser.v1.Browser.Inventory:input_type -> browser.v1.InventoryRequest
+	13, // 15: browser.v1.Browser.Claim:input_type -> browser.v1.ClaimRequest
+	16, // 16: browser.v1.Browser.TwitchAuthenticate:input_type -> browser.v1.TwitchAuthenticateRequest
+	18, // 17: browser.v1.Browser.TwitchGQL:input_type -> browser.v1.TwitchGQLRequest
+	20, // 18: browser.v1.Browser.TwitchOpenStream:input_type -> browser.v1.TwitchOpenStreamRequest
+	22, // 19: browser.v1.Browser.TwitchHeartbeat:input_type -> browser.v1.TwitchHeartbeatRequest
+	24, // 20: browser.v1.Browser.TwitchStopWatch:input_type -> browser.v1.TwitchStopWatchRequest
+	3,  // 21: browser.v1.Browser.Authenticate:output_type -> browser.v1.AuthenticateResponse
+	5,  // 22: browser.v1.Browser.StartWatch:output_type -> browser.v1.StartWatchResponse
+	7,  // 23: browser.v1.Browser.Heartbeat:output_type -> browser.v1.HeartbeatResponse
+	9,  // 24: browser.v1.Browser.StopWatch:output_type -> browser.v1.StopWatchResponse
+	12, // 25: browser.v1.Browser.Inventory:output_type -> browser.v1.InventoryResponse
+	14, // 26: browser.v1.Browser.Claim:output_type -> browser.v1.ClaimResponse
+	17, // 27: browser.v1.Browser.TwitchAuthenticate:output_type -> browser.v1.TwitchAuthenticateResponse
+	19, // 28: browser.v1.Browser.TwitchGQL:output_type -> browser.v1.TwitchGQLResponse
+	21, // 29: browser.v1.Browser.TwitchOpenStream:output_type -> browser.v1.TwitchOpenStreamResponse
+	23, // 30: browser.v1.Browser.TwitchHeartbeat:output_type -> browser.v1.TwitchHeartbeatResponse
+	25, // 31: browser.v1.Browser.TwitchStopWatch:output_type -> browser.v1.TwitchStopWatchResponse
+	21, // [21:32] is the sub-list for method output_type
+	10, // [10:21] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_browser_v1_browser_proto_init() }
@@ -1153,6 +1833,138 @@ func file_browser_v1_browser_proto_init() {
 				return nil
 			}
 		}
+		file_browser_v1_browser_proto_msgTypes[15].Exporter = func(v any, i int) any {
+			switch v := v.(*TwitchSession); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_browser_v1_browser_proto_msgTypes[16].Exporter = func(v any, i int) any {
+			switch v := v.(*TwitchAuthenticateRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_browser_v1_browser_proto_msgTypes[17].Exporter = func(v any, i int) any {
+			switch v := v.(*TwitchAuthenticateResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_browser_v1_browser_proto_msgTypes[18].Exporter = func(v any, i int) any {
+			switch v := v.(*TwitchGQLRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_browser_v1_browser_proto_msgTypes[19].Exporter = func(v any, i int) any {
+			switch v := v.(*TwitchGQLResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_browser_v1_browser_proto_msgTypes[20].Exporter = func(v any, i int) any {
+			switch v := v.(*TwitchOpenStreamRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_browser_v1_browser_proto_msgTypes[21].Exporter = func(v any, i int) any {
+			switch v := v.(*TwitchOpenStreamResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_browser_v1_browser_proto_msgTypes[22].Exporter = func(v any, i int) any {
+			switch v := v.(*TwitchHeartbeatRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_browser_v1_browser_proto_msgTypes[23].Exporter = func(v any, i int) any {
+			switch v := v.(*TwitchHeartbeatResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_browser_v1_browser_proto_msgTypes[24].Exporter = func(v any, i int) any {
+			switch v := v.(*TwitchStopWatchRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_browser_v1_browser_proto_msgTypes[25].Exporter = func(v any, i int) any {
+			switch v := v.(*TwitchStopWatchResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1160,7 +1972,7 @@ func file_browser_v1_browser_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_browser_v1_browser_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

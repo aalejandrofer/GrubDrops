@@ -19,24 +19,38 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Browser_Authenticate_FullMethodName = "/browser.v1.Browser/Authenticate"
-	Browser_StartWatch_FullMethodName   = "/browser.v1.Browser/StartWatch"
-	Browser_Heartbeat_FullMethodName    = "/browser.v1.Browser/Heartbeat"
-	Browser_StopWatch_FullMethodName    = "/browser.v1.Browser/StopWatch"
-	Browser_Inventory_FullMethodName    = "/browser.v1.Browser/Inventory"
-	Browser_Claim_FullMethodName        = "/browser.v1.Browser/Claim"
+	Browser_Authenticate_FullMethodName       = "/browser.v1.Browser/Authenticate"
+	Browser_StartWatch_FullMethodName         = "/browser.v1.Browser/StartWatch"
+	Browser_Heartbeat_FullMethodName          = "/browser.v1.Browser/Heartbeat"
+	Browser_StopWatch_FullMethodName          = "/browser.v1.Browser/StopWatch"
+	Browser_Inventory_FullMethodName          = "/browser.v1.Browser/Inventory"
+	Browser_Claim_FullMethodName              = "/browser.v1.Browser/Claim"
+	Browser_TwitchAuthenticate_FullMethodName = "/browser.v1.Browser/TwitchAuthenticate"
+	Browser_TwitchGQL_FullMethodName          = "/browser.v1.Browser/TwitchGQL"
+	Browser_TwitchOpenStream_FullMethodName   = "/browser.v1.Browser/TwitchOpenStream"
+	Browser_TwitchHeartbeat_FullMethodName    = "/browser.v1.Browser/TwitchHeartbeat"
+	Browser_TwitchStopWatch_FullMethodName    = "/browser.v1.Browser/TwitchStopWatch"
 )
 
 // BrowserClient is the client API for Browser service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BrowserClient interface {
+	// Kick RPCs (unchanged).
 	Authenticate(ctx context.Context, in *AuthenticateRequest, opts ...grpc.CallOption) (*AuthenticateResponse, error)
 	StartWatch(ctx context.Context, in *StartWatchRequest, opts ...grpc.CallOption) (*StartWatchResponse, error)
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 	StopWatch(ctx context.Context, in *StopWatchRequest, opts ...grpc.CallOption) (*StopWatchResponse, error)
 	Inventory(ctx context.Context, in *InventoryRequest, opts ...grpc.CallOption) (*InventoryResponse, error)
 	Claim(ctx context.Context, in *ClaimRequest, opts ...grpc.CallOption) (*ClaimResponse, error)
+	// Twitch RPCs. The sidecar keeps a logged-in twitch.tv tab open per
+	// account and proxies GraphQL calls through it so Twitch's anti-bot
+	// integrity check sees a real browser context.
+	TwitchAuthenticate(ctx context.Context, in *TwitchAuthenticateRequest, opts ...grpc.CallOption) (*TwitchAuthenticateResponse, error)
+	TwitchGQL(ctx context.Context, in *TwitchGQLRequest, opts ...grpc.CallOption) (*TwitchGQLResponse, error)
+	TwitchOpenStream(ctx context.Context, in *TwitchOpenStreamRequest, opts ...grpc.CallOption) (*TwitchOpenStreamResponse, error)
+	TwitchHeartbeat(ctx context.Context, in *TwitchHeartbeatRequest, opts ...grpc.CallOption) (*TwitchHeartbeatResponse, error)
+	TwitchStopWatch(ctx context.Context, in *TwitchStopWatchRequest, opts ...grpc.CallOption) (*TwitchStopWatchResponse, error)
 }
 
 type browserClient struct {
@@ -107,16 +121,75 @@ func (c *browserClient) Claim(ctx context.Context, in *ClaimRequest, opts ...grp
 	return out, nil
 }
 
+func (c *browserClient) TwitchAuthenticate(ctx context.Context, in *TwitchAuthenticateRequest, opts ...grpc.CallOption) (*TwitchAuthenticateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TwitchAuthenticateResponse)
+	err := c.cc.Invoke(ctx, Browser_TwitchAuthenticate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *browserClient) TwitchGQL(ctx context.Context, in *TwitchGQLRequest, opts ...grpc.CallOption) (*TwitchGQLResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TwitchGQLResponse)
+	err := c.cc.Invoke(ctx, Browser_TwitchGQL_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *browserClient) TwitchOpenStream(ctx context.Context, in *TwitchOpenStreamRequest, opts ...grpc.CallOption) (*TwitchOpenStreamResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TwitchOpenStreamResponse)
+	err := c.cc.Invoke(ctx, Browser_TwitchOpenStream_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *browserClient) TwitchHeartbeat(ctx context.Context, in *TwitchHeartbeatRequest, opts ...grpc.CallOption) (*TwitchHeartbeatResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TwitchHeartbeatResponse)
+	err := c.cc.Invoke(ctx, Browser_TwitchHeartbeat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *browserClient) TwitchStopWatch(ctx context.Context, in *TwitchStopWatchRequest, opts ...grpc.CallOption) (*TwitchStopWatchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TwitchStopWatchResponse)
+	err := c.cc.Invoke(ctx, Browser_TwitchStopWatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BrowserServer is the server API for Browser service.
 // All implementations must embed UnimplementedBrowserServer
 // for forward compatibility.
 type BrowserServer interface {
+	// Kick RPCs (unchanged).
 	Authenticate(context.Context, *AuthenticateRequest) (*AuthenticateResponse, error)
 	StartWatch(context.Context, *StartWatchRequest) (*StartWatchResponse, error)
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
 	StopWatch(context.Context, *StopWatchRequest) (*StopWatchResponse, error)
 	Inventory(context.Context, *InventoryRequest) (*InventoryResponse, error)
 	Claim(context.Context, *ClaimRequest) (*ClaimResponse, error)
+	// Twitch RPCs. The sidecar keeps a logged-in twitch.tv tab open per
+	// account and proxies GraphQL calls through it so Twitch's anti-bot
+	// integrity check sees a real browser context.
+	TwitchAuthenticate(context.Context, *TwitchAuthenticateRequest) (*TwitchAuthenticateResponse, error)
+	TwitchGQL(context.Context, *TwitchGQLRequest) (*TwitchGQLResponse, error)
+	TwitchOpenStream(context.Context, *TwitchOpenStreamRequest) (*TwitchOpenStreamResponse, error)
+	TwitchHeartbeat(context.Context, *TwitchHeartbeatRequest) (*TwitchHeartbeatResponse, error)
+	TwitchStopWatch(context.Context, *TwitchStopWatchRequest) (*TwitchStopWatchResponse, error)
 	mustEmbedUnimplementedBrowserServer()
 }
 
@@ -144,6 +217,21 @@ func (UnimplementedBrowserServer) Inventory(context.Context, *InventoryRequest) 
 }
 func (UnimplementedBrowserServer) Claim(context.Context, *ClaimRequest) (*ClaimResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Claim not implemented")
+}
+func (UnimplementedBrowserServer) TwitchAuthenticate(context.Context, *TwitchAuthenticateRequest) (*TwitchAuthenticateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TwitchAuthenticate not implemented")
+}
+func (UnimplementedBrowserServer) TwitchGQL(context.Context, *TwitchGQLRequest) (*TwitchGQLResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TwitchGQL not implemented")
+}
+func (UnimplementedBrowserServer) TwitchOpenStream(context.Context, *TwitchOpenStreamRequest) (*TwitchOpenStreamResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TwitchOpenStream not implemented")
+}
+func (UnimplementedBrowserServer) TwitchHeartbeat(context.Context, *TwitchHeartbeatRequest) (*TwitchHeartbeatResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TwitchHeartbeat not implemented")
+}
+func (UnimplementedBrowserServer) TwitchStopWatch(context.Context, *TwitchStopWatchRequest) (*TwitchStopWatchResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TwitchStopWatch not implemented")
 }
 func (UnimplementedBrowserServer) mustEmbedUnimplementedBrowserServer() {}
 func (UnimplementedBrowserServer) testEmbeddedByValue()                 {}
@@ -274,6 +362,96 @@ func _Browser_Claim_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Browser_TwitchAuthenticate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TwitchAuthenticateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BrowserServer).TwitchAuthenticate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Browser_TwitchAuthenticate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BrowserServer).TwitchAuthenticate(ctx, req.(*TwitchAuthenticateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Browser_TwitchGQL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TwitchGQLRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BrowserServer).TwitchGQL(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Browser_TwitchGQL_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BrowserServer).TwitchGQL(ctx, req.(*TwitchGQLRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Browser_TwitchOpenStream_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TwitchOpenStreamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BrowserServer).TwitchOpenStream(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Browser_TwitchOpenStream_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BrowserServer).TwitchOpenStream(ctx, req.(*TwitchOpenStreamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Browser_TwitchHeartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TwitchHeartbeatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BrowserServer).TwitchHeartbeat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Browser_TwitchHeartbeat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BrowserServer).TwitchHeartbeat(ctx, req.(*TwitchHeartbeatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Browser_TwitchStopWatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TwitchStopWatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BrowserServer).TwitchStopWatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Browser_TwitchStopWatch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BrowserServer).TwitchStopWatch(ctx, req.(*TwitchStopWatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Browser_ServiceDesc is the grpc.ServiceDesc for Browser service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -304,6 +482,26 @@ var Browser_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Claim",
 			Handler:    _Browser_Claim_Handler,
+		},
+		{
+			MethodName: "TwitchAuthenticate",
+			Handler:    _Browser_TwitchAuthenticate_Handler,
+		},
+		{
+			MethodName: "TwitchGQL",
+			Handler:    _Browser_TwitchGQL_Handler,
+		},
+		{
+			MethodName: "TwitchOpenStream",
+			Handler:    _Browser_TwitchOpenStream_Handler,
+		},
+		{
+			MethodName: "TwitchHeartbeat",
+			Handler:    _Browser_TwitchHeartbeat_Handler,
+		},
+		{
+			MethodName: "TwitchStopWatch",
+			Handler:    _Browser_TwitchStopWatch_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

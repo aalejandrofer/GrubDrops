@@ -1,0 +1,43 @@
+{{define "login_twitch_paste.html"}}{{template "layout" .}}{{end}}
+
+{{define "title"}}Twitch login · rust-drops-miner{{end}}
+
+{{define "content"}}
+{{with .Page}}
+<div class="auth-wrap wide">
+  <div class="auth-card">
+    <div class="kicker">// twitch · cookie paste</div>
+    <h1>Authorize {{.DisplayName}}</h1>
+    <p class="intro">Twitch's anti-bot integrity check blocks pure-HTTP drops mining. The sidecar's browser tab serves as the trust anchor — paste your browser cookies once and the sidecar replays them on every gql call.</p>
+    <ol class="steps">
+      <li>Open <code>twitch.tv</code> in any browser and sign in.</li>
+      <li>Open DevTools → Application → Cookies → <code>https://www.twitch.tv</code>.</li>
+      <li>Copy at minimum <code>auth-token</code>. <code>persistent</code>, <code>server_session_id</code>, <code>twilight-user</code>, <code>unique_id</code>, <code>login</code>, <code>name</code> are optional but help Twitch treat the session as a returning user.</li>
+      <li>Paste below.</li>
+    </ol>
+  </div>
+  {{end}}
+  {{if .Flash}}<div style="max-width:620px;margin:0 auto;padding:0 24px;"><div class="err">{{.Flash}}</div></div>{{end}}
+  {{with .Page}}
+  <div class="auth-card" style="margin-top: 18px;">
+    <form method="post" action="/accounts/{{.AccountID}}/twitch/paste">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <label>auth-token <span style="color:var(--accent)">(required)</span><input type="text" name="auth-token" required autocomplete="off"></label>
+      <label>persistent <span style="color:var(--muted);font-weight:400">(optional)</span><input type="text" name="persistent" autocomplete="off"></label>
+      <label>server_session_id <span style="color:var(--muted);font-weight:400">(optional)</span><input type="text" name="server_session_id" autocomplete="off"></label>
+      <label>twilight-user <span style="color:var(--muted);font-weight:400">(optional)</span><input type="text" name="twilight-user" autocomplete="off"></label>
+      <label>unique_id <span style="color:var(--muted);font-weight:400">(optional)</span><input type="text" name="unique_id" autocomplete="off"></label>
+      <label>login <span style="color:var(--muted);font-weight:400">(optional)</span><input type="text" name="login" autocomplete="off"></label>
+      <label>name <span style="color:var(--muted);font-weight:400">(optional)</span><input type="text" name="name" autocomplete="off"></label>
+      <label>raw paste <span style="color:var(--muted);font-weight:400">(optional — name=value lines, overrides empty fields above)</span>
+        <textarea name="raw" rows="6" style="font-family:'JetBrains Mono',monospace;font-size:12px;width:100%;" autocomplete="off"></textarea>
+      </label>
+      <div class="submit-row">
+        <a class="alt" href="/accounts">← cancel</a>
+        <button class="btn primary" type="submit">Authorize →</button>
+      </div>
+    </form>
+  </div>
+</div>
+{{end}}
+{{end}}

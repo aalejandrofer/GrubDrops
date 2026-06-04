@@ -5,12 +5,22 @@ package browser.v1;
 option go_package = "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1;browserv1";
 
 service Browser {
+  // Kick RPCs (unchanged).
   rpc Authenticate(AuthenticateRequest) returns (AuthenticateResponse);
   rpc StartWatch(StartWatchRequest) returns (StartWatchResponse);
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
   rpc StopWatch(StopWatchRequest) returns (StopWatchResponse);
   rpc Inventory(InventoryRequest) returns (InventoryResponse);
   rpc Claim(ClaimRequest) returns (ClaimResponse);
+
+  // Twitch RPCs. The sidecar keeps a logged-in twitch.tv tab open per
+  // account and proxies GraphQL calls through it so Twitch's anti-bot
+  // integrity check sees a real browser context.
+  rpc TwitchAuthenticate(TwitchAuthenticateRequest) returns (TwitchAuthenticateResponse);
+  rpc TwitchGQL(TwitchGQLRequest) returns (TwitchGQLResponse);
+  rpc TwitchOpenStream(TwitchOpenStreamRequest) returns (TwitchOpenStreamResponse);
+  rpc TwitchHeartbeat(TwitchHeartbeatRequest) returns (TwitchHeartbeatResponse);
+  rpc TwitchStopWatch(TwitchStopWatchRequest) returns (TwitchStopWatchResponse);
 }
 
 message Cookie {
@@ -80,3 +90,57 @@ message ClaimRequest {
 message ClaimResponse {
   bool already_claimed = 1;
 }
+
+// ---- Twitch ----
+
+message TwitchSession {
+  repeated Cookie cookies = 1;
+  string user_agent = 2;
+}
+
+message TwitchAuthenticateRequest {
+  string account_id = 1;
+  TwitchSession session = 2;
+}
+
+message TwitchAuthenticateResponse {
+  string username = 1;
+  string user_id = 2;
+  TwitchSession session = 3; // round-tripped, may have refreshed cookies
+}
+
+message TwitchGQLRequest {
+  string account_id = 1;
+  string operation_name = 2;
+  // JSON body the miner already marshals. Sidecar evaluates fetch()
+  // from inside the twitch.tv tab and returns the raw response body.
+  bytes body = 3;
+}
+
+message TwitchGQLResponse {
+  bytes body = 1;
+  int32 status = 2;
+}
+
+message TwitchOpenStreamRequest {
+  string account_id = 1;
+  string channel = 2;
+}
+
+message TwitchOpenStreamResponse {
+  string watch_handle = 1;
+}
+
+message TwitchHeartbeatRequest {
+  string watch_handle = 1;
+}
+
+message TwitchHeartbeatResponse {
+  bool alive = 1;
+}
+
+message TwitchStopWatchRequest {
+  string watch_handle = 1;
+}
+
+message TwitchStopWatchResponse {}
