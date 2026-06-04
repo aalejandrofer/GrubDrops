@@ -1,0 +1,23 @@
+{
+  "data": {
+    "currentUser": {
+      "inventory": {
+        "dropCampaignsInProgress": [
+          {
+            "id": "camp1",
+            "timeBasedDrops": [
+              {
+                "id": "drop1",
+                "self": {
+                  "currentMinutesWatched": 30,
+                  "isClaimed": false,
+                  "dropInstanceID": "inst1"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

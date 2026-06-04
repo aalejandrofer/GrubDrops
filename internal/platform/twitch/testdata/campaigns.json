@@ -1,0 +1,24 @@
+{
+  "data": {
+    "currentUser": {
+      "dropCampaigns": [
+        {
+          "id": "camp1",
+          "name": "Rust Twitch Drops",
+          "status": "ACTIVE",
+          "startAt": "2026-06-01T00:00:00Z",
+          "endAt": "2026-07-01T00:00:00Z",
+          "game": {"id": "263490", "displayName": "Rust"}
+        },
+        {
+          "id": "camp2",
+          "name": "Old Drops",
+          "status": "EXPIRED",
+          "startAt": "2026-01-01T00:00:00Z",
+          "endAt": "2026-02-01T00:00:00Z",
+          "game": {"id": "263490", "displayName": "Rust"}
+        }
+      ]
+    }
+  }
+}

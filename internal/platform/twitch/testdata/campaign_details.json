@@ -1,0 +1,20 @@
+{
+  "data": {
+    "user": {
+      "dropCampaign": {
+        "id": "camp1",
+        "name": "Rust Twitch Drops",
+        "timeBasedDrops": [
+          {
+            "id": "drop1",
+            "name": "Helmet",
+            "requiredMinutesWatched": 60,
+            "benefitEdges": [
+              {"benefit": {"id": "ben1", "name": "Wolf Helmet", "imageAssetURL": "https://example/img.png"}}
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
