@@ -1,18 +1,34 @@
-{{define "title"}}Settings · Rust Drops Miner{{end}}
-{{define "content"}}
-<h1>Settings</h1>
-{{if .Flash}}<p class="ok">{{.Flash}}</p>{{end}}
-{{with .Page}}
-<form method="post" action="/settings">
-  <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-  <label>Global Discord webhook URL
-    <input type="url" name="discord_webhook" value="{{.GlobalDiscordWebhook}}" placeholder="https://discord.com/api/webhooks/...">
-  </label>
-  <label>Log retention (days)
-    <input type="number" name="log_retention_days" value="{{.LogRetentionDays}}" min="1" max="365">
-  </label>
-  <button type="submit">Save</button>
-</form>
-{{end}}
-{{end}}
 {{define "settings.html"}}{{template "layout" .}}{{end}}
+
+{{define "title"}}Settings · rust-drops-miner{{end}}
+
+{{define "content"}}
+<div class="shell">
+  <div class="ph">
+    <div>
+      <div class="kicker">// system / settings</div>
+      <h1>Settings</h1>
+    </div>
+  </div>
+
+  {{if .Flash}}<div class="flash-ok">{{.Flash}}</div>{{end}}
+
+  {{with .Page}}
+  <div class="form-card">
+    <form method="post" action="/settings">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <label>Global Discord webhook URL <span style="text-transform:none;font-family:'IBM Plex Sans',sans-serif;letter-spacing:0;color:var(--muted);font-size:11px;">(per-account overrides this)</span>
+        <input type="url" name="discord_webhook" value="{{.GlobalDiscordWebhook}}" placeholder="https://discord.com/api/webhooks/…">
+      </label>
+      <label>Log retention (days)
+        <input type="number" name="log_retention_days" value="{{.LogRetentionDays}}" min="1" max="365" style="max-width:140px;">
+      </label>
+      <div class="row">
+        <a class="back-link" href="/">← back</a>
+        <button class="btn primary" type="submit">Save →</button>
+      </div>
+    </form>
+  </div>
+  {{end}}
+</div>
+{{end}}

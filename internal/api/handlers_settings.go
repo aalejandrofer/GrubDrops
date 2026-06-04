@@ -26,7 +26,7 @@ func (d *settingsDeps) get(w http.ResponseWriter, r *http.Request) {
 	days, _ := d.s.LogRetentionDays(r.Context())
 	flash := d.sm.PopString(r.Context(), "flash")
 	render(w, d.t, "settings.html", templateData{
-		AuthedAdmin: true, CSRFToken: csrfToken(r),
+		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "settings",
 		Page:  settingsPageData{GlobalDiscordWebhook: url, LogRetentionDays: days},
 		Flash: flash,
 	})

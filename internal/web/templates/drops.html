@@ -1,26 +1,46 @@
-{{define "title"}}Drops history · Rust Drops Miner{{end}}
-{{define "content"}}
-<h1>Drops history</h1>
-{{if not .Page}}<p>No drops claimed yet.</p>{{end}}
-{{if .Page}}
-<table>
-  <thead><tr>
-    <th>When</th><th>Platform</th><th>Game</th><th>Campaign</th>
-    <th>Drop</th><th>Account</th>
-  </tr></thead>
-  <tbody>
-  {{range .Page}}
-  <tr>
-    <td>{{.ClaimedAtHuman}}</td>
-    <td><span class="badge">{{.Platform}}</span></td>
-    <td>{{.Game}}</td>
-    <td>{{.CampaignName}}</td>
-    <td>{{.BenefitName}}</td>
-    <td>{{.AccountName}}</td>
-  </tr>
-  {{end}}
-  </tbody>
-</table>
-{{end}}
-{{end}}
 {{define "drops.html"}}{{template "layout" .}}{{end}}
+
+{{define "title"}}Drops · rust-drops-miner{{end}}
+
+{{define "content"}}
+<div class="shell">
+  <div class="ph">
+    <div>
+      <div class="kicker">// drops / history</div>
+      <h1>Drops history</h1>
+    </div>
+    <div class="actions">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.14em;">last {{len .Page}} claims</span>
+    </div>
+  </div>
+
+  {{if not .Page}}
+  <div class="empty">No drops claimed yet. They show up here as the watchers complete them.</div>
+  {{else}}
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>When</th>
+        <th>Platform</th>
+        <th>Game</th>
+        <th>Campaign</th>
+        <th>Drop</th>
+        <th>Account</th>
+      </tr>
+    </thead>
+    <tbody>
+    {{range .Page}}
+      <tr>
+        <td class="handle">{{.ClaimedAtHuman}}</td>
+        <td class="plat"><span class="{{.Platform}}">{{.Platform}}</span></td>
+        <td>{{.Game}}</td>
+        <td>{{.CampaignName}}</td>
+        <td class="name">{{.BenefitName}}</td>
+        <td class="handle">@{{.AccountName}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{end}}
+</div>
+{{end}}

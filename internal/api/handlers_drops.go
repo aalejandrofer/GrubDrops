@@ -39,7 +39,7 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	render(w, d.t, "drops.html", templateData{
-		AuthedAdmin: true, CSRFToken: csrfToken(r),
+		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "drops",
 		Page: out,
 	})
 }
