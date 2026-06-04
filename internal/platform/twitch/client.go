@@ -3,32 +3,115 @@ package twitch
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
 // client is the low-level HTTP client. It handles header injection,
 // GraphQL persisted-query envelope marshaling, and response unmarshaling.
 type client struct {
-	endpoint string
-	http     *http.Client
+	endpoint     string
+	integrityURL string
+	http         *http.Client
+
+	// Per-process pseudo-browser identity. Twitch's anti-bot integrity
+	// check binds the issued integrity token to the X-Device-Id sent
+	// when requesting it; the same value must accompany every /gql
+	// call. Client-Session-Id is similar but session-scoped.
+	deviceID  string
+	sessionID string
+
+	intMu     sync.Mutex
+	intToken  string
+	intExpiry time.Time
 }
 
 func newClient() *client {
 	return &client{
-		endpoint: gqlEndpoint,
-		http:     &http.Client{Timeout: 20 * time.Second},
+		endpoint:     gqlEndpoint,
+		integrityURL: integrityURL,
+		http:         &http.Client{Timeout: 20 * time.Second},
+		deviceID:     randomHex(16),
+		sessionID:    randomHex(16),
 	}
 }
 
 func newTestClient(endpoint string) *client {
 	return &client{
-		endpoint: endpoint,
-		http:     &http.Client{Timeout: 5 * time.Second},
+		endpoint:     endpoint,
+		integrityURL: "", // tests do not exercise the integrity path
+		http:         &http.Client{Timeout: 5 * time.Second},
+		deviceID:     randomHex(16),
+		sessionID:    randomHex(16),
 	}
+}
+
+func randomHex(nBytes int) string {
+	buf := make([]byte, nBytes)
+	_, _ = rand.Read(buf)
+	return hex.EncodeToString(buf)
+}
+
+// integrity fetches (and caches) a Client-Integrity token. Twitch
+// rejects /gql calls that lack one with `failed integrity check`.
+//
+// The token is bound to the headers sent on the integrity request
+// (Client-Id, X-Device-Id, Client-Session-Id, User-Agent). Subsequent
+// /gql requests must echo the same X-Device-Id and Client-Session-Id
+// or Twitch will invalidate the token.
+//
+// Token TTL is ~24h in practice; we refresh 5 minutes before expiry.
+func (c *client) integrity(ctx context.Context, token string) (string, error) {
+	if c.integrityURL == "" {
+		return "", nil
+	}
+	c.intMu.Lock()
+	defer c.intMu.Unlock()
+	if c.intToken != "" && time.Now().Before(c.intExpiry.Add(-5*time.Minute)) {
+		return c.intToken, nil
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.integrityURL, bytes.NewReader([]byte("{}")))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Client-Id", clientID)
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Device-Id", c.deviceID)
+	req.Header.Set("Client-Session-Id", c.sessionID)
+	if token != "" {
+		req.Header.Set("Authorization", "OAuth "+token)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("integrity: %s", resp.Status)
+	}
+	var body struct {
+		Token      string `json:"token"`
+		Expiration int64  `json:"expiration"` // epoch milliseconds
+		IsBadBot   bool   `json:"is_bad_bot"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return "", fmt.Errorf("decode integrity: %w", err)
+	}
+	if body.Token == "" {
+		return "", fmt.Errorf("integrity: empty token (is_bad_bot=%v)", body.IsBadBot)
+	}
+	c.intToken = body.Token
+	c.intExpiry = time.UnixMilli(body.Expiration)
+	slog.Info("twitch integrity token obtained", "expiration", c.intExpiry, "is_bad_bot", body.IsBadBot)
+	return c.intToken, nil
 }
 
 // gql sends a persisted GraphQL operation and decodes the `data` field
@@ -70,8 +153,15 @@ func (c *client) do(ctx context.Context, token, opName string, body []byte, out 
 	req.Header.Set("Client-Id", clientID)
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Device-Id", c.deviceID)
+	req.Header.Set("Client-Session-Id", c.sessionID)
 	if token != "" {
 		req.Header.Set("Authorization", "OAuth "+token)
+	}
+	if integrityToken, err := c.integrity(ctx, token); err == nil && integrityToken != "" {
+		req.Header.Set("Client-Integrity", integrityToken)
+	} else if err != nil {
+		slog.Warn("twitch integrity fetch failed; sending request anyway", "op", opName, "err", err)
 	}
 
 	resp, err := c.http.Do(req)

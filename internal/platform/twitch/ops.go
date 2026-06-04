@@ -8,6 +8,7 @@ const (
 	userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
 
 	gqlEndpoint   = "https://gql.twitch.tv/gql"
+	integrityURL  = "https://gql.twitch.tv/integrity"
 	deviceAuthURL = "https://id.twitch.tv/oauth2/device"
 	tokenURL      = "https://id.twitch.tv/oauth2/token"
 
