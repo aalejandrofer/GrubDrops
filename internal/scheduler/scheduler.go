@@ -24,15 +24,16 @@ type Options struct {
 }
 
 type Scheduler struct {
-	opts    Options
+	opts Options
+
 	mu      sync.Mutex
 	entries []entry
-	wg      sync.WaitGroup
+
+	runMu   sync.Mutex
+	current *runState
 }
 
-func New(opts Options) *Scheduler {
-	return &Scheduler{opts: opts}
-}
+func New(opts Options) *Scheduler { return &Scheduler{opts: opts} }
 
 func (s *Scheduler) Add(id string, w *watcher.Watcher) {
 	s.mu.Lock()
@@ -41,27 +42,31 @@ func (s *Scheduler) Add(id string, w *watcher.Watcher) {
 }
 
 func (s *Scheduler) Start(ctx context.Context) error {
-	s.mu.Lock()
-	entries := append([]entry(nil), s.entries...)
-	s.mu.Unlock()
-
-	for _, e := range entries {
-		s.wg.Add(1)
-		go s.supervise(ctx, e)
+	s.runMu.Lock()
+	defer s.runMu.Unlock()
+	if s.current != nil {
+		return errors.New("scheduler already running")
 	}
+	s.current = s.startInternal(ctx)
 	return nil
 }
 
-func (s *Scheduler) Wait() { s.wg.Wait() }
+func (s *Scheduler) Wait() {
+	s.runMu.Lock()
+	r := s.current
+	s.runMu.Unlock()
+	if r == nil {
+		return
+	}
+	r.wg.Wait()
+}
 
 func (s *Scheduler) supervise(ctx context.Context, e entry) {
-	defer s.wg.Done()
 	defer func() {
 		if r := recover(); r != nil {
 			if s.opts.Notifier != nil {
 				_ = s.opts.Notifier.Notify(ctx, notify.EventError, map[string]any{
-					"account": e.id,
-					"panic":   fmt.Sprint(r),
+					"account": e.id, "panic": fmt.Sprint(r),
 				})
 			}
 		}
@@ -69,8 +74,7 @@ func (s *Scheduler) supervise(ctx context.Context, e entry) {
 	if err := e.runner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		if s.opts.Notifier != nil {
 			_ = s.opts.Notifier.Notify(ctx, notify.EventError, map[string]any{
-				"account": e.id,
-				"error":   err.Error(),
+				"account": e.id, "error": err.Error(),
 			})
 		}
 	}

@@ -47,6 +47,8 @@ func (w *Watcher) State() State {
 	return w.state
 }
 
+func (w *Watcher) AccountID() string { return w.cfg.AccountID }
+
 func (w *Watcher) setState(ctx context.Context, s State) {
 	w.mu.Lock()
 	w.state = s
