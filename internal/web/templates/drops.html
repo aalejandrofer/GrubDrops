@@ -1,0 +1,26 @@
+{{define "title"}}Drops history · Rust Drops Miner{{end}}
+{{define "content"}}
+<h1>Drops history</h1>
+{{if not .Page}}<p>No drops claimed yet.</p>{{end}}
+{{if .Page}}
+<table>
+  <thead><tr>
+    <th>When</th><th>Platform</th><th>Game</th><th>Campaign</th>
+    <th>Drop</th><th>Account</th>
+  </tr></thead>
+  <tbody>
+  {{range .Page}}
+  <tr>
+    <td>{{.ClaimedAtHuman}}</td>
+    <td><span class="badge">{{.Platform}}</span></td>
+    <td>{{.Game}}</td>
+    <td>{{.CampaignName}}</td>
+    <td>{{.BenefitName}}</td>
+    <td>{{.AccountName}}</td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+{{end}}
+{{define "drops.html"}}{{template "layout" .}}{{end}}

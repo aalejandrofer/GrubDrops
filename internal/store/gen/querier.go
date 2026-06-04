@@ -23,6 +23,7 @@ type Querier interface {
 	ListAllAccounts(ctx context.Context) ([]Account, error)
 	ListBenefitsForCampaign(ctx context.Context, campaignID string) ([]Benefit, error)
 	ListEnabledAccounts(ctx context.Context) ([]Account, error)
+	ListRecentClaims(ctx context.Context, limit int64) ([]ListRecentClaimsRow, error)
 	ListUnclaimedProgressForAccount(ctx context.Context, arg ListUnclaimedProgressForAccountParams) ([]Progress, error)
 	SetAccountEnabled(ctx context.Context, arg SetAccountEnabledParams) error
 	UpdateAccountDisplayName(ctx context.Context, arg UpdateAccountDisplayNameParams) error
