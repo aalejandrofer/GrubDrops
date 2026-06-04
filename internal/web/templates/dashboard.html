@@ -1,8 +1,160 @@
-{{define "title"}}Dashboard · Rust Drops Miner{{end}}
+{{define "title"}}Dashboard · rust-drops-miner{{end}}
+
 {{define "content"}}
-<h1>Dashboard</h1>
-<div id="cards" hx-get="/dashboard/cards" hx-trigger="every 2s" hx-swap="innerHTML">
-  {{template "dashboard_cards" .Page}}
+{{with .Page}}
+<div class="page-head">
+  <div>
+    <div class="sub">// node {{.NodeAddr}} · uptime {{.Uptime}} · last poll {{.UpdatedAt}}</div>
+  </div>
+  <div class="actions">
+    <form method="post" action="/accounts/apply" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <button type="submit" class="btn">Reload</button>
+    </form>
+    <a class="btn primary" href="/accounts/new">+ Add account</a>
+  </div>
+</div>
+
+<section class="telemetry">
+  <div class="stat"><div class="label">Watch time · today</div><div class="value">{{.Tele.WatchTimeToday}}<sup>h:m</sup></div><div class="delta flat">—</div></div>
+  <div class="stat"><div class="label">Drops claimed · 7d</div><div class="value">{{.Tele.ClaimsWeek}}<sup>items</sup></div><div class="delta flat">—</div></div>
+  <div class="stat"><div class="label">Active campaigns</div><div class="value">{{.Tele.ActiveCamps}}<sup>discovered</sup></div><div class="delta flat">—</div></div>
+  <div class="stat"><div class="label">In progress</div><div class="value">{{.Tele.InProgress}}<sup>drops</sup></div><div class="delta flat">—</div></div>
+  <div class="stat"><div class="label">Next claim</div><div class="value" style="color:var(--accent)">{{.Tele.NextClaimETA}}<sup>h:m</sup></div><div class="delta">{{.Tele.NextClaimName}}</div></div>
+  <div class="stat"><div class="label">Heartbeats / hr</div><div class="value">{{.Tele.HeartbeatsHour}}<sup>last hr</sup></div><div class="delta flat">—</div></div>
+</section>
+
+<div class="layout">
+  <div>
+
+    <section class="section">
+      <div class="sec-head">
+        <h2>Next claim ETAs</h2>
+        <div class="rule"></div>
+        <div class="meta">auto-claim on completion · sorted by time</div>
+      </div>
+      <div class="pending">
+        {{range .NextClaims}}
+        <article class="pcard">
+          <div class="sprite" style="color: var(--muted);">▲</div>
+          <div class="meta">
+            <div class="nm">{{.DropName}} <span class="ac">{{.Login}}</span></div>
+            <div class="sub">{{.Platform}} · {{if .DropCampaign}}{{.DropCampaign}} · {{end}}{{.DropMins}} / {{.DropReq}}m</div>
+          </div>
+          <span class="claim" style="background:transparent;border:1px solid var(--line);color:var(--muted);">{{.DropETA}}</span>
+        </article>
+        {{end}}
+      </div>
+    </section>
+
+    <section class="section" id="mining">
+      <div class="sec-head">
+        <h2>Currently mining</h2>
+        <div class="rule"></div>
+        <div class="meta">{{len .Mining}} accounts</div>
+      </div>
+      <div class="mining-grid" hx-get="/dashboard/cards" hx-trigger="every 2s" hx-swap="innerHTML">
+        {{template "dashboard_cards" .Mining}}
+      </div>
+    </section>
+
+    <section class="drawer">
+      <div class="drawer-head">
+        <h3>Live events</h3>
+        <div class="filter">
+          <a class="on" href="#">all</a>
+          <a href="#">claims</a>
+          <a href="#">progress</a>
+          <a href="#">state</a>
+          <a href="#">errors</a>
+        </div>
+        <div class="live">streaming</div>
+      </div>
+      <div class="events">
+        {{range .Events}}
+        <div class="ev">
+          <span class="t">{{.Time}}</span>
+          <span class="lvl" style="color:var(--{{.Color}})">●</span>
+          <span class="body">{{.BodyHTML | safe}}</span>
+          <span class="ac">{{.Account}}</span>
+        </div>
+        {{end}}
+      </div>
+    </section>
+
+  </div>
+
+  <aside>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Active campaigns</h3>
+        <span class="meta">{{len .ActiveCamps}} · auto-discovered</span>
+      </div>
+      <div class="panel-body">
+        {{range .ActiveCamps}}
+        <div class="camp">
+          <span class="pip {{.Platform}}"></span>
+          <div class="body">
+            <div class="name">{{.Name}}</div>
+            <div class="sub"><b>{{.Drops}}</b> drops · {{.Channels}} channels eligible</div>
+          </div>
+          <div class="right">
+            <div class="ends" {{if .EndsUrgent}}style="color: var(--red)"{{end}}>ends {{.EndsIn}}</div>
+            <div class="pct">{{.Claimed}}/{{.Total}} claimed</div>
+          </div>
+        </div>
+        {{end}}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Priority list</h3>
+        <span class="meta">drag to reorder</span>
+      </div>
+      <div class="panel-body">
+        {{range .Priority}}
+        <div class="prio-item {{if not .Enabled}}off{{end}}">
+          <span class="rank">{{printf "%02d" .Rank}}</span>
+          <span class="grip">⋮⋮</span>
+          <span class="name">{{.Name}} <small>{{.Sub}}</small></span>
+          <span class="toggle">{{if .Enabled}}ON{{else}}OFF{{end}}</span>
+        </div>
+        {{end}}
+      </div>
+    </div>
+
+    {{$active := .ChannelActive}}
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Channels — eligible</h3>
+        <span class="meta">{{.ChannelActive}}</span>
+      </div>
+      <div class="ch-tabs">
+        {{range .ChannelTabs}}
+        <a class="{{if eq . $active}}on{{end}}" href="#">{{.}}</a>
+        {{end}}
+      </div>
+      <div class="ch-list">
+        {{range .Channels}}
+        <div class="ch {{if .Live}}live{{end}}">
+          <span class="av">{{.Initial}}</span>
+          <div class="meta">
+            <div class="name">{{.Login}}</div>
+            <div class="sub">
+              {{if .Live}}<span class="live-tag">LIVE</span> · {{.Game}} · {{.Duration}}{{else}}offline · last live {{.LastLive}}{{end}}
+            </div>
+          </div>
+          <span class="views {{if not .Live}}off{{end}}">{{if .Live}}{{.Views}}{{else}}—{{end}}</span>
+        </div>
+        {{end}}
+      </div>
+    </div>
+
+  </aside>
 </div>
 {{end}}
+{{end}}
+
 {{define "dashboard.html"}}{{template "layout" .}}{{end}}

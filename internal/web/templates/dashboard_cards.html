@@ -1,14 +1,57 @@
 {{define "dashboard_cards"}}
-{{if not .}}<p>No accounts configured yet. <a href="/accounts/new">Add one</a>.</p>{{end}}
+{{if not .}}<div class="mcard" style="grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 32px;">No accounts. <a href="/accounts/new" style="color:var(--accent)">Add one</a>.</div>{{end}}
 {{range .}}
-<div class="card">
-  <div class="row">
-    <strong>{{.DisplayName}}</strong>
-    <span class="badge">{{.Platform}}</span>
-    <span class="badge">{{.State}}</span>
-    {{if not .Enabled}}<span class="badge">disabled</span>{{end}}
-    <a href="/accounts/{{.ID}}" style="margin-left:auto">manage</a>
+<article class="mcard {{if not .Enabled}}disabled{{end}}">
+  <div class="mcard-head">
+    <div>
+      <h3 class="name">{{.Name}}</h3>
+      <span class="handle">{{.Login}}</span>
+    </div>
+    <span class="plat {{.Platform}}">{{.Platform}}</span>
   </div>
-</div>
+  <div class="state-row">
+    <span class="dot {{if eq .State "pick_stream"}}pick{{else}}{{.State}}{{end}}"></span>
+    <span class="state-label">{{.State}}{{if .StateSub}}<span class="sub"> · {{.StateSub}}</span>{{end}}</span>
+    <span class="uptime">{{.Uptime}}</span>
+  </div>
+  {{if .Channel}}
+  <div class="nowp {{if eq .Platform "kick"}}kick{{end}}">
+    <span class="av">{{.ChannelInitial}}</span>
+    <div class="meta1">
+      <div class="ch">{{.Channel}}</div>
+      <div class="game">{{.ChannelGame}}</div>
+    </div>
+    <span class="views">{{.ChannelViews}}</span>
+  </div>
+  {{end}}
+  <div class="drop">
+    <div class="meta">
+      <span class="nm">{{if .DropName}}{{.DropName}}{{else}}—{{end}}{{if .DropCampaign}}<span class="campaign"> — {{.DropCampaign}}</span>{{end}}</span>
+      <span class="progress"><b>{{.DropMins}}</b> / {{.DropReq}}m</span>
+    </div>
+    <div class="pbar">
+      <div class="fill" style="width: {{.DropPercent}}%"></div>
+      <div class="tick" style="left:25%"></div><div class="tick" style="left:50%"></div><div class="tick" style="left:75%"></div>
+    </div>
+    <div class="eta">ETA <b>{{.DropETA}}</b></div>
+  </div>
+  {{if .Queue}}
+  <div class="qmini">
+    <div class="h">queue · {{len .Queue}} next</div>
+    <ul>
+      {{range .Queue}}
+      <li><span class="n">{{printf "%02d" .N}}</span><span class="name">{{.Name}} <small>{{.Sub}}</small></span><span class="req">{{.Req}}</span></li>
+      {{end}}
+    </ul>
+  </div>
+  {{end}}
+  <div class="mcard-foot">
+    <div class="row">
+      <span>watch {{.WatchToday}}</span>
+      <span>{{.ClaimsToday}} claims today</span>
+    </div>
+    <a href="/accounts/{{.ID}}">manage →</a>
+  </div>
+</article>
 {{end}}
 {{end}}
