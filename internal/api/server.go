@@ -16,15 +16,17 @@ import (
 )
 
 type Deps struct {
-	DB        *sql.DB
-	Q         *gen.Queries
-	Templates Renderer
-	Session   *scs.SessionManager
-	Scheduler *scheduler.Scheduler
-	Reload    func(context.Context) error
-	Sessions  *store.SessionStore
-	Registry  *platform.Registry
-	RootCtx   context.Context
+	DB            *sql.DB
+	Q             *gen.Queries
+	Templates     Renderer
+	Session       *scs.SessionManager
+	Scheduler     *scheduler.Scheduler
+	Reload        func(context.Context) error
+	Sessions      *store.SessionStore
+	Registry      *platform.Registry
+	RootCtx       context.Context
+	BrowserClient KickBrowserClient
+	Registrar     KickChannelRegistrar
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -45,7 +47,15 @@ func NewRouter(d Deps) http.Handler {
 	authH := authDeps{q: d.Q, t: d.Templates, sm: d.Session}
 	dash := dashboardDeps{q: d.Q, t: d.Templates, sch: d.Scheduler}
 	accs := accountsDeps{q: d.Q, t: d.Templates, sm: d.Session}
-	login := newLoginTwitchDeps(d, d.RootCtx)
+	loginTwitch := newLoginTwitchDeps(d, d.RootCtx)
+	loginKick := &loginKickDeps{
+		q:         d.Q,
+		t:         d.Templates,
+		sm:        d.Session,
+		sessions:  d.Sessions,
+		browser:   d.BrowserClient,
+		registrar: d.Registrar,
+	}
 
 	withSession := func(h http.Handler) http.Handler { return d.Session.LoadAndSave(h) }
 
@@ -64,8 +74,37 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/accounts/new", accs.newGet)
 	authed.Post("/accounts/new", accs.newPost)
 	authed.Get("/accounts/{id}", accs.detail)
-	authed.Get("/accounts/{id}/login", login.get)
-	authed.Get("/accounts/{id}/login/poll", login.status)
+	authed.Get("/accounts/{id}/login", func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		acc, err := d.Q.GetAccount(r.Context(), id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		switch acc.Platform {
+		case "twitch":
+			loginTwitch.get(w, r)
+		case "kick":
+			loginKick.get(w, r)
+		default:
+			http.Error(w, "platform does not need login", http.StatusBadRequest)
+		}
+	})
+	authed.Get("/accounts/{id}/login/poll", loginTwitch.status)
+	authed.Post("/accounts/{id}/login", func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		acc, err := d.Q.GetAccount(r.Context(), id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		switch acc.Platform {
+		case "kick":
+			loginKick.post(w, r)
+		default:
+			http.Error(w, "platform does not accept login POST", http.StatusBadRequest)
+		}
+	})
 	authed.Post("/accounts/{id}/update", accs.update)
 	authed.Post("/accounts/{id}/delete", accs.delete)
 	authed.Post("/accounts/apply", func(w http.ResponseWriter, r *http.Request) {

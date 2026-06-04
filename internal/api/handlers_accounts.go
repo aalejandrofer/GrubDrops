@@ -65,7 +65,7 @@ func (d accountsDeps) newPost(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	if platform == "twitch" {
+	if platform == "twitch" || platform == "kick" {
 		http.Redirect(w, r, "/accounts/"+id+"/login", http.StatusSeeOther)
 		return
 	}

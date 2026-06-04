@@ -1,0 +1,27 @@
+{{define "title"}}Kick login · Rust Drops Miner{{end}}
+{{define "content"}}
+{{with .Page}}
+<h1>Authorize Kick — {{.DisplayName}}</h1>
+<p>Kick has no public OAuth, so we drive a real browser session on your behalf.</p>
+<ol>
+  <li>Open kick.com in any browser and log in normally.</li>
+  <li>Open DevTools (F12) → Application → Cookies → kick.com.</li>
+  <li>Copy <code>kick_session</code>, <code>XSRF-TOKEN</code>, and <code>cf_clearance</code> values.</li>
+  <li>Paste below and submit. The sidecar will validate the session.</li>
+  <li>Then enter the channel login you want to mine (e.g. <code>rust-streamer</code>).</li>
+</ol>
+{{end}}
+{{if .Flash}}<p class="err">{{.Flash}}</p>{{end}}
+{{with .Page}}
+<form method="post" action="/accounts/{{.AccountID}}/login">
+  <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+  <label>kick_session<input type="text" name="kick_session" required></label>
+  <label>XSRF-TOKEN<input type="text" name="xsrf_token" required></label>
+  <label>cf_clearance<input type="text" name="cf_clearance" required></label>
+  <label>Channel to mine<input type="text" name="channel" required></label>
+  <button type="submit">Authorize</button>
+</form>
+<p><a href="/accounts">cancel</a></p>
+{{end}}
+{{end}}
+{{define "login_kick.html"}}{{template "layout" .}}{{end}}

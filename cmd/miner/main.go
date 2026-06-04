@@ -79,6 +79,7 @@ func run() error {
 	registry.Register(twitch.New())
 
 	var browserClient *browser.Client
+	var kickBackend *kick.Backend
 	if cfg.BrowserURL != "" {
 		bc, err := browser.Dial(cfg.BrowserURL)
 		if err != nil {
@@ -86,12 +87,12 @@ func run() error {
 		}
 		defer bc.Close()
 		browserClient = bc
-		registry.Register(kick.New(bc))
+		kickBackend = kick.New(bc)
+		registry.Register(kickBackend)
 		logger.Info("kick backend enabled via sidecar", "url", cfg.BrowserURL)
 	} else {
 		logger.Info("MINER_BROWSER_URL empty, Kick backend disabled")
 	}
-	_ = browserClient // referenced below when wiring api.Deps in Task 11
 
 	notifier := makeNotifier(cfg, logger)
 	sched := scheduler.New(scheduler.Options{Notifier: notifier})
@@ -157,11 +158,21 @@ func run() error {
 		return fmt.Errorf("initial scheduler boot: %w", err)
 	}
 
+	// Avoid typed-nil-interface trap: only assign if the concrete pointer is non-nil.
+	var bc api.KickBrowserClient
+	var reg api.KickChannelRegistrar
+	if browserClient != nil {
+		bc = browserClient  // *browser.Client satisfies KickBrowserClient
+		reg = kickBackend   // *kick.Backend satisfies KickChannelRegistrar
+	}
+
 	deps := api.Deps{
 		DB: db, Q: q, Templates: tmplSet, Session: sm,
 		Scheduler: sched, Reload: loadAndStart,
 		Sessions: sessions, Registry: registry,
-		RootCtx: ctx,
+		RootCtx:       ctx,
+		BrowserClient: bc,
+		Registrar:     reg,
 	}
 
 	srv := &http.Server{
