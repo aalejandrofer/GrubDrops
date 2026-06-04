@@ -9,7 +9,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
 	"github.com/chano-fernandez/rust-drops-miner/internal/scheduler"
+	"github.com/chano-fernandez/rust-drops-miner/internal/store"
 	"github.com/chano-fernandez/rust-drops-miner/internal/store/gen"
 )
 
@@ -20,6 +22,8 @@ type Deps struct {
 	Session   *scs.SessionManager
 	Scheduler *scheduler.Scheduler
 	Reload    func(context.Context) error
+	Sessions  *store.SessionStore
+	Registry  *platform.Registry
 }
 
 func NewRouter(d Deps) http.Handler {

@@ -18,6 +18,7 @@ import (
 	"github.com/chano-fernandez/rust-drops-miner/internal/notify"
 	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
 	"github.com/chano-fernandez/rust-drops-miner/internal/platform/fake"
+	"github.com/chano-fernandez/rust-drops-miner/internal/platform/twitch"
 	"github.com/chano-fernandez/rust-drops-miner/internal/scheduler"
 	"github.com/chano-fernandez/rust-drops-miner/internal/store"
 	"github.com/chano-fernandez/rust-drops-miner/internal/store/gen"
@@ -57,6 +58,7 @@ func run() error {
 	_ = cryptor
 
 	q := gen.New(db)
+	sessions := store.NewSessionStore(db, q, cryptor)
 
 	tmplSet, err := web.Templates()
 	if err != nil {
@@ -72,6 +74,7 @@ func run() error {
 
 	registry := platform.NewRegistry()
 	registry.Register(fake.New(fake.WithFastTime()))
+	registry.Register(twitch.New())
 
 	notifier := makeNotifier(cfg, logger)
 	sched := scheduler.New(scheduler.Options{Notifier: notifier})
@@ -81,10 +84,31 @@ func run() error {
 		if !ok {
 			return scheduler.Entry{}, fmt.Errorf("no backend for platform %q", a.Platform)
 		}
-		sess, err := b.PollDeviceLogin(ctx, platform.DeviceChallenge{})
-		if err != nil {
-			return scheduler.Entry{}, fmt.Errorf("device login: %w", err)
+
+		var sess platform.Session
+		switch a.Platform {
+		case "fake":
+			s, err := b.PollDeviceLogin(ctx, platform.DeviceChallenge{})
+			if err != nil {
+				return scheduler.Entry{}, fmt.Errorf("device login: %w", err)
+			}
+			sess = s
+		default:
+			// Real backends load persisted session blob. If missing/expired,
+			// install a nopRunner so the account is visible but paused;
+			// the GUI device-code flow (Task 11) refreshes it.
+			s, ok, err := sessions.Get(ctx, a.ID)
+			if err != nil {
+				return scheduler.Entry{}, fmt.Errorf("load session: %w", err)
+			}
+			if !ok || s.ExpiresAt.Before(time.Now()) {
+				logger.Warn("account has no valid session, will idle until re-auth",
+					"account", a.ID, "platform", a.Platform)
+				return scheduler.NewEntry(a.ID, nopRunner{}), nil
+			}
+			sess = s
 		}
+
 		w := watcher.New(watcher.Config{
 			AccountID: a.ID, Backend: b, Session: sess,
 			Notifier: notifier, TickInterval: 500 * time.Millisecond,
@@ -119,6 +143,7 @@ func run() error {
 	deps := api.Deps{
 		DB: db, Q: q, Templates: tmplSet, Session: sm,
 		Scheduler: sched, Reload: loadAndStart,
+		Sessions: sessions, Registry: registry,
 	}
 
 	srv := &http.Server{
