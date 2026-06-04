@@ -1,0 +1,15 @@
+services:
+  miner:
+    image: rust-drops-miner:dev
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.miner
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      MINER_MASTER_KEY: ${MINER_MASTER_KEY:?MINER_MASTER_KEY required}
+      MINER_DB_PATH: /data/miner.db
+      MINER_HTTP_ADDR: 0.0.0.0:8080
+    volumes:
+      - ./data:/data
