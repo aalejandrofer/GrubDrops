@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package browser.v1;
+
+option go_package = "github.com/chano-fernandez/rust-drops-miner/internal/auth/browser/gen/browser/v1;browserv1";
+
+service Browser {
+  rpc Authenticate(AuthenticateRequest) returns (AuthenticateResponse);
+  rpc StartWatch(StartWatchRequest) returns (StartWatchResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  rpc StopWatch(StopWatchRequest) returns (StopWatchResponse);
+  rpc Inventory(InventoryRequest) returns (InventoryResponse);
+  rpc Claim(ClaimRequest) returns (ClaimResponse);
+}
+
+message Cookie {
+  string name = 1;
+  string value = 2;
+  string domain = 3;
+  string path = 4;
+}
+
+message KickSession {
+  repeated Cookie cookies = 1;
+  string xsrf_token = 2;
+  string user_agent = 3;
+}
+
+message AuthenticateRequest {
+  KickSession session = 1;
+}
+
+message AuthenticateResponse {
+  KickSession session = 1;
+  string username = 2;
+}
+
+message StartWatchRequest {
+  KickSession session = 1;
+  string channel = 2;
+}
+
+message StartWatchResponse {
+  string watch_handle = 1;
+}
+
+message HeartbeatRequest {
+  string watch_handle = 1;
+}
+
+message HeartbeatResponse {
+  bool alive = 1;
+}
+
+message StopWatchRequest {
+  string watch_handle = 1;
+}
+
+message StopWatchResponse {}
+
+message DropProgress {
+  string benefit_id = 1;
+  int32 minutes_watched = 2;
+  bool claimed = 3;
+}
+
+message InventoryRequest {
+  KickSession session = 1;
+}
+
+message InventoryResponse {
+  repeated DropProgress drops = 1;
+}
+
+message ClaimRequest {
+  KickSession session = 1;
+  string benefit_id = 2;
+}
+
+message ClaimResponse {
+  bool already_claimed = 1;
+}
