@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
@@ -67,6 +68,13 @@ func randomHex(nBytes int) string {
 	buf := make([]byte, nBytes)
 	_, _ = rand.Read(buf)
 	return hex.EncodeToString(buf)
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "...(truncated)"
 }
 
 // bootstrapIdentity fetches https://www.twitch.tv once so Twitch can
@@ -157,6 +165,15 @@ func (c *client) gqlQuery(ctx context.Context, token, operationName, query strin
 func (c *client) do(ctx context.Context, token, opName string, body []byte, out any) error {
 	c.bootstrapIdentity(ctx)
 
+	// DevilXD stores the OAuth access token in the cookie jar under
+	// `auth-token` so it goes out on both the Authorization header AND
+	// the Cookie header. Twitch's bot heuristics check the cookie.
+	if token != "" && c.http.Jar != nil {
+		if u, err := url.Parse(c.homeURL); err == nil && u != nil {
+			c.http.Jar.SetCookies(u, []*http.Cookie{{Name: "auth-token", Value: token, Domain: "twitch.tv", Path: "/"}})
+		}
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -170,12 +187,15 @@ func (c *client) do(ctx context.Context, token, opName string, body []byte, out 
 	}
 	defer resp.Body.Close()
 
+	rawBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 500 {
+		slog.Error("twitch gql 5xx", "op", opName, "status", resp.Status, "body", truncate(string(rawBody), 500))
 		return fmt.Errorf("twitch gql %s: %s", opName, resp.Status)
 	}
 
 	var envelope gqlResponse
-	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+	if err := json.Unmarshal(rawBody, &envelope); err != nil {
+		slog.Error("twitch gql decode failed", "op", opName, "status", resp.Status, "body", truncate(string(rawBody), 500))
 		return fmt.Errorf("decode gql response: %w", err)
 	}
 	if len(envelope.Errors) > 0 {
@@ -183,6 +203,7 @@ func (c *client) do(ctx context.Context, token, opName string, body []byte, out 
 		for _, e := range envelope.Errors {
 			msgs = append(msgs, e.Message)
 		}
+		slog.Error("twitch gql application error", "op", opName, "status", resp.Status, "errors", msgs, "body", truncate(string(rawBody), 500))
 		return fmt.Errorf("twitch gql %s: %s", opName, strings.Join(msgs, "; "))
 	}
 	if out == nil {
