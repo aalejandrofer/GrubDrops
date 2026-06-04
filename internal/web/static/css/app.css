@@ -731,3 +731,175 @@
     font-variant-numeric: tabular-nums;
   }
   .ch .views.off { color: var(--dim); }
+
+  /* ---- AUTH / FORM CARDS ---- */
+  .auth-wrap {
+    max-width: 460px;
+    margin: 80px auto 0;
+    padding: 0 24px;
+  }
+  .auth-card {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    padding: 36px 36px 32px;
+  }
+  .auth-card h1 {
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-variation-settings: 'opsz' 96, 'wdth' 90;
+    font-weight: 500;
+    font-size: 32px;
+    letter-spacing: -0.03em;
+    margin: 0 0 6px;
+    line-height: 1;
+  }
+  .auth-card .kicker {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-bottom: 24px;
+  }
+  .auth-card p {
+    color: var(--muted);
+    margin: 0 0 22px;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .auth-card p.intro {
+    color: var(--text);
+  }
+  .auth-card label {
+    display: block;
+    margin-bottom: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+  }
+  .auth-card input[type="text"],
+  .auth-card input[type="password"],
+  .auth-card input[type="url"],
+  .auth-card input[type="number"],
+  .auth-card input[type="email"],
+  .auth-card select,
+  .auth-card textarea {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    padding: 11px 13px;
+    border-radius: 2px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .auth-card input:focus, .auth-card select:focus, .auth-card textarea:focus {
+    border-color: var(--accent);
+  }
+  .auth-card textarea { min-height: 80px; resize: vertical; }
+  .auth-card .submit-row {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 22px;
+  }
+  .auth-card .submit-row .alt {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-decoration: none;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .auth-card .submit-row .alt:hover { color: var(--accent); }
+  .auth-card .err {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--red);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-left: 2px solid var(--red);
+    padding: 8px 12px;
+    background: rgba(198,74,60,.06);
+    margin-bottom: 22px;
+  }
+  .auth-card .ok {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--green);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* Device-code display */
+  .device-code {
+    text-align: center;
+    margin: 24px 0;
+    padding: 22px;
+    background: var(--bg);
+    border: 1px dashed var(--line);
+  }
+  .device-code .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-bottom: 12px;
+  }
+  .device-code .code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+  }
+  .device-code .url {
+    display: inline-block;
+    margin-top: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .device-code .url:hover { color: var(--accent); }
+
+  /* Wider auth card for richer flows (Kick cookie paste, Twitch login) */
+  .auth-wrap.wide { max-width: 620px; }
+
+  /* Step list (used by Kick login) */
+  .steps {
+    list-style: none;
+    counter-reset: step;
+    padding: 0;
+    margin: 0 0 22px;
+  }
+  .steps li {
+    counter-increment: step;
+    position: relative;
+    padding: 8px 0 8px 36px;
+    color: var(--text);
+    font-size: 13.5px;
+    line-height: 1.55;
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0; top: 8px;
+    width: 22px; height: 22px;
+    background: var(--surface-2);
+    color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .steps li code {
+    background: var(--surface-2);
+    padding: 1px 5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+  }

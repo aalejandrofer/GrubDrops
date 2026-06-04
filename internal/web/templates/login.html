@@ -1,11 +1,21 @@
-{{define "title"}}Login · Rust Drops Miner{{end}}
-{{define "content"}}
-<h1>Login</h1>
-{{if .Flash}}<p class="err">{{.Flash}}</p>{{end}}
-<form method="post" action="/login">
-  <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-  <label>Password<input type="password" name="password" required autofocus></label>
-  <button type="submit">Sign in</button>
-</form>
-{{end}}
 {{define "login.html"}}{{template "layout" .}}{{end}}
+
+{{define "title"}}Login · rust-drops-miner{{end}}
+
+{{define "content"}}
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="kicker">// admin</div>
+    <h1>Sign in</h1>
+    {{if .Flash}}<div class="err">{{.Flash}}</div>{{end}}
+    <form method="post" action="/login">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <label>Password<input type="password" name="password" required autofocus></label>
+      <div class="submit-row">
+        <span></span>
+        <button class="btn primary" type="submit">Sign in →</button>
+      </div>
+    </form>
+  </div>
+</div>
+{{end}}

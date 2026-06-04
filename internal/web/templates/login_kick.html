@@ -1,27 +1,37 @@
-{{define "title"}}Kick login · Rust Drops Miner{{end}}
+{{define "login_kick.html"}}{{template "layout" .}}{{end}}
+
+{{define "title"}}Kick login · rust-drops-miner{{end}}
+
 {{define "content"}}
 {{with .Page}}
-<h1>Authorize Kick — {{.DisplayName}}</h1>
-<p>Kick has no public OAuth, so we drive a real browser session on your behalf.</p>
-<ol>
-  <li>Open kick.com in any browser and log in normally.</li>
-  <li>Open DevTools (F12) → Application → Cookies → kick.com.</li>
-  <li>Copy <code>kick_session</code>, <code>XSRF-TOKEN</code>, and <code>cf_clearance</code> values.</li>
-  <li>Paste below and submit. The sidecar will validate the session.</li>
-  <li>Then enter the channel login you want to mine (e.g. <code>rust-streamer</code>).</li>
-</ol>
+<div class="auth-wrap wide">
+  <div class="auth-card">
+    <div class="kicker">// kick · cookie paste</div>
+    <h1>Authorize {{.DisplayName}}</h1>
+    <p class="intro">Kick has no public OAuth. The sidecar uses your existing browser session.</p>
+    <ol class="steps">
+      <li>Open <code>kick.com</code> in any browser and sign in.</li>
+      <li>Open DevTools → Application → Cookies → kick.com.</li>
+      <li>Copy <code>kick_session</code>, <code>XSRF-TOKEN</code>, and <code>cf_clearance</code>.</li>
+      <li>Paste below + the channel you want to mine.</li>
+    </ol>
+  </div>
+  {{end}}
+  {{if .Flash}}<div style="max-width:620px;margin:0 auto;padding:0 24px;"><div class="err">{{.Flash}}</div></div>{{end}}
+  {{with .Page}}
+  <div class="auth-card" style="margin-top: 18px;">
+    <form method="post" action="/accounts/{{.AccountID}}/login">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <label>kick_session<input type="text" name="kick_session" required autocomplete="off"></label>
+      <label>XSRF-TOKEN<input type="text" name="xsrf_token" required autocomplete="off"></label>
+      <label>cf_clearance<input type="text" name="cf_clearance" required autocomplete="off"></label>
+      <label>Channel to mine<input type="text" name="channel" required placeholder="rust-streamer-name"></label>
+      <div class="submit-row">
+        <a class="alt" href="/accounts">← cancel</a>
+        <button class="btn primary" type="submit">Authorize →</button>
+      </div>
+    </form>
+  </div>
+</div>
 {{end}}
-{{if .Flash}}<p class="err">{{.Flash}}</p>{{end}}
-{{with .Page}}
-<form method="post" action="/accounts/{{.AccountID}}/login">
-  <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-  <label>kick_session<input type="text" name="kick_session" required></label>
-  <label>XSRF-TOKEN<input type="text" name="xsrf_token" required></label>
-  <label>cf_clearance<input type="text" name="cf_clearance" required></label>
-  <label>Channel to mine<input type="text" name="channel" required></label>
-  <button type="submit">Authorize</button>
-</form>
-<p><a href="/accounts">cancel</a></p>
 {{end}}
-{{end}}
-{{define "login_kick.html"}}{{template "layout" .}}{{end}}

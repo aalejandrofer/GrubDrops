@@ -1,13 +1,23 @@
-{{define "title"}}Setup · Rust Drops Miner{{end}}
-{{define "content"}}
-<h1>First-run setup</h1>
-<p>Create the admin password. This is the only credential to manage this miner instance.</p>
-{{if .Flash}}<p class="err">{{.Flash}}</p>{{end}}
-<form method="post" action="/setup">
-  <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-  <label>Password<input type="password" name="password" minlength="8" required></label>
-  <label>Confirm<input type="password" name="confirm" minlength="8" required></label>
-  <button type="submit">Create admin</button>
-</form>
-{{end}}
 {{define "setup.html"}}{{template "layout" .}}{{end}}
+
+{{define "title"}}Setup · rust-drops-miner{{end}}
+
+{{define "content"}}
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="kicker">// first-run setup</div>
+    <h1>Create admin password</h1>
+    <p class="intro">This is the only credential to control the miner.</p>
+    {{if .Flash}}<div class="err">{{.Flash}}</div>{{end}}
+    <form method="post" action="/setup">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <label>Password<input type="password" name="password" minlength="8" required autofocus></label>
+      <label>Confirm<input type="password" name="confirm" minlength="8" required></label>
+      <div class="submit-row">
+        <span class="alt">min 8 chars</span>
+        <button class="btn primary" type="submit">Create admin →</button>
+      </div>
+    </form>
+  </div>
+</div>
+{{end}}

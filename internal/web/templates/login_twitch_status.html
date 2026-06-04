@@ -2,6 +2,6 @@
 {{if eq . "pending"}}<em>still waiting…</em>{{end}}
 {{if eq . "done"}}<strong class="ok">authorized — redirecting</strong>
 <script>setTimeout(()=>window.location='/accounts','800');</script>{{end}}
-{{if eq . "expired"}}<strong class="err">code expired — return to <a href="/accounts">accounts</a> and re-add</strong>{{end}}
-{{if eq . "error"}}<strong class="err">error — see logs</strong>{{end}}
+{{if eq . "expired"}}<strong style="color: var(--red); font-family: 'JetBrains Mono', monospace; font-size: 12px;">code expired — <a href="/accounts" style="color: var(--accent);">return to accounts</a> and re-add</strong>{{end}}
+{{if eq . "error"}}<strong style="color: var(--red); font-family: 'JetBrains Mono', monospace; font-size: 12px;">error — check logs</strong>{{end}}
 {{end}}
