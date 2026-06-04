@@ -7,6 +7,7 @@ package gen
 
 import (
 	"context"
+	"database/sql"
 )
 
 const deleteAccount = `-- name: DeleteAccount :exec
@@ -97,5 +98,20 @@ type UpdateAccountDisplayNameParams struct {
 
 func (q *Queries) UpdateAccountDisplayName(ctx context.Context, arg UpdateAccountDisplayNameParams) error {
 	_, err := q.db.ExecContext(ctx, updateAccountDisplayName, arg.DisplayName, arg.UpdatedAt, arg.ID)
+	return err
+}
+
+const updateAccountWebhook = `-- name: UpdateAccountWebhook :exec
+UPDATE accounts SET webhook_url = ?, updated_at = ? WHERE id = ?
+`
+
+type UpdateAccountWebhookParams struct {
+	WebhookUrl sql.NullString `json:"webhook_url"`
+	UpdatedAt  int64          `json:"updated_at"`
+	ID         string         `json:"id"`
+}
+
+func (q *Queries) UpdateAccountWebhook(ctx context.Context, arg UpdateAccountWebhookParams) error {
+	_, err := q.db.ExecContext(ctx, updateAccountWebhook, arg.WebhookUrl, arg.UpdatedAt, arg.ID)
 	return err
 }

@@ -9,3 +9,6 @@ SELECT * FROM accounts WHERE platform = ? AND login = ?;
 
 -- name: ListAllAccounts :many
 SELECT * FROM accounts ORDER BY created_at ASC;
+
+-- name: UpdateAccountWebhook :exec
+UPDATE accounts SET webhook_url = ?, updated_at = ? WHERE id = ?;

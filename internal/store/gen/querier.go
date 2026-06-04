@@ -27,6 +27,7 @@ type Querier interface {
 	SetAccountEnabled(ctx context.Context, arg SetAccountEnabledParams) error
 	UpdateAccountDisplayName(ctx context.Context, arg UpdateAccountDisplayNameParams) error
 	UpdateAccountStatus(ctx context.Context, arg UpdateAccountStatusParams) error
+	UpdateAccountWebhook(ctx context.Context, arg UpdateAccountWebhookParams) error
 	UpsertAdmin(ctx context.Context, arg UpsertAdminParams) error
 	UpsertBenefit(ctx context.Context, arg UpsertBenefitParams) error
 	UpsertCampaign(ctx context.Context, arg UpsertCampaignParams) error
