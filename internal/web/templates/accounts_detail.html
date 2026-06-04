@@ -1,22 +1,48 @@
-{{define "title"}}Account · Rust Drops Miner{{end}}
+{{define "accounts_detail.html"}}{{template "layout" .}}{{end}}
+
+{{define "title"}}Account · rust-drops-miner{{end}}
+
 {{define "content"}}
 {{with .Page}}
-<h1>{{.DisplayName}}</h1>
-<p>Platform: <span class="badge">{{.Platform}}</span> Login: <code>{{.Login}}</code></p>
-<form method="post" action="/accounts/{{.ID}}/update">
-  <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-  <label>Display name<input type="text" name="display_name" value="{{.DisplayName}}"></label>
-  <label><input type="checkbox" name="enabled" value="1" {{if eq .Enabled 1}}checked{{end}}> Enabled</label>
-  <label>Discord webhook URL (overrides global)
-    <input type="url" name="webhook_url" value="{{.WebhookUrl.String}}" placeholder="https://discord.com/api/webhooks/...">
-  </label>
-  <button type="submit">Save</button>
-</form>
-<form method="post" action="/accounts/{{.ID}}/delete" onsubmit="return confirm('Delete this account permanently?');" style="margin-top:1rem">
-  <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-  <button type="submit">Delete</button>
-</form>
+<div class="shell">
+  <div class="ph">
+    <div>
+      <div class="kicker">// accounts / edit</div>
+      <h1>{{.DisplayName}}</h1>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="platrow">
+      <span>platform: <code>{{.Platform}}</code></span>
+      <span>login: <code>@{{.Login}}</code></span>
+      <span>id: <code>{{.ID}}</code></span>
+    </div>
+
+    <form method="post" action="/accounts/{{.ID}}/update">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <label>Display name<input type="text" name="display_name" value="{{.DisplayName}}"></label>
+      <label class="cb">
+        <input type="checkbox" name="enabled" value="1" {{if eq .Enabled 1}}checked{{end}}>
+        Enabled
+      </label>
+      <label>Discord webhook URL <span style="text-transform:none;font-family:'IBM Plex Sans',sans-serif;letter-spacing:0;color:var(--muted);font-size:11px;">(overrides global)</span>
+        <input type="url" name="webhook_url" value="{{.WebhookUrl.String}}" placeholder="https://discord.com/api/webhooks/…">
+      </label>
+      <div class="row">
+        <a class="back-link" href="/accounts">← back</a>
+        <button class="btn primary" type="submit">Save →</button>
+      </div>
+    </form>
+
+    <div class="danger">
+      <h3>Danger zone</h3>
+      <form method="post" action="/accounts/{{.ID}}/delete" onsubmit="return confirm('Delete this account permanently?');">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <button type="submit">Delete account</button>
+      </form>
+    </div>
+  </div>
+</div>
 {{end}}
-<p><a href="/accounts">back</a></p>
 {{end}}
-{{define "accounts_detail.html"}}{{template "layout" .}}{{end}}

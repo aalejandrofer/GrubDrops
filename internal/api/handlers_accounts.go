@@ -29,13 +29,13 @@ func (d accountsDeps) list(w http.ResponseWriter, r *http.Request) {
 	flash := d.sm.PopString(r.Context(), "flash")
 	render(w, d.t, "accounts_list.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
-		Page: rows, Flash: flash,
+		Page: rows, Flash: flash, Active: "accounts",
 	})
 }
 
 func (d accountsDeps) newGet(w http.ResponseWriter, r *http.Request) {
 	render(w, d.t, "accounts_new.html", templateData{
-		AuthedAdmin: true, CSRFToken: csrfToken(r),
+		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "accounts",
 	})
 }
 
@@ -46,7 +46,7 @@ func (d accountsDeps) newPost(w http.ResponseWriter, r *http.Request) {
 	if platform == "" || login == "" {
 		render(w, d.t, "accounts_new.html", templateData{
 			AuthedAdmin: true, CSRFToken: csrfToken(r),
-			Flash: "platform and login required",
+			Flash: "platform and login required", Active: "accounts",
 		})
 		return
 	}
@@ -62,7 +62,7 @@ func (d accountsDeps) newPost(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		render(w, d.t, "accounts_new.html", templateData{
 			AuthedAdmin: true, CSRFToken: csrfToken(r),
-			Flash: err.Error(),
+			Flash: err.Error(), Active: "accounts",
 		})
 		return
 	}
@@ -83,7 +83,7 @@ func (d accountsDeps) detail(w http.ResponseWriter, r *http.Request) {
 	}
 	render(w, d.t, "accounts_detail.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
-		Page: row,
+		Page: row, Active: "accounts",
 	})
 }
 

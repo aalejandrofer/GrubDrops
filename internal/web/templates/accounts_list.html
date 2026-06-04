@@ -1,24 +1,50 @@
-{{define "title"}}Accounts · Rust Drops Miner{{end}}
-{{define "content"}}
-<h1>Accounts</h1>
-<p><a href="/accounts/new">+ Add account</a> · <form method="post" action="/accounts/apply" style="display:inline">
-  <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-  <button type="submit">Apply changes (reload watchers)</button>
-</form></p>
-{{if .Flash}}<p class="ok">{{.Flash}}</p>{{end}}
-<table>
-  <thead><tr><th>Display</th><th>Platform</th><th>Login</th><th>Enabled</th><th></th></tr></thead>
-  <tbody>
-  {{range .Page}}
-  <tr>
-    <td>{{.DisplayName}}</td>
-    <td>{{.Platform}}</td>
-    <td>{{.Login}}</td>
-    <td>{{if eq .Enabled 1}}yes{{else}}no{{end}}</td>
-    <td><a href="/accounts/{{.ID}}">edit</a></td>
-  </tr>
-  {{end}}
-  </tbody>
-</table>
-{{end}}
 {{define "accounts_list.html"}}{{template "layout" .}}{{end}}
+
+{{define "title"}}Accounts · rust-drops-miner{{end}}
+
+{{define "content"}}
+<div class="shell">
+  <div class="ph">
+    <div>
+      <div class="kicker">// accounts</div>
+      <h1>Accounts</h1>
+    </div>
+    <div class="actions">
+      <form method="post" action="/accounts/apply" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <button class="btn" type="submit">Apply changes</button>
+      </form>
+      <a class="btn primary" href="/accounts/new">+ Add account</a>
+    </div>
+  </div>
+
+  {{if .Flash}}<div class="flash-ok">{{.Flash}}</div>{{end}}
+
+  {{if not .Page}}
+  <div class="empty">No accounts yet. <a href="/accounts/new">Add one →</a></div>
+  {{else}}
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>Display</th>
+        <th>Platform</th>
+        <th>Login</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {{range .Page}}
+      <tr>
+        <td class="name">{{.DisplayName}}</td>
+        <td class="plat"><span class="{{.Platform}}">{{.Platform}}</span></td>
+        <td class="handle">@{{.Login}}</td>
+        <td class="enabled {{if eq .Enabled 1}}yes{{else}}no{{end}}">{{if eq .Enabled 1}}● enabled{{else}}○ disabled{{end}}</td>
+        <td class="act"><a href="/accounts/{{.ID}}">edit →</a></td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{end}}
+</div>
+{{end}}

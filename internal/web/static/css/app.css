@@ -903,3 +903,220 @@
     font-size: 12px;
     color: var(--accent);
   }
+
+  /* ---- PAGE SHELLS (non-dashboard pages) ---- */
+  .shell {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 28px 24px 80px;
+  }
+  .shell .ph {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 20px;
+    align-items: end;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 24px;
+  }
+  .shell .ph .kicker {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-bottom: 8px;
+  }
+  .shell .ph h1 {
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-variation-settings: 'opsz' 96, 'wdth' 90;
+    font-weight: 500;
+    font-size: clamp(28px, 4vw, 44px);
+    line-height: 0.98;
+    letter-spacing: -0.03em;
+    margin: 0;
+  }
+  .shell .ph .actions { display: flex; gap: 8px; }
+
+  /* flash */
+  .flash-ok {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--green);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    border-left: 2px solid var(--green);
+    background: rgba(111,181,107,.06);
+    padding: 10px 14px;
+    margin-bottom: 18px;
+  }
+
+  /* table */
+  .tbl {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .tbl thead th {
+    text-align: left;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-2);
+  }
+  .tbl tbody td {
+    padding: 14px 16px;
+    border-bottom: 1px dashed var(--line);
+    font-size: 13.5px;
+    vertical-align: middle;
+  }
+  .tbl tbody tr:last-child td { border-bottom: none; }
+  .tbl tbody tr:hover { background: var(--surface-2); }
+  .tbl td.name { font-weight: 500; }
+  .tbl td.handle { font-family: 'JetBrains Mono', monospace; color: var(--muted); font-size: 12.5px; }
+  .tbl td.plat span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    padding: 3px 7px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+  }
+  .tbl td.plat .twitch { color: var(--purple); border-color: #4a3970; background: rgba(122,75,176,.08); }
+  .tbl td.plat .kick   { color: var(--kick);   border-color: #2d5c44; background: rgba(83,231,164,.06); }
+  .tbl td.enabled.yes { color: var(--green); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .tbl td.enabled.no  { color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .tbl td.act a {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    text-decoration: none;
+  }
+  .tbl td.act a:hover { color: var(--accent-2); }
+
+  /* detail form layout */
+  .form-card {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    padding: 28px 32px;
+    max-width: 640px;
+  }
+  .form-card h2 {
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-weight: 500;
+    font-size: 22px;
+    letter-spacing: -0.02em;
+    margin: 0 0 6px;
+  }
+  .form-card .platrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 22px;
+    display: flex; gap: 14px;
+  }
+  .form-card .platrow code {
+    color: var(--text);
+    background: var(--surface-2);
+    padding: 1px 6px;
+    font-size: 11px;
+  }
+  .form-card label {
+    display: block;
+    margin-bottom: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+  }
+  .form-card label.cb {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 22px;
+  }
+  .form-card label.cb input[type="checkbox"] {
+    width: 16px; height: 16px;
+    accent-color: var(--accent);
+  }
+  .form-card input[type="text"],
+  .form-card input[type="url"],
+  .form-card input[type="password"],
+  .form-card input[type="number"],
+  .form-card select {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    padding: 11px 13px;
+    border-radius: 2px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .form-card input:focus, .form-card select:focus { border-color: var(--accent); }
+  .form-card .row {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 14px;
+  }
+  .form-card .danger {
+    margin-top: 28px;
+    padding-top: 22px;
+    border-top: 1px dashed var(--line);
+  }
+  .form-card .danger h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--red);
+    margin: 0 0 12px;
+  }
+  .form-card .danger button {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 9px 14px;
+    border: 1px solid var(--red);
+    background: transparent;
+    color: var(--red);
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all .15s;
+  }
+  .form-card .danger button:hover { background: var(--red); color: #1a0d04; }
+  .back-link {
+    display: inline-block;
+    margin-top: 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+  }
+  .back-link:hover { color: var(--accent); }
+  .empty {
+    padding: 40px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .empty a { color: var(--accent); }
