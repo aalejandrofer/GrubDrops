@@ -31,6 +31,8 @@ type Scheduler struct {
 
 	runMu   sync.Mutex
 	current *runState
+
+	reloadMu sync.Mutex
 }
 
 func New(opts Options) *Scheduler { return &Scheduler{opts: opts} }

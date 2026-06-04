@@ -61,6 +61,10 @@ func (d setupDeps) post(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if err := d.sm.RenewToken(r.Context()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	d.sm.Put(r.Context(), "admin_authed", true)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

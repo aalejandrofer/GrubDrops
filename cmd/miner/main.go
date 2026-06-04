@@ -68,6 +68,7 @@ func run() error {
 	sm.Lifetime = 12 * time.Hour
 	sm.Cookie.HttpOnly = true
 	sm.Cookie.SameSite = http.SameSiteStrictMode
+	sm.Cookie.Secure = cfg.SecureCookies
 
 	registry := platform.NewRegistry()
 	registry.Register(fake.New(fake.WithFastTime()))

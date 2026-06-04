@@ -42,8 +42,13 @@ func (s *Scheduler) Stop(_ context.Context) {
 	r.wg.Wait()
 }
 
-// Reload swaps the entry set and restarts.
+// Reload swaps the entry set and restarts. Serialized so that concurrent
+// callers (e.g. double-clicks on the GUI "Apply changes" button) cannot
+// interleave their entry sets or race on Start.
 func (s *Scheduler) Reload(parent context.Context, builders []EntryBuilder) error {
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
+
 	s.Stop(parent)
 	s.mu.Lock()
 	s.entries = nil
