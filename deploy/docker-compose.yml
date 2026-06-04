@@ -11,5 +11,16 @@ services:
       MINER_MASTER_KEY: ${MINER_MASTER_KEY:?MINER_MASTER_KEY required}
       MINER_DB_PATH: /data/miner.db
       MINER_HTTP_ADDR: 0.0.0.0:8080
+      MINER_BROWSER_URL: ${MINER_BROWSER_URL:-}
     volumes:
       - ./data:/data
+
+  browser:
+    image: rust-drops-miner-browser:dev
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.browser
+    restart: unless-stopped
+    profiles: ["browser"]
+    expose:
+      - "9090"
