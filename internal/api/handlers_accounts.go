@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"net/http"
 	"time"
@@ -89,6 +90,7 @@ func (d accountsDeps) detail(w http.ResponseWriter, r *http.Request) {
 func (d accountsDeps) update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	display := r.FormValue("display_name")
+	webhook := r.FormValue("webhook_url")
 	enabled := int64(0)
 	if r.FormValue("enabled") == "1" {
 		enabled = 1
@@ -104,6 +106,14 @@ func (d accountsDeps) update(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := d.q.SetAccountEnabled(r.Context(), gen.SetAccountEnabledParams{
 		Enabled: enabled, UpdatedAt: now, ID: id,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := d.q.UpdateAccountWebhook(r.Context(), gen.UpdateAccountWebhookParams{
+		WebhookUrl: sql.NullString{String: webhook, Valid: webhook != ""},
+		UpdatedAt:  now,
+		ID:         id,
 	}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
