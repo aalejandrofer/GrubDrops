@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/justinas/nosurf"
@@ -44,23 +43,30 @@ func RequireAdmin(sm *scs.SessionManager) func(http.Handler) http.Handler {
 	}
 }
 
+// isLoopbackRequest distinguishes "direct localhost curl on the host"
+// from "request that came through Traefik / from the LAN".
+//
+//   - Direct host curl: no X-Forwarded-For; RemoteAddr is the docker
+//     bridge gateway (172.17.0.1 etc) because docker-proxy forwards
+//     127.0.0.1:8080 traffic in via the bridge.
+//   - Traefik traffic: X-Forwarded-For contains the original client
+//     IP (LAN or public). Even loopback LAN clients reach us via
+//     Traefik, so an XFF header always implies "external".
+//
+// Therefore we only accept "no XFF + private RemoteAddr" as local.
 func isLoopbackRequest(r *http.Request) bool {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// The first entry is the originating client.
-		first := strings.TrimSpace(strings.SplitN(xff, ",", 2)[0])
-		if ip := net.ParseIP(first); ip != nil {
-			return ip.IsLoopback()
-		}
+	if r.Header.Get("X-Forwarded-For") != "" {
 		return false
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
 	}
-	if ip := net.ParseIP(host); ip != nil {
-		return ip.IsLoopback()
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
 	}
-	return false
+	return ip.IsLoopback() || ip.IsPrivate()
 }
 
 // CSRF wraps mutating endpoints. Get-only handlers do not need it but
