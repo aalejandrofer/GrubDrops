@@ -84,41 +84,15 @@ func truncate(s string, n int) string {
 	return s[:n] + "...(truncated)"
 }
 
-// bootstrapIdentity fetches https://www.twitch.tv once so Twitch can
-// set its `unique_id` cookie; we then use that value as X-Device-Id
-// on every subsequent /gql call. Mirrors DevilXD's `_validate` flow.
+// bootstrapIdentity is a no-op for the Android client profile —
+// the upstream Twitch app sends a random device ID on first launch
+// and never visits the web; we mirror that by keeping the random
+// 32-hex deviceID created in newClient().
 func (c *client) bootstrapIdentity(ctx context.Context) {
 	c.idMu.Lock()
 	defer c.idMu.Unlock()
-	if c.idBootstrap || c.homeURL == "" {
-		return
-	}
 	c.idBootstrap = true
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.homeURL, nil)
-	if err != nil {
-		slog.Warn("twitch identity bootstrap: build request", "err", err)
-		return
-	}
-	c.setCommonHeaders(req, "")
-	resp, err := c.http.Do(req)
-	if err != nil {
-		slog.Warn("twitch identity bootstrap: GET twitch.tv", "err", err)
-		return
-	}
-	_ = resp.Body.Close()
-
-	u, _ := url.Parse(c.homeURL)
-	if c.http.Jar != nil {
-		for _, ck := range c.http.Jar.Cookies(u) {
-			if ck.Name == "unique_id" && ck.Value != "" {
-				c.deviceID = ck.Value
-				slog.Info("twitch device-id bootstrapped from cookie", "device_id", ck.Value)
-				return
-			}
-		}
-	}
-	slog.Warn("twitch identity bootstrap: unique_id cookie not present, using random device-id")
+	_ = ctx
 }
 
 // integrity acquires Twitch's anti-bot integrity token from the
@@ -173,7 +147,9 @@ func (c *client) integrity(ctx context.Context, token string) (string, error) {
 	return c.intToken, nil
 }
 
-// setCommonHeaders mirrors DevilXD's AuthState.headers(gql=True).
+// setCommonHeaders mirrors DevilXD's AuthState.headers(gql=True) for
+// the Android client profile. Android apps don't send Origin/Referer
+// so we omit them.
 func (c *client) setCommonHeaders(req *http.Request, oauthToken string) {
 	req.Header.Set("Accept", "*/*")
 	req.Header.Set("Accept-Language", "en-US")
@@ -183,8 +159,6 @@ func (c *client) setCommonHeaders(req *http.Request, oauthToken string) {
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Client-Session-Id", c.sessionID)
 	req.Header.Set("X-Device-Id", c.deviceID)
-	req.Header.Set("Origin", "https://www.twitch.tv")
-	req.Header.Set("Referer", "https://www.twitch.tv/")
 	if oauthToken != "" {
 		req.Header.Set("Authorization", "OAuth "+oauthToken)
 	}

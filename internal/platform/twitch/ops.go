@@ -4,8 +4,13 @@ package twitch
 // docs/superpowers/notes/2026-06-04-twitch-ops-source.md for source links.
 // Refresh these constants if production sees PersistedQueryNotFound errors.
 const (
-	clientID  = "kimne78kx3ncx6brgo4mv6wki5h1ko"
-	userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+	// Twitch Android app client. Has weaker integrity gating than the
+	// web client (kimne78kx3ncx6brgo4mv6wki5h1ko), which now requires
+	// a browser-executed JS puzzle to pass /gql integrity checks for
+	// dropCampaigns fields. The Android client is what DevilXD's
+	// ANDROID_APP profile uses.
+	clientID  = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"
+	userAgent = "Dalvik/2.1.0 (Linux; U; Android 16; SM-S911B Build/TP1A.220624.014) tv.twitch.android.app/25.3.0/2503006"
 
 	gqlEndpoint   = "https://gql.twitch.tv/gql"
 	deviceAuthURL = "https://id.twitch.tv/oauth2/device"
