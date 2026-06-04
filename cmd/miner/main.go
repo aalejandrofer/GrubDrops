@@ -13,11 +13,13 @@ import (
 	"github.com/alexedwards/scs/v2"
 
 	"github.com/chano-fernandez/rust-drops-miner/internal/api"
+	"github.com/chano-fernandez/rust-drops-miner/internal/auth/browser"
 	"github.com/chano-fernandez/rust-drops-miner/internal/config"
 	mlog "github.com/chano-fernandez/rust-drops-miner/internal/log"
 	"github.com/chano-fernandez/rust-drops-miner/internal/notify"
 	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
 	"github.com/chano-fernandez/rust-drops-miner/internal/platform/fake"
+	"github.com/chano-fernandez/rust-drops-miner/internal/platform/kick"
 	"github.com/chano-fernandez/rust-drops-miner/internal/platform/twitch"
 	"github.com/chano-fernandez/rust-drops-miner/internal/scheduler"
 	"github.com/chano-fernandez/rust-drops-miner/internal/store"
@@ -75,6 +77,21 @@ func run() error {
 	registry := platform.NewRegistry()
 	registry.Register(fake.New(fake.WithFastTime()))
 	registry.Register(twitch.New())
+
+	var browserClient *browser.Client
+	if cfg.BrowserURL != "" {
+		bc, err := browser.Dial(cfg.BrowserURL)
+		if err != nil {
+			return fmt.Errorf("dial browser sidecar: %w", err)
+		}
+		defer bc.Close()
+		browserClient = bc
+		registry.Register(kick.New(bc))
+		logger.Info("kick backend enabled via sidecar", "url", cfg.BrowserURL)
+	} else {
+		logger.Info("MINER_BROWSER_URL empty, Kick backend disabled")
+	}
+	_ = browserClient // referenced below when wiring api.Deps in Task 11
 
 	notifier := makeNotifier(cfg, logger)
 	sched := scheduler.New(scheduler.Options{Notifier: notifier})

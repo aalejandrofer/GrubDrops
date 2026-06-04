@@ -17,12 +17,14 @@ func TestLoad_RequiresMasterKey(t *testing.T) {
 func TestLoad_DefaultsApplied(t *testing.T) {
 	t.Setenv("MINER_MASTER_KEY", "AGE-SECRET-KEY-1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX0")
 	t.Setenv("MINER_DISCORD_WEBHOOK", "")
+	t.Setenv("MINER_BROWSER_URL", "")
 
 	cfg, err := Load()
 	require.NoError(t, err)
 	assert.Equal(t, "0.0.0.0:8080", cfg.HTTPAddr)
 	assert.Equal(t, "/data/miner.db", cfg.DBPath)
 	assert.Equal(t, "", cfg.DiscordWebhookURL)
+	assert.Equal(t, "", cfg.BrowserURL)
 }
 
 func TestLoad_Overrides(t *testing.T) {
@@ -30,10 +32,12 @@ func TestLoad_Overrides(t *testing.T) {
 	t.Setenv("MINER_HTTP_ADDR", "127.0.0.1:9000")
 	t.Setenv("MINER_DB_PATH", "/tmp/m.db")
 	t.Setenv("MINER_DISCORD_WEBHOOK", "https://discord.example/wh/x")
+	t.Setenv("MINER_BROWSER_URL", "browser:9090")
 
 	cfg, err := Load()
 	require.NoError(t, err)
 	assert.Equal(t, "127.0.0.1:9000", cfg.HTTPAddr)
 	assert.Equal(t, "/tmp/m.db", cfg.DBPath)
 	assert.Equal(t, "https://discord.example/wh/x", cfg.DiscordWebhookURL)
+	assert.Equal(t, "browser:9090", cfg.BrowserURL)
 }
