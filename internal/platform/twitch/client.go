@@ -169,7 +169,7 @@ func (c *client) integrity(ctx context.Context, token string) (string, error) {
 	}
 	c.intToken = body.Token
 	c.intExpiry = time.UnixMilli(body.Expiration)
-	slog.Info("twitch integrity token acquired", "expiration", c.intExpiry, "is_bad_bot", body.IsBadBot)
+	slog.Info("twitch integrity token acquired", "expiration", c.intExpiry, "is_bad_bot", body.IsBadBot, "token_prefix", truncate(body.Token, 30), "raw", truncate(string(raw), 500))
 	return c.intToken, nil
 }
 
