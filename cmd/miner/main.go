@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -187,9 +188,22 @@ func run() error {
 			sess = s
 		}
 
+		allow, rank, err := loadAccountWhitelist(ctx, q, a.ID)
+		if err != nil {
+			logger.Warn("load account whitelist failed; mining nothing until fixed",
+				"account", a.ID, "err", err)
+			return scheduler.NewEntry(a.ID, nopRunner{}), nil
+		}
+		if !hasAnyGame(allow) {
+			logger.Info("account has empty game whitelist, idle until games are picked",
+				"account", a.ID)
+			return scheduler.NewEntry(a.ID, nopRunner{}), nil
+		}
+
 		w := watcher.New(watcher.Config{
 			AccountID: a.ID, Backend: b, Session: sess,
 			Notifier: notifier, TickInterval: 500 * time.Millisecond,
+			AllowGame: allow, GameRank: rank,
 		})
 		return scheduler.NewEntry(a.ID, w), nil
 	}
@@ -278,4 +292,49 @@ func (i *indirectNotifier) Notify(ctx context.Context, event string, fields map[
 	n := *i.ptr
 	i.mu.Unlock()
 	return n.Notify(ctx, event, fields)
+}
+
+// loadAccountWhitelist materialises the per-account game allow-list
+// into match + rank closures the watcher consumes. Returns nil
+// closures when account has no rows — caller treats that as "no
+// whitelist configured, do nothing".
+func loadAccountWhitelist(ctx context.Context, q *gen.Queries, accountID string) (func(string) bool, func(string) int, error) {
+	rows, err := q.ListAccountGames(ctx, accountID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("list account games: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil, nil, nil
+	}
+	// game.name (lowercased) -> rank
+	rankByName := make(map[string]int, len(rows))
+	// game.slug -> rank, in case backends report by slug
+	rankBySlug := make(map[string]int, len(rows))
+	for _, r := range rows {
+		rankByName[strings.ToLower(r.Name)] = int(r.Rank)
+		rankBySlug[r.Slug] = int(r.Rank)
+	}
+	allow := func(game string) bool {
+		g := strings.ToLower(game)
+		if _, ok := rankByName[g]; ok {
+			return true
+		}
+		_, ok := rankBySlug[g]
+		return ok
+	}
+	rank := func(game string) int {
+		g := strings.ToLower(game)
+		if r, ok := rankByName[g]; ok {
+			return r
+		}
+		if r, ok := rankBySlug[g]; ok {
+			return r
+		}
+		return 1 << 30
+	}
+	return allow, rank, nil
+}
+
+func hasAnyGame(allow func(string) bool) bool {
+	return allow != nil
 }

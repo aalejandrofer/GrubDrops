@@ -22,6 +22,12 @@ type Account struct {
 	UpdatedAt       int64          `json:"updated_at"`
 }
 
+type AccountGame struct {
+	AccountID string `json:"account_id"`
+	GameID    string `json:"game_id"`
+	Rank      int64  `json:"rank"`
+}
+
 type Admin struct {
 	ID           int64  `json:"id"`
 	PasswordHash string `json:"password_hash"`

@@ -9,7 +9,9 @@ import (
 )
 
 type Querier interface {
+	AddAccountGame(ctx context.Context, arg AddAccountGameParams) error
 	AdminExists(ctx context.Context) (bool, error)
+	ClearAccountGames(ctx context.Context, accountID string) error
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
 	DeleteAccount(ctx context.Context, id string) error
 	GetAccount(ctx context.Context, id string) (Account, error)
@@ -19,12 +21,15 @@ type Querier interface {
 	GetSession(ctx context.Context, accountID string) (Session, error)
 	GetSettingString(ctx context.Context, key string) ([]byte, error)
 	InsertClaim(ctx context.Context, arg InsertClaimParams) error
+	ListAccountGames(ctx context.Context, accountID string) ([]ListAccountGamesRow, error)
 	ListActiveCampaignsForPlatform(ctx context.Context, arg ListActiveCampaignsForPlatformParams) ([]Campaign, error)
 	ListAllAccounts(ctx context.Context) ([]Account, error)
+	ListAllGames(ctx context.Context) ([]Game, error)
 	ListBenefitsForCampaign(ctx context.Context, campaignID string) ([]Benefit, error)
 	ListEnabledAccounts(ctx context.Context) ([]Account, error)
 	ListRecentClaims(ctx context.Context, limit int64) ([]ListRecentClaimsRow, error)
 	ListUnclaimedProgressForAccount(ctx context.Context, arg ListUnclaimedProgressForAccountParams) ([]Progress, error)
+	RemoveAccountGame(ctx context.Context, arg RemoveAccountGameParams) error
 	SetAccountEnabled(ctx context.Context, arg SetAccountEnabledParams) error
 	UpdateAccountDisplayName(ctx context.Context, arg UpdateAccountDisplayNameParams) error
 	UpdateAccountStatus(ctx context.Context, arg UpdateAccountStatusParams) error
@@ -32,6 +37,7 @@ type Querier interface {
 	UpsertAdmin(ctx context.Context, arg UpsertAdminParams) error
 	UpsertBenefit(ctx context.Context, arg UpsertBenefitParams) error
 	UpsertCampaign(ctx context.Context, arg UpsertCampaignParams) error
+	UpsertGame(ctx context.Context, arg UpsertGameParams) error
 	UpsertProgress(ctx context.Context, arg UpsertProgressParams) error
 	UpsertSession(ctx context.Context, arg UpsertSessionParams) error
 	UpsertSettingString(ctx context.Context, arg UpsertSettingStringParams) error

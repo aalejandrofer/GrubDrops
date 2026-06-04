@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"sync"
 	"time"
 
@@ -21,6 +22,21 @@ type Config struct {
 	Session      platform.Session
 	Notifier     Notifier
 	TickInterval time.Duration
+
+	// AllowGame returns true if a campaign whose Game string matches
+	// the account's whitelist should be considered for mining. When
+	// nil the watcher mines anything (legacy behaviour); production
+	// passes a function backed by the account_games table.
+	//
+	// Match by either game.id or game.name — Twitch's GraphQL returns
+	// the human-readable Game name on Campaign.Game, while our games
+	// table stores both. The check should be lenient.
+	AllowGame func(game string) bool
+
+	// GameRank returns the priority of `game` within the whitelist
+	// (lower = higher priority). Used to sort matching campaigns.
+	// Defaults to math.MaxInt when AllowGame is nil.
+	GameRank func(game string) int
 }
 
 type Watcher struct {
@@ -119,9 +135,27 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			claimed[p.BenefitID] = true
 		}
 	}
-	slog.Debug("watcher discovery", "account", w.cfg.AccountID, "campaigns", len(campaigns), "claimed_count", len(claimed))
 
-	for _, c := range campaigns {
+	// Filter campaigns by per-account whitelist (if configured) and
+	// sort by the whitelist rank — lower rank = higher priority.
+	matched := campaigns
+	if w.cfg.AllowGame != nil {
+		filtered := matched[:0]
+		for _, c := range campaigns {
+			if w.cfg.AllowGame(c.Game) {
+				filtered = append(filtered, c)
+			}
+		}
+		matched = filtered
+	}
+	if w.cfg.GameRank != nil {
+		sort.SliceStable(matched, func(i, j int) bool {
+			return w.cfg.GameRank(matched[i].Game) < w.cfg.GameRank(matched[j].Game)
+		})
+	}
+	slog.Debug("watcher discovery", "account", w.cfg.AccountID, "campaigns_total", len(campaigns), "campaigns_eligible", len(matched), "claimed_count", len(claimed))
+
+	for _, c := range matched {
 		for _, b := range c.Benefits {
 			if claimed[b.ID] {
 				continue
@@ -131,12 +165,16 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			w.currentCampaign = &campaignCopy
 			w.currentBenefit = &benefitCopy
 			w.mu.Unlock()
-			slog.Info("watcher picked benefit", "account", w.cfg.AccountID, "campaign", c.Name, "benefit", b.ID, "required_min", b.RequiredMinutes)
+			slog.Info("watcher picked benefit", "account", w.cfg.AccountID, "campaign", c.Name, "game", c.Game, "benefit", b.ID, "required_min", b.RequiredMinutes)
 			w.setState(ctx, StatePickStream)
 			return nil
 		}
 	}
-	slog.Info("watcher has no eligible benefit, sleeping", "account", w.cfg.AccountID, "scanned_campaigns", len(campaigns))
+	if w.cfg.AllowGame != nil && len(matched) == 0 && len(campaigns) > 0 {
+		slog.Info("watcher: no whitelisted games match active campaigns, sleeping", "account", w.cfg.AccountID, "active_campaigns", len(campaigns))
+	} else {
+		slog.Info("watcher has no eligible benefit, sleeping", "account", w.cfg.AccountID, "scanned_campaigns", len(matched))
+	}
 	w.setState(ctx, StateSleeping)
 	return nil
 }

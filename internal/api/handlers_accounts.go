@@ -74,6 +74,20 @@ func (d accountsDeps) newPost(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
 
+type accountDetailPage struct {
+	Account       gen.Account
+	AllGames      []gameRow
+	SelectedGames []gameRow // ordered by rank
+}
+
+type gameRow struct {
+	ID       string
+	Name     string
+	Slug     string
+	Selected bool
+	Rank     int
+}
+
 func (d accountsDeps) detail(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	row, err := d.q.GetAccount(r.Context(), id)
@@ -81,10 +95,62 @@ func (d accountsDeps) detail(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	all, _ := d.q.ListAllGames(r.Context())
+	picked, _ := d.q.ListAccountGames(r.Context(), id)
+
+	rankByID := make(map[string]int, len(picked))
+	for _, p := range picked {
+		rankByID[p.ID] = int(p.Rank)
+	}
+
+	allRows := make([]gameRow, 0, len(all))
+	for _, g := range all {
+		r, ok := rankByID[g.ID]
+		allRows = append(allRows, gameRow{
+			ID: g.ID, Name: g.Name, Slug: g.Slug,
+			Selected: ok, Rank: r,
+		})
+	}
+	selected := make([]gameRow, 0, len(picked))
+	for _, p := range picked {
+		selected = append(selected, gameRow{ID: p.ID, Name: p.Name, Slug: p.Slug, Selected: true, Rank: int(p.Rank)})
+	}
+
 	render(w, d.t, "accounts_detail.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
-		Page: row, Active: "accounts",
+		Page:   accountDetailPage{Account: row, AllGames: allRows, SelectedGames: selected},
+		Active: "accounts",
 	})
+}
+
+// games handles POST /accounts/:id/games — rewrites the per-account
+// whitelist from the form's `game_ids[]` field. Order matters: position
+// in the slice becomes the rank.
+func (d accountsDeps) games(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	ids := r.Form["game_ids[]"]
+	if err := d.q.ClearAccountGames(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	for i, gid := range ids {
+		if err := d.q.AddAccountGame(r.Context(), gen.AddAccountGameParams{
+			AccountID: id, GameID: gid, Rank: int64(i),
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	d.sm.Put(r.Context(), "flash", "games saved — click Apply changes to reload watchers")
+	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
 
 func (d accountsDeps) update(w http.ResponseWriter, r *http.Request) {

@@ -4,6 +4,7 @@
 
 {{define "content"}}
 {{with .Page}}
+{{with .Account}}
 <div class="shell">
   <div class="ph">
     <div>
@@ -50,6 +51,120 @@
       </form>
     </div>
   </div>
+{{end}}{{/* .Account */}}
+
+  <div class="form-card" style="margin-top: 18px;">
+    <h2 style="margin: 0 0 6px;">Games</h2>
+    <p style="color: var(--muted); font-size: 12px; margin: 0 0 14px;">
+      The watcher only mines campaigns whose game appears here. Order = priority (top = mined first). Account with empty selection idles.
+    </p>
+    <form method="post" action="/accounts/{{.Account.ID}}/games" id="games-form">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px;">
+        <div>
+          <div class="kicker" style="margin-bottom: 8px;">Selected · drag to reorder</div>
+          <ul id="selected-list" style="list-style:none;margin:0;padding:0;border:1px dashed var(--line);min-height:200px;">
+            {{range .SelectedGames}}
+            <li draggable="true" data-game-id="{{.ID}}" style="padding:8px 12px;border-bottom:1px solid var(--line);cursor:grab;display:flex;align-items:center;justify-content:space-between;background:var(--bg-soft, #14151a);">
+              <span>{{.Name}}</span>
+              <button type="button" class="alt" onclick="removeGame('{{.ID}}')" style="border:none;background:transparent;color:var(--muted);cursor:pointer;">remove ×</button>
+            </li>
+            {{end}}
+            {{if not .SelectedGames}}
+            <li style="padding:12px;color:var(--muted);font-size:12px;text-align:center;">No games selected — pick from the right →</li>
+            {{end}}
+          </ul>
+        </div>
+        <div>
+          <div class="kicker" style="margin-bottom: 8px;">Available</div>
+          <ul id="available-list" style="list-style:none;margin:0;padding:0;border:1px dashed var(--line);max-height:300px;overflow-y:auto;">
+            {{range .AllGames}}
+            {{if not .Selected}}
+            <li data-game-id="{{.ID}}" style="padding:8px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;">
+              <span>{{.Name}}</span>
+              <button type="button" class="alt" onclick="addGame('{{.ID}}','{{.Name}}')" style="border:none;background:transparent;color:var(--accent);cursor:pointer;">add +</button>
+            </li>
+            {{end}}
+            {{end}}
+          </ul>
+        </div>
+      </div>
+      <div class="row" style="margin-top: 16px;">
+        <span style="color:var(--muted);font-size:11px;">Order in the left column = mining priority.</span>
+        <button class="btn primary" type="submit">Save games →</button>
+      </div>
+    </form>
+  </div>
 </div>
-{{end}}
+
+<script>
+(function() {
+  const sel = document.getElementById('selected-list');
+  const avail = document.getElementById('available-list');
+  const form = document.getElementById('games-form');
+
+  function addInputs() {
+    // Drop any existing inputs then rebuild from current order.
+    form.querySelectorAll('input[name="game_ids[]"]').forEach(n => n.remove());
+    sel.querySelectorAll('li[data-game-id]').forEach(li => {
+      const i = document.createElement('input');
+      i.type = 'hidden';
+      i.name = 'game_ids[]';
+      i.value = li.dataset.gameId;
+      form.appendChild(i);
+    });
+  }
+
+  window.addGame = function(id, name) {
+    if (sel.querySelector('li[data-game-id="'+id+'"]')) return;
+    const placeholder = sel.querySelector('li:not([data-game-id])');
+    if (placeholder) placeholder.remove();
+    const li = document.createElement('li');
+    li.dataset.gameId = id;
+    li.draggable = true;
+    li.style.cssText = 'padding:8px 12px;border-bottom:1px solid var(--line);cursor:grab;display:flex;align-items:center;justify-content:space-between;background:var(--bg-soft,#14151a);';
+    li.innerHTML = '<span>' + name + '</span><button type="button" class="alt" onclick="removeGame(\''+id+'\')" style="border:none;background:transparent;color:var(--muted);cursor:pointer;">remove ×</button>';
+    bindDrag(li);
+    sel.appendChild(li);
+    // also remove from available
+    const a = avail.querySelector('li[data-game-id="'+id+'"]');
+    if (a) a.remove();
+  };
+
+  window.removeGame = function(id) {
+    const li = sel.querySelector('li[data-game-id="'+id+'"]');
+    if (!li) return;
+    const name = li.querySelector('span').textContent;
+    li.remove();
+    const a = document.createElement('li');
+    a.dataset.gameId = id;
+    a.style.cssText = 'padding:8px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;';
+    a.innerHTML = '<span>' + name + '</span><button type="button" class="alt" onclick="addGame(\''+id+'\',\''+name+'\')" style="border:none;background:transparent;color:var(--accent);cursor:pointer;">add +</button>';
+    avail.appendChild(a);
+  };
+
+  let dragSrc = null;
+  function bindDrag(li) {
+    li.addEventListener('dragstart', function(e) {
+      dragSrc = li;
+      e.dataTransfer.effectAllowed = 'move';
+      li.style.opacity = '0.4';
+    });
+    li.addEventListener('dragend', function() {
+      li.style.opacity = '';
+    });
+    li.addEventListener('dragover', function(e) {
+      if (!dragSrc || dragSrc === li) return;
+      e.preventDefault();
+      const rect = li.getBoundingClientRect();
+      const before = (e.clientY - rect.top) < rect.height / 2;
+      sel.insertBefore(dragSrc, before ? li : li.nextSibling);
+    });
+  }
+  sel.querySelectorAll('li[data-game-id]').forEach(bindDrag);
+
+  form.addEventListener('submit', addInputs);
+})();
+</script>
+{{end}}{{/* .Page */}}
 {{end}}
