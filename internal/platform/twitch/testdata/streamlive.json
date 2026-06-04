@@ -1,0 +1,12 @@
+{
+  "data": {
+    "user": {
+      "login": "fakestreamer",
+      "displayName": "FakeStreamer",
+      "stream": {
+        "id": "12345",
+        "viewersCount": 9001
+      }
+    }
+  }
+}
