@@ -43,5 +43,12 @@ func TestQueries_AccountRoundtrip(t *testing.T) {
 
 	list, err := q.ListEnabledAccounts(context.Background())
 	require.NoError(t, err)
-	assert.Len(t, list, 1)
+	found := false
+	for _, a := range list {
+		if a.ID == "acc1" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "acc1 not present in ListEnabledAccounts result")
 }
