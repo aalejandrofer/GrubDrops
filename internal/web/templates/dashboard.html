@@ -1,5 +1,3 @@
-{{define "dashboard.html"}}
-{{template "layout" .}}
 {{define "title"}}Dashboard · Rust Drops Miner{{end}}
 {{define "content"}}
 <h1>Dashboard</h1>
@@ -7,4 +5,4 @@
   {{template "dashboard_cards" .Page}}
 </div>
 {{end}}
-{{end}}
+{{define "dashboard.html"}}{{template "layout" .}}{{end}}

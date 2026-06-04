@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"html/template"
 	"net/http"
 	"time"
 
@@ -14,7 +13,7 @@ import (
 
 type setupDeps struct {
 	q  *gen.Queries
-	t  *template.Template
+	t  Renderer
 	sm *scs.SessionManager
 }
 

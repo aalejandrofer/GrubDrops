@@ -1,7 +1,6 @@
 package api
 
 import (
-	"html/template"
 	"net/http"
 
 	"github.com/chano-fernandez/rust-drops-miner/internal/scheduler"
@@ -10,7 +9,7 @@ import (
 
 type dashboardDeps struct {
 	q   *gen.Queries
-	t   *template.Template
+	t   Renderer
 	sch *scheduler.Scheduler
 }
 

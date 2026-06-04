@@ -1,5 +1,3 @@
-{{define "login.html"}}
-{{template "layout" .}}
 {{define "title"}}Login · Rust Drops Miner{{end}}
 {{define "content"}}
 <h1>Login</h1>
@@ -10,4 +8,4 @@
   <button type="submit">Sign in</button>
 </form>
 {{end}}
-{{end}}
+{{define "login.html"}}{{template "layout" .}}{{end}}

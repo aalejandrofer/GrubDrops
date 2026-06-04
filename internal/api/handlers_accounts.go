@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"html/template"
 	"net/http"
 	"time"
 
@@ -16,7 +15,7 @@ import (
 
 type accountsDeps struct {
 	q  *gen.Queries
-	t  *template.Template
+	t  Renderer
 	sm *scs.SessionManager
 }
 

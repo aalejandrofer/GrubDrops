@@ -1,5 +1,3 @@
-{{define "accounts_detail.html"}}
-{{template "layout" .}}
 {{define "title"}}Account · Rust Drops Miner{{end}}
 {{define "content"}}
 {{with .Page}}
@@ -18,4 +16,4 @@
 {{end}}
 <p><a href="/accounts">back</a></p>
 {{end}}
-{{end}}
+{{define "accounts_detail.html"}}{{template "layout" .}}{{end}}

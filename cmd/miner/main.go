@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/alexedwards/scs/v2"
 
 	"github.com/chano-fernandez/rust-drops-miner/internal/api"
 	"github.com/chano-fernandez/rust-drops-miner/internal/config"
@@ -19,6 +22,7 @@ import (
 	"github.com/chano-fernandez/rust-drops-miner/internal/store"
 	"github.com/chano-fernandez/rust-drops-miner/internal/store/gen"
 	"github.com/chano-fernandez/rust-drops-miner/internal/watcher"
+	"github.com/chano-fernandez/rust-drops-miner/internal/web"
 )
 
 func main() {
@@ -50,48 +54,75 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("master key invalid: %w", err)
 	}
-	// Held for Plan 2/3 wiring (session blob encrypt/decrypt). Bind the
-	// reference here so the daemon refuses to start without a valid key.
 	_ = cryptor
 
 	q := gen.New(db)
-	accounts, err := q.ListEnabledAccounts(ctx)
+
+	tmplSet, err := web.Templates()
 	if err != nil {
-		return fmt.Errorf("list accounts: %w", err)
+		return fmt.Errorf("load templates: %w", err)
 	}
 
+	sm := scs.New()
+	sm.Store = api.NewKVSessionStore(db)
+	sm.Lifetime = 12 * time.Hour
+	sm.Cookie.HttpOnly = true
+	sm.Cookie.SameSite = http.SameSiteStrictMode
+
 	registry := platform.NewRegistry()
-	// Fast time keeps the demo loop short (RequiredMinutes=2 vs default 5)
-	// so a claim happens within a few seconds during smoke runs.
 	registry.Register(fake.New(fake.WithFastTime()))
 
-	notifier := &notify.NoopNotifier{Logger: logger}
+	notifier := makeNotifier(cfg, logger)
 	sched := scheduler.New(scheduler.Options{Notifier: notifier})
 
-	for _, a := range accounts {
-		backend, ok := registry.Get(a.Platform)
+	build := func(a gen.Account) (scheduler.Entry, error) {
+		b, ok := registry.Get(a.Platform)
 		if !ok {
-			logger.Warn("no backend registered for account", "platform", a.Platform, "account", a.ID)
-			continue
+			return scheduler.Entry{}, fmt.Errorf("no backend for platform %q", a.Platform)
 		}
-		sess, err := backend.PollDeviceLogin(ctx, platform.DeviceChallenge{})
+		sess, err := b.PollDeviceLogin(ctx, platform.DeviceChallenge{})
 		if err != nil {
-			logger.Error("device login failed", "account", a.ID, "err", err)
-			continue
+			return scheduler.Entry{}, fmt.Errorf("device login: %w", err)
 		}
 		w := watcher.New(watcher.Config{
-			AccountID:    a.ID,
-			Backend:      backend,
-			Session:      sess,
-			Notifier:     notifier,
-			TickInterval: 500 * time.Millisecond,
+			AccountID: a.ID, Backend: b, Session: sess,
+			Notifier: notifier, TickInterval: 500 * time.Millisecond,
 		})
-		sched.Add(a.ID, w)
+		return scheduler.NewEntry(a.ID, w), nil
+	}
+
+	loadAndStart := func(parent context.Context) error {
+		accs, err := q.ListEnabledAccounts(parent)
+		if err != nil {
+			return err
+		}
+		builders := make([]scheduler.EntryBuilder, 0, len(accs))
+		for _, a := range accs {
+			a := a
+			builders = append(builders, func() scheduler.Entry {
+				e, err := build(a)
+				if err != nil {
+					logger.Error("account skipped", "account", a.ID, "err", err)
+					return scheduler.NewEntry(a.ID, nopRunner{})
+				}
+				return e
+			})
+		}
+		return sched.Reload(parent, builders)
+	}
+
+	if err := loadAndStart(ctx); err != nil {
+		return fmt.Errorf("initial scheduler boot: %w", err)
+	}
+
+	deps := api.Deps{
+		DB: db, Q: q, Templates: tmplSet, Session: sm,
+		Scheduler: sched, Reload: loadAndStart,
 	}
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewRouter(api.Deps{}),
+		Handler:           api.NewRouter(deps),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -102,16 +133,26 @@ func run() error {
 		}
 	}()
 
-	if err := sched.Start(ctx); err != nil {
-		return err
-	}
-
 	<-ctx.Done()
 	logger.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
 
-	sched.Wait()
+	sched.Stop(shutdownCtx)
 	return nil
 }
+
+func makeNotifier(cfg config.Config, logger *slog.Logger) notify.Notifier {
+	if cfg.DiscordWebhookURL != "" {
+		return notify.NewDiscordWebhook(cfg.DiscordWebhookURL, &notify.VerbosityFilter{Allow: map[string]bool{
+			notify.EventClaim: true, notify.EventError: true,
+			notify.EventProgress: true, notify.EventAuth: true,
+		}})
+	}
+	return &notify.NoopNotifier{Logger: logger}
+}
+
+type nopRunner struct{}
+
+func (nopRunner) Run(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }

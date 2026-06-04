@@ -1,5 +1,3 @@
-{{define "accounts_new.html"}}
-{{template "layout" .}}
 {{define "title"}}New account · Rust Drops Miner{{end}}
 {{define "content"}}
 <h1>New account</h1>
@@ -17,4 +15,4 @@
 </form>
 <p><a href="/accounts">cancel</a></p>
 {{end}}
-{{end}}
+{{define "accounts_new.html"}}{{template "layout" .}}{{end}}
