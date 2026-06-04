@@ -4,6 +4,7 @@ go 1.26.2
 
 require (
 	filippo.io/age v1.2.0
+	github.com/go-chi/chi/v5 v5.0.12
 	github.com/pressly/goose/v3 v3.20.0
 	github.com/stretchr/testify v1.9.0
 	modernc.org/sqlite v1.29.6
