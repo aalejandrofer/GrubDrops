@@ -3,6 +3,7 @@ package twitch
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
@@ -10,7 +11,11 @@ import (
 
 // discovery wraps the low-level client and implements campaign + inventory queries.
 type discovery struct {
-	c *client
+	c  *client
+	mu sync.Mutex
+	// pendingAllowed accumulates per-campaign allow-lists as fetchDetails
+	// runs. Backend drains this via drainAllowed() after listActive returns.
+	pendingAllowed map[string][]string
 }
 
 // campaignsData decodes the ViewerDropsDashboard (OpCampaigns) response.
@@ -36,11 +41,26 @@ type campaignsData struct {
 // DevilXD path: response["data"]["user"]["dropCampaign"]["timeBasedDrops"]
 // Benefit image field is "imageAssetURL" (flat string, NOT a nested image object).
 // Source: inventory.py TimedDrop.__init__ + Benefit.__init__
+//
+// Allow-list path (verified from DevilXD channel.py Channel.from_acl):
+//   response["data"]["user"]["dropCampaign"]["allow"]["isEnabled"] bool
+//   response["data"]["user"]["dropCampaign"]["allow"]["channels"][]["id"]   string
+//   response["data"]["user"]["dropCampaign"]["allow"]["channels"][]["name"] string  ← used as login
+// If isEnabled==false (or allow.channels is empty), all channels streaming the
+// game qualify (no restriction). We conservatively return an empty allow-list
+// in that case — a future revision can fan out to "top channels for game".
 type campaignDetailsData struct {
 	User struct {
 		DropCampaign struct {
-			ID             string `json:"id"`
-			Name           string `json:"name"`
+			ID    string `json:"id"`
+			Name  string `json:"name"`
+			Allow struct {
+				IsEnabled bool `json:"isEnabled"`
+				Channels  []struct {
+					ID   string `json:"id"`
+					Name string `json:"name"` // DevilXD reads this as login (Channel.from_acl: login=data["name"])
+				} `json:"channels"`
+			} `json:"allow"`
 			TimeBasedDrops []struct {
 				ID                     string `json:"id"`
 				Name                   string `json:"name"`
@@ -81,6 +101,8 @@ type inventoryData struct {
 
 // listActive returns all ACTIVE campaigns with their drop benefits.
 // EXPIRED and UPCOMING campaigns are discarded.
+// As a side effect it calls captureAllowed so that the caller (Backend) can
+// drain the allow-lists via drainAllowed() and store them in its own cache.
 func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]platform.Campaign, error) {
 	var page campaignsData
 	if err := d.c.gql(ctx, sess.AccessToken, OpCampaigns, nil, &page); err != nil {
@@ -91,10 +113,11 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 		if c.Status != "ACTIVE" {
 			continue
 		}
-		benefits, err := d.fetchDetails(ctx, sess, c.ID)
+		benefits, allowedLogins, err := d.fetchDetails(ctx, sess, c.ID)
 		if err != nil {
 			return nil, err
 		}
+		d.captureAllowed(c.ID, allowedLogins)
 		out = append(out, platform.Campaign{
 			ID:       c.ID,
 			Platform: "twitch",
@@ -110,17 +133,22 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 }
 
 // fetchDetails calls OpDropCampaignDetails and converts the response into
-// a slice of platform.DropBenefit values.
+// a slice of platform.DropBenefit values and the per-campaign allow-list.
 //
 // Note on BenefitID: claims are issued against the drop's id (TimedDrop.id),
 // not the underlying reward benefit id — matching DevilXD's claim flow.
-func (d *discovery) fetchDetails(ctx context.Context, sess platform.Session, campaignID string) ([]platform.DropBenefit, error) {
+//
+// allowedLogins is nil when allow.isEnabled==false (meaning any channel
+// streaming the game qualifies). A future revision should fan out to the
+// "top channels for game" query in that case. For now we conservatively
+// return nil, which causes ListEligibleChannels to return no streams.
+func (d *discovery) fetchDetails(ctx context.Context, sess platform.Session, campaignID string) (benefits []platform.DropBenefit, allowedLogins []string, err error) {
 	var det campaignDetailsData
 	if err := d.c.gql(ctx, sess.AccessToken, OpDropCampaignDetails,
 		map[string]any{"dropID": campaignID, "channelLogin": ""}, &det); err != nil {
-		return nil, fmt.Errorf("campaign details %s: %w", campaignID, err)
+		return nil, nil, fmt.Errorf("campaign details %s: %w", campaignID, err)
 	}
-	benefits := make([]platform.DropBenefit, 0, len(det.User.DropCampaign.TimeBasedDrops))
+	benefits = make([]platform.DropBenefit, 0, len(det.User.DropCampaign.TimeBasedDrops))
 	for _, td := range det.User.DropCampaign.TimeBasedDrops {
 		for _, be := range td.BenefitEdges {
 			benefits = append(benefits, platform.DropBenefit{
@@ -132,7 +160,33 @@ func (d *discovery) fetchDetails(ctx context.Context, sess platform.Session, cam
 			})
 		}
 	}
-	return benefits, nil
+	if det.User.DropCampaign.Allow.IsEnabled {
+		for _, ch := range det.User.DropCampaign.Allow.Channels {
+			allowedLogins = append(allowedLogins, ch.Name)
+		}
+	}
+	return benefits, allowedLogins, nil
+}
+
+// captureAllowed stores per-campaign allow-lists as a side-effect of
+// fetchDetails so Backend can drain them after listActive completes.
+func (d *discovery) captureAllowed(campaignID string, logins []string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.pendingAllowed == nil {
+		d.pendingAllowed = map[string][]string{}
+	}
+	d.pendingAllowed[campaignID] = logins
+}
+
+// drainAllowed returns and clears the pending allow-list map. Safe for
+// concurrent use; intended to be called exactly once per listActive call.
+func (d *discovery) drainAllowed() map[string][]string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	out := d.pendingAllowed
+	d.pendingAllowed = map[string][]string{}
+	return out
 }
 
 // inventory returns the current watch progress for all in-progress drop campaigns.

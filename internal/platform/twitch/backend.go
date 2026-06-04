@@ -82,16 +82,12 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 	if err != nil {
 		return nil, err
 	}
-	// We initialize the allow-list cache empty. Production should refine
-	// this by reading dropCampaignDetails.allow.channels[].login when
-	// fetching details — left for a follow-up plan revision (see plan
-	// self-review notes). For now an empty allow-list means
-	// ListEligibleChannels returns no streams and the watcher sleeps.
+	// Drain the allow-lists captured as a side-effect of fetchDetails and
+	// merge them into our cache. ListEligibleChannels reads from this map.
+	allowed := b.disc.drainAllowed()
 	b.mu.Lock()
-	for _, c := range camps {
-		if _, ok := b.allowedLoginsByCampaign[c.ID]; !ok {
-			b.allowedLoginsByCampaign[c.ID] = nil
-		}
+	for cid, logins := range allowed {
+		b.allowedLoginsByCampaign[cid] = logins
 	}
 	b.mu.Unlock()
 	return camps, nil

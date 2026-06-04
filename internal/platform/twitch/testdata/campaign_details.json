@@ -4,6 +4,13 @@
       "dropCampaign": {
         "id": "camp1",
         "name": "Rust Twitch Drops",
+        "allow": {
+          "isEnabled": true,
+          "channels": [
+            {"id": "111", "name": "fakestreamer"},
+            {"id": "222", "name": "another"}
+          ]
+        },
         "timeBasedDrops": [
           {
             "id": "drop1",
