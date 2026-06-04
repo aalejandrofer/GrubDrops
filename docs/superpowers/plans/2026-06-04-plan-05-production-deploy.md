@@ -4,7 +4,7 @@
 
 **Goal:** Ship the daemon (+ browser sidecar) to the homelab so `https://rdrops.ryuzec.dev` serves the GUI. Images go to ghcr.io; a new homelab stack at `humblewhale/rust-drops-miner/compose.yml` joins `traeky_proxynet`; Traefik labels handle TLS via Cloudflare DNS-01. Deploy via the homelab's standard SSH + `docker compose pull && up -d` flow (or the `homelab-update` TUI).
 
-**Architecture:** Two-repo flow. The miner repo (this one) owns the source + a `scripts/release.sh` helper that tags and pushes images to `ghcr.io/chano-fernandez/rust-drops-miner` and `...-browser`. The homelab repo (sibling at `/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab`) gains a new stack directory with `compose.yml` and `.env.example`. Operator pushes images interactively (ghcr requires login), commits the homelab change, then runs `update/homelab-update` (or SSH directly) to pull and reload on 10.10.2.40.
+**Architecture:** Two-repo flow. The miner repo (this one) owns the source + a `scripts/release.sh` helper that tags and pushes images to `ghcr.io/aalejandrofer/rust-drops-miner` and `...-browser`. The homelab repo (sibling at `/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab`) gains a new stack directory with `compose.yml` and `.env.example`. Operator pushes images interactively (ghcr requires login), commits the homelab change, then runs `update/homelab-update` (or SSH directly) to pull and reload on 10.10.2.40.
 
 **Tech Stack:** Existing Docker images, `ghcr.io` registry, Traefik (already running on the host), Cloudflare DNS challenge (already configured at the Traefik level), `homelab-update` TUI.
 
@@ -64,7 +64,7 @@ if [[ -z "$TAG" ]]; then
   exit 2
 fi
 
-REGISTRY="ghcr.io/chano-fernandez"
+REGISTRY="ghcr.io/aalejandrofer"
 MINER_IMAGE="$REGISTRY/rust-drops-miner"
 BROWSER_IMAGE="$REGISTRY/rust-drops-miner-browser"
 
@@ -111,7 +111,7 @@ Expected: usage line.
 
 ```bash
 ./scripts/release.sh v0.0.0-smoke --build-only
-docker images | grep -E 'ghcr.io/chano-fernandez/rust-drops-miner'
+docker images | grep -E 'ghcr.io/aalejandrofer/rust-drops-miner'
 ```
 
 Expected: both `:v0.0.0-smoke` and `:latest` tags appear for both images.
@@ -119,8 +119,8 @@ Expected: both `:v0.0.0-smoke` and `:latest` tags appear for both images.
 Clean up the smoke tags:
 
 ```bash
-docker rmi ghcr.io/chano-fernandez/rust-drops-miner:v0.0.0-smoke || true
-docker rmi ghcr.io/chano-fernandez/rust-drops-miner-browser:v0.0.0-smoke || true
+docker rmi ghcr.io/aalejandrofer/rust-drops-miner:v0.0.0-smoke || true
+docker rmi ghcr.io/aalejandrofer/rust-drops-miner-browser:v0.0.0-smoke || true
 ```
 
 - [ ] **Step 4: Commit**
@@ -167,7 +167,7 @@ If the reference stack uses different label keys, mirror those.
 # humblewhale/rust-drops-miner/compose.yml
 services:
   rust-drops-miner:
-    image: ghcr.io/chano-fernandez/rust-drops-miner:latest
+    image: ghcr.io/aalejandrofer/rust-drops-miner:latest
     container_name: rust-drops-miner
     restart: unless-stopped
     env_file: ./.env
@@ -187,7 +187,7 @@ services:
       - "traefik.docker.network=traeky_proxynet"
 
   rust-drops-miner-browser:
-    image: ghcr.io/chano-fernandez/rust-drops-miner-browser:latest
+    image: ghcr.io/aalejandrofer/rust-drops-miner-browser:latest
     container_name: rust-drops-miner-browser
     restart: unless-stopped
     networks:
@@ -266,7 +266,7 @@ Self-hosted Twitch + Kick drops miner.
 - Web GUI: https://rdrops.ryuzec.dev
 - Data: bind-mount at `/home/jandro/localConfig/rust-drops-miner/data` (sqlite + age-encrypted sessions).
 - Browser sidecar (`rust-drops-miner-browser`) handles Kick. Twitch works without it.
-- Images: `ghcr.io/chano-fernandez/rust-drops-miner` and `...-browser`.
+- Images: `ghcr.io/aalejandrofer/rust-drops-miner` and `...-browser`.
 - Releases pushed from the source repo via `scripts/release.sh v0.X.Y`.
 - Source: ../../../RustDropsMiner (separate repo).
 
@@ -299,9 +299,9 @@ git commit -m "$(cat <<'EOF'
 feat(rust-drops-miner): add stack for rdrops.ryuzec.dev
 
 New humblewhale stack:
-- ghcr.io/chano-fernandez/rust-drops-miner:latest behind Traefik
+- ghcr.io/aalejandrofer/rust-drops-miner:latest behind Traefik
   with Cloudflare DNS-01 cert at rdrops.ryuzec.dev
-- ghcr.io/chano-fernandez/rust-drops-miner-browser:latest for Kick
+- ghcr.io/aalejandrofer/rust-drops-miner-browser:latest for Kick
   via the chromedp sidecar
 - Bind-mount /home/jandro/localConfig/rust-drops-miner/data for sqlite
 
@@ -333,7 +333,7 @@ This runbook is the operator's checklist for shipping a build to https://rdrops.
 1. **GHCR login.** Generate a GitHub PAT with `write:packages` scope, then:
 
    ```bash
-   echo "$GHCR_TOKEN" | docker login ghcr.io -u chano-fernandez --password-stdin
+   echo "$GHCR_TOKEN" | docker login ghcr.io -u aalejandrofer --password-stdin
    ```
 
 2. **Confirm Traefik + Blocky are configured.** `*.ryuzec.dev` already resolves to 10.10.2.40 via Blocky and Traefik holds a Cloudflare DNS-01 cert. No changes needed.
@@ -428,7 +428,7 @@ If a release is bad:
 ssh jandro@10.10.2.40 '
   cd ~/deployments/humblewhale/rust-drops-miner &&
   # pin previous tag in compose.yml manually OR:
-  docker compose pull ghcr.io/chano-fernandez/rust-drops-miner:v0.0.X
+  docker compose pull ghcr.io/aalejandrofer/rust-drops-miner:v0.0.X
   docker compose up -d
 '
 ```

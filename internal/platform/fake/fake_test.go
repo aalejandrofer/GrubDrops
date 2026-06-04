@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 func TestFake_LifecycleClaims(t *testing.T) {

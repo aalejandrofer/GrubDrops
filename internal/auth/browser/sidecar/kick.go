@@ -9,7 +9,7 @@ import (
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 
-	pb "github.com/chano-fernandez/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
 )
 
 // Kick wraps Browser with Kick.com-specific page logic.

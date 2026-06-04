@@ -7,7 +7,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/chano-fernandez/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
 )
 
 // Client wraps the generated gRPC client with a friendlier surface.

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 // Verify that *Backend satisfies platform.Backend at compile time.

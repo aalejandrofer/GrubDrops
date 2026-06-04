@@ -1,7 +1,7 @@
 # Rust Drops Miner — Design
 
 **Status:** Approved 2026-06-04
-**Owner:** chano.fernandez@klaviyo.com
+**Owner:** aalejandrofer
 **Inspirations:** [TwitchDropsMiner](https://github.com/DevilXD/TwitchDropsMiner), [KickDropsMiner](https://github.com/HyperBeats/KickDropsMiner)
 
 ## Goal
@@ -308,7 +308,7 @@ Sketch:
 ```yaml
 services:
   rust-drops-miner:
-    image: ghcr.io/chano-fernandez/rust-drops-miner:latest
+    image: ghcr.io/aalejandrofer/rust-drops-miner:latest
     container_name: rust-drops-miner
     restart: unless-stopped
     env_file: ./.env

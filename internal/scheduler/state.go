@@ -1,6 +1,6 @@
 package scheduler
 
-import "github.com/chano-fernandez/rust-drops-miner/internal/watcher"
+import "github.com/aalejandrofer/rust-drops-miner/internal/watcher"
 
 type AccountState struct {
 	AccountID string

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/notify"
-	"github.com/chano-fernandez/rust-drops-miner/internal/watcher"
+	"github.com/aalejandrofer/rust-drops-miner/internal/notify"
+	"github.com/aalejandrofer/rust-drops-miner/internal/watcher"
 )
 
 type runner interface {

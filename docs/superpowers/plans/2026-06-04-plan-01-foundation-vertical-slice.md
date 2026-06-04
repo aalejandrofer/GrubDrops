@@ -74,10 +74,10 @@ Expected: commit succeeds on `master`.
 - [ ] **Step 1: Initialize Go module**
 
 ```bash
-go mod init github.com/chano-fernandez/rust-drops-miner
+go mod init github.com/aalejandrofer/rust-drops-miner
 ```
 
-Expected: creates `go.mod` with `module github.com/chano-fernandez/rust-drops-miner` and `go 1.22` (or newer).
+Expected: creates `go.mod` with `module github.com/aalejandrofer/rust-drops-miner` and `go 1.22` (or newer).
 
 - [ ] **Step 2: Create `.gitignore`**
 
@@ -838,7 +838,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
 )
 
 func openTest(t *testing.T) *sql.DB {
@@ -1172,7 +1172,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 func TestFake_LifecycleClaims(t *testing.T) {
@@ -1225,7 +1225,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 type Option func(*Backend)
@@ -1386,8 +1386,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform/fake"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform/fake"
 )
 
 type recordingNotifier struct{ events []string }
@@ -1481,7 +1481,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 type Notifier interface {
@@ -1794,9 +1794,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform/fake"
-	"github.com/chano-fernandez/rust-drops-miner/internal/watcher"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform/fake"
+	"github.com/aalejandrofer/rust-drops-miner/internal/watcher"
 )
 
 type captureNotifier struct{ claims atomic.Int64 }
@@ -1847,8 +1847,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/notify"
-	"github.com/chano-fernandez/rust-drops-miner/internal/watcher"
+	"github.com/aalejandrofer/rust-drops-miner/internal/notify"
+	"github.com/aalejandrofer/rust-drops-miner/internal/watcher"
 )
 
 type runner interface {
@@ -2059,16 +2059,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/api"
-	"github.com/chano-fernandez/rust-drops-miner/internal/config"
-	mlog "github.com/chano-fernandez/rust-drops-miner/internal/log"
-	"github.com/chano-fernandez/rust-drops-miner/internal/notify"
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform/fake"
-	"github.com/chano-fernandez/rust-drops-miner/internal/scheduler"
-	"github.com/chano-fernandez/rust-drops-miner/internal/store"
-	"github.com/chano-fernandez/rust-drops-miner/internal/store/gen"
-	"github.com/chano-fernandez/rust-drops-miner/internal/watcher"
+	"github.com/aalejandrofer/rust-drops-miner/internal/api"
+	"github.com/aalejandrofer/rust-drops-miner/internal/config"
+	mlog "github.com/aalejandrofer/rust-drops-miner/internal/log"
+	"github.com/aalejandrofer/rust-drops-miner/internal/notify"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform/fake"
+	"github.com/aalejandrofer/rust-drops-miner/internal/scheduler"
+	"github.com/aalejandrofer/rust-drops-miner/internal/store"
+	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/rust-drops-miner/internal/watcher"
 )
 
 func main() {
@@ -2336,7 +2336,7 @@ git commit -m "feat(deploy): docker-compose for local end-to-end testing"
 ```bash
 mkdir -p e2e
 cd e2e
-go mod init github.com/chano-fernandez/rust-drops-miner-e2e
+go mod init github.com/aalejandrofer/rust-drops-miner-e2e
 go get github.com/stretchr/testify@v1.9.0
 cd ..
 ```

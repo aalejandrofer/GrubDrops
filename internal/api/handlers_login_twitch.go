@@ -10,9 +10,9 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
-	"github.com/chano-fernandez/rust-drops-miner/internal/store"
-	"github.com/chano-fernandez/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/store"
+	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
 )
 
 type loginTwitchDeps struct {

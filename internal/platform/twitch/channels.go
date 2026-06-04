@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 type channels struct {

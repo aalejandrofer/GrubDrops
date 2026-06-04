@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 // oauthScopes mirrors DevilXD's pinned scope set.

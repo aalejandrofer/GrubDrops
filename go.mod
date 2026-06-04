@@ -1,10 +1,12 @@
-module github.com/chano-fernandez/rust-drops-miner
+module github.com/aalejandrofer/rust-drops-miner
 
 go 1.26.2
 
 require (
 	filippo.io/age v1.2.0
 	github.com/alexedwards/scs/v2 v2.8.0
+	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc
+	github.com/chromedp/chromedp v0.15.1
 	github.com/go-chi/chi/v5 v5.0.12
 	github.com/justinas/nosurf v1.1.1
 	github.com/pressly/goose/v3 v3.20.0
@@ -16,8 +18,6 @@ require (
 )
 
 require (
-	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc // indirect
-	github.com/chromedp/chromedp v0.15.1 // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect

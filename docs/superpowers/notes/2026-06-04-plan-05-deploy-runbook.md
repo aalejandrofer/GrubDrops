@@ -7,7 +7,7 @@ Operator's checklist for shipping a build to https://rdrops.ryuzec.dev.
 1. **GHCR login.** Generate a GitHub PAT with `write:packages` scope, then:
 
    ```bash
-   echo "$GHCR_TOKEN" | docker login ghcr.io -u chano-fernandez --password-stdin
+   echo "$GHCR_TOKEN" | docker login ghcr.io -u aalejandrofer --password-stdin
    ```
 
 2. **Confirm Traefik + Blocky are configured.** `*.ryuzec.dev` already resolves to 10.10.2.40 via Blocky, and Traefik holds a Let's Encrypt DNS-01 cert via the `letsencrypt-dns` resolver. No per-stack work needed.

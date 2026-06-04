@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
 )
 
 type dropsDeps struct {

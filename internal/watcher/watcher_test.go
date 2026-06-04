@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform/fake"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform/fake"
 )
 
 type recordingNotifier struct{ events []string }

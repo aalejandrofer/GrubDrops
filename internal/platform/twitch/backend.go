@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 // Backend implements platform.Backend for Twitch using GraphQL persisted

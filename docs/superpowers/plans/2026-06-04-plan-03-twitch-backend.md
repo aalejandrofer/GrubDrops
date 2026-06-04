@@ -525,7 +525,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 // Scopes requested for device login. Mirrors DevilXD reference.
@@ -783,7 +783,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 func loadFixture(t *testing.T, name string) []byte {
@@ -845,7 +845,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 type discovery struct {
@@ -1057,7 +1057,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 func TestChannels_ListEligible_ReturnsLiveOnly(t *testing.T) {
@@ -1089,7 +1089,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 type channels struct {
@@ -1235,7 +1235,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 func TestWatch_HeartbeatSendsGzippedBase64Mutation(t *testing.T) {
@@ -1304,7 +1304,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 const sendEventsMutation = `mutation SendEvents($input: SendSpadeEventsInput!) {
@@ -1450,7 +1450,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 func TestClaim_SendsCorrectVariables(t *testing.T) {
@@ -1478,7 +1478,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 type claimer struct {
@@ -1552,7 +1552,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 // Backend implements platform.Backend for Twitch using GraphQL persisted
@@ -1664,7 +1664,7 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 ```
 
@@ -1722,8 +1722,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
-	"github.com/chano-fernandez/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
 )
 
 func TestSessionStore_RoundTrip(t *testing.T) {
@@ -1788,8 +1788,8 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
-	"github.com/chano-fernandez/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
 )
 
 // SessionStore persists encrypted platform.Session blobs in the sessions
@@ -1920,7 +1920,7 @@ build := func(a gen.Account) (scheduler.Entry, error) {
 Add the import:
 
 ```go
-"github.com/chano-fernandez/rust-drops-miner/internal/platform/twitch"
+"github.com/aalejandrofer/rust-drops-miner/internal/platform/twitch"
 ```
 
 - [ ] **Step 2: Make `sessions` reachable to the API handlers**
@@ -1944,7 +1944,7 @@ deps := api.Deps{
 Plus the matching import in `internal/api/server.go`:
 
 ```go
-"github.com/chano-fernandez/rust-drops-miner/internal/store"
+"github.com/aalejandrofer/rust-drops-miner/internal/store"
 ```
 
 - [ ] **Step 3: Build + run all tests**
@@ -2027,9 +2027,9 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
-	"github.com/chano-fernandez/rust-drops-miner/internal/store"
-	"github.com/chano-fernandez/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/store"
+	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
 )
 
 type loginTwitchDeps struct {

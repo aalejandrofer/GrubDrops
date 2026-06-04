@@ -18,7 +18,7 @@ if [[ -z "$TAG" ]]; then
   exit 2
 fi
 
-REGISTRY="ghcr.io/chano-fernandez"
+REGISTRY="ghcr.io/aalejandrofer"
 MINER_IMAGE="$REGISTRY/rust-drops-miner"
 BROWSER_IMAGE="$REGISTRY/rust-drops-miner-browser"
 

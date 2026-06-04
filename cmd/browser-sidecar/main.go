@@ -13,8 +13,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	pb "github.com/chano-fernandez/rust-drops-miner/internal/auth/browser/gen/browser/v1"
-	"github.com/chano-fernandez/rust-drops-miner/internal/auth/browser/sidecar"
+	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	"github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/sidecar"
 )
 
 func main() {

@@ -11,7 +11,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
 )
 
 type accountsDeps struct {

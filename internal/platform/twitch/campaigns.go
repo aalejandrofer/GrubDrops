@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 // discovery wraps the low-level client and implements campaign + inventory queries.

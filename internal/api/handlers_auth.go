@@ -5,8 +5,8 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/auth"
-	"github.com/chano-fernandez/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/rust-drops-miner/internal/auth"
+	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
 )
 
 type authDeps struct {

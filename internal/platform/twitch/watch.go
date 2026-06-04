@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 const sendEventsMutation = `mutation SendEvents($input: SendSpadeEventsInput!) {

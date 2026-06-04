@@ -116,7 +116,7 @@ syntax = "proto3";
 
 package browser.v1;
 
-option go_package = "github.com/chano-fernandez/rust-drops-miner/internal/auth/browser/gen/browser/v1;browserv1";
+option go_package = "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1;browserv1";
 
 // Browser is the sidecar's gRPC service. It owns a headless Chromium
 // instance and exposes Kick-specific drops operations to the main daemon.
@@ -421,7 +421,7 @@ import (
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 
-	pb "github.com/chano-fernandez/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
 )
 
 // Kick wraps Browser with Kick.com-specific page logic.
@@ -683,7 +683,7 @@ package sidecar
 import (
 	"context"
 
-	pb "github.com/chano-fernandez/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
 )
 
 // Server implements the gRPC service. Methods translate proto types
@@ -792,8 +792,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	pb "github.com/chano-fernandez/rust-drops-miner/internal/auth/browser/gen/browser/v1"
-	"github.com/chano-fernandez/rust-drops-miner/internal/auth/browser/sidecar"
+	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	"github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/sidecar"
 )
 
 func main() {
@@ -889,7 +889,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/chano-fernandez/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
 )
 
 // Client wraps the generated gRPC client with a friendlier surface.
@@ -968,7 +968,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	pb "github.com/chano-fernandez/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
 )
 
 type stubServer struct {
@@ -1071,9 +1071,9 @@ package kick
 import (
 	"encoding/json"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 
-	pb "github.com/chano-fernandez/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
 )
 
 // kickSession is the JSON we serialize into platform.Session.Cookies +
@@ -1176,8 +1176,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/auth/browser"
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/auth/browser"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 // Backend implements platform.Backend for Kick by delegating page
@@ -1348,9 +1348,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	pb "github.com/chano-fernandez/rust-drops-miner/internal/auth/browser/gen/browser/v1"
-	"github.com/chano-fernandez/rust-drops-miner/internal/auth/browser"
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	"github.com/aalejandrofer/rust-drops-miner/internal/auth/browser"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 type stubServer struct {
@@ -1576,8 +1576,8 @@ if cfg.BrowserURL != "" {
 Add imports:
 
 ```go
-"github.com/chano-fernandez/rust-drops-miner/internal/auth/browser"
-"github.com/chano-fernandez/rust-drops-miner/internal/platform/kick"
+"github.com/aalejandrofer/rust-drops-miner/internal/auth/browser"
+"github.com/aalejandrofer/rust-drops-miner/internal/platform/kick"
 ```
 
 - [ ] **Step 4: Build + tests**
@@ -1658,10 +1658,10 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
-	pb "github.com/chano-fernandez/rust-drops-miner/internal/auth/browser/gen/browser/v1"
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
-	"github.com/chano-fernandez/rust-drops-miner/internal/store"
-	"github.com/chano-fernandez/rust-drops-miner/internal/store/gen"
+	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/store"
+	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
 )
 
 // kickBrowserClient is the surface handlers_login_kick depends on. We

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/auth/browser"
-	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/rust-drops-miner/internal/auth/browser"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 )
 
 // Backend implements platform.Backend for Kick by delegating page

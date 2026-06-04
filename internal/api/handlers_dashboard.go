@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"github.com/chano-fernandez/rust-drops-miner/internal/scheduler"
-	"github.com/chano-fernandez/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/rust-drops-miner/internal/scheduler"
+	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
 )
 
 type dashboardDeps struct {
