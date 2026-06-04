@@ -1,0 +1,13 @@
+{{define "login.html"}}
+{{template "layout" .}}
+{{define "title"}}Login · Rust Drops Miner{{end}}
+{{define "content"}}
+<h1>Login</h1>
+{{if .Flash}}<p class="err">{{.Flash}}</p>{{end}}
+<form method="post" action="/login">
+  <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+  <label>Password<input type="password" name="password" required autofocus></label>
+  <button type="submit">Sign in</button>
+</form>
+{{end}}
+{{end}}
