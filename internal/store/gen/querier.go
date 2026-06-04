@@ -19,6 +19,7 @@ type Querier interface {
 	GetSession(ctx context.Context, accountID string) (Session, error)
 	InsertClaim(ctx context.Context, arg InsertClaimParams) error
 	ListActiveCampaignsForPlatform(ctx context.Context, arg ListActiveCampaignsForPlatformParams) ([]Campaign, error)
+	ListAllAccounts(ctx context.Context) ([]Account, error)
 	ListBenefitsForCampaign(ctx context.Context, campaignID string) ([]Benefit, error)
 	ListEnabledAccounts(ctx context.Context) ([]Account, error)
 	ListUnclaimedProgressForAccount(ctx context.Context, arg ListUnclaimedProgressForAccountParams) ([]Progress, error)

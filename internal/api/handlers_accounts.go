@@ -21,7 +21,7 @@ type accountsDeps struct {
 }
 
 func (d accountsDeps) list(w http.ResponseWriter, r *http.Request) {
-	rows, err := d.q.ListEnabledAccounts(r.Context())
+	rows, err := d.q.ListAllAccounts(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -46,6 +46,45 @@ func (q *Queries) GetAccountByPlatformLogin(ctx context.Context, arg GetAccountB
 	return i, err
 }
 
+const listAllAccounts = `-- name: ListAllAccounts :many
+SELECT id, platform, login, display_name, status, proxy_url, webhook_url, fingerprint_json, enabled, created_at, updated_at FROM accounts ORDER BY created_at ASC
+`
+
+func (q *Queries) ListAllAccounts(ctx context.Context) ([]Account, error) {
+	rows, err := q.db.QueryContext(ctx, listAllAccounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Account
+	for rows.Next() {
+		var i Account
+		if err := rows.Scan(
+			&i.ID,
+			&i.Platform,
+			&i.Login,
+			&i.DisplayName,
+			&i.Status,
+			&i.ProxyUrl,
+			&i.WebhookUrl,
+			&i.FingerprintJson,
+			&i.Enabled,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateAccountDisplayName = `-- name: UpdateAccountDisplayName :exec
 UPDATE accounts SET display_name = ?, updated_at = ? WHERE id = ?
 `

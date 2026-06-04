@@ -6,3 +6,6 @@ DELETE FROM accounts WHERE id = ?;
 
 -- name: GetAccountByPlatformLogin :one
 SELECT * FROM accounts WHERE platform = ? AND login = ?;
+
+-- name: ListAllAccounts :many
+SELECT * FROM accounts ORDER BY created_at ASC;
