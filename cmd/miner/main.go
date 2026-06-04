@@ -45,6 +45,7 @@ func run() error {
 	ring := mlog.NewRing(1000)
 	logger := mlog.NewWithRing(os.Stdout, cfg.LogLevel, ring)
 	slog.SetDefault(logger)
+	startTime := time.Now()
 	logger.Info("miner starting", "log_level", cfg.LogLevel, "http_addr", cfg.HTTPAddr, "db_path", cfg.DBPath, "browser_url", cfg.BrowserURL, "secure_cookies", cfg.SecureCookies)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -253,6 +254,8 @@ func run() error {
 		SettingsStore:       settingsStore,
 		OnSettingsUpdate:    onSettingsUpdate,
 		TwitchBrowser:       twitchBrowserEnabled && browserClient != nil,
+		LogRing:             ring,
+		StartTime:           startTime,
 	}
 
 	srv := &http.Server{

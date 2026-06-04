@@ -49,6 +49,8 @@ type Watcher struct {
 	currentBenefit  *platform.DropBenefit
 	currentStream   *platform.Stream
 	handle          *platform.WatchHandle
+	watchStartedAt  time.Time
+	lastProgressMin int
 }
 
 func New(cfg Config) *Watcher {
@@ -66,6 +68,47 @@ func (w *Watcher) State() State {
 }
 
 func (w *Watcher) AccountID() string { return w.cfg.AccountID }
+
+// Snapshot is the dashboard-friendly view of a watcher's in-flight
+// state. Safe to call from any goroutine; returns a copy.
+type Snapshot struct {
+	AccountID       string
+	State           string
+	CampaignID      string
+	CampaignName    string
+	CampaignGame    string
+	BenefitID       string
+	BenefitName     string
+	RequiredMinutes int
+	MinutesWatched  int
+	Channel         string
+	StartedAt       time.Time
+}
+
+func (w *Watcher) Snapshot() Snapshot {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	s := Snapshot{
+		AccountID: w.cfg.AccountID,
+		State:     w.state.String(),
+	}
+	if w.currentCampaign != nil {
+		s.CampaignID = w.currentCampaign.ID
+		s.CampaignName = w.currentCampaign.Name
+		s.CampaignGame = w.currentCampaign.Game
+	}
+	if w.currentBenefit != nil {
+		s.BenefitID = w.currentBenefit.ID
+		s.BenefitName = w.currentBenefit.Name
+		s.RequiredMinutes = w.currentBenefit.RequiredMinutes
+	}
+	if w.currentStream != nil {
+		s.Channel = w.currentStream.Channel
+	}
+	s.MinutesWatched = w.lastProgressMin
+	s.StartedAt = w.watchStartedAt
+	return s
+}
 
 func (w *Watcher) setState(ctx context.Context, s State) {
 	w.mu.Lock()
@@ -205,6 +248,8 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 	w.mu.Lock()
 	w.currentStream = &s
 	w.handle = &h
+	w.watchStartedAt = time.Now()
+	w.lastProgressMin = 0
 	w.mu.Unlock()
 	w.setState(ctx, StateWatching)
 	return nil
@@ -229,6 +274,9 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 	for _, p := range progress {
 		if p.BenefitID == benefit.ID {
 			slog.Debug("watcher progress", "account", w.cfg.AccountID, "benefit", benefit.ID, "min_watched", p.MinutesWatched, "required", benefit.RequiredMinutes, "claimed", p.Claimed)
+			w.mu.Lock()
+			w.lastProgressMin = p.MinutesWatched
+			w.mu.Unlock()
 			if p.MinutesWatched >= benefit.RequiredMinutes {
 				slog.Info("watcher benefit complete, claiming", "account", w.cfg.AccountID, "benefit", benefit.ID)
 				w.setState(ctx, StateClaiming)

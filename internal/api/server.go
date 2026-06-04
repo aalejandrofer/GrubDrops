@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
+	"time"
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	mlog "github.com/aalejandrofer/rust-drops-miner/internal/log"
 	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
 	"github.com/aalejandrofer/rust-drops-miner/internal/scheduler"
 	"github.com/aalejandrofer/rust-drops-miner/internal/store"
@@ -35,6 +37,8 @@ type Deps struct {
 	// variant; the login handler redirects to the cookie-paste page
 	// instead of the device-code flow when true.
 	TwitchBrowser bool
+	LogRing       *mlog.Ring
+	StartTime     time.Time
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -57,7 +61,11 @@ func NewRouter(d Deps) http.Handler {
 
 	setup := setupDeps{q: d.Q, t: d.Templates, sm: d.Session}
 	authH := authDeps{q: d.Q, t: d.Templates, sm: d.Session}
-	dash := dashboardDeps{q: d.Q, t: d.Templates, sch: d.Scheduler}
+	startedAt := d.StartTime
+	if startedAt.IsZero() {
+		startedAt = time.Now()
+	}
+	dash := dashboardDeps{q: d.Q, t: d.Templates, sch: d.Scheduler, ring: d.LogRing, start: startedAt}
 	accs := accountsDeps{q: d.Q, t: d.Templates, sm: d.Session}
 	loginTwitch := newLoginTwitchDeps(d, d.RootCtx)
 	loginKick := &loginKickDeps{
@@ -91,6 +99,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Use(RequireAdmin(d.Session))
 	authed.Get("/", dash.page)
 	authed.Get("/dashboard/cards", dash.cards)
+	authed.Get("/dashboard/events", dash.events)
 	authed.Get("/accounts", accs.list)
 	authed.Get("/accounts/new", accs.newGet)
 	authed.Post("/accounts/new", accs.newPost)

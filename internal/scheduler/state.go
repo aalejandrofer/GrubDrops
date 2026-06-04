@@ -21,3 +21,21 @@ func (s *Scheduler) Snapshot() []AccountState {
 	}
 	return out
 }
+
+// WatcherSnapshots returns the dashboard-friendly view of every
+// active watcher in the scheduler. nopRunner-backed entries are
+// represented with State="needs_auth" and otherwise empty fields.
+func (s *Scheduler) WatcherSnapshots() []watcher.Snapshot {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]watcher.Snapshot, 0, len(s.entries))
+	for _, e := range s.entries {
+		w, ok := e.runner.(*watcher.Watcher)
+		if !ok {
+			out = append(out, watcher.Snapshot{AccountID: e.id, State: "needs_auth"})
+			continue
+		}
+		out = append(out, w.Snapshot())
+	}
+	return out
+}

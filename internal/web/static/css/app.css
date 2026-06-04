@@ -456,11 +456,16 @@
   /* PENDING CLAIMS */
   .pending {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    /* Fill the row regardless of count, capped at 4 columns. Less than
+       four cards spread out evenly; more than four wrap. */
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
     gap: 1px;
     background: var(--line);
     border: 1px solid var(--line);
     margin-bottom: 24px;
+  }
+  .pending:has(> :nth-child(5)) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   .pcard {
     background: linear-gradient(180deg, rgba(225,176,74,.06), transparent 70%) var(--surface);

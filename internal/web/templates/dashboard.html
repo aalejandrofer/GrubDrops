@@ -62,23 +62,16 @@
       <div class="drawer-head">
         <h3>Live events</h3>
         <div class="filter">
-          <a class="on" href="#">all</a>
-          <a href="#">claims</a>
-          <a href="#">progress</a>
-          <a href="#">state</a>
-          <a href="#">errors</a>
+          <a class="on" hx-get="/dashboard/events?filter=all" hx-target="#events-list" hx-swap="innerHTML" href="#">all</a>
+          <a hx-get="/dashboard/events?filter=claim" hx-target="#events-list" hx-swap="innerHTML" href="#">claims</a>
+          <a hx-get="/dashboard/events?filter=progress" hx-target="#events-list" hx-swap="innerHTML" href="#">progress</a>
+          <a hx-get="/dashboard/events?filter=state" hx-target="#events-list" hx-swap="innerHTML" href="#">state</a>
+          <a hx-get="/dashboard/events?filter=error" hx-target="#events-list" hx-swap="innerHTML" href="#">errors</a>
         </div>
         <div class="live">streaming</div>
       </div>
-      <div class="events">
-        {{range .Events}}
-        <div class="ev">
-          <span class="t">{{.Time}}</span>
-          <span class="lvl" style="color:var(--{{.Color}})">●</span>
-          <span class="body">{{.BodyHTML | safe}}</span>
-          <span class="ac">{{.Account}}</span>
-        </div>
-        {{end}}
+      <div class="events" id="events-list" hx-get="/dashboard/events?filter=all" hx-trigger="every 3s" hx-swap="innerHTML">
+        {{template "dashboard_events" .Events}}
       </div>
     </section>
 
