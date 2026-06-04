@@ -1,0 +1,7 @@
+{{define "login_twitch_status"}}
+{{if eq . "pending"}}<em>still waiting…</em>{{end}}
+{{if eq . "done"}}<strong class="ok">authorized — redirecting</strong>
+<script>setTimeout(()=>window.location='/accounts','800');</script>{{end}}
+{{if eq . "expired"}}<strong class="err">code expired — return to <a href="/accounts">accounts</a> and re-add</strong>{{end}}
+{{if eq . "error"}}<strong class="err">error — see logs</strong>{{end}}
+{{end}}

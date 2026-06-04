@@ -24,6 +24,7 @@ type Deps struct {
 	Reload    func(context.Context) error
 	Sessions  *store.SessionStore
 	Registry  *platform.Registry
+	RootCtx   context.Context
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -44,6 +45,7 @@ func NewRouter(d Deps) http.Handler {
 	authH := authDeps{q: d.Q, t: d.Templates, sm: d.Session}
 	dash := dashboardDeps{q: d.Q, t: d.Templates, sch: d.Scheduler}
 	accs := accountsDeps{q: d.Q, t: d.Templates, sm: d.Session}
+	login := newLoginTwitchDeps(d, d.RootCtx)
 
 	withSession := func(h http.Handler) http.Handler { return d.Session.LoadAndSave(h) }
 
@@ -62,6 +64,8 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/accounts/new", accs.newGet)
 	authed.Post("/accounts/new", accs.newPost)
 	authed.Get("/accounts/{id}", accs.detail)
+	authed.Get("/accounts/{id}/login", login.get)
+	authed.Get("/accounts/{id}/login/poll", login.status)
 	authed.Post("/accounts/{id}/update", accs.update)
 	authed.Post("/accounts/{id}/delete", accs.delete)
 	authed.Post("/accounts/apply", func(w http.ResponseWriter, r *http.Request) {

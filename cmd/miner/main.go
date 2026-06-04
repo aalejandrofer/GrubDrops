@@ -144,6 +144,7 @@ func run() error {
 		DB: db, Q: q, Templates: tmplSet, Session: sm,
 		Scheduler: sched, Reload: loadAndStart,
 		Sessions: sessions, Registry: registry,
+		RootCtx: ctx,
 	}
 
 	srv := &http.Server{

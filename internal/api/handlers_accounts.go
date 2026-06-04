@@ -65,6 +65,10 @@ func (d accountsDeps) newPost(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	if platform == "twitch" {
+		http.Redirect(w, r, "/accounts/"+id+"/login", http.StatusSeeOther)
+		return
+	}
 	d.sm.Put(r.Context(), "flash", "account added — click Apply changes to start mining")
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }

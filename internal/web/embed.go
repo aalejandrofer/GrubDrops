@@ -74,7 +74,7 @@ func Templates() (*PageTemplates, error) {
 	var pageFiles []string
 	for _, m := range matches {
 		name := m[len("templates/"):]
-		if strings.HasPrefix(name, "_") || name == "dashboard_cards.html" {
+		if strings.HasPrefix(name, "_") || name == "dashboard_cards.html" || name == "login_twitch_status.html" {
 			baseFiles = append(baseFiles, m)
 		} else {
 			pageFiles = append(pageFiles, m)

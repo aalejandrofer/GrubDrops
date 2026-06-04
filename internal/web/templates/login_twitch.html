@@ -1,0 +1,17 @@
+{{define "title"}}Twitch login · Rust Drops Miner{{end}}
+{{define "content"}}
+{{with .Page}}
+<h1>Authorize Twitch — {{.DisplayName}}</h1>
+<p>Open the following URL in any browser and enter the code:</p>
+<p><a href="{{.VerificationURL}}" target="_blank" rel="noopener">{{.VerificationURL}}</a></p>
+<p style="font-size:2rem;letter-spacing:0.5rem;font-family:monospace">{{.UserCode}}</p>
+<div id="status"
+     hx-get="/accounts/{{.AccountID}}/login/poll"
+     hx-trigger="every 3s"
+     hx-swap="innerHTML">
+  <em>waiting for authorization…</em>
+</div>
+<p><a href="/accounts">cancel</a></p>
+{{end}}
+{{end}}
+{{define "login_twitch.html"}}{{template "layout" .}}{{end}}
