@@ -1,0 +1,26 @@
+{{define "accounts_list.html"}}
+{{template "layout" .}}
+{{define "title"}}Accounts · Rust Drops Miner{{end}}
+{{define "content"}}
+<h1>Accounts</h1>
+<p><a href="/accounts/new">+ Add account</a> · <form method="post" action="/accounts/apply" style="display:inline">
+  <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+  <button type="submit">Apply changes (reload watchers)</button>
+</form></p>
+{{if .Flash}}<p class="ok">{{.Flash}}</p>{{end}}
+<table>
+  <thead><tr><th>Display</th><th>Platform</th><th>Login</th><th>Enabled</th><th></th></tr></thead>
+  <tbody>
+  {{range .Page}}
+  <tr>
+    <td>{{.DisplayName}}</td>
+    <td>{{.Platform}}</td>
+    <td>{{.Login}}</td>
+    <td>{{if eq .Enabled 1}}yes{{else}}no{{end}}</td>
+    <td><a href="/accounts/{{.ID}}">edit</a></td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+{{end}}

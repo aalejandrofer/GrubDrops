@@ -1,0 +1,21 @@
+{{define "accounts_detail.html"}}
+{{template "layout" .}}
+{{define "title"}}Account · Rust Drops Miner{{end}}
+{{define "content"}}
+{{with .Page}}
+<h1>{{.DisplayName}}</h1>
+<p>Platform: <span class="badge">{{.Platform}}</span> Login: <code>{{.Login}}</code></p>
+<form method="post" action="/accounts/{{.ID}}/update">
+  <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+  <label>Display name<input type="text" name="display_name" value="{{.DisplayName}}"></label>
+  <label><input type="checkbox" name="enabled" value="1" {{if eq .Enabled 1}}checked{{end}}> Enabled</label>
+  <button type="submit">Save</button>
+</form>
+<form method="post" action="/accounts/{{.ID}}/delete" onsubmit="return confirm('Delete this account permanently?');" style="margin-top:1rem">
+  <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+  <button type="submit">Delete</button>
+</form>
+{{end}}
+<p><a href="/accounts">back</a></p>
+{{end}}
+{{end}}

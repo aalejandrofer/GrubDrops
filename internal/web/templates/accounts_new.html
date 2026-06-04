@@ -1,0 +1,20 @@
+{{define "accounts_new.html"}}
+{{template "layout" .}}
+{{define "title"}}New account · Rust Drops Miner{{end}}
+{{define "content"}}
+<h1>New account</h1>
+{{if .Flash}}<p class="err">{{.Flash}}</p>{{end}}
+<form method="post" action="/accounts/new">
+  <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+  <label>Platform
+    <select name="platform">
+      <option value="fake">fake (development)</option>
+    </select>
+  </label>
+  <label>Login (handle)<input type="text" name="login" required></label>
+  <label>Display name<input type="text" name="display_name"></label>
+  <button type="submit">Create</button>
+</form>
+<p><a href="/accounts">cancel</a></p>
+{{end}}
+{{end}}
