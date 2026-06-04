@@ -2107,7 +2107,9 @@ func run() error {
 	}
 
 	registry := platform.NewRegistry()
-	registry.Register(fake.New())
+	// Fast time keeps the demo loop short (RequiredMinutes=2 vs default 5)
+	// so a claim happens within a few seconds during smoke runs.
+	registry.Register(fake.New(fake.WithFastTime()))
 
 	notifier := &notify.NoopNotifier{Logger: logger}
 	sched := scheduler.New(scheduler.Options{Notifier: notifier})
@@ -2129,7 +2131,7 @@ func run() error {
 			Backend:      backend,
 			Session:      sess,
 			Notifier:     notifier,
-			TickInterval: 1 * time.Second,
+			TickInterval: 500 * time.Millisecond,
 		})
 		sched.Add(a.ID, w)
 	}
@@ -2189,15 +2191,16 @@ Expected: `bin/miner` exists.
 ```bash
 MINER_MASTER_KEY="$(go run filippo.io/age/cmd/age-keygen 2>&1 | awk '/AGE-SECRET-KEY/ {print $NF}')" \
 MINER_DB_PATH=./data/miner.db \
-./bin/miner &
+./bin/miner > /tmp/miner.log 2>&1 &
 PID=$!
-sleep 3
+sleep 10
 curl -fsS http://127.0.0.1:8080/healthz
+grep -c '"event":"claim"' /tmp/miner.log
 kill $PID
 wait $PID 2>/dev/null || true
 ```
 
-Expected: `ok` printed; in process logs, a `notify event=claim` line appears.
+Expected: `ok` printed; `grep -c` returns ≥1 (at least one `event=claim` JSON line emitted within 10s).
 
 - [ ] **Step 6: Commit**
 
@@ -2298,12 +2301,12 @@ cd deploy
 mkdir -p data
 export MINER_MASTER_KEY="$(go run filippo.io/age/cmd/age-keygen 2>&1 | awk '/AGE-SECRET-KEY/ {print $NF}')"
 docker compose up --build -d
-sleep 5
+sleep 10
 curl -fsS http://127.0.0.1:8080/healthz
-docker compose logs miner | grep -E 'notify.*claim'
+docker compose logs miner | grep -c '"event":"claim"'
 ```
 
-Expected: `healthz` returns `ok`; `notify event=claim` line visible in logs.
+Expected: `healthz` returns `ok`; `grep -c` returns ≥1.
 
 - [ ] **Step 3: Tear down**
 
