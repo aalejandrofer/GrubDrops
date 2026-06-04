@@ -1,0 +1,22 @@
+# binaries
+/miner
+/browser-sidecar
+/bin/
+
+# local data
+/data/
+*.db
+*.db-wal
+*.db-shm
+
+# env
+.env
+!.env.example
+
+# tooling
+.DS_Store
+*.swp
+*.swo
+
+# coverage
+coverage.out
