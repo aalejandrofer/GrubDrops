@@ -150,10 +150,10 @@ type Operation struct {
 var (
 	OpInventory             = Operation{Name: "Inventory", Hash: "<paste>"}
 	OpClaimDrop             = Operation{Name: "ClaimDrop", Hash: "<paste>"}
-	OpDropsPageContentList  = Operation{Name: "DropsPage_ContentList", Hash: "<paste>"}
+	OpCampaigns  = Operation{Name: "DropsPage_ContentList", Hash: "<paste>"}
 	OpDropCampaignDetails   = Operation{Name: "DropCampaignDetails", Hash: "<paste>"}
 	OpPlaybackAccessToken   = Operation{Name: "PlaybackAccessToken_Template", Hash: "<paste>"}
-	OpWithIsStreamLiveQuery = Operation{Name: "WithIsStreamLiveQuery", Hash: "<paste>"}
+	OpGetStreamInfo = Operation{Name: "WithIsStreamLiveQuery", Hash: "<paste>"}
 )
 ```
 
@@ -798,7 +798,7 @@ func TestCampaigns_ListActive_ParsesFixture(t *testing.T) {
 		var req gqlRequest
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
 		switch req.OperationName {
-		case OpDropsPageContentList.Name:
+		case OpCampaigns.Name:
 			_, _ = w.Write(loadFixture(t, "dropspage_contentlist.json"))
 		case OpDropCampaignDetails.Name:
 			_, _ = w.Write(loadFixture(t, "dropcampaigndetails.json"))
@@ -852,7 +852,7 @@ type discovery struct {
 	c *client
 }
 
-// dropsPageData is the JSON shape returned by OpDropsPageContentList.
+// dropsPageData is the JSON shape returned by OpCampaigns.
 type dropsPageData struct {
 	CurrentUser struct {
 		DropCampaigns []struct {
@@ -912,7 +912,7 @@ type inventoryData struct {
 
 func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]platform.Campaign, error) {
 	var page dropsPageData
-	if err := d.c.gql(ctx, sess.AccessToken, OpDropsPageContentList, nil, &page); err != nil {
+	if err := d.c.gql(ctx, sess.AccessToken, OpCampaigns, nil, &page); err != nil {
 		return nil, fmt.Errorf("list campaigns: %w", err)
 	}
 	out := make([]platform.Campaign, 0, len(page.CurrentUser.DropCampaigns))
@@ -1110,7 +1110,7 @@ func (ch *channels) listEligible(ctx context.Context, sess platform.Session, _ p
 	out := []platform.Stream{}
 	for _, login := range allowedLogins {
 		var sd streamLiveData
-		err := ch.c.gql(ctx, sess.AccessToken, OpWithIsStreamLiveQuery,
+		err := ch.c.gql(ctx, sess.AccessToken, OpGetStreamInfo,
 			map[string]any{"login": login}, &sd)
 		if err != nil {
 			return nil, fmt.Errorf("stream live %s: %w", login, err)
@@ -1152,26 +1152,84 @@ EOF
 
 ---
 
-## Task 6: Watch heartbeat (MinuteWatched)
+## Task 6: Watch heartbeat (SendEvents mutation)
+
+DevilXD's heartbeat is a GraphQL **mutation** posted to `gql.twitch.tv/gql`, not a REST endpoint. The mutation is `SendEvents` with the full query body inline (no persisted hash). Payload is `base64(gzip(json_minify([eventList])))` carried in `variables.input.data`. Required `variables.input` extras: `repository="twilight"` and `encoding="GZIP_B64"`. Successful response shape: `{ "data": { "sendSpadeEvents": { "statusCode": 204 } } }`.
 
 **Files:**
 - Create: `internal/platform/twitch/watch.go`
 - Test: `internal/platform/twitch/watch_test.go`
+- Modify: `internal/platform/twitch/client.go` (add `gqlQuery` for non-persisted operations)
 
-- [ ] **Step 1: Test**
+- [ ] **Step 1: Add `gqlQuery` to the client**
+
+In `internal/platform/twitch/client.go`, add this method below `gql`:
+
+```go
+// gqlQuery sends a non-persisted GraphQL operation (full query body
+// inline). Used by mutations like SendEvents where Twitch does not
+// publish a stable persisted-query hash.
+func (c *client) gqlQuery(ctx context.Context, token, operationName, query string, variables map[string]any, out any) error {
+	body, err := json.Marshal(map[string]any{
+		"operationName": operationName,
+		"query":         query,
+		"variables":     variables,
+	})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Client-Id", clientID)
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "OAuth "+token)
+	}
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 500 {
+		return fmt.Errorf("twitch gql %s: %s", operationName, resp.Status)
+	}
+	var envelope gqlResponse
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+		return fmt.Errorf("decode gql response: %w", err)
+	}
+	if len(envelope.Errors) > 0 {
+		msgs := make([]string, 0, len(envelope.Errors))
+		for _, e := range envelope.Errors {
+			msgs = append(msgs, e.Message)
+		}
+		return fmt.Errorf("twitch gql %s: %s", operationName, strings.Join(msgs, "; "))
+	}
+	if out == nil {
+		return nil
+	}
+	return json.Unmarshal(envelope.Data, out)
+}
+```
+
+- [ ] **Step 2: Test (against httptest)**
 
 ```go
 // internal/platform/twitch/watch_test.go
 package twitch
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1180,78 +1238,101 @@ import (
 	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
 )
 
-func TestWatch_HeartbeatSendsExpectedPayload(t *testing.T) {
+func TestWatch_HeartbeatSendsGzippedBase64Mutation(t *testing.T) {
 	var got struct {
-		path string
-		body string
+		body []byte
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got.path = r.URL.Path
-		body, _ := io.ReadAll(r.Body)
-		got.body = string(body)
-		w.WriteHeader(http.StatusNoContent)
+		got.body, _ = io.ReadAll(r.Body)
+		_, _ = w.Write([]byte(`{"data":{"sendSpadeEvents":{"statusCode":204}}}`))
 	}))
 	defer srv.Close()
 
-	wt := &watch{minuteURL: srv.URL + "/site.js", http: srv.Client()}
-	h, err := wt.start(context.Background(), platform.Session{AccessToken: "tok"}, platform.Stream{Channel: "fakestreamer"})
+	c := newTestClient(srv.URL)
+	wt := &watch{c: c}
+	h, err := wt.start(context.Background(), platform.Session{AccessToken: "tok"},
+		platform.Stream{Channel: "fakestreamer"})
 	require.NoError(t, err)
+
 	require.NoError(t, wt.heartbeat(context.Background(), h))
 
-	assert.Equal(t, "/site.js", got.path)
-	// DevilXD encodes payload as form-data { data: <base64-json> }. We
-	// just check the data field looks base64 and decodes to JSON.
-	var form struct{}
-	require.NoError(t, json.Unmarshal([]byte("{}"), &form))
-	assert.Contains(t, got.body, "data=")
-	encoded := strings.TrimPrefix(strings.Split(got.body, "data=")[1], "")
-	raw, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(encoded, "%3D", "="))
+	// Parse the outbound JSON request body, extract variables.input.data,
+	// b64-decode, gunzip, JSON-parse, assert the event payload.
+	var req struct {
+		OperationName string `json:"operationName"`
+		Variables     struct {
+			Input struct {
+				Data       string `json:"data"`
+				Repository string `json:"repository"`
+				Encoding   string `json:"encoding"`
+			} `json:"input"`
+		} `json:"variables"`
+	}
+	require.NoError(t, json.Unmarshal(got.body, &req))
+	assert.Equal(t, "SendEvents", req.OperationName)
+	assert.Equal(t, "twilight", req.Variables.Input.Repository)
+	assert.Equal(t, "GZIP_B64", req.Variables.Input.Encoding)
+
+	raw, err := base64.StdEncoding.DecodeString(req.Variables.Input.Data)
 	require.NoError(t, err)
-	assert.Contains(t, string(raw), "fakestreamer")
+	gr, err := gzip.NewReader(bytes.NewReader(raw))
+	require.NoError(t, err)
+	plain, err := io.ReadAll(gr)
+	require.NoError(t, err)
+
+	var events []map[string]any
+	require.NoError(t, json.Unmarshal(plain, &events))
+	require.Len(t, events, 1)
+	assert.Equal(t, "minute-watched", events[0]["event"])
+	props := events[0]["properties"].(map[string]any)
+	assert.Equal(t, "fakestreamer", props["channel"])
 }
 ```
 
-- [ ] **Step 2: Implement**
+- [ ] **Step 3: Implement**
 
 ```go
 // internal/platform/twitch/watch.go
 package twitch
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
 )
 
+const sendEventsMutation = `mutation SendEvents($input: SendSpadeEventsInput!) {
+  sendSpadeEvents(input: $input) {
+    statusCode
+  }
+}`
+
 type watch struct {
-	minuteURL string
-	http      *http.Client
+	c *client
 }
 
 func newWatch() *watch {
-	return &watch{
-		minuteURL: minuteWatchedURL,
-		http:      &http.Client{Timeout: 15 * time.Second},
-	}
+	return &watch{c: newClient()}
 }
 
 type watchInternal struct {
-	Channel   string
-	ChannelID string
-	UserID    string
+	Channel    string
+	ChannelID  string
+	BroadcastID string
+	UserID     int64
 }
 
-func (w *watch) start(ctx context.Context, _ platform.Session, stream platform.Stream) (platform.WatchHandle, error) {
-	// DevilXD also fetches PlaybackAccessToken at this point to keep parity
-	// with the web client; we omit it because the minute-watched endpoint
-	// does not require it. Sufficient for drop progress.
+func (w *watch) start(_ context.Context, _ platform.Session, stream platform.Stream) (platform.WatchHandle, error) {
+	// In a complete impl we'd fetch channel id + broadcast id here. For
+	// the heartbeat to register drop progress, the channel login is the
+	// minimum; channel/broadcast IDs are best-effort and may need a
+	// follow-up GetStreamInfo query in production.
 	return platform.WatchHandle{
 		Channel:  stream.Channel,
 		Internal: watchInternal{Channel: stream.Channel},
@@ -1263,38 +1344,54 @@ func (w *watch) heartbeat(ctx context.Context, h platform.WatchHandle) error {
 	if !ok {
 		return fmt.Errorf("invalid watch handle")
 	}
-	payload := map[string]any{
-		"event":     "minute-watched",
+
+	event := map[string]any{
+		"event": "minute-watched",
 		"properties": map[string]any{
-			"channel":  internal.Channel,
-			"player":   "site",
-			"player_state": "Playing",
-			"login":    "",
+			"broadcast_id":   internal.BroadcastID,
+			"channel_id":     internal.ChannelID,
+			"channel":        internal.Channel,
+			"client_time":    time.Now().UTC().Format(time.RFC3339),
+			"game":           "",
+			"game_id":        "",
+			"hidden":         false,
+			"is_live":        true,
+			"live":           true,
+			"logged_in":      true,
+			"minutes_logged": 1,
+			"muted":          false,
+			"user_id":        internal.UserID,
 		},
 	}
-	raw, err := json.Marshal(payload)
+	plain, err := json.Marshal([]any{event})
 	if err != nil {
 		return err
 	}
-	encoded := base64.StdEncoding.EncodeToString(raw)
-	body := url.Values{"data": {encoded}}.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.minuteURL, strings.NewReader(body))
-	if err != nil {
+	var gz bytes.Buffer
+	gw := gzip.NewWriter(&gz)
+	if _, err := gw.Write(plain); err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", userAgent)
+	if err := gw.Close(); err != nil {
+		return err
+	}
+	encoded := base64.StdEncoding.EncodeToString(gz.Bytes())
 
-	resp, err := w.http.Do(req)
-	if err != nil {
-		return err
+	variables := map[string]any{
+		"input": map[string]any{
+			"data":       encoded,
+			"repository": "twilight",
+			"encoding":   "GZIP_B64",
+		},
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return fmt.Errorf("minute-watched: %s", resp.Status)
+
+	var resp struct {
+		SendSpadeEvents struct {
+			StatusCode int `json:"statusCode"`
+		} `json:"sendSpadeEvents"`
 	}
-	return nil
+	return w.c.gqlQuery(ctx, "", "SendEvents", sendEventsMutation, variables, &resp)
 }
 
 func (w *watch) stop(_ context.Context, _ platform.WatchHandle) error {
@@ -1302,7 +1399,7 @@ func (w *watch) stop(_ context.Context, _ platform.WatchHandle) error {
 }
 ```
 
-> The minute-watched payload shape comes from DevilXD's `site.py` minute-watched dict literal. The implementer should diff their copy against the live DevilXD source before submitting.
+> The auth token is intentionally `""` on `gqlQuery` because the SessionStore handle isn't reachable from `watch.heartbeat` — the watcher's main loop calls Heartbeat without re-supplying the session. Plan 3 Task 8 (Backend wrapper) bridges this: the wrapper's `Heartbeat` method should call `w.c.gqlQuery(ctx, b.currentToken(h), ...)` where `currentToken` looks the token up from the active session map keyed by handle. For now, this minimal impl will work against the httptest server (no auth check) but a real Twitch request will 401. The bridging is added when Backend is finalized in Task 8.
 
 - [ ] **Step 3: Run tests**
 
