@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>DropsMiner Helper</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0e0f11;
+      --surface: #14161a;
+      --surface-2: #1c1f24;
+      --line: #2a2e35;
+      --muted: #8b929a;
+      --text: #e7e9ec;
+      --accent: #d4631e;
+      --green: #5ad19a;
+      --red: #e35d5d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: start center;
+      padding: 48px 18px;
+    }
+    .card {
+      width: 100%;
+      max-width: 520px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      padding: 28px;
+    }
+    .kicker {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    h1 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 700;
+      font-size: 28px;
+      margin: 0 0 8px;
+    }
+    .intro {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 0 0 24px;
+    }
+    label {
+      display: block;
+      margin-bottom: 14px;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    input, select {
+      display: block;
+      width: 100%;
+      margin-top: 6px;
+      padding: 10px 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .submit-row {
+      margin-top: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    button:hover:not(:disabled) {
+      background: #e57930;
+    }
+    .status {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      display: none;
+    }
+    .status.ok { border-color: var(--green); color: var(--green); }
+    .status.err { border-color: var(--red); color: var(--red); }
+    .hide { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="kicker">// dropsminer · helper</div>
+    <h1>Authorize an account</h1>
+    <p class="intro">
+      Reads your browser's <code>twitch.tv</code> or <code>kick.com</code> cookies and uploads them to the miner.
+      Make sure you're signed in to that site in your usual browser first.
+    </p>
+
+    <form id="form">
+      <label>Miner URL
+        <input type="url" name="miner" value="{{.DefaultMiner}}" required>
+      </label>
+      <label>Admin password
+        <input type="password" name="password" required>
+      </label>
+      <div class="row">
+        <label>Platform
+          <select name="platform" id="platform" required>
+            <option value="twitch">Twitch</option>
+            <option value="kick">Kick</option>
+          </select>
+        </label>
+        <label>Browser <span style="text-transform:none;font-weight:400;color:var(--muted)">(optional)</span>
+          <select name="browser">
+            <option value="">auto (any installed)</option>
+            <option value="chrome">Chrome</option>
+            <option value="firefox">Firefox</option>
+            <option value="safari">Safari</option>
+            <option value="edge">Edge</option>
+            <option value="brave">Brave</option>
+          </select>
+        </label>
+      </div>
+      <label>Account ID <span style="text-transform:none;font-weight:400;color:var(--muted)">(copy from the miner's Accounts page)</span>
+        <input type="text" name="account_id" placeholder="acc_…" required>
+      </label>
+      <label class="kick-only hide">Kick channel
+        <input type="text" name="channel" placeholder="streamer-login">
+      </label>
+      <div class="submit-row">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);">no data leaves your machine except cookies → miner</span>
+        <button type="submit" id="submit">Upload →</button>
+      </div>
+    </form>
+    <div class="status" id="status"></div>
+  </div>
+
+<script>
+const form = document.getElementById('form');
+const platform = document.getElementById('platform');
+const kickOnly = document.querySelector('.kick-only');
+const channelInput = kickOnly.querySelector('input');
+const status = document.getElementById('status');
+const submit = document.getElementById('submit');
+
+function syncPlatform() {
+  if (platform.value === 'kick') {
+    kickOnly.classList.remove('hide');
+    channelInput.required = true;
+  } else {
+    kickOnly.classList.add('hide');
+    channelInput.required = false;
+  }
+}
+platform.addEventListener('change', syncPlatform);
+syncPlatform();
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  submit.disabled = true;
+  status.className = 'status';
+  status.style.display = 'block';
+  status.textContent = 'reading browser cookies + uploading…';
+  try {
+    const fd = new FormData(form);
+    const resp = await fetch('/submit', { method: 'POST', body: new URLSearchParams(fd) });
+    const data = await resp.json();
+    if (data.ok) {
+      status.classList.add('ok');
+      status.textContent = '✓ ' + data.message;
+      if (data.uploaded_cookies && data.uploaded_cookies.length) {
+        status.textContent += '\n\nuploaded: ' + data.uploaded_cookies.join(', ');
+      }
+    } else {
+      status.classList.add('err');
+      status.textContent = '✗ ' + (data.error || 'unknown error');
+    }
+  } catch (err) {
+    status.classList.add('err');
+    status.textContent = '✗ ' + err;
+  } finally {
+    submit.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
