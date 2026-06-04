@@ -1,0 +1,14 @@
+{{define "nav"}}
+{{if .AuthedAdmin}}
+<nav>
+  <a href="/">Dashboard</a>
+  <a href="/accounts">Accounts</a>
+  <form method="post" action="/logout" style="margin-left:auto;display:inline">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <button type="submit">Logout</button>
+  </form>
+</nav>
+{{else}}
+<nav><strong>rust-drops-miner</strong></nav>
+{{end}}
+{{end}}

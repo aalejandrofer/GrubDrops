@@ -1,0 +1,30 @@
+{{define "layout"}}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{block "title" .}}Rust Drops Miner{{end}}</title>
+<script src="https://unpkg.com/htmx.org@2.0.2"></script>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  body { max-width: 960px; margin: 2rem auto; padding: 0 1rem; line-height: 1.4; }
+  nav { display: flex; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #ccc; margin-bottom: 1rem; }
+  nav a { text-decoration: none; }
+  .card { border: 1px solid #ccc; border-radius: 6px; padding: 1rem; margin-bottom: 0.75rem; }
+  .row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+  .badge { padding: 0.15rem 0.5rem; border-radius: 4px; background: #eee; font-size: 0.85rem; }
+  form { display: flex; flex-direction: column; gap: 0.5rem; max-width: 320px; }
+  input, select, button { padding: 0.4rem; font: inherit; }
+  .err { color: #c00; }
+  .ok { color: #060; }
+</style>
+</head>
+<body>
+{{template "nav" .}}
+<main>
+{{block "content" .}}{{end}}
+</main>
+</body>
+</html>
+{{end}}
