@@ -9,8 +9,12 @@ import (
 )
 
 type Querier interface {
+	AdminExists(ctx context.Context) (bool, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
+	DeleteAccount(ctx context.Context, id string) error
 	GetAccount(ctx context.Context, id string) (Account, error)
+	GetAccountByPlatformLogin(ctx context.Context, arg GetAccountByPlatformLoginParams) (Account, error)
+	GetAdmin(ctx context.Context) (Admin, error)
 	GetProgress(ctx context.Context, arg GetProgressParams) (Progress, error)
 	GetSession(ctx context.Context, accountID string) (Session, error)
 	InsertClaim(ctx context.Context, arg InsertClaimParams) error
@@ -19,7 +23,9 @@ type Querier interface {
 	ListEnabledAccounts(ctx context.Context) ([]Account, error)
 	ListUnclaimedProgressForAccount(ctx context.Context, arg ListUnclaimedProgressForAccountParams) ([]Progress, error)
 	SetAccountEnabled(ctx context.Context, arg SetAccountEnabledParams) error
+	UpdateAccountDisplayName(ctx context.Context, arg UpdateAccountDisplayNameParams) error
 	UpdateAccountStatus(ctx context.Context, arg UpdateAccountStatusParams) error
+	UpsertAdmin(ctx context.Context, arg UpsertAdminParams) error
 	UpsertBenefit(ctx context.Context, arg UpsertBenefitParams) error
 	UpsertCampaign(ctx context.Context, arg UpsertCampaignParams) error
 	UpsertProgress(ctx context.Context, arg UpsertProgressParams) error
