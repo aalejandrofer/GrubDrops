@@ -775,7 +775,7 @@
   <div class="page-head">
     <div>
       <div class="sub">// node 10.10.2.40 · uptime 17h 42m · 4 watchers · last poll 1.2s ago</div>
-      <h1>currently mining <em>3</em> drops · <em>2</em> ready to claim</h1>
+      <h1>currently mining <em>3</em> drops · next claim in <em>13m</em></h1>
     </div>
     <div class="actions">
       <a class="btn" href="#">Reload</a>
@@ -788,7 +788,7 @@
     <div class="stat"><div class="label">Drops claimed · 7d</div><div class="value">12<sup>items</sup></div><div class="delta">▲ +4</div></div>
     <div class="stat"><div class="label">Active campaigns</div><div class="value">8<sup>5 twitch · 3 kick</sup></div><div class="delta flat">—</div></div>
     <div class="stat"><div class="label">In progress</div><div class="value">11<sup>drops</sup></div><div class="delta">▲ 3 new</div></div>
-    <div class="stat"><div class="label">Ready to claim</div><div class="value" style="color:var(--amber)">2<sup>pending</sup></div><div class="delta flat">click below</div></div>
+    <div class="stat"><div class="label">Next claim</div><div class="value" style="color:var(--accent)">00:13<sup>h:m</sup></div><div class="delta">Wolf Helmet · 47m → 60m</div></div>
     <div class="stat"><div class="label">Heartbeats / hr</div><div class="value">182<sup>last hr</sup></div><div class="delta">▲ stable</div></div>
   </section>
 
@@ -797,29 +797,45 @@
     <!-- LEFT/PRIMARY COLUMN -->
     <div>
 
-      <!-- PENDING CLAIMS -->
+      <!-- NEXT CLAIM ETAs -->
       <section class="section">
         <div class="sec-head">
-          <h2>Pending claims</h2>
+          <h2>Next claim ETAs</h2>
           <div class="rule"></div>
-          <div class="meta"><b>2</b> drops · click to claim</div>
+          <div class="meta">auto-claim on completion · sorted by time</div>
         </div>
         <div class="pending">
           <article class="pcard">
-            <div class="sprite">◆</div>
+            <div class="sprite" style="color: var(--accent);">▲</div>
             <div class="meta">
-              <div class="nm">Salvaged Cleaver <span class="ac">@demo_two</span></div>
-              <div class="sub">kick · Rust Drops · 120/120m</div>
+              <div class="nm">Wolf Helmet <span class="ac">@helmet_farmer</span></div>
+              <div class="sub">twitch · Rust Drops · 47 / 60m</div>
             </div>
-            <a class="claim" href="#">claim →</a>
+            <span class="claim" style="background:transparent;border:1px solid var(--accent);color:var(--accent);">~13m</span>
           </article>
           <article class="pcard">
-            <div class="sprite">◆</div>
+            <div class="sprite" style="color: var(--amber);">▲</div>
+            <div class="meta">
+              <div class="nm">Salvaged Cleaver <span class="ac">@demo_two</span></div>
+              <div class="sub">kick · Rust Drops · auto-claiming now</div>
+            </div>
+            <span class="claim" style="background:transparent;border:1px solid var(--amber);color:var(--amber);animation:pulse 1.6s ease-in-out infinite;">claiming</span>
+          </article>
+          <article class="pcard">
+            <div class="sprite" style="color: var(--muted);">▲</div>
             <div class="meta">
               <div class="nm">Burlap Trousers <span class="ac">@helmet_farmer</span></div>
-              <div class="sub">twitch · Holiday Drops · 60/60m</div>
+              <div class="sub">twitch · Holiday Drops · 21 / 60m</div>
             </div>
-            <a class="claim" href="#">claim →</a>
+            <span class="claim" style="background:transparent;border:1px solid var(--line);color:var(--muted);">~39m</span>
+          </article>
+          <article class="pcard">
+            <div class="sprite" style="color: var(--muted);">▲</div>
+            <div class="meta">
+              <div class="nm">Crate Skin <span class="ac">@backup_acc</span></div>
+              <div class="sub">twitch · Holiday Drops · 0 / 60m</div>
+            </div>
+            <span class="claim" style="background:transparent;border:1px solid var(--line);color:var(--muted);">~60m</span>
           </article>
         </div>
       </section>
