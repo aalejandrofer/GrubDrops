@@ -159,6 +159,8 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 			c.StateSub = "scanning channels"
 		case "sleeping":
 			c.StateSub = "no eligible campaign"
+		case "needs_auth":
+			c.StateSub = "login required"
 		}
 		c.WatchToday = "—"
 		c.ClaimsToday = 0

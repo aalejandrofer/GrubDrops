@@ -14,7 +14,7 @@ func (s *Scheduler) Snapshot() []AccountState {
 	for _, e := range s.entries {
 		w, ok := e.runner.(*watcher.Watcher)
 		if !ok {
-			out = append(out, AccountState{AccountID: e.id, State: "unknown"})
+			out = append(out, AccountState{AccountID: e.id, State: "needs_auth"})
 			continue
 		}
 		out = append(out, AccountState{AccountID: e.id, State: w.State().String()})

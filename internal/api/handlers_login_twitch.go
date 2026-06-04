@@ -21,6 +21,7 @@ type loginTwitchDeps struct {
 	sm       *scs.SessionManager
 	sessions *store.SessionStore
 	registry *platform.Registry
+	reload   func(context.Context) error
 	rootCtx  context.Context
 
 	pending sync.Map // accountID -> *twitchLoginState
@@ -47,6 +48,7 @@ func newLoginTwitchDeps(d Deps, rootCtx context.Context) *loginTwitchDeps {
 		sm:       d.Session,
 		sessions: d.Sessions,
 		registry: d.Registry,
+		reload:   d.Reload,
 		rootCtx:  rootCtx,
 	}
 }
@@ -112,6 +114,9 @@ func (d *loginTwitchDeps) poll(accountID string, backend platform.Backend, st *t
 			st.status = "error"
 			st.mu.Unlock()
 			return
+		}
+		if d.reload != nil {
+			_ = d.reload(d.rootCtx)
 		}
 		st.mu.Lock()
 		st.status = "done"
