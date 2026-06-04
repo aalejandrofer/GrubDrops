@@ -1,0 +1,16 @@
+# deploy/Dockerfile.browser
+FROM golang:1.26-alpine AS build
+WORKDIR /src
+RUN apk add --no-cache git ca-certificates
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/browser-sidecar ./cmd/browser-sidecar
+
+# chromedp/headless-shell ships Chrome at /headless-shell/headless-shell.
+# Use it as runtime so chromedp.NewExecAllocator finds Chrome on PATH.
+FROM chromedp/headless-shell:latest
+COPY --from=build /out/browser-sidecar /browser-sidecar
+ENV PATH="/headless-shell:${PATH}"
+EXPOSE 9090
+ENTRYPOINT ["/browser-sidecar"]
