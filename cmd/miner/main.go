@@ -46,9 +46,13 @@ func run() error {
 	}
 	defer db.Close()
 
-	if _, err := store.NewCryptor(cfg.MasterKey); err != nil {
+	cryptor, err := store.NewCryptor(cfg.MasterKey)
+	if err != nil {
 		return fmt.Errorf("master key invalid: %w", err)
 	}
+	// Held for Plan 2/3 wiring (session blob encrypt/decrypt). Bind the
+	// reference here so the daemon refuses to start without a valid key.
+	_ = cryptor
 
 	q := gen.New(db)
 	accounts, err := q.ListEnabledAccounts(ctx)

@@ -47,11 +47,11 @@ func (w *Watcher) State() State {
 	return w.state
 }
 
-func (w *Watcher) setState(s State) {
+func (w *Watcher) setState(ctx context.Context, s State) {
 	w.mu.Lock()
 	w.state = s
 	w.mu.Unlock()
-	_ = w.cfg.Notifier.Notify(context.Background(), "state", map[string]any{
+	_ = w.cfg.Notifier.Notify(ctx, "state", map[string]any{
 		"account": w.cfg.AccountID, "state": s.String(),
 	})
 }
@@ -123,11 +123,11 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			w.currentCampaign = &campaignCopy
 			w.currentBenefit = &benefitCopy
 			w.mu.Unlock()
-			w.setState(StatePickStream)
+			w.setState(ctx, StatePickStream)
 			return nil
 		}
 	}
-	w.setState(StateSleeping)
+	w.setState(ctx, StateSleeping)
 	return nil
 }
 
@@ -141,7 +141,7 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 		return fmt.Errorf("list channels: %w", err)
 	}
 	if len(streams) == 0 {
-		w.setState(StateSleeping)
+		w.setState(ctx, StateSleeping)
 		return nil
 	}
 	s := streams[0]
@@ -153,7 +153,7 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 	w.currentStream = &s
 	w.handle = &h
 	w.mu.Unlock()
-	w.setState(StateWatching)
+	w.setState(ctx, StateWatching)
 	return nil
 }
 
@@ -173,7 +173,7 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 	}
 	for _, p := range progress {
 		if p.BenefitID == benefit.ID && p.MinutesWatched >= benefit.RequiredMinutes {
-			w.setState(StateClaiming)
+			w.setState(ctx, StateClaiming)
 			return nil
 		}
 	}
@@ -205,6 +205,6 @@ func (w *Watcher) claim(ctx context.Context) error {
 	w.handle = nil
 	w.mu.Unlock()
 
-	w.setState(StateIdle)
+	w.setState(ctx, StateIdle)
 	return nil
 }

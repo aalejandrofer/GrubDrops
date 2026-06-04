@@ -19,6 +19,9 @@ func Open(ctx context.Context, path string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
+	// SQLite WAL allows one writer; serialize all access through a single
+	// connection to avoid SQLITE_BUSY storms under concurrent goroutines.
+	db.SetMaxOpenConns(1)
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("ping sqlite: %w", err)
