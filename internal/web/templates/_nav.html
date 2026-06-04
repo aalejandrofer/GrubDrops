@@ -1,16 +1,29 @@
 {{define "nav"}}
-{{if .AuthedAdmin}}
-<nav>
-  <a href="/">Dashboard</a>
-  <a href="/accounts">Accounts</a>
-  <a href="/drops">Drops</a>
-  <a href="/settings">Settings</a>
-  <form method="post" action="/logout" style="margin-left:auto;display:inline">
-    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-    <button type="submit">Logout</button>
-  </form>
-</nav>
-{{else}}
-<nav><strong>rust-drops-miner</strong></nav>
-{{end}}
+<header class="top">
+  <div class="topbar">
+    <div class="brand">
+      <span class="mark">RUST<span>·</span>DROPS</span>
+      <span class="tag">v0.1</span>
+    </div>
+    {{if .AuthedAdmin}}
+    <nav class="nav">
+      <a href="/" class="{{if eq .Active "dashboard"}}active{{end}}">Dashboard</a>
+      <a href="/accounts" class="{{if eq .Active "accounts"}}active{{end}}">Accounts</a>
+      <a href="/drops" class="{{if eq .Active "drops"}}active{{end}}">Drops</a>
+      <a href="/settings" class="{{if eq .Active "settings"}}active{{end}}">Settings</a>
+    </nav>
+    <div class="user">
+      <span class="clock">— UTC</span>
+      <span class="pulse" title="live"></span>
+      <form method="post" action="/logout" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <button type="submit" class="btn sm ghost" style="margin-left:6px">Logout</button>
+      </form>
+    </div>
+    {{else}}
+    <nav class="nav"></nav>
+    <div class="user"><span class="clock">— UTC</span></div>
+    {{end}}
+  </div>
+</header>
 {{end}}

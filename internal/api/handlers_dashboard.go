@@ -44,7 +44,8 @@ func (d dashboardDeps) collect(r *http.Request) []dashCard {
 func (d dashboardDeps) page(w http.ResponseWriter, r *http.Request) {
 	render(w, d.t, "dashboard.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
-		Page: d.collect(r),
+		Page:   d.collect(r),
+		Active: "dashboard",
 	})
 }
 

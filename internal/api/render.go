@@ -16,6 +16,7 @@ type templateData struct {
 	CSRFToken   string
 	Page        any
 	Flash       string
+	Active      string // "dashboard" | "accounts" | "drops" | "settings" — for nav highlight
 }
 
 func render(w http.ResponseWriter, t Renderer, name string, data templateData) {
