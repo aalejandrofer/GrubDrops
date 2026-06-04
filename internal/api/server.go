@@ -13,6 +13,7 @@ import (
 	"github.com/aalejandrofer/rust-drops-miner/internal/scheduler"
 	"github.com/aalejandrofer/rust-drops-miner/internal/store"
 	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/rust-drops-miner/internal/web"
 )
 
 type Deps struct {
@@ -39,6 +40,10 @@ func NewRouter(d Deps) http.Handler {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok\n"))
 	})
+
+	// Static assets shipped via internal/web/static/. Cache aggressively
+	// since file names change on rebuild.
+	r.Handle("/static/*", http.StripPrefix("/static/", staticHandler()))
 
 	if d.Session == nil {
 		// Skeleton mode (used by TestHealthz) — no business routes.
@@ -133,4 +138,12 @@ func NewRouter(d Deps) http.Handler {
 
 	r.Mount("/", withSession(CSRF(authed)))
 	return r
+}
+
+// staticHandler serves the embedded static/ assets with a short cache TTL.
+func staticHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		http.FileServer(http.FS(web.Static())).ServeHTTP(w, r)
+	})
 }

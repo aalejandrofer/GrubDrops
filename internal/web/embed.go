@@ -12,6 +12,20 @@ import (
 //go:embed templates/*.html
 var templatesFS embed.FS
 
+//go:embed static
+var staticFS embed.FS
+
+// Static returns an fs.FS rooted at the embedded static/ directory.
+// Callers can serve it under any URL prefix via http.FileServer(http.FS(web.Static())).
+func Static() fs.FS {
+	sub, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		// Embed-time guarantee: if the directory exists at build time this never fires.
+		panic(err)
+	}
+	return sub
+}
+
 // PageTemplates holds per-page clones of the base template set so that each
 // page's {{define "title"}} and {{define "content"}} blocks correctly override
 // the layout's {{block}} directives without conflicting with other pages.
