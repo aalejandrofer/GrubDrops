@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -94,12 +95,15 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pbSession := &pb.KickSession{Cookies: cookies, XsrfToken: xsrf}
+	slog.Info("kick login attempt", "account", id, "channel", channel, "cookie_count", len(cookies), "has_cf_clearance", cfClearance != "", "kick_session_len", len(kickSessionCookie), "xsrf_len", len(xsrf))
 
 	resp, err := d.browser.Authenticate(r.Context(), pbSession)
 	if err != nil {
+		slog.Error("kick sidecar Authenticate rejected", "account", id, "err", err)
 		d.renderError(w, r, id, acc.DisplayName, "sidecar rejected session: "+err.Error())
 		return
 	}
+	slog.Info("kick sidecar authenticated", "account", id, "username", resp.Username)
 
 	internal := kickSessionForStorage{
 		Cookies:   stored,
@@ -112,16 +116,22 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 		Cookies:   map[string]string{"kick": string(raw)},
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 	}); err != nil {
+		slog.Error("persist kick session failed", "account", id, "err", err)
 		d.renderError(w, r, id, acc.DisplayName, "failed to persist session: "+err.Error())
 		return
 	}
+	slog.Info("kick session persisted", "account", id, "channel", channel, "username", resp.Username)
 
 	if d.registrar != nil {
 		d.registrar.RegisterChannel(id, channel)
 	}
 
 	if d.reload != nil {
-		_ = d.reload(r.Context())
+		if err := d.reload(r.Context()); err != nil {
+			slog.Error("scheduler reload after kick login failed", "account", id, "err", err)
+		} else {
+			slog.Info("scheduler reloaded after kick login", "account", id)
+		}
 	}
 
 	d.sm.Put(r.Context(), "flash", "Kick session authorized for "+resp.Username)

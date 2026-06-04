@@ -14,6 +14,7 @@ type Config struct {
 	DiscordWebhookURL string
 	SecureCookies     bool
 	BrowserURL        string
+	LogLevel          string
 }
 
 func Load() (Config, error) {
@@ -24,6 +25,7 @@ func Load() (Config, error) {
 		DiscordWebhookURL: os.Getenv("MINER_DISCORD_WEBHOOK"),
 		SecureCookies:     parseBool(os.Getenv("MINER_SECURE_COOKIES")),
 		BrowserURL:        os.Getenv("MINER_BROWSER_URL"),
+		LogLevel:          strings.ToLower(getenv("MINER_LOG_LEVEL", "info")),
 	}
 	if strings.TrimSpace(cfg.MasterKey) == "" {
 		return Config{}, fmt.Errorf("MINER_MASTER_KEY is required")

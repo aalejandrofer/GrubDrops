@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -100,12 +101,15 @@ func (w *Watcher) step(ctx context.Context) error {
 }
 
 func (w *Watcher) pickCampaign(ctx context.Context) error {
+	slog.Debug("watcher pickCampaign", "account", w.cfg.AccountID)
 	campaigns, err := w.cfg.Backend.ListActiveCampaigns(ctx, w.cfg.Session)
 	if err != nil {
+		slog.Error("watcher list campaigns failed", "account", w.cfg.AccountID, "err", err)
 		return fmt.Errorf("list campaigns: %w", err)
 	}
 	progress, err := w.cfg.Backend.InventoryProgress(ctx, w.cfg.Session)
 	if err != nil {
+		slog.Error("watcher inventory failed", "account", w.cfg.AccountID, "err", err)
 		return fmt.Errorf("inventory: %w", err)
 	}
 	claimed := map[string]bool{}
@@ -114,6 +118,7 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			claimed[p.BenefitID] = true
 		}
 	}
+	slog.Debug("watcher discovery", "account", w.cfg.AccountID, "campaigns", len(campaigns), "claimed_count", len(claimed))
 
 	for _, c := range campaigns {
 		for _, b := range c.Benefits {
@@ -125,10 +130,12 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			w.currentCampaign = &campaignCopy
 			w.currentBenefit = &benefitCopy
 			w.mu.Unlock()
+			slog.Info("watcher picked benefit", "account", w.cfg.AccountID, "campaign", c.Name, "benefit", b.ID, "required_min", b.RequiredMinutes)
 			w.setState(ctx, StatePickStream)
 			return nil
 		}
 	}
+	slog.Info("watcher has no eligible benefit, sleeping", "account", w.cfg.AccountID, "scanned_campaigns", len(campaigns))
 	w.setState(ctx, StateSleeping)
 	return nil
 }
@@ -137,18 +144,23 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 	w.mu.Lock()
 	camp := *w.currentCampaign
 	w.mu.Unlock()
+	slog.Debug("watcher pickStream", "account", w.cfg.AccountID, "campaign", camp.Name)
 
 	streams, err := w.cfg.Backend.ListEligibleChannels(ctx, w.cfg.Session, camp)
 	if err != nil {
+		slog.Error("watcher list channels failed", "account", w.cfg.AccountID, "campaign", camp.Name, "err", err)
 		return fmt.Errorf("list channels: %w", err)
 	}
 	if len(streams) == 0 {
+		slog.Info("watcher no eligible streams live, sleeping", "account", w.cfg.AccountID, "campaign", camp.Name)
 		w.setState(ctx, StateSleeping)
 		return nil
 	}
 	s := streams[0]
+	slog.Info("watcher starting watch", "account", w.cfg.AccountID, "channel", s.Channel, "campaign", camp.Name, "eligible_count", len(streams))
 	h, err := w.cfg.Backend.StartWatch(ctx, w.cfg.Session, s)
 	if err != nil {
+		slog.Error("watcher StartWatch failed", "account", w.cfg.AccountID, "channel", s.Channel, "err", err)
 		return fmt.Errorf("start watch: %w", err)
 	}
 	w.mu.Lock()
@@ -166,17 +178,23 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 	w.mu.Unlock()
 
 	if err := w.cfg.Backend.Heartbeat(ctx, handle); err != nil {
+		slog.Error("watcher heartbeat failed", "account", w.cfg.AccountID, "channel", handle.Channel, "err", err)
 		return fmt.Errorf("heartbeat: %w", err)
 	}
 
 	progress, err := w.cfg.Backend.InventoryProgress(ctx, w.cfg.Session)
 	if err != nil {
+		slog.Error("watcher inventory failed", "account", w.cfg.AccountID, "err", err)
 		return fmt.Errorf("inventory: %w", err)
 	}
 	for _, p := range progress {
-		if p.BenefitID == benefit.ID && p.MinutesWatched >= benefit.RequiredMinutes {
-			w.setState(ctx, StateClaiming)
-			return nil
+		if p.BenefitID == benefit.ID {
+			slog.Debug("watcher progress", "account", w.cfg.AccountID, "benefit", benefit.ID, "min_watched", p.MinutesWatched, "required", benefit.RequiredMinutes, "claimed", p.Claimed)
+			if p.MinutesWatched >= benefit.RequiredMinutes {
+				slog.Info("watcher benefit complete, claiming", "account", w.cfg.AccountID, "benefit", benefit.ID)
+				w.setState(ctx, StateClaiming)
+				return nil
+			}
 		}
 	}
 

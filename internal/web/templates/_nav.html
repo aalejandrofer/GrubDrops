@@ -1,10 +1,10 @@
 {{define "nav"}}
 <header class="top">
   <div class="topbar">
-    <div class="brand">
+    <a class="brand" href="/" style="text-decoration: none; color: inherit;">
       <span class="mark">RUST<span>·</span>DROPS</span>
       <span class="tag">v0.1</span>
-    </div>
+    </a>
     {{if .AuthedAdmin}}
     <nav class="nav">
       <a href="/" class="{{if eq .Active "dashboard"}}active{{end}}">Dashboard</a>

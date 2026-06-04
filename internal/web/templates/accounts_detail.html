@@ -19,6 +19,13 @@
       <span>id: <code>{{.ID}}</code></span>
     </div>
 
+    {{if or (eq .Platform "twitch") (eq .Platform "kick")}}
+    <div class="reauth-row" style="margin: 16px 0; padding: 12px; border: 1px dashed var(--line); display: flex; gap: 12px; align-items: center;">
+      <a class="btn" href="/accounts/{{.ID}}/login">Re-authenticate →</a>
+      <span style="color: var(--muted); font-size: 12px;">Re-runs the login flow. Existing session is overwritten.</span>
+    </div>
+    {{end}}
+
     <form method="post" action="/accounts/{{.ID}}/update">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
       <label>Display name<input type="text" name="display_name" value="{{.DisplayName}}"></label>

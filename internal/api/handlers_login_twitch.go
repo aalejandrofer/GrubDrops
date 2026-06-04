@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -93,36 +94,48 @@ func (d *loginTwitchDeps) poll(accountID string, backend platform.Backend, st *t
 		interval = 5 * time.Second
 	}
 	deadline := st.challenge.ExpiresAt
+	slog.Info("twitch device-code poll started", "account", accountID, "interval", interval, "deadline", deadline)
 	for time.Now().Before(deadline) {
 		select {
 		case <-d.rootCtx.Done():
+			slog.Info("twitch device-code poll cancelled", "account", accountID)
 			return
 		case <-time.After(interval):
 		}
 		sess, err := backend.PollDeviceLogin(d.rootCtx, st.challenge)
 		if err != nil {
 			if strings.Contains(err.Error(), "authorization_pending") {
+				slog.Debug("twitch device-code still pending", "account", accountID)
 				continue
 			}
+			slog.Error("twitch device-code poll failed", "account", accountID, "err", err)
 			st.mu.Lock()
 			st.status = "error"
 			st.mu.Unlock()
 			return
 		}
+		slog.Info("twitch device-code authorized", "account", accountID, "expires_at", sess.ExpiresAt)
 		if err := d.sessions.Put(d.rootCtx, accountID, sess); err != nil {
+			slog.Error("persist twitch session failed", "account", accountID, "err", err)
 			st.mu.Lock()
 			st.status = "error"
 			st.mu.Unlock()
 			return
 		}
+		slog.Info("twitch session persisted", "account", accountID)
 		if d.reload != nil {
-			_ = d.reload(d.rootCtx)
+			if err := d.reload(d.rootCtx); err != nil {
+				slog.Error("scheduler reload after twitch login failed", "account", accountID, "err", err)
+			} else {
+				slog.Info("scheduler reloaded after twitch login", "account", accountID)
+			}
 		}
 		st.mu.Lock()
 		st.status = "done"
 		st.mu.Unlock()
 		return
 	}
+	slog.Warn("twitch device-code expired before user authorized", "account", accountID)
 	st.mu.Lock()
 	st.status = "expired"
 	st.mu.Unlock()
