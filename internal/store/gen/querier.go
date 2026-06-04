@@ -17,6 +17,7 @@ type Querier interface {
 	GetAdmin(ctx context.Context) (Admin, error)
 	GetProgress(ctx context.Context, arg GetProgressParams) (Progress, error)
 	GetSession(ctx context.Context, accountID string) (Session, error)
+	GetSettingString(ctx context.Context, key string) ([]byte, error)
 	InsertClaim(ctx context.Context, arg InsertClaimParams) error
 	ListActiveCampaignsForPlatform(ctx context.Context, arg ListActiveCampaignsForPlatformParams) ([]Campaign, error)
 	ListAllAccounts(ctx context.Context) ([]Account, error)
@@ -31,6 +32,7 @@ type Querier interface {
 	UpsertCampaign(ctx context.Context, arg UpsertCampaignParams) error
 	UpsertProgress(ctx context.Context, arg UpsertProgressParams) error
 	UpsertSession(ctx context.Context, arg UpsertSessionParams) error
+	UpsertSettingString(ctx context.Context, arg UpsertSettingStringParams) error
 }
 
 var _ Querier = (*Queries)(nil)
