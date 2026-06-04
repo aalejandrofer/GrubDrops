@@ -100,8 +100,20 @@ func (a *authFlow) poll(ctx context.Context, internal deviceInternal) (platform.
 	return platform.Session{
 		AccessToken:  body.AccessToken,
 		RefreshToken: body.RefreshToken,
-		ExpiresAt:    time.Now().Add(time.Duration(body.ExpiresIn) * time.Second),
+		ExpiresAt:    computeExpiresAt(body.ExpiresIn),
 	}, nil
+}
+
+// Twitch's web client_id (kimne78kx3ncx6brgo4mv6wki5h1ko) returns
+// expires_in=0 for device-code tokens, signalling "no expiry" rather
+// than literally zero. Treat <= 0 as "long-lived" and set a 60-day
+// horizon so the scheduler doesn't immediately mark the session
+// expired on the next boot.
+func computeExpiresAt(expiresIn int) time.Time {
+	if expiresIn <= 0 {
+		return time.Now().Add(60 * 24 * time.Hour)
+	}
+	return time.Now().Add(time.Duration(expiresIn) * time.Second)
 }
 
 func (a *authFlow) refresh(ctx context.Context, s platform.Session) (platform.Session, error) {
@@ -135,7 +147,7 @@ func (a *authFlow) refresh(ctx context.Context, s platform.Session) (platform.Se
 	return platform.Session{
 		AccessToken:  body.AccessToken,
 		RefreshToken: body.RefreshToken,
-		ExpiresAt:    time.Now().Add(time.Duration(body.ExpiresIn) * time.Second),
+		ExpiresAt:    computeExpiresAt(body.ExpiresIn),
 	}, nil
 }
 
