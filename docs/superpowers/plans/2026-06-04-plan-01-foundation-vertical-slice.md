@@ -1419,7 +1419,9 @@ func TestWatcher_MinesUntilClaim(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, notif.events, "claim")
-	assert.Equal(t, StateIdle, w.State())
+	// After claim, watcher goes Idle → pickCampaign finds nothing → Sleeping → errComplete.
+	// Run returns with final state = StateSleeping.
+	assert.Equal(t, StateSleeping, w.State())
 }
 ```
 
