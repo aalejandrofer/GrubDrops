@@ -1,0 +1,18 @@
+{{define "title"}}Settings · Rust Drops Miner{{end}}
+{{define "content"}}
+<h1>Settings</h1>
+{{if .Flash}}<p class="ok">{{.Flash}}</p>{{end}}
+{{with .Page}}
+<form method="post" action="/settings">
+  <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+  <label>Global Discord webhook URL
+    <input type="url" name="discord_webhook" value="{{.GlobalDiscordWebhook}}" placeholder="https://discord.com/api/webhooks/...">
+  </label>
+  <label>Log retention (days)
+    <input type="number" name="log_retention_days" value="{{.LogRetentionDays}}" min="1" max="365">
+  </label>
+  <button type="submit">Save</button>
+</form>
+{{end}}
+{{end}}
+{{define "settings.html"}}{{template "layout" .}}{{end}}
