@@ -438,7 +438,7 @@ git commit -m "feat(log): slog wrapper with bounded ring buffer for later GUI ta
 ## Task 4: Migrations + sqlite open
 
 **Files:**
-- Create: `migrations/0001_init.sql`
+- Create: `internal/store/migrations/0001_init.sql` (note: under the package so `go:embed` can reach it)
 - Create: `internal/store/db.go`
 - Test: `internal/store/db_test.go`
 
@@ -452,7 +452,7 @@ go get modernc.org/sqlite@v1.29.0
 - [ ] **Step 2: Write migration**
 
 ```sql
--- migrations/0001_init.sql
+-- internal/store/migrations/0001_init.sql
 -- +goose Up
 -- +goose StatementBegin
 CREATE TABLE accounts (
@@ -636,7 +636,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-//go:embed ../../migrations/*.sql
+//go:embed migrations/*.sql
 var migrationsFS embed.FS
 
 func Open(ctx context.Context, path string) (*sql.DB, error) {
@@ -655,7 +655,7 @@ func Open(ctx context.Context, path string) (*sql.DB, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("set goose dialect: %w", err)
 	}
-	if err := goose.UpContext(ctx, db, "../../migrations"); err != nil {
+	if err := goose.UpContext(ctx, db, "migrations"); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
@@ -663,7 +663,7 @@ func Open(ctx context.Context, path string) (*sql.DB, error) {
 }
 ```
 
-Note the relative `embed` path: it's resolved at build time from this file's location, so `internal/store/db.go` → `../../migrations`. Verify on the build step.
+Note: `go:embed` cannot use `..` to escape the source file's directory tree. Migrations live at `internal/store/migrations/*.sql` so the embed pattern is `migrations/*.sql` relative to `db.go`. The seed migration in Task 13 must also land in `internal/store/migrations/`.
 
 - [ ] **Step 5: Run tests**
 
@@ -677,7 +677,7 @@ Expected: both PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add migrations/ internal/store/ go.mod go.sum
+git add internal/store/ go.mod go.sum
 git commit -m "feat(store): sqlite open with embedded goose migrations and seed"
 ```
 
@@ -708,7 +708,7 @@ version: "2"
 sql:
   - engine: "sqlite"
     queries: "internal/store/queries"
-    schema: "migrations"
+    schema: "internal/store/migrations"
     gen:
       go:
         package: "gen"
@@ -2019,14 +2019,14 @@ git commit -m "feat(api): bare http router with /healthz"
 ## Task 13: Main wiring + dev seed migration
 
 **Files:**
-- Create: `migrations/0002_dev_seed.sql`
+- Create: `internal/store/migrations/0002_dev_seed.sql`
 - Create: `cmd/miner/main.go`
 - Create: `.env.example`
 
 - [ ] **Step 1: Write conditional dev seed**
 
 ```sql
--- migrations/0002_dev_seed.sql
+-- internal/store/migrations/0002_dev_seed.sql
 -- +goose Up
 -- +goose StatementBegin
 -- Seed a single fake-backend account. Plan 1 boots this; later plans
@@ -2200,7 +2200,7 @@ Expected: `ok` printed; in process logs, a `notify event=claim` line appears.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add migrations/0002_dev_seed.sql cmd/miner/main.go .env.example
+git add internal/store/migrations/0002_dev_seed.sql cmd/miner/main.go .env.example
 git commit -m "feat(cmd/miner): wire daemon — config, store, scheduler, http"
 ```
 
