@@ -1,0 +1,14 @@
+{{define "dashboard_cards"}}
+{{if not .}}<p>No accounts configured yet. <a href="/accounts/new">Add one</a>.</p>{{end}}
+{{range .}}
+<div class="card">
+  <div class="row">
+    <strong>{{.DisplayName}}</strong>
+    <span class="badge">{{.Platform}}</span>
+    <span class="badge">{{.State}}</span>
+    {{if not .Enabled}}<span class="badge">disabled</span>{{end}}
+    <a href="/accounts/{{.ID}}" style="margin-left:auto">manage</a>
+  </div>
+</div>
+{{end}}
+{{end}}

@@ -1,0 +1,10 @@
+{{define "dashboard.html"}}
+{{template "layout" .}}
+{{define "title"}}Dashboard · Rust Drops Miner{{end}}
+{{define "content"}}
+<h1>Dashboard</h1>
+<div id="cards" hx-get="/dashboard/cards" hx-trigger="every 2s" hx-swap="innerHTML">
+  {{template "dashboard_cards" .Page}}
+</div>
+{{end}}
+{{end}}
