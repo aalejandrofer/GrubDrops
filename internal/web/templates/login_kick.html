@@ -12,7 +12,7 @@
     <ol class="steps">
       <li>Open <code>kick.com</code> in any browser and sign in.</li>
       <li>Open DevTools → Application → Cookies → kick.com.</li>
-      <li>Copy <code>kick_session</code>, <code>XSRF-TOKEN</code>, and <code>cf_clearance</code>.</li>
+      <li>Copy <code>kick_session</code> and <code>XSRF-TOKEN</code> (required). <code>cf_clearance</code> is optional — the sidecar generates its own when needed.</li>
       <li>Paste below + the channel you want to mine.</li>
     </ol>
   </div>
@@ -24,7 +24,7 @@
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
       <label>kick_session<input type="text" name="kick_session" required autocomplete="off"></label>
       <label>XSRF-TOKEN<input type="text" name="xsrf_token" required autocomplete="off"></label>
-      <label>cf_clearance<input type="text" name="cf_clearance" required autocomplete="off"></label>
+      <label>cf_clearance <span style="color:var(--muted);font-weight:400">(optional)</span><input type="text" name="cf_clearance" autocomplete="off"></label>
       <label>Channel to mine<input type="text" name="channel" required placeholder="rust-streamer-name"></label>
       <div class="submit-row">
         <a class="alt" href="/accounts">← cancel</a>

@@ -38,6 +38,7 @@ type loginKickDeps struct {
 	sessions  *store.SessionStore
 	browser   kickBrowserClient
 	registrar kickChannelRegistrar
+	reload    func(context.Context) error
 }
 
 type loginKickPageData struct {
@@ -79,14 +80,20 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 	cfClearance := r.FormValue("cf_clearance")
 	channel := r.FormValue("channel")
 
-	pbSession := &pb.KickSession{
-		Cookies: []*pb.Cookie{
-			{Name: "kick_session", Value: kickSessionCookie, Domain: "kick.com", Path: "/"},
-			{Name: "XSRF-TOKEN", Value: xsrf, Domain: "kick.com", Path: "/"},
-			{Name: "cf_clearance", Value: cfClearance, Domain: "kick.com", Path: "/"},
-		},
-		XsrfToken: xsrf,
+	cookies := []*pb.Cookie{
+		{Name: "kick_session", Value: kickSessionCookie, Domain: "kick.com", Path: "/"},
+		{Name: "XSRF-TOKEN", Value: xsrf, Domain: "kick.com", Path: "/"},
 	}
+	stored := []cookieStored{
+		{Name: "kick_session", Value: kickSessionCookie, Domain: "kick.com", Path: "/"},
+		{Name: "XSRF-TOKEN", Value: xsrf, Domain: "kick.com", Path: "/"},
+	}
+	if cfClearance != "" {
+		cookies = append(cookies, &pb.Cookie{Name: "cf_clearance", Value: cfClearance, Domain: "kick.com", Path: "/"})
+		stored = append(stored, cookieStored{Name: "cf_clearance", Value: cfClearance, Domain: "kick.com", Path: "/"})
+	}
+
+	pbSession := &pb.KickSession{Cookies: cookies, XsrfToken: xsrf}
 
 	resp, err := d.browser.Authenticate(r.Context(), pbSession)
 	if err != nil {
@@ -95,11 +102,7 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 	}
 
 	internal := kickSessionForStorage{
-		Cookies: []cookieStored{
-			{Name: "kick_session", Value: kickSessionCookie, Domain: "kick.com", Path: "/"},
-			{Name: "XSRF-TOKEN", Value: xsrf, Domain: "kick.com", Path: "/"},
-			{Name: "cf_clearance", Value: cfClearance, Domain: "kick.com", Path: "/"},
-		},
+		Cookies:   stored,
 		XSRFToken: xsrf,
 		Channel:   channel,
 		Username:  resp.Username,
@@ -117,7 +120,11 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 		d.registrar.RegisterChannel(id, channel)
 	}
 
-	d.sm.Put(r.Context(), "flash", "Kick session authorized for "+resp.Username+" — click Apply changes")
+	if d.reload != nil {
+		_ = d.reload(r.Context())
+	}
+
+	d.sm.Put(r.Context(), "flash", "Kick session authorized for "+resp.Username)
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
 

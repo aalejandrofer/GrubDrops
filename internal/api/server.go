@@ -62,6 +62,7 @@ func NewRouter(d Deps) http.Handler {
 		sessions:  d.Sessions,
 		browser:   d.BrowserClient,
 		registrar: d.Registrar,
+		reload:    d.Reload,
 	}
 
 	withSession := func(h http.Handler) http.Handler { return d.Session.LoadAndSave(h) }
