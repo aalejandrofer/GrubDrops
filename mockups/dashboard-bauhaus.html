@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BAUHAUS · rust-drops-miner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream:   #f1ece2;
+    --paper:   #faf5e9;
+    --ink:     #0e0e0e;
+    --ink-2:   #2a2a2a;
+    --mute:    #6e6a60;
+    --line:    #0e0e0e;
+    --red:     #d6361a;
+    --yellow:  #f3b419;
+    --blue:    #1a4ed6;
+    --green:   #2f7a48;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--cream);
+    color: var(--ink);
+    font-family: 'Archivo', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  /* TOP MASTHEAD */
+  .masthead {
+    border-bottom: 3px solid var(--ink);
+    padding: 18px 32px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 32px;
+    background: var(--paper);
+  }
+  .logo {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 26px;
+    line-height: 1;
+    letter-spacing: -0.04em;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .logo .square {
+    width: 22px; height: 22px;
+    background: var(--red);
+    display: inline-block;
+    transform: rotate(0deg);
+  }
+  .logo .circle {
+    width: 18px; height: 18px;
+    background: var(--yellow);
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .logo .tri {
+    width: 0; height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 18px solid var(--blue);
+    display: inline-block;
+  }
+  .nav {
+    display: flex; gap: 0;
+    justify-self: center;
+    border-left: 1px solid var(--ink);
+  }
+  .nav a {
+    color: var(--ink);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: -0.005em;
+    padding: 8px 22px;
+    border-right: 1px solid var(--ink);
+    text-transform: uppercase;
+    background: var(--paper);
+    transition: background .12s;
+  }
+  .nav a.active { background: var(--ink); color: var(--paper); }
+  .nav a:not(.active):hover { background: var(--yellow); }
+  .you {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .you .live {
+    width: 10px; height: 10px;
+    background: var(--green);
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(47,122,72,.18);
+    display: inline-block;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(0.7); }
+  }
+
+  /* HERO */
+  main { max-width: 1300px; margin: 0 auto; padding: 32px; }
+  .hero {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: 0;
+    border: 3px solid var(--ink);
+    margin-bottom: 0;
+    border-bottom-width: 0;
+  }
+  .hero .title {
+    padding: 32px 36px 28px;
+    border-right: 3px solid var(--ink);
+    background: var(--paper);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero .title::before {
+    content: "";
+    position: absolute;
+    right: -120px; bottom: -120px;
+    width: 320px; height: 320px;
+    background: var(--yellow);
+    border-radius: 50%;
+    z-index: 0;
+  }
+  .hero h1 {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: clamp(40px, 6.5vw, 84px);
+    line-height: 0.88;
+    letter-spacing: -0.045em;
+    margin: 0 0 14px;
+    position: relative; z-index: 1;
+  }
+  .hero h1 .accent {
+    background: var(--red); color: var(--paper);
+    padding: 0 12px;
+    display: inline-block;
+    transform: rotate(-1.5deg);
+  }
+  .hero .label {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-2);
+    position: relative; z-index: 1;
+  }
+  .hero .label::before {
+    content: "■";
+    color: var(--red);
+    margin-right: 8px;
+  }
+  .hero .stats {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+  }
+  .stat {
+    padding: 22px 28px;
+    border-bottom: 3px solid var(--ink);
+    position: relative;
+    background: var(--cream);
+  }
+  .stat:last-child { border-bottom: none; }
+  .stat.yellow { background: var(--yellow); }
+  .stat.blue   { background: var(--blue); color: var(--paper); }
+  .stat .k {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-bottom: 8px;
+    opacity: .85;
+  }
+  .stat .v {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 48px;
+    line-height: 0.9;
+    letter-spacing: -0.04em;
+  }
+  .stat .sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    margin-top: 8px;
+    opacity: .8;
+  }
+  .stat .icon {
+    position: absolute; top: 14px; right: 14px;
+    width: 20px; height: 20px;
+  }
+
+  /* TOOLBAR (sits attached to hero) */
+  .toolbar {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 28px;
+    border: 3px solid var(--ink);
+    background: var(--paper);
+    margin-bottom: 32px;
+  }
+  .breadcrumb {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+  }
+  .breadcrumb b { font-weight: 700; }
+  .toolbar input {
+    background: var(--cream);
+    border: 2px solid var(--ink);
+    padding: 8px 12px;
+    font: inherit;
+    font-size: 13px;
+    width: 220px;
+    outline: none;
+    border-radius: 0;
+  }
+  .toolbar .btn {
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+    padding: 9px 18px;
+    border: 2px solid var(--ink);
+    background: var(--paper);
+    color: var(--ink);
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  .toolbar .btn:hover { background: var(--yellow); }
+  .toolbar .btn.solid { background: var(--ink); color: var(--paper); }
+  .toolbar .btn.solid:hover { background: var(--red); }
+
+  /* ACCOUNT GRID */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border: 3px solid var(--ink);
+  }
+  .card {
+    border-right: 3px solid var(--ink);
+    border-bottom: 3px solid var(--ink);
+    padding: 22px 24px 18px;
+    background: var(--paper);
+    position: relative;
+    min-height: 270px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .card:nth-child(3n) { border-right: none; }
+  .card:nth-last-child(-n+3) { border-bottom: none; }
+  .card.accent-red    { background: var(--red);    color: var(--paper); }
+  .card.accent-yellow { background: var(--yellow); }
+  .card.accent-blue   { background: var(--blue);   color: var(--paper); }
+  .card.disabled { opacity: .35; }
+
+  .card-top {
+    display: flex; justify-content: space-between; align-items: start;
+  }
+  .card-num {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    opacity: .8;
+  }
+  .card-plat {
+    font-family: 'DM Mono', monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    padding: 4px 10px;
+    border: 2px solid currentColor;
+    font-weight: 700;
+  }
+  .card .name {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 26px;
+    line-height: 0.95;
+    letter-spacing: -0.025em;
+    margin: 18px 0 4px;
+  }
+  .card .handle {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    opacity: .75;
+    margin-bottom: 12px;
+  }
+
+  /* state symbol */
+  .state {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 14px;
+  }
+  .sym {
+    width: 26px; height: 26px; flex: none;
+  }
+  .sym.watching { background: var(--green); border-radius: 50%; box-shadow: inset 0 0 0 3px var(--paper); }
+  .sym.claiming { background: var(--ink); border-radius: 50%; box-shadow: inset 0 0 0 3px var(--yellow); }
+  .sym.pick { width:0; height:0; background:transparent;
+              border-left: 13px solid transparent; border-right: 13px solid transparent;
+              border-bottom: 22px solid var(--paper); }
+  .sym.sleeping { background: var(--ink); }
+  .sym.disabled { background: transparent; outline: 3px solid currentColor; outline-offset: -3px; }
+  .state-text {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 18px;
+    letter-spacing: -0.02em;
+    text-transform: lowercase;
+  }
+  .state-text small {
+    display: block;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 400;
+    opacity: .7;
+    text-transform: none;
+    letter-spacing: 0.04em;
+    margin-top: 2px;
+  }
+
+  .prog-line {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 6px;
+  }
+  .prog-line b { font-family: 'Archivo Black', sans-serif; font-size: 13px; letter-spacing: -0.01em; text-transform: none; }
+  .prog {
+    height: 10px;
+    border: 2px solid currentColor;
+    position: relative;
+    background: transparent;
+  }
+  .prog .fill {
+    position: absolute; inset: 0 auto 0 0;
+    background: currentColor;
+  }
+
+  .card-foot {
+    margin-top: 16px;
+    display: flex; justify-content: space-between; align-items: end;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+  }
+  .card-foot a {
+    color: currentColor;
+    text-decoration: none;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-bottom: 2px solid currentColor;
+    padding-bottom: 2px;
+  }
+  .card-foot a:hover { background: currentColor; color: var(--paper); padding: 2px 6px; }
+
+  /* BOTTOM ROW */
+  .bottom {
+    margin-top: 32px;
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 0;
+    border: 3px solid var(--ink);
+  }
+  .panel-events {
+    background: var(--paper);
+    border-right: 3px solid var(--ink);
+    padding: 26px 28px;
+  }
+  .panel-events h2 {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 26px;
+    margin: 0 0 16px;
+    letter-spacing: -0.02em;
+  }
+  .panel-events .row {
+    display: grid;
+    grid-template-columns: 70px 18px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    padding: 10px 0;
+    border-top: 1px solid var(--ink);
+    font-size: 14px;
+  }
+  .panel-events .row:first-of-type { border-top: 2px solid var(--ink); }
+  .panel-events .row .t { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mute); }
+  .panel-events .row .mark {
+    width: 14px; height: 14px;
+    background: var(--ink);
+  }
+  .panel-events .row .mark.claim   { background: var(--red); }
+  .panel-events .row .mark.progress{ background: var(--yellow); border-radius: 50%; }
+  .panel-events .row .mark.state   { background: var(--blue); }
+  .panel-events .row .mark.error   { background: var(--ink); transform: rotate(45deg); }
+  .panel-events .row .body { font-weight: 500; }
+  .panel-events .row .body b { font-weight: 700; }
+  .panel-events .row .acc  { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--mute); }
+
+  .panel-keys {
+    background: var(--red);
+    color: var(--paper);
+    padding: 26px 28px;
+    position: relative;
+    overflow: hidden;
+  }
+  .panel-keys::after {
+    content: "";
+    position: absolute;
+    right: -60px; bottom: -60px;
+    width: 200px; height: 200px;
+    background: var(--paper);
+    opacity: .08;
+    border-radius: 50%;
+  }
+  .panel-keys h2 {
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 26px;
+    margin: 0 0 18px;
+    letter-spacing: -0.02em;
+  }
+  .panel-keys .key {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 14px;
+    padding: 8px 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    border-top: 1px solid rgba(255,255,255,.2);
+    position: relative; z-index: 1;
+  }
+  .panel-keys .key:first-of-type { border-top: 2px solid rgba(255,255,255,.5); }
+  .panel-keys .key kbd {
+    background: var(--paper);
+    color: var(--red);
+    padding: 2px 8px;
+    font-family: 'Archivo Black', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-align: center;
+    font-weight: 700;
+    display: inline-block;
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="logo">
+    <span class="square"></span>
+    <span class="circle"></span>
+    <span class="tri"></span>
+    <span>RDM·25</span>
+  </div>
+  <nav class="nav">
+    <a class="active" href="#">Dashboard</a>
+    <a href="#">Accounts</a>
+    <a href="#">Drops</a>
+    <a href="#">Settings</a>
+    <a href="#">Logout</a>
+  </nav>
+  <div class="you">
+    <span>node 10.10.2.40</span>
+    <span class="clock">14:32:08</span>
+    <span class="live"></span>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero">
+    <div class="title">
+      <div class="label">June 4, 2026 — system status: nominal</div>
+      <h1>Mining <span class="accent">three</span><br>accounts<br>right now.</h1>
+    </div>
+    <div class="stats">
+      <div class="stat yellow">
+        <svg class="icon" viewBox="0 0 20 20"><path d="M0 0h20v20H0z" fill="#0e0e0e"/><path d="M3 3h14v14H3z" fill="#f3b419"/></svg>
+        <div class="k">drops · 7d</div>
+        <div class="v">12</div>
+        <div class="sub">+4 vs prior week</div>
+      </div>
+      <div class="stat blue">
+        <svg class="icon" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="#faf5e9"/><circle cx="10" cy="10" r="5" fill="#1a4ed6"/></svg>
+        <div class="k">campaigns active</div>
+        <div class="v">05</div>
+        <div class="sub">04 twitch / 01 kick</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="toolbar">
+    <div class="breadcrumb">RDM / <b>dashboard</b></div>
+    <input placeholder="filter accounts…">
+    <a class="btn" href="#">Reload watchers</a>
+    <a class="btn solid" href="#">+ Add account</a>
+  </div>
+
+  <section class="grid">
+
+    <article class="card accent-yellow">
+      <div>
+        <div class="card-top">
+          <span class="card-num">01</span>
+          <span class="card-plat">twitch</span>
+        </div>
+        <div class="name">Helmet<br>Farmer</div>
+        <div class="handle">@helmet_farmer</div>
+        <div class="state">
+          <span class="sym watching"></span>
+          <div class="state-text">watching<small>shroud · 42m</small></div>
+        </div>
+      </div>
+      <div>
+        <div class="prog-line"><span><b>Wolf Helmet</b></span><span>47 / 120m</span></div>
+        <div class="prog"><div class="fill" style="width:39%"></div></div>
+        <div class="card-foot">
+          <span>last claim 2d</span>
+          <a href="#">manage →</a>
+        </div>
+      </div>
+    </article>
+
+    <article class="card accent-red">
+      <div>
+        <div class="card-top">
+          <span class="card-num">02</span>
+          <span class="card-plat">kick</span>
+        </div>
+        <div class="name">Demo<br>Two</div>
+        <div class="handle">@demo_two</div>
+        <div class="state">
+          <span class="sym claiming"></span>
+          <div class="state-text">claiming<small>instance #4f2</small></div>
+        </div>
+      </div>
+      <div>
+        <div class="prog-line"><span><b>Salvaged Cleaver</b></span><span>120 / 120m</span></div>
+        <div class="prog"><div class="fill" style="width:100%"></div></div>
+        <div class="card-foot">
+          <span>last claim 11h</span>
+          <a href="#">manage →</a>
+        </div>
+      </div>
+    </article>
+
+    <article class="card accent-blue">
+      <div>
+        <div class="card-top">
+          <span class="card-num">03</span>
+          <span class="card-plat">twitch</span>
+        </div>
+        <div class="name">Backup<br>Acc</div>
+        <div class="handle">@aalejandrofer</div>
+        <div class="state">
+          <span class="sym pick"></span>
+          <div class="state-text">pick stream<small>scanning channels…</small></div>
+        </div>
+      </div>
+      <div>
+        <div class="prog-line"><span><b>Crate Skin</b></span><span>0 / 60m</span></div>
+        <div class="prog"><div class="fill" style="width:0%"></div></div>
+        <div class="card-foot">
+          <span>last claim 6d</span>
+          <a href="#">manage →</a>
+        </div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div>
+        <div class="card-top">
+          <span class="card-num">04</span>
+          <span class="card-plat">fake</span>
+        </div>
+        <div class="name">Dev<br>User</div>
+        <div class="handle">@devuser</div>
+        <div class="state">
+          <span class="sym sleeping"></span>
+          <div class="state-text">sleeping<small>no active campaign</small></div>
+        </div>
+      </div>
+      <div>
+        <div class="prog-line"><span><b>—</b></span><span>—</span></div>
+        <div class="prog"><div class="fill" style="width:0%"></div></div>
+        <div class="card-foot">
+          <span>last claim 23h</span>
+          <a href="#">manage →</a>
+        </div>
+      </div>
+    </article>
+
+    <article class="card disabled">
+      <div>
+        <div class="card-top">
+          <span class="card-num">05</span>
+          <span class="card-plat">twitch</span>
+        </div>
+        <div class="name">Old<br>Account</div>
+        <div class="handle">@old_handle</div>
+        <div class="state">
+          <span class="sym disabled"></span>
+          <div class="state-text">disabled<small>—</small></div>
+        </div>
+      </div>
+      <div>
+        <div class="prog-line"><span><b>—</b></span><span>—</span></div>
+        <div class="prog"><div class="fill" style="width:0%"></div></div>
+        <div class="card-foot">
+          <span>last claim 28d</span>
+          <a href="#">manage →</a>
+        </div>
+      </div>
+    </article>
+
+    <article class="card" style="display:flex;align-items:center;justify-content:center;">
+      <a href="#" style="text-decoration:none;color:var(--ink);text-align:center;">
+        <div style="font-family:'Archivo Black',sans-serif;font-size:48px;line-height:1;margin-bottom:8px;">+</div>
+        <div style="font-family:'DM Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.18em;">new account</div>
+      </a>
+    </article>
+
+  </section>
+
+  <section class="bottom">
+    <div class="panel-events">
+      <h2>Recent events</h2>
+      <div class="row"><span class="t">14:31:02</span><span class="mark claim"></span><span class="body"><b>claim</b> · Wolf Helmet recorded</span><span class="acc">helmet_farmer</span></div>
+      <div class="row"><span class="t">14:30:44</span><span class="mark progress"></span><span class="body"><b>50%</b> · Salvaged Cleaver progress</span><span class="acc">demo_two</span></div>
+      <div class="row"><span class="t">14:24:17</span><span class="mark state"></span><span class="body">pick_stream → <b>watching</b></span><span class="acc">helmet_farmer</span></div>
+      <div class="row"><span class="t">14:18:33</span><span class="mark claim"></span><span class="body"><b>claim</b> · Crate Skin recorded</span><span class="acc">backup_acc</span></div>
+      <div class="row"><span class="t">14:09:55</span><span class="mark error"></span><span class="body"><b>error</b> · sidecar timeout, retrying</span><span class="acc">demo_two</span></div>
+      <div class="row"><span class="t">14:03:21</span><span class="mark progress"></span><span class="body">60 heartbeats / 60s</span><span class="acc">—</span></div>
+    </div>
+    <div class="panel-keys">
+      <h2>Shortcuts</h2>
+      <div class="key"><kbd>G A</kbd><span>go to accounts</span></div>
+      <div class="key"><kbd>G D</kbd><span>go to drops</span></div>
+      <div class="key"><kbd>G S</kbd><span>settings</span></div>
+      <div class="key"><kbd>/</kbd><span>focus search</span></div>
+      <div class="key"><kbd>R</kbd><span>reload watchers</span></div>
+      <div class="key"><kbd>?</kbd><span>show all keys</span></div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  function tick() {
+    const n = new Date();
+    const pad = (x) => String(x).padStart(2,'0');
+    document.querySelector('.clock').textContent =
+      pad(n.getHours()) + ':' + pad(n.getMinutes()) + ':' + pad(n.getSeconds());
+  }
+  tick(); setInterval(tick, 1000);
+</script>
+</body>
+</html>
