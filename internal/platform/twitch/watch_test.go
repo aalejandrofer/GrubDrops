@@ -17,6 +17,24 @@ import (
 	"github.com/chano-fernandez/rust-drops-miner/internal/platform"
 )
 
+func TestWatch_HeartbeatSendsAuthHeader(t *testing.T) {
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		_, _ = w.Write([]byte(`{"data":{"sendSpadeEvents":{"statusCode":204}}}`))
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv.URL)
+	wt := &watch{c: c}
+	h, err := wt.start(context.Background(), platform.Session{AccessToken: "tok123"},
+		platform.Stream{Channel: "fakestreamer"})
+	require.NoError(t, err)
+	require.NoError(t, wt.heartbeat(context.Background(), h))
+
+	require.Equal(t, "OAuth tok123", gotAuth)
+}
+
 func TestWatch_HeartbeatSendsGzippedBase64Mutation(t *testing.T) {
 	var got struct {
 		body []byte

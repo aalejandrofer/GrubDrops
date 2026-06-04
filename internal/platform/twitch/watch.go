@@ -31,12 +31,16 @@ type watchInternal struct {
 	ChannelID   string
 	BroadcastID string
 	UserID      int64
+	Token       string
 }
 
-func (w *watch) start(_ context.Context, _ platform.Session, stream platform.Stream) (platform.WatchHandle, error) {
+func (w *watch) start(_ context.Context, sess platform.Session, stream platform.Stream) (platform.WatchHandle, error) {
 	return platform.WatchHandle{
-		Channel:  stream.Channel,
-		Internal: watchInternal{Channel: stream.Channel},
+		Channel: stream.Channel,
+		Internal: watchInternal{
+			Channel: stream.Channel,
+			Token:   sess.AccessToken,
+		},
 	}, nil
 }
 
@@ -92,7 +96,7 @@ func (w *watch) heartbeat(ctx context.Context, h platform.WatchHandle) error {
 			StatusCode int `json:"statusCode"`
 		} `json:"sendSpadeEvents"`
 	}
-	return w.c.gqlQuery(ctx, "", "SendEvents", sendEventsMutation, variables, &resp)
+	return w.c.gqlQuery(ctx, internal.Token, "SendEvents", sendEventsMutation, variables, &resp)
 }
 
 func (w *watch) stop(_ context.Context, _ platform.WatchHandle) error {
