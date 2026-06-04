@@ -3,6 +3,8 @@
 <nav>
   <a href="/">Dashboard</a>
   <a href="/accounts">Accounts</a>
+  <a href="/drops">Drops</a>
+  <a href="/settings">Settings</a>
   <form method="post" action="/logout" style="margin-left:auto;display:inline">
     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
     <button type="submit">Logout</button>

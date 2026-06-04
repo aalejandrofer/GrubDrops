@@ -16,17 +16,19 @@ import (
 )
 
 type Deps struct {
-	DB            *sql.DB
-	Q             *gen.Queries
-	Templates     Renderer
-	Session       *scs.SessionManager
-	Scheduler     *scheduler.Scheduler
-	Reload        func(context.Context) error
-	Sessions      *store.SessionStore
-	Registry      *platform.Registry
-	RootCtx       context.Context
-	BrowserClient KickBrowserClient
-	Registrar     KickChannelRegistrar
+	DB              *sql.DB
+	Q               *gen.Queries
+	Templates       Renderer
+	Session         *scs.SessionManager
+	Scheduler       *scheduler.Scheduler
+	Reload          func(context.Context) error
+	Sessions        *store.SessionStore
+	Registry        *platform.Registry
+	RootCtx         context.Context
+	BrowserClient   KickBrowserClient
+	Registrar       KickChannelRegistrar
+	SettingsStore   *store.Settings
+	OnSettingsUpdate func()
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -116,6 +118,18 @@ func NewRouter(d Deps) http.Handler {
 		http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 	})
 	authed.Post("/logout", authH.logoutPost)
+
+	settingsH := &settingsDeps{
+		s:        d.SettingsStore,
+		t:        d.Templates,
+		sm:       d.Session,
+		onUpdate: d.OnSettingsUpdate,
+	}
+	dropsH := &dropsDeps{q: d.Q, t: d.Templates}
+
+	authed.Get("/settings", settingsH.get)
+	authed.Post("/settings", settingsH.post)
+	authed.Get("/drops", dropsH.list)
 
 	r.Mount("/", withSession(CSRF(authed)))
 	return r

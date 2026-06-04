@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -60,6 +60,7 @@ func run() error {
 	_ = cryptor
 
 	q := gen.New(db)
+	settingsStore := store.NewSettings(q)
 	sessions := store.NewSessionStore(db, q, cryptor)
 
 	tmplSet, err := web.Templates()
@@ -94,7 +95,47 @@ func run() error {
 		logger.Info("MINER_BROWSER_URL empty, Kick backend disabled")
 	}
 
-	notifier := makeNotifier(cfg, logger)
+	resolver := func(accountID string) string {
+		acc, err := q.GetAccount(ctx, accountID)
+		if err != nil || !acc.WebhookUrl.Valid {
+			return ""
+		}
+		return acc.WebhookUrl.String
+	}
+
+	filter := &notify.VerbosityFilter{Allow: map[string]bool{
+		notify.EventClaim:    true,
+		notify.EventError:    true,
+		notify.EventProgress: true,
+		notify.EventAuth:     true,
+	}}
+
+	buildNotifier := func() notify.Notifier {
+		globalURL, _ := settingsStore.GlobalDiscordWebhook(ctx)
+		if globalURL == "" {
+			globalURL = cfg.DiscordWebhookURL
+		}
+		var fallback notify.Notifier
+		if globalURL != "" {
+			fallback = notify.NewDiscordWebhook(globalURL, filter)
+		} else {
+			fallback = &notify.NoopNotifier{Logger: logger}
+		}
+		return notify.NewAccountRouted(fallback, resolver, filter)
+	}
+
+	var notifierMu sync.Mutex
+	currentNotifier := buildNotifier()
+
+	onSettingsUpdate := func() {
+		n := buildNotifier()
+		notifierMu.Lock()
+		currentNotifier = n
+		notifierMu.Unlock()
+	}
+
+	notifier := &indirectNotifier{mu: &notifierMu, ptr: &currentNotifier}
+
 	sched := scheduler.New(scheduler.Options{Notifier: notifier})
 
 	build := func(a gen.Account) (scheduler.Entry, error) {
@@ -170,9 +211,11 @@ func run() error {
 		DB: db, Q: q, Templates: tmplSet, Session: sm,
 		Scheduler: sched, Reload: loadAndStart,
 		Sessions: sessions, Registry: registry,
-		RootCtx:       ctx,
-		BrowserClient: bc,
-		Registrar:     reg,
+		RootCtx:          ctx,
+		BrowserClient:    bc,
+		Registrar:        reg,
+		SettingsStore:    settingsStore,
+		OnSettingsUpdate: onSettingsUpdate,
 	}
 
 	srv := &http.Server{
@@ -198,16 +241,18 @@ func run() error {
 	return nil
 }
 
-func makeNotifier(cfg config.Config, logger *slog.Logger) notify.Notifier {
-	if cfg.DiscordWebhookURL != "" {
-		return notify.NewDiscordWebhook(cfg.DiscordWebhookURL, &notify.VerbosityFilter{Allow: map[string]bool{
-			notify.EventClaim: true, notify.EventError: true,
-			notify.EventProgress: true, notify.EventAuth: true,
-		}})
-	}
-	return &notify.NoopNotifier{Logger: logger}
-}
-
 type nopRunner struct{}
 
 func (nopRunner) Run(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }
+
+type indirectNotifier struct {
+	mu  *sync.Mutex
+	ptr *notify.Notifier
+}
+
+func (i *indirectNotifier) Notify(ctx context.Context, event string, fields map[string]any) error {
+	i.mu.Lock()
+	n := *i.ptr
+	i.mu.Unlock()
+	return n.Notify(ctx, event, fields)
+}
