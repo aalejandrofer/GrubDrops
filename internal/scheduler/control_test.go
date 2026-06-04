@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform/fake"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform/platformtest"
 	"github.com/aalejandrofer/rust-drops-miner/internal/watcher"
 )
 
@@ -34,7 +34,7 @@ func TestScheduler_StopThenReloadAddsAccount(t *testing.T) {
 		return func() Entry {
 			w := watcher.New(watcher.Config{
 				AccountID:    id,
-				Backend:      fake.New(fake.WithFastTime()),
+				Backend:      platformtest.New(),
 				Session:      platform.Session{AccessToken: "x"},
 				Notifier:     notif,
 				TickInterval: 5 * time.Millisecond,

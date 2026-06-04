@@ -304,7 +304,6 @@
   }
   .plat.twitch { color: var(--purple); border-color: #4a3970; background: rgba(122,75,176,.08); }
   .plat.kick   { color: var(--kick);   border-color: #2d5c44; background: rgba(83,231,164,.06); }
-  .plat.fake   { color: var(--muted); }
 
   .mcard .state-row {
     display: grid;

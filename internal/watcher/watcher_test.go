@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform/fake"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform/platformtest"
 )
 
 type recordingNotifier struct{ events []string }
@@ -23,7 +23,7 @@ func TestWatcher_MinesUntilClaim(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	backend := fake.New(fake.WithFastTime())
+	backend := platformtest.New()
 	notif := &recordingNotifier{}
 
 	sess, err := backend.PollDeviceLogin(ctx, platform.DeviceChallenge{})

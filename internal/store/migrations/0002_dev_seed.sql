@@ -1,11 +1,14 @@
 -- +goose Up
 -- +goose StatementBegin
-INSERT INTO accounts (id, platform, login, display_name, status, proxy_url, webhook_url, fingerprint_json, enabled, created_at, updated_at)
-SELECT 'acc_fake_dev', 'fake', 'devuser', 'Dev User', 'idle', NULL, NULL, '{}', 1, strftime('%s','now'), strftime('%s','now')
-WHERE NOT EXISTS (SELECT 1 FROM accounts WHERE id = 'acc_fake_dev');
+-- Historically inserted acc_fake_dev. Now a no-op — 0003 drops the
+-- row on existing DBs and the FakeBackend has been removed from the
+-- runtime. Kept as a placeholder so the migration version stays
+-- monotonic for installations that already ran 0002 against the
+-- previous content.
+SELECT 1;
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
-DELETE FROM accounts WHERE id = 'acc_fake_dev';
+SELECT 1;
 -- +goose StatementEnd

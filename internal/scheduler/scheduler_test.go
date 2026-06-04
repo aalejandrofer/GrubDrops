@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform/fake"
+	"github.com/aalejandrofer/rust-drops-miner/internal/platform/platformtest"
 	"github.com/aalejandrofer/rust-drops-miner/internal/watcher"
 )
 
@@ -32,7 +32,7 @@ func TestScheduler_RunsMultipleAccountsConcurrently(t *testing.T) {
 	s := New(Options{Notifier: notif})
 
 	for i := 0; i < 3; i++ {
-		backend := fake.New(fake.WithFastTime())
+		backend := platformtest.New()
 		sess := platform.Session{AccessToken: "x"}
 		w := watcher.New(watcher.Config{
 			AccountID:    fmt.Sprintf("acc%d", i),

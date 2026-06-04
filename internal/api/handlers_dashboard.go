@@ -29,7 +29,7 @@ type dashMineCard struct {
 	ID       string
 	Name     string
 	Login    string
-	Platform string // "twitch" | "kick" | "fake"
+	Platform string // "twitch" | "kick"
 	State    string // "watching" | "claiming" | "pick_stream" | "sleeping" | "idle" | "stopped"
 	StateSub string // free-text aside
 	Uptime   string // "17m on stream" or "—"

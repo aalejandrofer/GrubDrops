@@ -19,7 +19,6 @@ import (
 	mlog "github.com/aalejandrofer/rust-drops-miner/internal/log"
 	"github.com/aalejandrofer/rust-drops-miner/internal/notify"
 	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform/fake"
 	"github.com/aalejandrofer/rust-drops-miner/internal/platform/kick"
 	"github.com/aalejandrofer/rust-drops-miner/internal/platform/twitch"
 	"github.com/aalejandrofer/rust-drops-miner/internal/scheduler"
@@ -79,7 +78,6 @@ func run() error {
 	sm.Cookie.Secure = cfg.SecureCookies
 
 	registry := platform.NewRegistry()
-	registry.Register(fake.New(fake.WithFastTime()))
 
 	var browserClient *browser.Client
 	var kickBackend *kick.Backend
@@ -156,14 +154,7 @@ func run() error {
 		}
 
 		var sess platform.Session
-		switch a.Platform {
-		case "fake":
-			s, err := b.PollDeviceLogin(ctx, platform.DeviceChallenge{})
-			if err != nil {
-				return scheduler.Entry{}, fmt.Errorf("device login: %w", err)
-			}
-			sess = s
-		default:
+		{
 			s, ok, err := sessions.Get(ctx, a.ID)
 			if err != nil {
 				return scheduler.Entry{}, fmt.Errorf("load session: %w", err)

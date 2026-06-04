@@ -29,7 +29,7 @@ func TestQueries_AccountRoundtrip(t *testing.T) {
 
 	acc, err := q.CreateAccount(context.Background(), gen.CreateAccountParams{
 		ID:              "acc1",
-		Platform:        "fake",
+		Platform:        "twitch",
 		Login:           "user1",
 		DisplayName:     "User One",
 		Status:          "idle",
