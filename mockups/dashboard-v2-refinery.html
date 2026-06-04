@@ -1,0 +1,1247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>v2 · REFINERY · rust-drops-miner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0e0f11;
+    --bg-grad:   radial-gradient(1400px 900px at 100% -10%, #1a1410 0%, #0e0f11 60%);
+    --surface:   #16181c;
+    --surface-2: #1c1f24;
+    --surface-3: #232730;
+    --line:      #25282e;
+    --line-soft: #1f2227;
+    --text:      #e8e3d8;
+    --muted:     #7a7a78;
+    --dim:       #4d4e52;
+    --accent:    #d4631e;
+    --accent-2:  #f0a45e;
+    --green:     #6fb56b;
+    --amber:     #e1b04a;
+    --blue:      #6f8db5;
+    --red:       #c64a3c;
+    --purple:    #b079f0;
+    --kick:      #53e7a4;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    background-image: var(--bg-grad);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-feature-settings: 'ss03', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    font-size: 14px;
+    line-height: 1.45;
+    min-height: 100vh;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .08 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    opacity: .45; mix-blend-mode: overlay;
+  }
+
+  /* TOP BAR */
+  header.top {
+    position: sticky; top: 0; z-index: 10;
+    border-bottom: 1px solid var(--line);
+    background: rgba(14,15,17,.82);
+    backdrop-filter: blur(14px) saturate(120%);
+  }
+  .topbar {
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 12px 24px;
+  }
+  .brand {
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  .brand .mark {
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-weight: 700;
+    font-variation-settings: 'opsz' 96, 'wdth' 200;
+    letter-spacing: -0.02em;
+    font-size: 20px;
+  }
+  .brand .mark span { color: var(--accent); }
+  .brand .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    padding: 3px 8px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+  }
+  .nav { display: flex; gap: 4px; justify-self: center; }
+  .nav a {
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    text-decoration: none;
+    padding: 7px 14px;
+    border-radius: 2px;
+    transition: color .15s, background .15s;
+  }
+  .nav a:hover { color: var(--text); background: var(--surface); }
+  .nav a.active {
+    color: var(--text);
+    background: var(--surface);
+    box-shadow: inset 0 -2px 0 var(--accent);
+  }
+  .user {
+    justify-self: end;
+    display: flex; align-items: center; gap: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--muted);
+  }
+  .user .clock { color: var(--text); }
+  .user .pulse {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .4 } }
+
+  /* LAYOUT */
+  main {
+    position: relative; z-index: 1;
+    max-width: 1640px; margin: 0 auto;
+    padding: 24px 24px 80px;
+  }
+
+  /* PAGE HEAD compact */
+  .page-head {
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 24px; align-items: end;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 20px;
+  }
+  .page-head .sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.15em;
+    margin-bottom: 8px;
+  }
+  .page-head h1 {
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-variation-settings: 'opsz' 96, 'wdth' 90;
+    font-weight: 500;
+    font-size: clamp(28px, 4vw, 44px);
+    line-height: 0.98;
+    letter-spacing: -0.03em;
+    margin: 0;
+  }
+  .page-head h1 em {
+    font-style: italic;
+    color: var(--accent);
+    background: linear-gradient(105deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .page-head .actions { display: flex; gap: 8px; }
+
+  .btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 9px 14px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--text);
+    text-decoration: none;
+    border-radius: 2px;
+    transition: all .15s;
+    cursor: pointer;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #1a0d04;
+  }
+  .btn.primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
+  .btn.sm { padding: 5px 9px; font-size: 10px; }
+  .btn.ghost { background: transparent; }
+
+  /* TELEMETRY STRIP — 6 stats */
+  .telemetry {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin-bottom: 20px;
+  }
+  .stat {
+    background: var(--surface);
+    padding: 14px 16px;
+    position: relative;
+  }
+  .stat::after {
+    content: ""; position: absolute; top: 0; left: 0;
+    width: 28px; height: 2px;
+    background: var(--accent);
+  }
+  .stat .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.16em;
+    margin-bottom: 8px;
+  }
+  .stat .value {
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-variation-settings: 'opsz' 96;
+    font-weight: 500;
+    font-size: 26px;
+    line-height: 1;
+    letter-spacing: -0.025em;
+  }
+  .stat .value sup {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 400;
+    margin-left: 6px;
+    letter-spacing: 0;
+    vertical-align: middle;
+  }
+  .stat .delta {
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--green);
+  }
+  .stat .delta.flat { color: var(--muted); }
+  .stat .delta.bad { color: var(--red); }
+
+  /* GRID: primary + side */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 20px;
+  }
+  @media (max-width: 1200px) { .layout { grid-template-columns: 1fr; } }
+
+  /* SECTION HEADER */
+  .section {
+    margin-bottom: 24px;
+  }
+  .sec-head {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: end;
+    gap: 14px;
+    margin: 0 0 12px;
+  }
+  .sec-head h2 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    margin: 0;
+  }
+  .sec-head .rule { border-bottom: 1px dashed var(--line); align-self: end; margin-bottom: 6px; }
+  .sec-head .meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.15em;
+  }
+  .sec-head .meta b { color: var(--text); }
+
+  /* CURRENTLY MINING — rich cards */
+  .mining-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+  }
+  .mcard {
+    background: var(--surface);
+    padding: 16px 18px 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .mcard:hover { background: var(--surface-2); }
+  .mcard.disabled { opacity: .42; }
+
+  .mcard-head {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .mcard .name {
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-weight: 500;
+    font-variation-settings: 'opsz' 60;
+    font-size: 19px;
+    letter-spacing: -0.015em;
+    line-height: 1.1;
+    margin: 0 0 2px;
+  }
+  .mcard .handle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+  .mcard .plat {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    padding: 3px 7px;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    color: var(--muted);
+    height: fit-content;
+    white-space: nowrap;
+  }
+  .plat.twitch { color: var(--purple); border-color: #4a3970; background: rgba(122,75,176,.08); }
+  .plat.kick   { color: var(--kick);   border-color: #2d5c44; background: rgba(83,231,164,.06); }
+  .plat.fake   { color: var(--muted); }
+
+  .mcard .state-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center; gap: 10px;
+    margin-bottom: 12px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+  }
+  .dot.watching { background: var(--green); box-shadow: 0 0 10px var(--green); animation: pulse 1.6s ease-in-out infinite; }
+  .dot.claiming { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+  .dot.pick     { background: var(--blue);  box-shadow: 0 0 8px var(--blue); animation: pulse 2.2s ease-in-out infinite; }
+  .dot.sleeping { background: var(--dim); }
+  .dot.error    { background: var(--red);   box-shadow: 0 0 10px var(--red); animation: pulse 1.2s ease-in-out infinite; }
+  .state-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+  }
+  .state-label .sub { color: var(--muted); margin-left: 6px; letter-spacing: 0.08em; }
+  .uptime { color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+
+  /* now-playing strip */
+  .nowp {
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    background: var(--surface-2);
+    border-left: 2px solid var(--purple);
+    font-size: 12.5px;
+  }
+  .nowp.kick { border-left-color: var(--kick); }
+  .nowp .av {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--surface-3), var(--dim));
+    border-radius: 50%;
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-weight: 600;
+    color: var(--text);
+    font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nowp .meta1 { line-height: 1.25; }
+  .nowp .meta1 .ch { font-weight: 600; }
+  .nowp .meta1 .game { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); }
+  .nowp .views {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+  .nowp .views::before { content: "●"; color: var(--red); margin-right: 4px; }
+
+  /* drop block */
+  .drop {
+    border-top: 1px dashed var(--line);
+    padding-top: 11px;
+    margin-bottom: 10px;
+  }
+  .drop .meta {
+    display: flex; justify-content: space-between;
+    margin-bottom: 6px;
+    align-items: baseline;
+  }
+  .drop .meta .nm {
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .drop .meta .nm .campaign {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-left: 6px;
+  }
+  .drop .meta .progress {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .drop .meta .progress b { color: var(--text); }
+  .pbar {
+    height: 4px; background: var(--surface-3); position: relative;
+    overflow: hidden;
+  }
+  .pbar .fill {
+    position: absolute; inset: 0 auto 0 0;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  }
+  .pbar .tick { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
+  .drop .eta {
+    margin-top: 5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .drop .eta b { color: var(--accent); }
+
+  /* queue mini-list inside card */
+  .qmini {
+    border-top: 1px dashed var(--line);
+    padding-top: 10px;
+    margin-top: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+  .qmini .h {
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    margin-bottom: 5px;
+    color: var(--muted);
+  }
+  .qmini ul { list-style: none; margin: 0; padding: 0; }
+  .qmini li {
+    display: grid;
+    grid-template-columns: 14px 1fr auto;
+    gap: 8px;
+    padding: 3px 0;
+    align-items: baseline;
+  }
+  .qmini li .n { color: var(--dim); }
+  .qmini li .name { color: var(--text); font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; }
+  .qmini li .name small { color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-left: 4px; }
+  .qmini li .req { color: var(--muted); }
+
+  .mcard-foot {
+    margin-top: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    border-top: 1px solid var(--line);
+    padding-top: 8px;
+  }
+  .mcard-foot a {
+    color: var(--accent); text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+  }
+  .mcard-foot .row { display: flex; gap: 14px; }
+
+  /* PENDING CLAIMS */
+  .pending {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin-bottom: 24px;
+  }
+  .pcard {
+    background: linear-gradient(180deg, rgba(225,176,74,.06), transparent 70%) var(--surface);
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: 36px 1fr auto;
+    gap: 12px;
+    align-items: center;
+  }
+  .pcard .sprite {
+    width: 36px; height: 36px;
+    background: var(--surface-3);
+    border: 1px solid var(--line);
+    display: grid; place-items: center;
+    color: var(--amber);
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-size: 18px;
+  }
+  .pcard .meta { line-height: 1.25; }
+  .pcard .nm { font-size: 13px; font-weight: 500; }
+  .pcard .nm .ac {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-left: 6px;
+  }
+  .pcard .sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .pcard .claim {
+    background: var(--amber);
+    color: #1a1305;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 5px 10px;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    border: 1px solid var(--amber);
+    transition: all .15s;
+  }
+  .pcard .claim:hover { background: var(--accent-2); border-color: var(--accent-2); }
+
+  /* EVENTS BOTTOM DRAWER */
+  .drawer {
+    margin-top: 20px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .drawer-head {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .drawer-head h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin: 0;
+  }
+  .drawer-head .filter {
+    display: flex; gap: 4px; font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  }
+  .drawer-head .filter a {
+    color: var(--muted);
+    text-decoration: none;
+    padding: 2px 8px;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  .drawer-head .filter a.on { color: var(--text); background: var(--surface-2); border-color: var(--surface-2); }
+  .drawer-head .live {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    color: var(--green); display: flex; align-items: center; gap: 6px;
+  }
+  .drawer-head .live::before { content: "●"; animation: pulse 1.5s ease-in-out infinite; }
+
+  .events { padding: 4px 0; max-height: 280px; overflow: auto; }
+  .ev {
+    display: grid;
+    grid-template-columns: 90px 16px 1fr 120px;
+    gap: 14px;
+    align-items: center;
+    padding: 6px 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+  }
+  .ev:hover { background: var(--surface-2); }
+  .ev .t { color: var(--muted); }
+  .ev .body { color: var(--text); }
+  .ev .body em { color: var(--accent); font-style: normal; }
+  .ev .ac { color: var(--muted); font-size: 10.5px; text-align: right; }
+  .ev .lvl { font-size: 11px; }
+
+  /* SIDE PANEL */
+  aside {
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .panel {
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .panel-head {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .panel-head h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin: 0;
+  }
+  .panel-head .meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .panel-body { padding: 8px 0; }
+
+  /* Active campaigns */
+  .camp {
+    display: grid;
+    grid-template-columns: 8px 1fr auto;
+    gap: 10px;
+    padding: 9px 14px;
+    align-items: start;
+    border-top: 1px dashed transparent;
+  }
+  .camp + .camp { border-top-color: var(--line); }
+  .camp:hover { background: var(--surface-2); }
+  .camp .pip {
+    width: 8px; height: 8px; border-radius: 50%;
+    margin-top: 5px;
+  }
+  .camp .pip.twitch { background: var(--purple); }
+  .camp .pip.kick { background: var(--kick); }
+  .camp .body { line-height: 1.3; }
+  .camp .name {
+    font-size: 12.5px; font-weight: 500;
+  }
+  .camp .sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .camp .sub b { color: var(--text); }
+  .camp .right {
+    text-align: right;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+  .camp .right .ends { color: var(--amber); }
+  .camp .right .pct { color: var(--text); }
+
+  /* PRIORITY LIST */
+  .prio-item {
+    display: grid;
+    grid-template-columns: 22px 22px 1fr auto;
+    gap: 10px;
+    padding: 8px 14px;
+    border-top: 1px dashed transparent;
+    align-items: center;
+    cursor: grab;
+  }
+  .prio-item + .prio-item { border-top-color: var(--line); }
+  .prio-item:hover { background: var(--surface-2); }
+  .prio-item .rank {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .prio-item .grip {
+    color: var(--dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+  }
+  .prio-item .name {
+    font-size: 12.5px;
+  }
+  .prio-item .name small {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+    font-size: 10px;
+    margin-left: 6px;
+  }
+  .prio-item .toggle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    color: var(--green);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+  }
+  .prio-item.off .toggle { color: var(--muted); }
+  .prio-item.off .name { opacity: .5; }
+
+  /* CHANNEL ALLOW-LIST */
+  .ch-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--line);
+    padding: 0 8px;
+    gap: 0;
+  }
+  .ch-tabs a {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-decoration: none;
+    padding: 8px 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    border-bottom: 2px solid transparent;
+  }
+  .ch-tabs a.on { color: var(--text); border-bottom-color: var(--accent); }
+  .ch-list {
+    padding: 6px 0;
+    max-height: 280px;
+    overflow: auto;
+  }
+  .ch {
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    gap: 10px;
+    padding: 7px 14px;
+    align-items: center;
+  }
+  .ch:hover { background: var(--surface-2); }
+  .ch .av {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--surface-3), var(--dim));
+    border-radius: 50%;
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-size: 12px;
+    color: var(--text);
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line);
+  }
+  .ch.live .av { border-color: var(--red); box-shadow: 0 0 0 1px var(--red); }
+  .ch .meta { line-height: 1.25; }
+  .ch .name { font-size: 12.5px; font-weight: 500; }
+  .ch .sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .ch .sub .live-tag { color: var(--red); }
+  .ch .views {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .ch .views.off { color: var(--dim); }
+
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="topbar">
+    <div class="brand">
+      <span class="mark">RUST<span>·</span>DROPS</span>
+      <span class="tag">v0.1 · refinery</span>
+    </div>
+    <nav class="nav">
+      <a class="active" href="#">Dashboard</a>
+      <a href="#">Accounts</a>
+      <a href="#">Campaigns</a>
+      <a href="#">Drops</a>
+      <a href="#">Settings</a>
+    </nav>
+    <div class="user">
+      <span>jandro</span>
+      <span class="clock">14:32:08 UTC</span>
+      <span class="pulse" title="live"></span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="page-head">
+    <div>
+      <div class="sub">// node 10.10.2.40 · uptime 17h 42m · 4 watchers · last poll 1.2s ago</div>
+      <h1>currently mining <em>3</em> drops · <em>2</em> ready to claim</h1>
+    </div>
+    <div class="actions">
+      <a class="btn" href="#">Reload</a>
+      <a class="btn primary" href="#">+ Add account</a>
+    </div>
+  </div>
+
+  <section class="telemetry">
+    <div class="stat"><div class="label">Watch time · today</div><div class="value">04:18<sup>h:m</sup></div><div class="delta">▲ +37m vs yest</div></div>
+    <div class="stat"><div class="label">Drops claimed · 7d</div><div class="value">12<sup>items</sup></div><div class="delta">▲ +4</div></div>
+    <div class="stat"><div class="label">Active campaigns</div><div class="value">8<sup>5 twitch · 3 kick</sup></div><div class="delta flat">—</div></div>
+    <div class="stat"><div class="label">In progress</div><div class="value">11<sup>drops</sup></div><div class="delta">▲ 3 new</div></div>
+    <div class="stat"><div class="label">Ready to claim</div><div class="value" style="color:var(--amber)">2<sup>pending</sup></div><div class="delta flat">click below</div></div>
+    <div class="stat"><div class="label">Heartbeats / hr</div><div class="value">182<sup>last hr</sup></div><div class="delta">▲ stable</div></div>
+  </section>
+
+  <div class="layout">
+
+    <!-- LEFT/PRIMARY COLUMN -->
+    <div>
+
+      <!-- PENDING CLAIMS -->
+      <section class="section">
+        <div class="sec-head">
+          <h2>Pending claims</h2>
+          <div class="rule"></div>
+          <div class="meta"><b>2</b> drops · click to claim</div>
+        </div>
+        <div class="pending">
+          <article class="pcard">
+            <div class="sprite">◆</div>
+            <div class="meta">
+              <div class="nm">Salvaged Cleaver <span class="ac">@demo_two</span></div>
+              <div class="sub">kick · Rust Drops · 120/120m</div>
+            </div>
+            <a class="claim" href="#">claim →</a>
+          </article>
+          <article class="pcard">
+            <div class="sprite">◆</div>
+            <div class="meta">
+              <div class="nm">Burlap Trousers <span class="ac">@helmet_farmer</span></div>
+              <div class="sub">twitch · Holiday Drops · 60/60m</div>
+            </div>
+            <a class="claim" href="#">claim →</a>
+          </article>
+        </div>
+      </section>
+
+      <!-- CURRENTLY MINING -->
+      <section class="section">
+        <div class="sec-head">
+          <h2>Currently mining</h2>
+          <div class="rule"></div>
+          <div class="meta"><b>3</b> active · 1 sleeping · 1 disabled</div>
+        </div>
+        <div class="mining-grid">
+
+          <!-- CARD 1 -->
+          <article class="mcard">
+            <div class="mcard-head">
+              <div>
+                <h3 class="name">Helmet Farmer</h3>
+                <span class="handle">@helmet_farmer</span>
+              </div>
+              <span class="plat twitch">twitch</span>
+            </div>
+            <div class="state-row">
+              <span class="dot watching"></span>
+              <span class="state-label">watching<span class="sub">live since 14:14</span></span>
+              <span class="uptime">17m on stream</span>
+            </div>
+            <div class="nowp">
+              <span class="av">S</span>
+              <div class="meta1">
+                <div class="ch">shroud</div>
+                <div class="game">rust · drops enabled</div>
+              </div>
+              <span class="views">62.4k</span>
+            </div>
+            <div class="drop">
+              <div class="meta">
+                <span class="nm">Wolf Helmet <span class="campaign">— Rust Twitch Drops</span></span>
+                <span class="progress"><b>47</b> / 120m</span>
+              </div>
+              <div class="pbar">
+                <div class="fill" style="width: 39%"></div>
+                <div class="tick" style="left:25%"></div><div class="tick" style="left:50%"></div><div class="tick" style="left:75%"></div>
+              </div>
+              <div class="eta">ETA <b>~01:13</b> to claim · 73m remaining</div>
+            </div>
+            <div class="qmini">
+              <div class="h">queue · 2 next</div>
+              <ul>
+                <li><span class="n">02</span><span class="name">Wolf Boots <small>twitch · Rust Drops</small></span><span class="req">60m</span></li>
+                <li><span class="n">03</span><span class="name">Crate Skin <small>twitch · Holiday Drops</small></span><span class="req">60m</span></li>
+              </ul>
+            </div>
+            <div class="mcard-foot">
+              <div class="row">
+                <span>watch 4h17m / 24h</span>
+                <span>2 claims today</span>
+              </div>
+              <a href="#">manage →</a>
+            </div>
+          </article>
+
+          <!-- CARD 2 -->
+          <article class="mcard">
+            <div class="mcard-head">
+              <div>
+                <h3 class="name">Demo Two</h3>
+                <span class="handle">@demo_two</span>
+              </div>
+              <span class="plat kick">kick</span>
+            </div>
+            <div class="state-row">
+              <span class="dot claiming"></span>
+              <span class="state-label">claiming<span class="sub">drop instance #4f2</span></span>
+              <span class="uptime">02:11:04</span>
+            </div>
+            <div class="nowp kick">
+              <span class="av">N</span>
+              <div class="meta1">
+                <div class="ch">nickmercs</div>
+                <div class="game">rust · drops enabled</div>
+              </div>
+              <span class="views">31.2k</span>
+            </div>
+            <div class="drop">
+              <div class="meta">
+                <span class="nm">Salvaged Cleaver <span class="campaign">— Kick Rust Drops</span></span>
+                <span class="progress"><b>120</b> / 120m</span>
+              </div>
+              <div class="pbar">
+                <div class="fill" style="width: 100%"></div>
+                <div class="tick" style="left:25%"></div><div class="tick" style="left:50%"></div><div class="tick" style="left:75%"></div>
+              </div>
+              <div class="eta">awaiting <b>claim confirmation</b>…</div>
+            </div>
+            <div class="qmini">
+              <div class="h">queue · 3 next</div>
+              <ul>
+                <li><span class="n">02</span><span class="name">Burlap Headwrap <small>kick · Rust Drops</small></span><span class="req">120m</span></li>
+                <li><span class="n">03</span><span class="name">Wood Door <small>kick · Rust Drops</small></span><span class="req">180m</span></li>
+                <li><span class="n">04</span><span class="name">Pump Shotgun Skin <small>kick · Holiday</small></span><span class="req">60m</span></li>
+              </ul>
+            </div>
+            <div class="mcard-foot">
+              <div class="row">
+                <span>watch 2h11m / 24h</span>
+                <span>1 claim today</span>
+              </div>
+              <a href="#">manage →</a>
+            </div>
+          </article>
+
+          <!-- CARD 3 -->
+          <article class="mcard">
+            <div class="mcard-head">
+              <div>
+                <h3 class="name">Backup Acc</h3>
+                <span class="handle">@aalejandrofer</span>
+              </div>
+              <span class="plat twitch">twitch</span>
+            </div>
+            <div class="state-row">
+              <span class="dot pick"></span>
+              <span class="state-label">pick stream<span class="sub">scanning 12 channels</span></span>
+              <span class="uptime">00:00:03</span>
+            </div>
+            <div class="nowp" style="border-left-color: var(--blue);">
+              <span class="av" style="background:var(--surface-3); color: var(--blue);">?</span>
+              <div class="meta1">
+                <div class="ch">no channel yet</div>
+                <div class="game">looking for live drops-enabled streamer…</div>
+              </div>
+              <span class="views" style="color: var(--blue);">—</span>
+            </div>
+            <div class="drop">
+              <div class="meta">
+                <span class="nm">Crate Skin <span class="campaign">— Holiday Drops</span></span>
+                <span class="progress"><b>0</b> / 60m</span>
+              </div>
+              <div class="pbar">
+                <div class="fill" style="width: 0%"></div>
+                <div class="tick" style="left:25%"></div><div class="tick" style="left:50%"></div><div class="tick" style="left:75%"></div>
+              </div>
+              <div class="eta">ETA <b>—</b> · waiting for live channel</div>
+            </div>
+            <div class="qmini">
+              <div class="h">queue · 4 next</div>
+              <ul>
+                <li><span class="n">02</span><span class="name">Stone Hatchet <small>twitch · Rust Drops</small></span><span class="req">60m</span></li>
+                <li><span class="n">03</span><span class="name">Wolf Boots <small>twitch · Rust Drops</small></span><span class="req">60m</span></li>
+                <li><span class="n">04</span><span class="name">Foundation Skin <small>twitch · Holiday</small></span><span class="req">120m</span></li>
+              </ul>
+            </div>
+            <div class="mcard-foot">
+              <div class="row">
+                <span>watch 0m / 24h</span>
+                <span>0 claims today</span>
+              </div>
+              <a href="#">manage →</a>
+            </div>
+          </article>
+
+          <!-- CARD 4 sleeping -->
+          <article class="mcard">
+            <div class="mcard-head">
+              <div>
+                <h3 class="name">Dev User</h3>
+                <span class="handle">@devuser</span>
+              </div>
+              <span class="plat fake">fake</span>
+            </div>
+            <div class="state-row">
+              <span class="dot sleeping"></span>
+              <span class="state-label">sleeping<span class="sub">no eligible campaign</span></span>
+              <span class="uptime">01:14:33</span>
+            </div>
+            <div class="nowp" style="border-left-color: var(--dim);">
+              <span class="av" style="background:var(--surface-3); color: var(--dim);">—</span>
+              <div class="meta1">
+                <div class="ch" style="color: var(--muted);">— idle —</div>
+                <div class="game">enable a campaign in priority list to wake</div>
+              </div>
+              <span class="views" style="color: var(--dim);">—</span>
+            </div>
+            <div class="drop">
+              <div class="meta">
+                <span class="nm" style="color: var(--muted);">no active drop</span>
+                <span class="progress">—</span>
+              </div>
+              <div class="pbar"><div class="fill" style="width:0%"></div></div>
+              <div class="eta">— sleeping —</div>
+            </div>
+            <div class="mcard-foot">
+              <div class="row">
+                <span>watch 0m / 24h</span>
+                <span>0 claims today</span>
+              </div>
+              <a href="#">manage →</a>
+            </div>
+          </article>
+
+        </div>
+      </section>
+
+      <!-- BOTTOM DRAWER: EVENTS -->
+      <section class="drawer">
+        <div class="drawer-head">
+          <h3>Live events</h3>
+          <div class="filter">
+            <a class="on" href="#">all</a>
+            <a href="#">claims</a>
+            <a href="#">progress</a>
+            <a href="#">state</a>
+            <a href="#">errors</a>
+          </div>
+          <div class="live">streaming</div>
+        </div>
+        <div class="events">
+          <div class="ev"><span class="t">14:31:02</span><span class="lvl" style="color:var(--green)">●</span><span class="body"><em>claim</em> · Wolf Helmet recorded</span><span class="ac">helmet_farmer</span></div>
+          <div class="ev"><span class="t">14:30:44</span><span class="lvl" style="color:var(--amber)">●</span><span class="body">progress · Salvaged Cleaver 100% — claiming</span><span class="ac">demo_two</span></div>
+          <div class="ev"><span class="t">14:30:01</span><span class="lvl" style="color:var(--blue)">●</span><span class="body">state · backup_acc idle → pick_campaign</span><span class="ac">backup_acc</span></div>
+          <div class="ev"><span class="t">14:29:33</span><span class="lvl" style="color:var(--blue)">●</span><span class="body">state · backup_acc pick_campaign → pick_stream (Crate Skin)</span><span class="ac">backup_acc</span></div>
+          <div class="ev"><span class="t">14:24:17</span><span class="lvl" style="color:var(--blue)">●</span><span class="body">state · helmet_farmer pick_stream → watching (shroud)</span><span class="ac">helmet_farmer</span></div>
+          <div class="ev"><span class="t">14:22:01</span><span class="lvl" style="color:var(--muted)">●</span><span class="body">discovery · 8 active campaigns (5 twitch · 3 kick)</span><span class="ac">—</span></div>
+          <div class="ev"><span class="t">14:18:33</span><span class="lvl" style="color:var(--green)">●</span><span class="body"><em>claim</em> · Crate Skin recorded</span><span class="ac">backup_acc</span></div>
+          <div class="ev"><span class="t">14:14:09</span><span class="lvl" style="color:var(--blue)">●</span><span class="body">auth · token refreshed (expires in 4h)</span><span class="ac">demo_two</span></div>
+          <div class="ev"><span class="t">14:09:55</span><span class="lvl" style="color:var(--red)">●</span><span class="body">error · sidecar timeout (kick), retrying in 2s</span><span class="ac">demo_two</span></div>
+          <div class="ev"><span class="t">14:03:21</span><span class="lvl" style="color:var(--muted)">●</span><span class="body">heartbeat · 60 ticks / 60s</span><span class="ac">—</span></div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- RIGHT SIDE PANEL -->
+    <aside>
+
+      <!-- ACTIVE CAMPAIGNS -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Active campaigns</h3>
+          <span class="meta">8 · auto-discovered</span>
+        </div>
+        <div class="panel-body">
+          <div class="camp">
+            <span class="pip twitch"></span>
+            <div class="body">
+              <div class="name">Rust Twitch Drops</div>
+              <div class="sub"><b>3</b> drops · 12 channels eligible</div>
+            </div>
+            <div class="right">
+              <div class="ends">ends 12d</div>
+              <div class="pct">1/3 claimed</div>
+            </div>
+          </div>
+          <div class="camp">
+            <span class="pip twitch"></span>
+            <div class="body">
+              <div class="name">Holiday Drops</div>
+              <div class="sub"><b>2</b> drops · 4 channels eligible</div>
+            </div>
+            <div class="right">
+              <div class="ends">ends 5d</div>
+              <div class="pct">0/2 claimed</div>
+            </div>
+          </div>
+          <div class="camp">
+            <span class="pip kick"></span>
+            <div class="body">
+              <div class="name">Kick Rust Drops</div>
+              <div class="sub"><b>5</b> drops · 8 channels eligible</div>
+            </div>
+            <div class="right">
+              <div class="ends">ends 21d</div>
+              <div class="pct">2/5 claimed</div>
+            </div>
+          </div>
+          <div class="camp">
+            <span class="pip kick"></span>
+            <div class="body">
+              <div class="name">Kick Holiday</div>
+              <div class="sub"><b>1</b> drop · 3 channels eligible</div>
+            </div>
+            <div class="right">
+              <div class="ends">ends 8d</div>
+              <div class="pct">0/1 claimed</div>
+            </div>
+          </div>
+          <div class="camp">
+            <span class="pip twitch"></span>
+            <div class="body">
+              <div class="name">Rust Tournament Drops</div>
+              <div class="sub"><b>2</b> drops · 6 channels eligible</div>
+            </div>
+            <div class="right">
+              <div class="ends ends" style="color: var(--red)">ends 18h</div>
+              <div class="pct">0/2 claimed</div>
+            </div>
+          </div>
+        </div>
+        <div class="panel-head" style="border-top: 1px solid var(--line); border-bottom: none; padding: 8px 14px;">
+          <a class="btn ghost sm" href="#">view all →</a>
+          <span class="meta">refreshed 2m ago</span>
+        </div>
+      </div>
+
+      <!-- PRIORITY LIST -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Priority list</h3>
+          <span class="meta">drag to reorder</span>
+        </div>
+        <div class="panel-body">
+          <div class="prio-item">
+            <span class="rank">01</span>
+            <span class="grip">⋮⋮</span>
+            <span class="name">Rust Tournament <small>twitch · ends 18h</small></span>
+            <span class="toggle">ON</span>
+          </div>
+          <div class="prio-item">
+            <span class="rank">02</span>
+            <span class="grip">⋮⋮</span>
+            <span class="name">Rust Twitch Drops <small>twitch · main</small></span>
+            <span class="toggle">ON</span>
+          </div>
+          <div class="prio-item">
+            <span class="rank">03</span>
+            <span class="grip">⋮⋮</span>
+            <span class="name">Kick Rust Drops <small>kick · main</small></span>
+            <span class="toggle">ON</span>
+          </div>
+          <div class="prio-item">
+            <span class="rank">04</span>
+            <span class="grip">⋮⋮</span>
+            <span class="name">Holiday Drops <small>twitch · seasonal</small></span>
+            <span class="toggle">ON</span>
+          </div>
+          <div class="prio-item off">
+            <span class="rank">05</span>
+            <span class="grip">⋮⋮</span>
+            <span class="name">Kick Holiday <small>kick · seasonal</small></span>
+            <span class="toggle">OFF</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHANNEL ALLOW-LIST -->
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Channels — eligible</h3>
+          <span class="meta">5 live / 12 total</span>
+        </div>
+        <div class="ch-tabs">
+          <a class="on" href="#">Rust Twitch</a>
+          <a href="#">Holiday</a>
+          <a href="#">Kick Rust</a>
+        </div>
+        <div class="ch-list">
+          <div class="ch live">
+            <span class="av">S</span>
+            <div class="meta">
+              <div class="name">shroud</div>
+              <div class="sub"><span class="live-tag">LIVE</span> · rust · 4h27m</div>
+            </div>
+            <span class="views">62.4k</span>
+          </div>
+          <div class="ch live">
+            <span class="av">N</span>
+            <div class="meta">
+              <div class="name">nickmercs</div>
+              <div class="sub"><span class="live-tag">LIVE</span> · rust · 2h08m</div>
+            </div>
+            <span class="views">31.2k</span>
+          </div>
+          <div class="ch live">
+            <span class="av">W</span>
+            <div class="meta">
+              <div class="name">welyn</div>
+              <div class="sub"><span class="live-tag">LIVE</span> · rust · 6h11m</div>
+            </div>
+            <span class="views">18.7k</span>
+          </div>
+          <div class="ch">
+            <span class="av">B</span>
+            <div class="meta">
+              <div class="name">blooprint</div>
+              <div class="sub">offline · last live 6h ago</div>
+            </div>
+            <span class="views off">—</span>
+          </div>
+          <div class="ch">
+            <span class="av">M</span>
+            <div class="meta">
+              <div class="name">mendo</div>
+              <div class="sub">offline · last live 2d ago</div>
+            </div>
+            <span class="views off">—</span>
+          </div>
+          <div class="ch">
+            <span class="av">F</span>
+            <div class="meta">
+              <div class="name">facepunch_official</div>
+              <div class="sub">offline · last live 1w ago</div>
+            </div>
+            <span class="views off">—</span>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+  </div>
+
+</main>
+
+<script>
+  function tick() {
+    const n = new Date();
+    const pad = (x) => String(x).padStart(2,'0');
+    document.querySelector('.clock').textContent =
+      pad(n.getUTCHours()) + ':' + pad(n.getUTCMinutes()) + ':' + pad(n.getUTCSeconds()) + ' UTC';
+  }
+  tick(); setInterval(tick, 1000);
+</script>
+</body>
+</html>
