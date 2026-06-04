@@ -16,23 +16,24 @@ func TestLoad_RequiresMasterKey(t *testing.T) {
 
 func TestLoad_DefaultsApplied(t *testing.T) {
 	t.Setenv("MINER_MASTER_KEY", "AGE-SECRET-KEY-1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX0")
+	t.Setenv("MINER_DISCORD_WEBHOOK", "")
 
 	cfg, err := Load()
 	require.NoError(t, err)
 	assert.Equal(t, "0.0.0.0:8080", cfg.HTTPAddr)
 	assert.Equal(t, "/data/miner.db", cfg.DBPath)
-	assert.Equal(t, false, cfg.SeedFakeAccount)
+	assert.Equal(t, "", cfg.DiscordWebhookURL)
 }
 
 func TestLoad_Overrides(t *testing.T) {
 	t.Setenv("MINER_MASTER_KEY", "AGE-SECRET-KEY-1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX0")
 	t.Setenv("MINER_HTTP_ADDR", "127.0.0.1:9000")
 	t.Setenv("MINER_DB_PATH", "/tmp/m.db")
-	t.Setenv("MINER_SEED_FAKE_ACCOUNT", "true")
+	t.Setenv("MINER_DISCORD_WEBHOOK", "https://discord.example/wh/x")
 
 	cfg, err := Load()
 	require.NoError(t, err)
 	assert.Equal(t, "127.0.0.1:9000", cfg.HTTPAddr)
 	assert.Equal(t, "/tmp/m.db", cfg.DBPath)
-	assert.True(t, cfg.SeedFakeAccount)
+	assert.Equal(t, "https://discord.example/wh/x", cfg.DiscordWebhookURL)
 }
