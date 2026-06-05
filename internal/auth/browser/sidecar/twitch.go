@@ -419,11 +419,20 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 // the same shape ListActiveCampaigns expects, so the existing parser
 // in internal/platform/twitch/campaigns.go doesn't need to know about
 // the scrape fallback.
+//
+// Scraped campaigns assume Status=ACTIVE and self.isAccountConnected=true
+// so the watcher tries to mine them. If the account isn't actually
+// linked, Twitch will reject the claim later — better than silently
+// skipping campaigns the user CAN see in their browser.
 func buildViewerDropsDashboardEnvelope(camps []apolloCampaign) []byte {
 	type campOut struct {
-		ID    string `json:"id"`
-		Name  string `json:"name"`
-		Game  struct {
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		Status string `json:"status"`
+		Self   struct {
+			IsAccountConnected bool `json:"isAccountConnected"`
+		} `json:"self"`
+		Game struct {
 			Name string `json:"displayName"`
 		} `json:"game"`
 		EndAt   string `json:"endAt"`
@@ -433,7 +442,9 @@ func buildViewerDropsDashboardEnvelope(camps []apolloCampaign) []byte {
 	for _, c := range camps {
 		var co campOut
 		co.ID = c.ID
-		co.Name = c.Name
+		co.Name = cleanCampaignName(c.Name)
+		co.Status = "ACTIVE"
+		co.Self.IsAccountConnected = true // optimistic; watcher hits real check on claim
 		co.Game.Name = c.Game
 		co.EndAt = c.EndsAt
 		co.StartAt = c.StartsAt
@@ -448,6 +459,38 @@ func buildViewerDropsDashboardEnvelope(camps []apolloCampaign) []byte {
 	}
 	b, _ := json.Marshal(resp)
 	return b
+}
+
+// cleanCampaignName strips trailing date strings the scrape concatenates
+// onto the drop name ("Builder CapeSat, May 30, 3:30 PM UTC - Mon, Jun
+// 15, 6:59 AM UTC" -> "Builder Cape"). Heuristic: cut at the first
+// weekday abbreviation.
+func cleanCampaignName(s string) string {
+	for _, day := range []string{"Sun, ", "Mon, ", "Tue, ", "Wed, ", "Thu, ", "Fri, ", "Sat, "} {
+		if i := stringsIndex(s, day); i > 0 {
+			return trimTrailingSpace(s[:i])
+		}
+	}
+	return s
+}
+
+// stringsIndex / trimTrailingSpace inlined to avoid pulling in "strings"
+// at this site (sidecar package already imports it elsewhere, but the
+// linter complains about cyclic refactors during agent runs).
+func stringsIndex(s, sub string) int {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return i
+		}
+	}
+	return -1
+}
+
+func trimTrailingSpace(s string) string {
+	for len(s) > 0 && (s[len(s)-1] == ' ' || s[len(s)-1] == '\t') {
+		s = s[:len(s)-1]
+	}
+	return s
 }
 
 // OpenStream opens twitch.tv/<channel> in a fresh tab so the embedded
