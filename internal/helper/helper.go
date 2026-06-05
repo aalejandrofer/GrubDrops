@@ -262,6 +262,36 @@ func (c *minerClient) adminLogin(ctx context.Context, password string) error {
 	return nil
 }
 
+// submitErrorMarkers are substrings that, when present in the body of
+// a 200 response to a form POST, indicate the miner re-rendered the
+// page with an error flash rather than redirecting on success. Real
+// successes are signaled by a 303 + Location header (the server's
+// http.Redirect for the post-success view); a 200 means the same
+// template came back, almost always because the handler appended a
+// flash and called render().
+//
+// This list is intentionally a small, hand-picked allowlist of the
+// markers the miner UI is known to produce. Each entry must match the
+// exact phrase used by the server-side flash so we never report
+// success when one of these errors is shown.
+var submitErrorMarkers = []string{
+	"sidecar rejected",
+	"failed to persist",
+	"wrong password",
+	"CSRF token invalid",
+}
+
+// submit posts form to path on the miner and returns nil only when the
+// miner responded with a redirect (303 + Location) — the unambiguous
+// signal that the handler completed and moved the user to a new page.
+//
+// Heuristic for 200 OK: the miner re-renders the same template on
+// failure (with an error flash appended), so a 200 here is NOT a
+// success signal on its own. We peek at the body for known error
+// markers (see submitErrorMarkers) and surface the matching marker as
+// the error message. If a 200 carries no known marker we still treat
+// it as success — better than blocking legitimate flows when the
+// server happens to land on a 200 path we haven't catalogued yet.
 func (c *minerClient) submit(ctx context.Context, path string, form url.Values) error {
 	body, err := c.get(ctx, path)
 	if err != nil {
@@ -277,11 +307,26 @@ func (c *minerClient) submit(ctx context.Context, path string, form url.Values) 
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusSeeOther && resp.StatusCode != http.StatusOK {
+	switch {
+	case resp.StatusCode == http.StatusSeeOther && resp.Header.Get("Location") != "":
+		// Real success — server redirected us to a new page.
+		return nil
+	case resp.StatusCode == http.StatusOK:
+		raw, _ := io.ReadAll(resp.Body)
+		bodyStr := string(raw)
+		for _, marker := range submitErrorMarkers {
+			if strings.Contains(bodyStr, marker) {
+				return fmt.Errorf("POST %s: %s", path, marker)
+			}
+		}
+		return nil
+	case resp.StatusCode == http.StatusSeeOther:
+		// 303 with no Location header — treat as a malformed response.
+		return fmt.Errorf("POST %s: 303 with no Location header", path)
+	default:
 		raw, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("POST %s: %s — %s", path, resp.Status, truncate(string(raw), 200))
 	}
-	return nil
 }
 
 func (c *minerClient) get(ctx context.Context, path string) (string, error) {
