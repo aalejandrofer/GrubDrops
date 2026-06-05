@@ -259,6 +259,7 @@ func (d *discovery) inventory(ctx context.Context, sess platform.Session) ([]pla
 				BenefitID:      td.ID,
 				MinutesWatched: td.Self.CurrentMinutesWatched,
 				Claimed:        td.Self.IsClaimed,
+				InstanceID:     td.Self.DropInstanceID,
 			})
 		}
 	}

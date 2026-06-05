@@ -435,9 +435,15 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 			slog.Info("watcher progress", "kind", "progress", "account", w.cfg.AccountID, "benefit", benefit.ID, "min_watched", p.MinutesWatched, "required", benefit.RequiredMinutes, "claimed", p.Claimed)
 			w.mu.Lock()
 			w.lastProgressMin = p.MinutesWatched
+			// Capture the per-account drop-instance ID at progress
+			// time so Backend.Claim can send it. Without this Twitch
+			// rejects claims with INVALID_DROP_INSTANCE.
+			if p.InstanceID != "" && w.currentBenefit != nil {
+				w.currentBenefit.InstanceID = p.InstanceID
+			}
 			w.mu.Unlock()
 			if p.MinutesWatched >= benefit.RequiredMinutes {
-				slog.Info("watcher benefit complete, claiming", "kind", "claim", "account", w.cfg.AccountID, "benefit", benefit.ID, "benefit_name", benefit.Name, "channel", handle.Channel)
+				slog.Info("watcher benefit complete, claiming", "kind", "claim", "account", w.cfg.AccountID, "benefit", benefit.ID, "benefit_name", benefit.Name, "instance", p.InstanceID, "channel", handle.Channel)
 				w.setState(ctx, StateClaiming)
 				return nil
 			}

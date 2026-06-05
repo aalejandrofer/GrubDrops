@@ -54,6 +54,11 @@ type DropBenefit struct {
 	Name            string
 	RequiredMinutes int
 	ImageURL        string
+	// InstanceID is populated at progress time (from Inventory.self.
+	// dropInstanceID) and passed into the claim mutation. Distinct
+	// from ID — the latter is the drop template, this is the per-
+	// account instance. Empty until progress is observed.
+	InstanceID string
 }
 
 type Stream struct {
@@ -75,6 +80,11 @@ type Progress struct {
 	BenefitID      string
 	MinutesWatched int
 	Claimed        bool
+	// InstanceID is the per-account drop instance id that the claim
+	// mutation expects. Distinct from BenefitID (the drop's template
+	// id) — Twitch issues a fresh instance id when the user enters a
+	// campaign. Empty for backends that don't surface it.
+	InstanceID string
 }
 
 type WatchHandle struct {
