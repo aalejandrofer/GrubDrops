@@ -37,6 +37,14 @@ type BrowserBackend struct {
 
 	mu                      sync.Mutex
 	allowedLoginsByCampaign map[string][]string
+
+	// PubSub: one WebSocket per account. Started lazily on first
+	// ListActiveCampaigns once the access token + user_id are
+	// available. Real-time progress/claim/stream-down events feed
+	// callbacks set via SetPubSubHandlers.
+	pubsubMu       sync.Mutex
+	pubsubs        map[string]*PubSubClient // account_id → client
+	pubsubHandlers PubSubHandlers
 }
 
 // TwitchSidecarAuthenticator is the surface BrowserBackend needs to
@@ -78,6 +86,7 @@ func NewBrowserBackend(client interface {
 		clients:                 map[string]*twitchAccount{},
 		authed:                  map[string]bool{},
 		allowedLoginsByCampaign: map[string][]string{},
+		pubsubs:                 map[string]*PubSubClient{},
 	}
 	if r, ok := client.(TwitchRewardClaimer); ok {
 		bb.rewards = r
@@ -220,7 +229,80 @@ func (b *BrowserBackend) ListActiveCampaigns(ctx context.Context, s platform.Ses
 		b.allowedLoginsByCampaign[cid] = logins
 	}
 	b.mu.Unlock()
+	// Best-effort PubSub bootstrap. Per-account, once-only.
+	b.ensurePubSub(s, a)
 	return camps, nil
+}
+
+// SetPubSubHandlers wires real-time callbacks for newly-started
+// PubSub clients. Existing clients are not retrofitted — call this
+// before any account's first ListActiveCampaigns.
+func (b *BrowserBackend) SetPubSubHandlers(h PubSubHandlers) {
+	b.pubsubMu.Lock()
+	b.pubsubHandlers = h
+	b.pubsubMu.Unlock()
+}
+
+// SubscribeChannel adds a video-playback-by-id.<id> topic to the
+// account's PubSub socket. Use when a watcher starts a stream so
+// stream-down events fire instantly.
+func (b *BrowserBackend) SubscribeChannel(accountID, channelID string) {
+	b.pubsubMu.Lock()
+	c := b.pubsubs[accountID]
+	b.pubsubMu.Unlock()
+	if c == nil || channelID == "" {
+		return
+	}
+	c.AddTopic(TopicVideoPlaybackByID(channelID))
+}
+
+// UnsubscribeChannel drops a video-playback-by-id topic.
+func (b *BrowserBackend) UnsubscribeChannel(accountID, channelID string) {
+	b.pubsubMu.Lock()
+	c := b.pubsubs[accountID]
+	b.pubsubMu.Unlock()
+	if c == nil || channelID == "" {
+		return
+	}
+	c.RemoveTopic(TopicVideoPlaybackByID(channelID))
+}
+
+// ensurePubSub lazily starts the PubSub WebSocket for an account.
+// Idempotent — subsequent calls noop. resolveUserID is the only
+// blocking step; it makes a single gql call (CurrentUser).
+func (b *BrowserBackend) ensurePubSub(s platform.Session, a *twitchAccount) {
+	b.pubsubMu.Lock()
+	if _, ok := b.pubsubs[s.AccountID]; ok {
+		b.pubsubMu.Unlock()
+		return
+	}
+	handlers := b.pubsubHandlers
+	b.pubsubMu.Unlock()
+
+	userID, err := a.watch.resolveUserID(context.Background(), s)
+	if err != nil {
+		slog.Warn("pubsub: resolve user id failed, deferring", "account", s.AccountID, "err", err)
+		return
+	}
+	b.pubsubMu.Lock()
+	if _, ok := b.pubsubs[s.AccountID]; ok {
+		b.pubsubMu.Unlock()
+		return
+	}
+	client := NewPubSubClient(s.AccessToken, handlers)
+	b.pubsubs[s.AccountID] = client
+	b.pubsubMu.Unlock()
+	go func() {
+		topics := []string{
+			TopicUserDropEvents(userID),
+			TopicOnsiteNotifications(userID),
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		if err := client.Run(ctx, topics); err != nil && !errors.Is(err, context.Canceled) {
+			slog.Warn("pubsub run exited", "account", s.AccountID, "err", err)
+		}
+	}()
 }
 
 func (b *BrowserBackend) ListEligibleChannels(ctx context.Context, s platform.Session, c platform.Campaign) ([]platform.Stream, error) {

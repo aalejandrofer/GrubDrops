@@ -342,16 +342,13 @@ func (t *Twitch) GQL(ctx context.Context, accountID string, body []byte) ([]byte
 		if scrapeErr != nil {
 			slog.Warn("scrape supplement failed", "account", accountID, "err", scrapeErr)
 		}
-		// Anonymous catalog scrape — bypasses the integrity wall by
-		// hitting /drops/campaigns from a fresh, no-cookie browser
-		// context. The page renders the public catalog (used for
-		// signup) which lists every active campaign. Cached 30 min;
-		// only one in-flight refresh at a time.
-		anonCamps := t.getAnonymousCampaigns(ctx)
+		// NOTE: anonymous catalog scrape removed — Twitch's logged-out
+		// /drops/campaigns redirects to the login wall ("You must be
+		// logged in to view this page"). Catalog visibility now
+		// depends entirely on the per-account gql + scrape paths, both
+		// of which are gated by the integrity wall. Real fix is
+		// device-code re-auth so gql returns the full enrolled list.
 		merged := unionCampaigns(gqlCamps, scrapeCamps)
-		if len(anonCamps) > 0 {
-			merged = unionCampaigns(merged, anonCamps)
-		}
 		if len(merged) == 0 {
 			if err == nil && status == 200 {
 				return resp, status, nil
@@ -360,7 +357,7 @@ func (t *Twitch) GQL(ctx context.Context, accountID string, body []byte) ([]byte
 		}
 		slog.Info("twitch campaign discovery", "account", accountID,
 			"gql", len(gqlCamps), "scrape", len(scrapeCamps),
-			"anon", len(anonCamps), "merged", len(merged))
+			"merged", len(merged))
 		envelope := buildViewerDropsDashboardEnvelope(merged)
 		return envelope, 200, nil
 	}
