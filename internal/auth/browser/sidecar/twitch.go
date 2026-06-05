@@ -51,6 +51,7 @@ type Twitch struct {
 	anonScrapeMu        sync.Mutex
 	anonScrapeCamps     []apolloCampaign
 	anonScrapeFetchedAt time.Time
+	anonScrapeInflight  bool
 
 	// Last successful scrape result per account. Twitch's drops page
 	// is flaky in headless — sometimes renders campaigns, sometimes
@@ -341,18 +342,94 @@ func (t *Twitch) GQL(ctx context.Context, accountID string, body []byte) ([]byte
 		if scrapeErr != nil {
 			slog.Warn("scrape supplement failed", "account", accountID, "err", scrapeErr)
 		}
+		// Anonymous catalog scrape — bypasses the integrity wall by
+		// hitting /drops/campaigns from a fresh, no-cookie browser
+		// context. The page renders the public catalog (used for
+		// signup) which lists every active campaign. Cached 30 min;
+		// only one in-flight refresh at a time.
+		anonCamps := t.getAnonymousCampaigns(ctx)
 		merged := unionCampaigns(gqlCamps, scrapeCamps)
+		if len(anonCamps) > 0 {
+			merged = unionCampaigns(merged, anonCamps)
+		}
 		if len(merged) == 0 {
 			if err == nil && status == 200 {
 				return resp, status, nil
 			}
 			return resp, status, fmt.Errorf("evalFetch failed (%v) and scrape returned nothing", err)
 		}
-		slog.Info("twitch campaign discovery", "account", accountID, "gql", len(gqlCamps), "scrape", len(scrapeCamps), "merged", len(merged))
+		slog.Info("twitch campaign discovery", "account", accountID,
+			"gql", len(gqlCamps), "scrape", len(scrapeCamps),
+			"anon", len(anonCamps), "merged", len(merged))
 		envelope := buildViewerDropsDashboardEnvelope(merged)
 		return envelope, 200, nil
 	}
 	return resp, status, err
+}
+
+// getAnonymousCampaigns returns a cached snapshot of the public
+// /drops/campaigns catalog, refreshing the cache asynchronously if it
+// is stale or empty. Synchronous callers never block — the first call
+// returns an empty slice and kicks off a background fetch.
+//
+// Cache TTL: 30 min. Concurrent callers see a single in-flight
+// refresh; the cached slice is read-only (callers must not mutate).
+func (t *Twitch) getAnonymousCampaigns(ctx context.Context) []apolloCampaign {
+	t.anonScrapeMu.Lock()
+	camps := t.anonScrapeCamps
+	fresh := time.Since(t.anonScrapeFetchedAt) < 30*time.Minute && len(camps) > 0
+	inflight := t.anonScrapeInflight
+	if !fresh && !inflight {
+		t.anonScrapeInflight = true
+	}
+	t.anonScrapeMu.Unlock()
+	if fresh || inflight {
+		return camps
+	}
+	// Kick off background refresh. Caller gets stale (or empty) data
+	// this cycle; next cycle gets fresh.
+	go func() {
+		// Use a fresh background context — the caller's ctx is per-RPC
+		// and may cancel before chromedp finishes loading the page.
+		bgCtx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		defer cancel()
+		fresh, err := t.scrapeAnonymousCatalog(bgCtx)
+		t.anonScrapeMu.Lock()
+		t.anonScrapeInflight = false
+		if err == nil && len(fresh) > 0 {
+			t.anonScrapeCamps = fresh
+			t.anonScrapeFetchedAt = time.Now()
+		}
+		t.anonScrapeMu.Unlock()
+		if err != nil {
+			slog.Warn("anonymous catalog scrape failed", "err", err)
+		} else {
+			slog.Info("anonymous catalog scrape", "campaigns", len(fresh))
+		}
+	}()
+	return camps
+}
+
+// scrapeAnonymousCatalog opens an isolated chromedp browser context
+// (no cookies) and scrapes /drops/campaigns. Returns the public
+// catalog the page renders for logged-out visitors.
+func (t *Twitch) scrapeAnonymousCatalog(ctx context.Context) ([]apolloCampaign, error) {
+	tabCtx, cleanup, err := t.b.OpenIncognitoTab()
+	if err != nil {
+		return nil, fmt.Errorf("open incognito tab: %w", err)
+	}
+	defer cleanup()
+	// Apply stealth script so navigator.webdriver etc. don't trip
+	// PerimeterX on the fresh tab.
+	if err := chromedp.Run(tabCtx,
+		chromedp.ActionFunc(func(c context.Context) error {
+			_, err := page.AddScriptToEvaluateOnNewDocument(StealthScript).Do(c)
+			return err
+		}),
+	); err != nil {
+		slog.Warn("anon stealth install failed", "err", err)
+	}
+	return scrapeDropsCampaignsPage(tabCtx)
 }
 
 // extractGqlCampaigns pulls the dropCampaigns array out of a successful

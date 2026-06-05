@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	cdp "github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 )
 
@@ -169,6 +171,57 @@ func (b *Browser) Close() {
 	b.tabs = map[string]tabState{}
 	b.mu.Unlock()
 	b.allocCancel()
+}
+
+// OpenIncognitoTab spawns a tab inside a fresh, isolated browser
+// context. Cookies + storage are NOT shared with other tabs. Use this
+// to scrape sites as a "logged-out" visitor even when other tabs in
+// the same process hold an authenticated session for the same domain.
+//
+// The cleanup func MUST be called to free the tab and the browser
+// context. The returned context is bound to the new target — running
+// chromedp.Run against it operates inside the isolated context.
+func (b *Browser) OpenIncognitoTab() (context.Context, func(), error) {
+	var ctxID cdp.BrowserContextID
+	if err := chromedp.Run(b.allocCtx, chromedp.ActionFunc(func(c context.Context) error {
+		id, err := target.CreateBrowserContext().Do(c)
+		if err != nil {
+			return err
+		}
+		ctxID = id
+		return nil
+	})); err != nil {
+		return nil, nil, fmt.Errorf("create browser context: %w", err)
+	}
+	dispose := func() {
+		_ = chromedp.Run(b.allocCtx, chromedp.ActionFunc(func(c context.Context) error {
+			return target.DisposeBrowserContext(ctxID).Do(c)
+		}))
+	}
+	var targetID target.ID
+	if err := chromedp.Run(b.allocCtx, chromedp.ActionFunc(func(c context.Context) error {
+		id, err := target.CreateTarget("about:blank").WithBrowserContextID(ctxID).Do(c)
+		if err != nil {
+			return err
+		}
+		targetID = id
+		return nil
+	})); err != nil {
+		dispose()
+		return nil, nil, fmt.Errorf("create target: %w", err)
+	}
+	tabCtx, cancel := chromedp.NewContext(b.allocCtx, chromedp.WithTargetID(targetID))
+	// Drive the context once so the target attaches.
+	if err := chromedp.Run(tabCtx); err != nil {
+		cancel()
+		dispose()
+		return nil, nil, fmt.Errorf("attach target: %w", err)
+	}
+	cleanup := func() {
+		cancel()
+		dispose()
+	}
+	return tabCtx, cleanup, nil
 }
 
 // OpenTab creates a new tab and returns an opaque handle.
