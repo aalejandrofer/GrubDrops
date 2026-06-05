@@ -10,7 +10,7 @@
       <h1>Accounts</h1>
     </div>
     <div class="actions">
-      <form method="post" action="/accounts/apply" style="display:inline">
+      <form method="post" action="/accounts/apply" class="inline-form">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <button class="btn" type="submit">Apply changes</button>
       </form>
@@ -24,33 +24,28 @@
 
   {{if .Flash}}<div class="flash-ok">{{.Flash}}</div>{{end}}
 
-  {{if not .Page}}
-  <div class="empty">No accounts yet. <a href="/accounts/new">Add one →</a></div>
-  {{else}}
-  <table class="tbl">
-    <thead>
-      <tr>
-        <th>Display</th>
-        <th>Platform</th>
-        <th>Login</th>
-        <th>Status</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-    {{range .Page}}
-      <tr>
-        <td class="name">{{.DisplayName}}</td>
-        <td class="plat"><span class="{{.Platform}}">{{.Platform}}</span></td>
-        <td class="handle">@{{.Login}}</td>
-        <td>
-          <span class="state-pill state-{{.StateTier}}" title="{{.State}}">{{if eq .StateTier "green"}}● {{.State}}{{else if eq .StateTier "orange"}}● {{if eq .State "needs_auth"}}needs login{{else if eq .State "sleeping"}}sleeping (no eligible drops){{else}}{{.State}}{{end}}{{else}}○ disabled{{end}}</span>
-        </td>
-        <td class="act"><a href="/accounts/{{.ID}}">edit →</a></td>
-      </tr>
+  <section class="settings-block">
+    <header class="section-h"><h3>Configured accounts</h3><span class="meta">{{len .Page}} total</span></header>
+    {{if not .Page}}
+    <div class="empty">No accounts yet. <a href="/accounts/new">Add one →</a></div>
+    {{else}}
+    <div class="events accounts-rows">
+      {{range .Page}}
+      <details class="ev kind-{{if eq .StateTier "green"}}claim{{else if eq .StateTier "orange"}}auth{{else}}info{{end}}">
+        <summary>
+          <span class="chev" aria-hidden="true">›</span>
+          <span class="t">{{.DisplayName}}</span>
+          <span class="lvl" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">●</span>
+          <span class="body"><em>{{.Platform}}</em> · @{{.Login}}
+            <a href="/accounts/{{.ID}}" onclick="event.stopPropagation()" style="margin-left:10px;color:var(--accent);text-decoration:none;font-size:11px;">edit →</a>
+            {{if eq .State "needs_auth"}}<a href="/accounts/{{.ID}}/login" onclick="event.stopPropagation()" style="margin-left:8px;color:var(--accent);text-decoration:none;font-size:11px;">re-auth →</a>{{end}}
+          </span>
+          <span class="ac"><span class="state-pill state-{{.StateTier}}">{{if eq .StateTier "green"}}● {{.State}}{{else if eq .StateTier "orange"}}● {{if eq .State "needs_auth"}}needs login{{else if eq .State "sleeping"}}sleeping{{else}}{{.State}}{{end}}{{else}}○ disabled{{end}}</span></span>
+        </summary>
+      </details>
+      {{end}}
+    </div>
     {{end}}
-    </tbody>
-  </table>
-  {{end}}
+  </section>
 </div>
 {{end}}

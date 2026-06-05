@@ -27,19 +27,6 @@
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
 
       <section class="settings-block">
-        <header class="section-h"><h3>Notifications</h3><span class="meta">Discord webhook</span></header>
-        <label>Global Discord webhook URL
-          <input type="url" name="discord_webhook" value="{{.GlobalDiscordWebhook}}" placeholder="https://discord.com/api/webhooks/…">
-        </label>
-        <div class="settings-grid-4">
-          <label class="cb"><input type="checkbox" name="notify_claim" value="1" {{if .NotifyClaim}}checked{{end}}> claims</label>
-          <label class="cb"><input type="checkbox" name="notify_progress" value="1" {{if .NotifyProgress}}checked{{end}}> progress</label>
-          <label class="cb"><input type="checkbox" name="notify_auth" value="1" {{if .NotifyAuth}}checked{{end}}> auth</label>
-          <label class="cb"><input type="checkbox" name="notify_error" value="1" {{if .NotifyError}}checked{{end}}> errors</label>
-        </div>
-      </section>
-
-      <section class="settings-block">
         <header class="section-h"><h3>Runtime</h3><span class="meta">Reload required</span></header>
         <div class="settings-grid-2">
           <label>Watcher tick interval (ms)
@@ -68,6 +55,19 @@
           <label>Log retention (days)
             <input type="number" name="log_retention_days" value="{{.LogRetentionDays}}" min="1" max="365">
           </label>
+        </div>
+      </section>
+
+      <section class="settings-block">
+        <header class="section-h"><h3>Notifications</h3><span class="meta">Discord webhook</span></header>
+        <label>Global Discord webhook URL
+          <input type="url" name="discord_webhook" value="{{.GlobalDiscordWebhook}}" placeholder="https://discord.com/api/webhooks/…">
+        </label>
+        <div class="settings-grid-4">
+          <label class="cb"><input type="checkbox" name="notify_claim" value="1" {{if .NotifyClaim}}checked{{end}}> claims</label>
+          <label class="cb"><input type="checkbox" name="notify_progress" value="1" {{if .NotifyProgress}}checked{{end}}> progress</label>
+          <label class="cb"><input type="checkbox" name="notify_auth" value="1" {{if .NotifyAuth}}checked{{end}}> auth</label>
+          <label class="cb"><input type="checkbox" name="notify_error" value="1" {{if .NotifyError}}checked{{end}}> errors</label>
         </div>
       </section>
 
