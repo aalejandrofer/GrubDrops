@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -104,6 +105,16 @@ type Watcher struct {
 	// mid-watch) and re-enters PickCampaign instead of mining forever
 	// against a ghost benefit (B2.5).
 	noProgressTicks int
+
+	// skippedBenefits collects benefit IDs the watcher has given up
+	// on for the lifetime of the Run. Synth scrape entries (no real
+	// Twitch UUID, contain "|" or "_default") can land here when no
+	// inventory progress ever materialises — usually because the
+	// account has ALREADY completed the drop (Minecraft code-only
+	// rewards never appear in dropCampaignsInProgress once Twitch
+	// issues the code) or never enrolled. pickCampaign filters
+	// against this set so we don't loop forever mining a ghost.
+	skippedBenefits map[string]struct{}
 
 	// lastDiscovery is the most recent successful
 	// Backend.ListActiveCampaigns result. Cached so the dashboard's
@@ -235,6 +246,20 @@ func (w *Watcher) handlePubSubRewardCode(notificationID, code, body string) {
 			"benefit", benefit.ID,
 			"err", err)
 	}
+}
+
+// isSynthBenefitID returns true when the benefit ID was fabricated by
+// the scrape-fallback merge instead of being a real Twitch UUID.
+// Synth IDs encode the campaign + game directly (contain "|") and
+// usually have a "_default" suffix. The watcher uses this hint to
+// decide whether to give up on a stuck benefit (real UUIDs that
+// don't appear in inventory are kept around longer since the
+// inventory poll itself may be flaky).
+func isSynthBenefitID(id string) bool {
+	if id == "" {
+		return false
+	}
+	return strings.Contains(id, "|") || strings.Contains(id, " ") || strings.HasSuffix(id, "_default")
 }
 
 // campaignMinRemaining returns the smallest (RequiredMinutes -
@@ -440,6 +465,14 @@ var errComplete = errors.New("nothing left to mine")
 // default minute-cadence ≈ 3 minutes of grace.
 const vanishThreshold = 3
 
+// synthSkipThreshold caps how long we'll babysit a synth-scrape
+// benefit (no real Twitch UUID) that NEVER shows up in
+// dropCampaignsInProgress. 120 ticks at 500ms ≈ 60 seconds — enough
+// time for the inventory poll to catch a real enrollment, short
+// enough that a code-only Minecraft drop the user already finished
+// doesn't keep the watcher pinned forever.
+const synthSkipThreshold = 120
+
 func (w *Watcher) step(ctx context.Context) error {
 	switch w.State() {
 	case StateIdle, StatePickCampaign:
@@ -465,6 +498,17 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 	if err != nil {
 		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
 			return fmt.Errorf("list campaigns: %w", err)
+		}
+		// Integrity wall regression (C1): the sidecar's retry path
+		// kept seeing "failed integrity check" from gql. Transition
+		// to StateAuthRequired so the dashboard surfaces a re-auth
+		// banner, and return errComplete so Run exits cleanly — the
+		// next Reload re-spins the watcher once cookies are refreshed.
+		if errors.Is(err, platform.ErrIntegrityBlocked) {
+			slog.Warn("watcher: integrity blocked, marking account needs_auth",
+				"kind", "auth", "account", w.cfg.AccountID)
+			w.setState(ctx, StateAuthRequired)
+			return errComplete
 		}
 		slog.Error("watcher list campaigns failed", "kind", "error", "account", w.cfg.AccountID, "err", err)
 		return fmt.Errorf("list campaigns: %w", err)
@@ -692,6 +736,14 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			if claimed[b.ID] {
 				continue
 			}
+			// Per-watcher skip set: synth benefits we already burnt
+			// time on without seeing any inventory progress.
+			w.mu.Lock()
+			_, skip := w.skippedBenefits[b.ID]
+			w.mu.Unlock()
+			if skip {
+				continue
+			}
 			campaignCopy, benefitCopy := c, b
 			w.mu.Lock()
 			w.currentCampaign = &campaignCopy
@@ -895,6 +947,38 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 			_ = w.cfg.Backend.StopWatch(ctx, handle)
 			w.unsubscribeCurrentChannel()
 			w.mu.Lock()
+			if w.skippedBenefits == nil {
+				w.skippedBenefits = map[string]struct{}{}
+			}
+			w.skippedBenefits[benefit.ID] = struct{}{}
+			w.currentBenefit = nil
+			w.currentStream = nil
+			w.handle = nil
+			w.mu.Unlock()
+			w.setState(ctx, StatePickCampaign)
+			return nil
+		}
+		// Synth benefits (no real Twitch UUID) that NEVER appeared in
+		// dropCampaignsInProgress: the account has probably already
+		// completed the drop (code-only Minecraft rewards vanish the
+		// moment Twitch issues the code) or never enrolled. Skip
+		// permanently after the synthSkipThreshold grace window so we
+		// don't burn the watcher on a ghost.
+		if n >= synthSkipThreshold && prevProgress == 0 && isSynthBenefitID(benefit.ID) {
+			slog.Warn("watcher: synth benefit never appeared in inventory; skipping",
+				"kind", "state",
+				"account", w.cfg.AccountID,
+				"benefit", benefit.ID,
+				"benefit_name", benefit.Name,
+				"channel", handle.Channel,
+				"ticks_without_progress", n)
+			_ = w.cfg.Backend.StopWatch(ctx, handle)
+			w.unsubscribeCurrentChannel()
+			w.mu.Lock()
+			if w.skippedBenefits == nil {
+				w.skippedBenefits = map[string]struct{}{}
+			}
+			w.skippedBenefits[benefit.ID] = struct{}{}
 			w.currentBenefit = nil
 			w.currentStream = nil
 			w.handle = nil

@@ -1,6 +1,15 @@
 package platform
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+// ErrIntegrityBlocked is returned by a Backend (Twitch today) when the
+// integrity wall keeps refusing privileged gql fields even after the
+// sidecar retry. Watchers catch this with errors.Is to transition the
+// account into needs_auth.
+var ErrIntegrityBlocked = errors.New("integrity check failed")
 
 type Backend interface {
 	Name() string

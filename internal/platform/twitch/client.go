@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
 
 // gqlTransport sends a POST body to gql.twitch.tv/gql and returns the
@@ -239,6 +241,14 @@ func (c *client) gqlQuery(ctx context.Context, token, operationName, query strin
 	return c.do(ctx, token, operationName, body, out)
 }
 
+// ErrIntegrityBlocked is the twitch-side wrap of
+// platform.ErrIntegrityBlocked. Returned by the gql client when
+// Twitch's anti-bot integrity wall keeps refusing privileged fields
+// even after the sidecar's retry-with-fresh-token path. Watchers
+// catch via errors.Is(err, platform.ErrIntegrityBlocked) to transition
+// the account into needs_auth (C1).
+var ErrIntegrityBlocked = fmt.Errorf("twitch %w", platform.ErrIntegrityBlocked)
+
 func (c *client) do(ctx context.Context, token, opName string, body []byte, out any) error {
 	rawBody, status, err := c.transport.gqlPost(ctx, token, opName, body)
 	if err != nil {
@@ -250,6 +260,15 @@ func (c *client) do(ctx context.Context, token, opName string, body []byte, out 
 	if status >= 500 {
 		slog.Error("twitch gql 5xx", "op", opName, "status", status, "body", truncate(string(rawBody), 500))
 		return fmt.Errorf("twitch gql %s: status %d", opName, status)
+	}
+	// Integrity wall: if the sidecar's retry-with-fresh-token path
+	// still came back with "failed integrity check" in the body,
+	// surface a typed sentinel so the watcher can transition the
+	// account to needs_auth instead of looping silently (C1).
+	if status == 200 && bytes.Contains(rawBody, []byte("failed integrity check")) {
+		slog.Warn("twitch gql still integrity-blocked after retry; flagging account",
+			"op", opName, "status", status, "body", truncate(string(rawBody), 300))
+		return ErrIntegrityBlocked
 	}
 
 	var envelope gqlResponse
