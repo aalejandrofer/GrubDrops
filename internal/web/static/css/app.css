@@ -314,7 +314,8 @@
      is in the watching state — keeps the column rhythm consistent. */
   .account-row {
     display: grid;
-    grid-template-columns: 28px minmax(140px, 1fr) minmax(180px, 2fr) 96px 60px;
+    grid-template-columns: 28px minmax(140px, 1fr) minmax(180px, 2fr) auto;
+    grid-template-areas: "av who activity pill";
     gap: 12px;
     align-items: center;
     padding: 9px 14px;
@@ -323,7 +324,24 @@
     color: inherit;
     transition: background 0.12s;
   }
-  .account-row .activity { text-align: right; min-width: 0; }
+  .account-row .av { grid-area: av; }
+  .account-row .who { grid-area: who; }
+  .account-row .activity {
+    grid-area: activity;
+    text-align: right;
+    min-width: 0;
+    margin-right: auto; /* keep text pushed left of the pill */
+    margin-left: auto;
+  }
+  .account-row .state-pill {
+    grid-area: pill;
+    justify-self: end;
+  }
+  .account-row .pbar.mini {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin-top: 6px;
+  }
 
   /* <details> wrapper around each row — click-to-expand inline. */
   .account-row-d { border-top: 1px dashed var(--line); }
