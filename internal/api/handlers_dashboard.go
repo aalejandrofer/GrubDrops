@@ -240,7 +240,7 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 
 	allowed := allowedLoginsFor(r, d.q, accs)
 	page := dashPage{
-		Tele:          telemetryFrom(cards, snapshots),
+		Tele:          telemetryWithClaims(telemetryFrom(cards, snapshots), d.ring, d.q, r.Context()),
 		Mining:        bucketMiningByPlatform(cards),
 		NextClaims:    nextClaimsFrom(cards),
 		ActiveCamps:   activeCampsFromDiscovery(r.Context(), d.sch, d.channelCounters, d.q),
@@ -509,6 +509,61 @@ func mineCardFromSnap(a gen.Account, s watcher.Snapshot) dashMineCard {
 	c.WatchToday = "—"
 	c.ClaimsToday = 0
 	return c
+}
+
+// telemetryWithClaims layers the "Drops claimed · 7d" count onto a
+// base telemetry struct. Counts two sources: the on-disk claims table
+// (real drop claims via platform.Claim) AND any kind=claim event in
+// the in-memory log ring (reward reaper claims, which don't go through
+// the benefits table so they never make it to claims/). The union is
+// deduped by (account_id, title) so the same reward isn't counted
+// twice if it appears in both sources.
+func telemetryWithClaims(base dashTelemetry, ring *mlog.Ring, q *gen.Queries, ctx context.Context) dashTelemetry {
+	since := time.Now().Add(-7 * 24 * time.Hour).Unix()
+	seen := map[string]bool{}
+	count := 0
+	// On-disk claims via ListRecentClaims (claims table is bounded — the
+	// claim rows are rare events, so 500 is generous).
+	if q != nil {
+		if rows, err := q.ListRecentClaims(ctx, 500); err == nil {
+			for _, r := range rows {
+				if r.ClaimedAt < since {
+					continue
+				}
+				k := r.AccountID + "|" + r.BenefitName
+				if seen[k] {
+					continue
+				}
+				seen[k] = true
+				count++
+			}
+		}
+	}
+	// Reward-reaper claims live in the log ring as kind=claim events.
+	// Field map carries account + title.
+	if ring != nil {
+		for _, l := range ring.Snapshot() {
+			if l.Kind != "claim" {
+				continue
+			}
+			if l.TS.Unix() < since {
+				continue
+			}
+			acc := fieldStr(l.Fields, "account")
+			title := fieldStr(l.Fields, "title")
+			if title == "" {
+				continue
+			}
+			k := acc + "|" + title
+			if seen[k] {
+				continue
+			}
+			seen[k] = true
+			count++
+		}
+	}
+	base.ClaimsWeek = count
+	return base
 }
 
 func telemetryFrom(cards []dashMineCard, snaps []watcher.Snapshot) dashTelemetry {
