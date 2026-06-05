@@ -198,39 +198,112 @@ func (t *Twitch) GQL(ctx context.Context, accountID string, body []byte) ([]byte
 		)
 	}
 	resp, status, err := t.evalFetch(tabCtx, body)
-	// For campaign discovery: gql often returns 200 with an empty
-	// dropCampaigns array because the user is only "enrolled" in a
-	// subset. The /drops/campaigns page renders ALL active campaigns
-	// (enrolled + joinable). Trigger the scrape supplement whenever
-	// gql returned no campaigns OR errored.
+	// For campaign discovery: ALWAYS scrape /drops/campaigns and union
+	// with gql results. gql only returns campaigns the user is enrolled
+	// in (e.g. 1 result for a user with just the Builder Cape reward),
+	// while the page renders every active campaign. Union: prefer gql
+	// fields where present (richer benefit data, accurate
+	// isAccountConnected), fill in the rest from the scrape so the user
+	// sees ALL active campaigns in /drops.
 	if isCampaignsQuery(body) {
-		needScrape := err != nil || status != 200 || gqlCampaignsEmpty(resp)
-		if needScrape {
-			if err == nil && status == 200 {
-				slog.Info("gql returned empty campaigns; supplementing via drops page scrape", "account", accountID)
-			} else {
-				slog.Warn("gql evalFetch failed; falling back to drops page scrape", "account", accountID, "err", err, "status", status)
-			}
-			camps, scrapeErr := scrapeDropsCampaignsPage(tabCtx)
-			if scrapeErr == nil && len(camps) > 0 {
-				t.rememberScrape(accountID, camps)
-			} else if len(camps) == 0 {
-				if cached, ok := t.recallScrape(accountID); ok {
-					slog.Info("scrape returned 0 campaigns; using cached result from earlier successful scrape", "account", accountID, "cached_count", len(cached))
-					camps = cached
-				}
-			}
-			if scrapeErr != nil && len(camps) == 0 {
-				if err == nil && status == 200 {
-					return resp, status, nil
-				}
-				return resp, status, fmt.Errorf("evalFetch failed (%v) and scrape fallback failed: %w", err, scrapeErr)
-			}
-			envelope := buildViewerDropsDashboardEnvelope(camps)
-			return envelope, 200, nil
+		var gqlCamps []apolloCampaign
+		if err == nil && status == 200 {
+			gqlCamps = extractGqlCampaigns(resp)
 		}
+		scrapeCamps, scrapeErr := scrapeDropsCampaignsPage(tabCtx)
+		if scrapeErr == nil && len(scrapeCamps) > 0 {
+			t.rememberScrape(accountID, scrapeCamps)
+		} else if len(scrapeCamps) == 0 {
+			if cached, ok := t.recallScrape(accountID); ok {
+				slog.Info("scrape returned 0 campaigns; using cached result", "account", accountID, "cached_count", len(cached))
+				scrapeCamps = cached
+			}
+		}
+		if scrapeErr != nil {
+			slog.Warn("scrape supplement failed", "account", accountID, "err", scrapeErr)
+		}
+		merged := unionCampaigns(gqlCamps, scrapeCamps)
+		if len(merged) == 0 {
+			if err == nil && status == 200 {
+				return resp, status, nil
+			}
+			return resp, status, fmt.Errorf("evalFetch failed (%v) and scrape returned nothing", err)
+		}
+		slog.Info("twitch campaign discovery", "account", accountID, "gql", len(gqlCamps), "scrape", len(scrapeCamps), "merged", len(merged))
+		envelope := buildViewerDropsDashboardEnvelope(merged)
+		return envelope, 200, nil
 	}
 	return resp, status, err
+}
+
+// extractGqlCampaigns pulls the dropCampaigns array out of a successful
+// ViewerDropsDashboard response, projected onto the apolloCampaign shape
+// so it can be unioned with scrape results downstream.
+func extractGqlCampaigns(body []byte) []apolloCampaign {
+	var env struct {
+		Data struct {
+			CurrentUser struct {
+				DropCampaigns []struct {
+					ID     string `json:"id"`
+					Name   string `json:"name"`
+					Status string `json:"status"`
+					Game   struct {
+						Name string `json:"displayName"`
+					} `json:"game"`
+					EndAt   string `json:"endAt"`
+					StartAt string `json:"startAt"`
+				} `json:"dropCampaigns"`
+			} `json:"currentUser"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil {
+		return nil
+	}
+	out := make([]apolloCampaign, 0, len(env.Data.CurrentUser.DropCampaigns))
+	for _, c := range env.Data.CurrentUser.DropCampaigns {
+		out = append(out, apolloCampaign{
+			ID:       c.ID,
+			Name:     cleanCampaignName(c.Name),
+			Game:     c.Game.Name,
+			EndsAt:   c.EndAt,
+			StartsAt: c.StartAt,
+			Kind:     "drop", // gql-side campaigns are real drops the user is enrolled in
+		})
+	}
+	return out
+}
+
+// unionCampaigns merges gql-derived and scrape-derived campaign lists.
+// gql entries take priority on the (game,name) key — they have the
+// real Twitch campaign ID + accurate metadata. Scrape entries fill in
+// anything gql didn't return.
+func unionCampaigns(gql, scrape []apolloCampaign) []apolloCampaign {
+	seen := make(map[string]bool, len(gql)+len(scrape))
+	key := func(c apolloCampaign) string { return c.Game + "\x00" + c.Name }
+	out := make([]apolloCampaign, 0, len(gql)+len(scrape))
+	for _, c := range gql {
+		if c.Game == "" || c.Name == "" {
+			continue
+		}
+		k := key(c)
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, c)
+	}
+	for _, c := range scrape {
+		if c.Game == "" || c.Name == "" {
+			continue
+		}
+		k := key(c)
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, c)
+	}
+	return out
 }
 
 // isCampaignsQuery sniffs the gql body to decide if it's the
