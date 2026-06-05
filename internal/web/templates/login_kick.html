@@ -6,26 +6,33 @@
 {{with .Page}}
 <div class="auth-wrap wide">
   <div class="auth-card">
-    <div class="kicker">// kick · cookie paste</div>
+    <div class="kicker">// kick · authorize</div>
     <h1>Authorize {{.DisplayName}}</h1>
-    <p class="intro">Kick has no public OAuth. The sidecar uses your existing browser session.</p>
+    <p class="intro">Kick has no public OAuth. The sidecar replays your existing browser session via a chromedp tab. When discovery starts logging <code>blocked by cloudflare</code>, the cookies have gone stale — re-paste here.</p>
+  </div>
+
+  <div class="auth-card method preferred">
+    <div class="method-head">
+      <span class="method-tag">required</span>
+      <h2>Cookie paste</h2>
+    </div>
     <ol class="steps">
       <li>Open <code>kick.com</code> in any browser and sign in.</li>
-      <li>Open DevTools → Application → Cookies → kick.com.</li>
-      <li>Copy <code>kick_session</code> and <code>XSRF-TOKEN</code> (required). <code>cf_clearance</code> is optional — the sidecar generates its own when needed.</li>
+      <li>DevTools → Application → Cookies → <code>kick.com</code>.</li>
+      <li>Copy <code>kick_session</code> and <code>XSRF-TOKEN</code> (required). <code>cf_clearance</code> is optional — sidecar generates its own when needed.</li>
       <li>Paste below + the channel you want to mine.</li>
     </ol>
   </div>
   {{end}}
-  {{if .Flash}}<div style="max-width:620px;margin:0 auto;padding:0 24px;"><div class="err">{{.Flash}}</div></div>{{end}}
+  {{if .Flash}}<div class="auth-flash"><div class="err">{{.Flash}}</div></div>{{end}}
   {{with .Page}}
-  <div class="auth-card" style="margin-top: 18px;">
+  <div class="auth-card">
     <form method="post" action="/accounts/{{.AccountID}}/login">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-      <label>kick_session<input type="text" name="kick_session" required autocomplete="off"></label>
-      <label>XSRF-TOKEN<input type="text" name="xsrf_token" required autocomplete="off"></label>
-      <label>cf_clearance <span style="color:var(--muted);font-weight:400">(optional)</span><input type="text" name="cf_clearance" autocomplete="off"></label>
-      <label>Channel to mine<input type="text" name="channel" required placeholder="streamer-login"></label>
+      <label>kick_session <span class="req">(required)</span><input type="text" name="kick_session" required autocomplete="off"></label>
+      <label>XSRF-TOKEN <span class="req">(required)</span><input type="text" name="xsrf_token" required autocomplete="off"></label>
+      <label>cf_clearance <span class="opt">(optional)</span><input type="text" name="cf_clearance" autocomplete="off"></label>
+      <label>Channel to mine <span class="req">(required)</span><input type="text" name="channel" required placeholder="streamer-login"></label>
       <div class="submit-row">
         <a class="alt" href="/accounts">← cancel</a>
         <button class="btn primary" type="submit">Authorize →</button>
