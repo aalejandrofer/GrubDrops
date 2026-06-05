@@ -17,9 +17,11 @@ type Browser struct {
 	allocCtx    context.Context
 	allocCancel context.CancelFunc
 
-	mu   sync.Mutex
-	tabs map[string]tabState
-	next int
+	mu         sync.Mutex
+	tabs       map[string]tabState
+	next       int
+	root       context.Context    // browser-attached context, lazy
+	rootCancel context.CancelFunc
 }
 
 type tabState struct {
@@ -173,6 +175,27 @@ func (b *Browser) Close() {
 	b.allocCancel()
 }
 
+// rootCtx returns a long-lived chromedp context attached to the
+// underlying browser. Browser-level CDP commands (CreateBrowserContext
+// etc.) need a context with a live browser session — running them
+// against the bare allocator returns "invalid context". Lazily
+// initialized on first use; reused across calls.
+func (b *Browser) rootCtx() (context.Context, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.root != nil {
+		return b.root, nil
+	}
+	rootCtx, cancel := chromedp.NewContext(b.allocCtx)
+	if err := chromedp.Run(rootCtx); err != nil {
+		cancel()
+		return nil, err
+	}
+	b.root = rootCtx
+	b.rootCancel = cancel
+	return rootCtx, nil
+}
+
 // OpenIncognitoTab spawns a tab inside a fresh, isolated browser
 // context. Cookies + storage are NOT shared with other tabs. Use this
 // to scrape sites as a "logged-out" visitor even when other tabs in
@@ -182,8 +205,12 @@ func (b *Browser) Close() {
 // context. The returned context is bound to the new target — running
 // chromedp.Run against it operates inside the isolated context.
 func (b *Browser) OpenIncognitoTab() (context.Context, func(), error) {
+	root, err := b.rootCtx()
+	if err != nil {
+		return nil, nil, fmt.Errorf("root ctx: %w", err)
+	}
 	var ctxID cdp.BrowserContextID
-	if err := chromedp.Run(b.allocCtx, chromedp.ActionFunc(func(c context.Context) error {
+	if err := chromedp.Run(root, chromedp.ActionFunc(func(c context.Context) error {
 		id, err := target.CreateBrowserContext().Do(c)
 		if err != nil {
 			return err
@@ -194,12 +221,12 @@ func (b *Browser) OpenIncognitoTab() (context.Context, func(), error) {
 		return nil, nil, fmt.Errorf("create browser context: %w", err)
 	}
 	dispose := func() {
-		_ = chromedp.Run(b.allocCtx, chromedp.ActionFunc(func(c context.Context) error {
+		_ = chromedp.Run(root, chromedp.ActionFunc(func(c context.Context) error {
 			return target.DisposeBrowserContext(ctxID).Do(c)
 		}))
 	}
 	var targetID target.ID
-	if err := chromedp.Run(b.allocCtx, chromedp.ActionFunc(func(c context.Context) error {
+	if err := chromedp.Run(root, chromedp.ActionFunc(func(c context.Context) error {
 		id, err := target.CreateTarget("about:blank").WithBrowserContextID(ctxID).Do(c)
 		if err != nil {
 			return err
@@ -210,7 +237,7 @@ func (b *Browser) OpenIncognitoTab() (context.Context, func(), error) {
 		dispose()
 		return nil, nil, fmt.Errorf("create target: %w", err)
 	}
-	tabCtx, cancel := chromedp.NewContext(b.allocCtx, chromedp.WithTargetID(targetID))
+	tabCtx, cancel := chromedp.NewContext(root, chromedp.WithTargetID(targetID))
 	// Drive the context once so the target attaches.
 	if err := chromedp.Run(tabCtx); err != nil {
 		cancel()
