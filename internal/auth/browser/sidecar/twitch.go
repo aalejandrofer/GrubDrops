@@ -36,6 +36,14 @@ type Twitch struct {
 	// for up to 30 minutes.
 	scrapeCacheMu sync.Mutex
 	scrapeCache   map[string]scrapedCampaignsCache
+
+	// Reward titles already claimed in this sidecar process lifetime,
+	// keyed account -> normalized title. Skip on next reaper run so we
+	// don't click "Claim" repeatedly on the same tile if Twitch keeps
+	// the button rendered post-success (it does — the page only
+	// repaints on full reload).
+	claimedMu sync.Mutex
+	claimed   map[string]map[string]bool
 }
 
 type scrapedCampaignsCache struct {
@@ -49,7 +57,65 @@ func NewTwitch(b *Browser) *Twitch {
 		authTabs:    map[string]string{},
 		tabMu:       map[string]*sync.Mutex{},
 		scrapeCache: map[string]scrapedCampaignsCache{},
+		claimed:     map[string]map[string]bool{},
 	}
+}
+
+// markClaimed records that we've successfully clicked the Claim button
+// for (account, title). Subsequent reaper runs skip these titles.
+func (t *Twitch) markClaimed(accountID, title string) {
+	if accountID == "" || title == "" {
+		return
+	}
+	key := normalizeTitle(title)
+	t.claimedMu.Lock()
+	defer t.claimedMu.Unlock()
+	m, ok := t.claimed[accountID]
+	if !ok {
+		m = map[string]bool{}
+		t.claimed[accountID] = m
+	}
+	m[key] = true
+}
+
+// alreadyClaimedTitles returns the set of titles we've already claimed
+// for the account this process lifetime. JS receives this as a string[]
+// and skips any tile whose extracted title matches.
+func (t *Twitch) alreadyClaimedTitles(accountID string) []string {
+	t.claimedMu.Lock()
+	defer t.claimedMu.Unlock()
+	m := t.claimed[accountID]
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+func normalizeTitle(s string) string {
+	// Lowercase + collapse whitespace + strip surrounding spaces.
+	b := make([]byte, 0, len(s))
+	prevSpace := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		if c == ' ' || c == '\t' || c == '\n' {
+			if prevSpace || len(b) == 0 {
+				continue
+			}
+			b = append(b, ' ')
+			prevSpace = true
+			continue
+		}
+		b = append(b, c)
+		prevSpace = false
+	}
+	if len(b) > 0 && b[len(b)-1] == ' ' {
+		b = b[:len(b)-1]
+	}
+	return string(b)
 }
 
 // rememberScrape stores the last good scrape result for an account.
@@ -713,15 +779,47 @@ func (t *Twitch) ClaimRewards(ctx context.Context, accountID string, allowedGame
 		return nil, nil, fmt.Errorf("acquire tab: %w", err)
 	}
 	allowJSON, _ := json.Marshal(allowedGames)
+	alreadyJSON, _ := json.Marshal(t.alreadyClaimedTitles(accountID))
 	// Walk every tile on /drops/inventory. A claimable reward tile
-	// has a button whose accessible name contains "Claim". Climb up
-	// to the nearest container that mentions a game (img[alt]) so we
-	// can filter by allow-list. Click button, wait 600ms, capture
-	// title for response. Tiles with progress bars (in-progress
-	// watch-time drops) don't have the Claim button surfaced yet —
-	// they're naturally skipped.
+	// has a button whose accessible name contains "Claim". Strategy:
+	//   1. Find every "Claim" button.
+	//   2. Climb up the DOM to find the nearest enclosing tile that
+	//      has both a title (any non-Claim text node 2-120 chars) and
+	//      a game name (from img[alt] portrait OR a section heading
+	//      above the tile group).
+	//   3. Skip if game not in allow-list OR title already claimed
+	//      this session.
+	//   4. Click + wait + return.
+	// Tiles with progress bars (in-progress watch-time drops) don't
+	// have a Claim button yet — they're naturally skipped.
 	script := `(async () => {
 		const allow = new Set((` + string(allowJSON) + ` || []).map(s => (s||'').toLowerCase()));
+		const already = new Set((` + string(alreadyJSON) + ` || []).map(s => (s||'').toLowerCase()));
+		const norm = (s) => (s||'').toLowerCase().replace(/\s+/g, ' ').trim();
+		// Find the game heading nearest above the tile by walking up
+		// + scanning previous siblings for h1-h4 text.
+		const findGameAbove = (start) => {
+			let node = start;
+			for (let depth = 0; depth < 12 && node; depth++) {
+				let sib = node.previousElementSibling;
+				while (sib) {
+					const h = sib.querySelector ? sib.querySelector('h1,h2,h3,h4') : null;
+					if (h) {
+						const t = (h.textContent || '').trim();
+						if (t.length > 1 && t.length < 60 && !/claim|drop|reward/i.test(t)) {
+							return t;
+						}
+					}
+					if (sib.tagName && /^H[1-4]$/.test(sib.tagName)) {
+						const t = (sib.textContent || '').trim();
+						if (t.length > 1 && t.length < 60) return t;
+					}
+					sib = sib.previousElementSibling;
+				}
+				node = node.parentElement;
+			}
+			return '';
+		};
 		const out = [];
 		const errors = [];
 		const buttons = Array.from(document.querySelectorAll('button'));
@@ -734,24 +832,30 @@ func (t *Twitch) ClaimRewards(ctx context.Context, accountID string, allowedGame
 			for (let i = 0; i < 8 && card; i++) {
 				card = card.parentElement;
 				if (!card) break;
-				const img = card.querySelector('img[alt]');
-				if (img && img.alt) {
-					const w = img.naturalWidth || img.width || 0;
-					const h = img.naturalHeight || img.height || 0;
-					if (w > 0 && h > 0 && (h > w * 1.1)) {
-						game = (img.alt || '').trim();
+				if (!game) {
+					const img = card.querySelector('img[alt]');
+					if (img && img.alt) {
+						const w = img.naturalWidth || img.width || 0;
+						const h = img.naturalHeight || img.height || 0;
+						if (w > 0 && h > 0 && (h > w * 1.1)) {
+							game = (img.alt || '').trim();
+						}
 					}
 				}
-				const headings = card.querySelectorAll('p,h1,h2,h3,h4,h5,span');
-				for (const el of headings) {
-					const t = (el.textContent || '').trim();
-					if (t && t.length > 2 && t.length < 120 && t.toLowerCase() !== 'claim') {
-						title = t;
-						break;
+				if (!title) {
+					const headings = card.querySelectorAll('p,h1,h2,h3,h4,h5,span');
+					for (const el of headings) {
+						const t = (el.textContent || '').trim();
+						if (t && t.length > 2 && t.length < 120 && t.toLowerCase() !== 'claim') {
+							title = t;
+							break;
+						}
 					}
 				}
 				if (game && title) break;
 			}
+			if (!game) game = findGameAbove(btn);
+			if (already.has(norm(title))) continue;
 			if (allow.size > 0 && game && !allow.has(game.toLowerCase())) continue;
 			try {
 				btn.click();
@@ -779,6 +883,9 @@ func (t *Twitch) ClaimRewards(ctx context.Context, accountID string, allowedGame
 	}
 	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
 		return nil, nil, fmt.Errorf("parse claim response (raw=%s): %w", truncate(raw, 200), err)
+	}
+	for _, c := range resp.Claimed {
+		t.markClaimed(accountID, c.Title)
 	}
 	return resp.Claimed, resp.Errors, nil
 }
