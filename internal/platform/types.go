@@ -46,6 +46,13 @@ type Campaign struct {
 	// operator should visit to make AccountLinked true. Empty if not
 	// provided by the platform.
 	AccountLinkURL string
+	// Kind distinguishes "drop" (watch-time mining required) from
+	// "reward" (one-click claim from /drops/inventory once the account
+	// is linked — e.g. Minecraft Builder Cape). Empty defaults to
+	// "drop". The watcher's pickCampaign() loop skips kind="reward"
+	// since there's no minutes to accrue; a separate reaper claims
+	// those out-of-band.
+	Kind string
 }
 
 type DropBenefit struct {

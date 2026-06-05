@@ -10,7 +10,7 @@ import (
 )
 
 const listActiveCampaignsForPlatform = `-- name: ListActiveCampaignsForPlatform :many
-SELECT id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at FROM campaigns
+SELECT id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at, kind FROM campaigns
 WHERE platform = ? AND status = 'active' AND starts_at <= ? AND ends_at >= ?
 ORDER BY discovered_at DESC
 `
@@ -40,6 +40,7 @@ func (q *Queries) ListActiveCampaignsForPlatform(ctx context.Context, arg ListAc
 			&i.Status,
 			&i.RawJson,
 			&i.DiscoveredAt,
+			&i.Kind,
 		); err != nil {
 			return nil, err
 		}
@@ -88,7 +89,7 @@ func (q *Queries) ListBenefitsForCampaign(ctx context.Context, campaignID string
 }
 
 const listCurrentCampaigns = `-- name: ListCurrentCampaigns :many
-SELECT id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at FROM campaigns
+SELECT id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at, kind FROM campaigns
 WHERE starts_at <= ? AND ends_at > ?
 ORDER BY ends_at ASC
 LIMIT ?
@@ -121,6 +122,7 @@ func (q *Queries) ListCurrentCampaigns(ctx context.Context, arg ListCurrentCampa
 			&i.Status,
 			&i.RawJson,
 			&i.DiscoveredAt,
+			&i.Kind,
 		); err != nil {
 			return nil, err
 		}
@@ -136,7 +138,7 @@ func (q *Queries) ListCurrentCampaigns(ctx context.Context, arg ListCurrentCampa
 }
 
 const listPastCampaigns = `-- name: ListPastCampaigns :many
-SELECT id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at FROM campaigns
+SELECT id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at, kind FROM campaigns
 WHERE ends_at < ?
 ORDER BY ends_at DESC
 LIMIT ?
@@ -167,6 +169,7 @@ func (q *Queries) ListPastCampaigns(ctx context.Context, arg ListPastCampaignsPa
 			&i.Status,
 			&i.RawJson,
 			&i.DiscoveredAt,
+			&i.Kind,
 		); err != nil {
 			return nil, err
 		}
@@ -182,7 +185,7 @@ func (q *Queries) ListPastCampaigns(ctx context.Context, arg ListPastCampaignsPa
 }
 
 const listUpcomingCampaigns = `-- name: ListUpcomingCampaigns :many
-SELECT id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at FROM campaigns
+SELECT id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at, kind FROM campaigns
 WHERE starts_at > ?
 ORDER BY starts_at ASC
 LIMIT ?
@@ -214,6 +217,7 @@ func (q *Queries) ListUpcomingCampaigns(ctx context.Context, arg ListUpcomingCam
 			&i.Status,
 			&i.RawJson,
 			&i.DiscoveredAt,
+			&i.Kind,
 		); err != nil {
 			return nil, err
 		}
@@ -257,14 +261,15 @@ func (q *Queries) UpsertBenefit(ctx context.Context, arg UpsertBenefitParams) er
 }
 
 const upsertCampaign = `-- name: UpsertCampaign :exec
-INSERT INTO campaigns (id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO campaigns (id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at, kind)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     name = excluded.name,
     starts_at = excluded.starts_at,
     ends_at = excluded.ends_at,
     status = excluded.status,
-    raw_json = excluded.raw_json
+    raw_json = excluded.raw_json,
+    kind = excluded.kind
 `
 
 type UpsertCampaignParams struct {
@@ -277,6 +282,7 @@ type UpsertCampaignParams struct {
 	Status       string `json:"status"`
 	RawJson      string `json:"raw_json"`
 	DiscoveredAt int64  `json:"discovered_at"`
+	Kind         string `json:"kind"`
 }
 
 func (q *Queries) UpsertCampaign(ctx context.Context, arg UpsertCampaignParams) error {
@@ -290,6 +296,7 @@ func (q *Queries) UpsertCampaign(ctx context.Context, arg UpsertCampaignParams) 
 		arg.Status,
 		arg.RawJson,
 		arg.DiscoveredAt,
+		arg.Kind,
 	)
 	return err
 }

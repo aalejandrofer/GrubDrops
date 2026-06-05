@@ -330,8 +330,16 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 	// don't translate to a claimable drop.
 	matched := make([]platform.Campaign, 0, len(whitelisted))
 	skippedUnlinked := 0
+	skippedReward := 0
 	for _, c := range whitelisted {
 		if c.Status != "" && c.Status != "active" {
+			continue
+		}
+		// Reward campaigns are one-click claims from /drops/inventory
+		// — no watch-time accrues. Drop them from the mining loop;
+		// the reward reaper handles them out-of-band.
+		if c.Kind == "reward" {
+			skippedReward++
 			continue
 		}
 		// AccountLinked defaults false for platforms that don't
@@ -350,6 +358,12 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			"kind", "discovery",
 			"account", w.cfg.AccountID,
 			"count", skippedUnlinked)
+	}
+	if skippedReward > 0 {
+		slog.Info("watcher skipped reward campaigns",
+			"kind", "discovery",
+			"account", w.cfg.AccountID,
+			"count", skippedReward)
 	}
 	if w.cfg.GameRank != nil {
 		sort.SliceStable(matched, func(i, j int) bool {

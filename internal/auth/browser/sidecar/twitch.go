@@ -266,6 +266,7 @@ type apolloCampaign struct {
 	Game     string `json:"game"`
 	EndsAt   string `json:"endsAt"`
 	StartsAt string `json:"startsAt"`
+	Kind     string `json:"kind"`
 }
 
 func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) {
@@ -327,12 +328,21 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 				const id = idMatch ? idMatch[1] : (alt + '|' + name);
 				if (seenGames.has(id)) continue;
 				seenGames.add(id);
+				// kind detection: presence of watch-time progress
+				// ("0h 0m / 4h", "watch for", "minutes to claim") =>
+				// drop. Presence of "claim" / "get reward" / "reward"
+				// without time hints => reward. Default "drop".
+				const tlow = txt.toLowerCase();
+				const hasTime = /\b\d+\s*h\s*\d+\s*m\b|\b\d+\s*\/\s*\d+\s*h(?:ours?)?\b|watch\s+(?:for|to)|minutes?\s+to\s+claim/.test(tlow);
+				const hasReward = /\b(reward|claim)\b/.test(tlow);
+				const kind = hasTime ? 'drop' : (hasReward ? 'reward' : 'drop');
 				domOut.push({
 					id: id,
 					name: name,
 					game: alt,
 					endsAt: '',
-					startsAt: ''
+					startsAt: '',
+					kind: kind
 				});
 			}
 		} catch (e) {}
@@ -489,6 +499,7 @@ func buildViewerDropsDashboardEnvelope(camps []apolloCampaign) []byte {
 		} `json:"game"`
 		EndAt   string `json:"endAt"`
 		StartAt string `json:"startAt"`
+		Kind    string `json:"__kind,omitempty"`
 	}
 	out := make([]campOut, 0, len(camps))
 	for _, c := range camps {
@@ -500,6 +511,7 @@ func buildViewerDropsDashboardEnvelope(camps []apolloCampaign) []byte {
 		co.Game.Name = c.Game
 		co.EndAt = c.EndsAt
 		co.StartAt = c.StartsAt
+		co.Kind = c.Kind
 		out = append(out, co)
 	}
 	resp := map[string]any{

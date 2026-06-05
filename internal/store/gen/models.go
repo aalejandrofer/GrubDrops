@@ -52,6 +52,7 @@ type Campaign struct {
 	Status       string `json:"status"`
 	RawJson      string `json:"raw_json"`
 	DiscoveredAt int64  `json:"discovered_at"`
+	Kind         string `json:"kind"`
 }
 
 type CampaignPriority struct {

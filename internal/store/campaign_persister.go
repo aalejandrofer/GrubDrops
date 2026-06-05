@@ -108,6 +108,10 @@ func (p *CampaignPersister) PersistCampaigns(ctx context.Context, camps []platfo
 		if c.EndsAt.IsZero() {
 			endsAt = now + 30*24*3600
 		}
+		kind := c.Kind
+		if kind == "" {
+			kind = "drop"
+		}
 		if err := p.Q.UpsertCampaign(ctx, gen.UpsertCampaignParams{
 			ID:           c.ID,
 			Platform:     c.Platform,
@@ -118,6 +122,7 @@ func (p *CampaignPersister) PersistCampaigns(ctx context.Context, camps []platfo
 			Status:       status,
 			RawJson:      "{}",
 			DiscoveredAt: now,
+			Kind:         kind,
 		}); err != nil {
 			return err
 		}

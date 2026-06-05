@@ -16,6 +16,7 @@
       <tr>
         <th>{{if eq .Tab "past"}}When{{else if eq .Tab "current"}}Ends{{else}}Starts{{end}}</th>
         <th>Platform</th>
+        <th>Kind</th>
         <th>Game</th>
         <th>Campaign</th>
         <th>Drop</th>
@@ -27,6 +28,7 @@
       <tr>
         <td class="handle">{{.When}}</td>
         <td class="plat"><span class="{{.Platform}}">{{.Platform}}</span></td>
+        <td>{{if eq .Kind "reward"}}<span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;padding:2px 7px;border:1px solid var(--accent);color:var(--accent);background:rgba(212,99,30,0.08);">reward</span>{{else}}<span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;padding:2px 7px;border:1px solid var(--line);color:var(--muted);">drop</span>{{end}}</td>
         <td>{{.Game}}</td>
         <td>{{.CampaignName}}</td>
         <td class="name">{{if .BenefitName}}{{.BenefitName}}{{else}}—{{end}}</td>

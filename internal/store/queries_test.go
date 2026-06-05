@@ -46,12 +46,12 @@ func TestQueries_CountClaimedForCampaign(t *testing.T) {
 	require.NoError(t, q.UpsertCampaign(ctx, gen.UpsertCampaignParams{
 		ID: "camp-1", Platform: "twitch", Game: "Rust", Name: "Camp One",
 		StartsAt: now - 3600, EndsAt: now + 3600, Status: "active",
-		RawJson: "{}", DiscoveredAt: now,
+		RawJson: "{}", DiscoveredAt: now, Kind: "drop",
 	}))
 	require.NoError(t, q.UpsertCampaign(ctx, gen.UpsertCampaignParams{
 		ID: "camp-2", Platform: "twitch", Game: "Rust", Name: "Camp Two",
 		StartsAt: now - 3600, EndsAt: now + 3600, Status: "active",
-		RawJson: "{}", DiscoveredAt: now,
+		RawJson: "{}", DiscoveredAt: now, Kind: "drop",
 	}))
 	mkBenefit := func(id, campID string) {
 		require.NoError(t, q.UpsertBenefit(ctx, gen.UpsertBenefitParams{

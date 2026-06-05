@@ -41,6 +41,7 @@ type dropsRow struct {
 	CampaignName string
 	BenefitName  string
 	AccountName  string
+	Kind         string // "drop" | "reward"
 }
 
 // dropsPage is what the template sees: the active tab, the three counts
@@ -165,6 +166,7 @@ func (d *dropsDeps) collectAll(
 			Platform:     c.Platform,
 			Game:         c.Game,
 			CampaignName: c.Name,
+			Kind:         c.Kind,
 		})
 	}
 
@@ -208,6 +210,7 @@ func (d *dropsDeps) collectAll(
 			Platform:     c.Platform,
 			Game:         c.Game,
 			CampaignName: c.Name,
+			Kind:         c.Kind,
 		})
 	}
 
@@ -228,6 +231,7 @@ func (d *dropsDeps) collectAll(
 			Platform:     c.Platform,
 			Game:         c.Game,
 			CampaignName: c.Name,
+			Kind:         c.Kind,
 		})
 	}
 

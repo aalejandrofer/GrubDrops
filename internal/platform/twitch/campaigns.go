@@ -34,7 +34,12 @@ type campaignsData struct {
 			StartAtRaw     string `json:"startAt"`
 			EndAtRaw       string `json:"endAt"`
 			AccountLinkURL string `json:"accountLinkURL"`
-			Self           struct {
+			// Kind is a sidecar-only synthetic field ("__kind") added
+			// by buildViewerDropsDashboardEnvelope when scrape detects
+			// REWARD-only campaigns (no watch-time). Real Twitch gql
+			// never sets this. Empty -> treated as "drop".
+			Kind string `json:"__kind"`
+			Self struct {
 				IsAccountConnected bool `json:"isAccountConnected"`
 			} `json:"self"`
 			Game struct {
@@ -157,6 +162,10 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 		if c.Game.DisplayName == "" && strings.HasPrefix(c.ID, "dom-") {
 			continue
 		}
+		kind := c.Kind
+		if kind == "" {
+			kind = "drop"
+		}
 		camp := platform.Campaign{
 			ID:             c.ID,
 			Platform:       "twitch",
@@ -166,6 +175,7 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 			EndsAt:         parseISO(c.EndAtRaw),
 			AccountLinked:  c.Self.IsAccountConnected,
 			AccountLinkURL: c.AccountLinkURL,
+			Kind:           kind,
 		}
 		switch c.Status {
 		case "ACTIVE":
