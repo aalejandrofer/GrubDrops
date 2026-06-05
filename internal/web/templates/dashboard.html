@@ -162,16 +162,14 @@
         <div class="live live-meta">{{len .LiveChannels}} live · sorted by viewers</div>
       </div>
     {{if .LiveChannels}}
-    <div class="live-channels-grid">
+    <div class="events drops-rows">
       {{range .LiveChannels}}
-      <a class="lch {{.Platform}}" href="{{.URL}}" target="_blank" rel="noopener">
-        <span class="av">{{.Initial}}</span>
-        <div class="meta">
-          <div class="name">{{.Login}}</div>
-          <div class="sub">{{if .Game}}{{.Game}}{{else}}—{{end}}</div>
-          {{if .Campaign}}<div class="tag">{{.Campaign}}</div>{{end}}
-        </div>
-        <span class="views">{{.Views}}</span>
+      <a class="ev kind-claim live-row" href="{{.URL}}" target="_blank" rel="noopener">
+        <span class="chev" aria-hidden="true">↗</span>
+        <span class="t">{{.Views}} 👁</span>
+        <span class="lvl" style="color:var(--green)">●</span>
+        <span class="body"><em>{{.Platform}} · LIVE</em> · {{.Login}}{{if .Game}} · <span style="color:var(--muted);">{{.Game}}</span>{{end}}{{if .Campaign}} · {{.Campaign}}{{end}}</span>
+        <span class="ac">{{.URL}} →</span>
       </a>
       {{end}}
     </div>

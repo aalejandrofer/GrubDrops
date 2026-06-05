@@ -1088,6 +1088,22 @@
   .ev.kind-discovery,.ev.ev-discovery{ box-shadow: inset 3px 0 0 var(--dim);    }
   .ev.kind-error,    .ev.ev-error    { box-shadow: inset 3px 0 0 var(--red);    }
   .ev.kind-auth,     .ev.ev-auth     { box-shadow: inset 3px 0 0 var(--accent); }
+
+  /* Live-channel rows reuse the .ev row chrome but render as a flat
+     anchor (no <details>) since clicking opens the broadcaster in a
+     new tab. Match the grid track sizes drops-rows already uses so
+     the chevron / time / dot / body / accessory columns align. */
+  .events .live-row {
+    display: grid;
+    grid-template-columns: 14px 130px 10px 1fr 160px;
+    gap: 10px;
+    align-items: center;
+    padding: 5px 16px 5px 20px;
+    text-decoration: none;
+    color: inherit;
+  }
+  .events .live-row:hover { background: var(--surface-2); }
+  .events .live-row .chev { color: var(--green); }
   .ev.kind-info,     .ev.ev-info     { box-shadow: inset 3px 0 0 var(--line);   }
 
   /* SIDE PANEL */

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -45,6 +46,11 @@ type dropsRow struct {
 	BenefitName  string
 	AccountName  string
 	Kind         string // "drop" | "reward"
+	// sortKey is a Unix timestamp used for "ending soonest" sorting
+	// across all tabs + the Discoverable list. Past uses ends_at,
+	// current uses ends_at, upcoming uses starts_at — i.e. always
+	// "next thing to happen for this row".
+	sortKey int64
 }
 
 // dropsPage is what the template sees: the active tab, the three counts
@@ -68,14 +74,16 @@ type dropsAccount struct {
 	Label string // "@login (platform)"
 }
 
-// allowedGamesUnion returns the union of every enabled account's game
-// whitelist, keyed by lowercased name AND slug. The /drops page uses
-// this to ensure non-whitelisted campaigns NEVER appear regardless of
-// status. Returns (nil, true) when at least one row was found — empty
-// whitelist means "show nothing". Returns (nil, false) when there are
-// no account_games rows at all — caller treats this as "no whitelist
-// configured" and shows everything (legacy behaviour, used before the
-// operator picks games).
+// allowedGamesUnion returns the union of explicit per-account game
+// whitelists, keyed by lowercased name AND slug. Global games is a
+// priority/default seed list — NOT a whitelist source — so a fresh
+// install with 111 seeded games does not auto-mark every campaign as
+// "whitelisted". Operators must opt their accounts in per-game.
+//
+// Returns (map, true) whenever any account_games row exists;
+// (nil, false) when no account has opted into anything. In the empty
+// case callers treat everything as Discoverable so the operator can
+// pick games from the inline form.
 func allowedGamesUnion(ctx context.Context, q *gen.Queries) (map[string]struct{}, bool) {
 	accs, err := q.ListAllAccounts(ctx)
 	if err != nil {
@@ -100,11 +108,13 @@ func allowedGamesUnion(ctx context.Context, q *gen.Queries) (map[string]struct{}
 	return out, true
 }
 
-// passesWhitelist returns true if game is on the whitelist union (or the
-// whitelist is unconfigured, in which case everything passes).
+// passesWhitelist returns true if game is on the whitelist union.
+// When no whitelist is configured at all (no account opted in to any
+// game), every row falls into the Discoverable tab so the operator
+// has a place to start picking games from.
 func passesWhitelist(allow map[string]struct{}, hasWhitelist bool, game string) bool {
 	if !hasWhitelist {
-		return true
+		return false
 	}
 	_, ok := allow[strings.ToLower(game)]
 	return ok
@@ -194,10 +204,11 @@ func (d *dropsDeps) collectAll(
 			Game:         c.Game,
 			CampaignName: c.Name,
 			Kind:         c.Kind,
+			sortKey:      c.EndsAt,
 		}
 		if passesWhitelist(allow, hasWhitelist, c.Game) {
 			past = append(past, row)
-		} else if hasWhitelist {
+		} else {
 			unlisted = append(unlisted, row)
 		}
 	}
@@ -241,10 +252,11 @@ func (d *dropsDeps) collectAll(
 			Game:         c.Game,
 			CampaignName: c.Name,
 			Kind:         c.Kind,
+			sortKey:      c.EndsAt,
 		}
 		if passesWhitelist(allow, hasWhitelist, c.Game) {
 			current = append(current, row)
-		} else if hasWhitelist {
+		} else {
 			unlisted = append(unlisted, row)
 		}
 	}
@@ -265,10 +277,11 @@ func (d *dropsDeps) collectAll(
 			Game:         c.Game,
 			CampaignName: c.Name,
 			Kind:         c.Kind,
+			sortKey:      c.StartsAt,
 		}
 		if passesWhitelist(allow, hasWhitelist, c.Game) {
 			upcoming = append(upcoming, row)
-		} else if hasWhitelist {
+		} else {
 			unlisted = append(unlisted, row)
 		}
 	}
@@ -287,6 +300,27 @@ func (d *dropsDeps) collectAll(
 		}
 		unlisted = out
 	}
+
+	// Ending-soonest sort across every list. sortKey carries ends_at for
+	// past/current rows and starts_at for upcoming — i.e. the next thing
+	// that will happen for this row. Zero keys sort last so rows
+	// missing a timestamp don't jump to the head.
+	sortBySoonest := func(xs []dropsRow) {
+		sort.SliceStable(xs, func(i, j int) bool {
+			ai, aj := xs[i].sortKey, xs[j].sortKey
+			if ai == 0 {
+				return false
+			}
+			if aj == 0 {
+				return true
+			}
+			return ai < aj
+		})
+	}
+	sortBySoonest(past)
+	sortBySoonest(current)
+	sortBySoonest(upcoming)
+	sortBySoonest(unlisted)
 
 	return past, current, upcoming, unlisted, nil
 }

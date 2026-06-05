@@ -88,7 +88,7 @@ func main() {
 			Insecure: r.FormValue("insecure") == "1",
 		}
 		accountID := strings.TrimSpace(r.FormValue("account_id"))
-		channel := strings.TrimSpace(r.FormValue("channel"))
+		channels := splitKickChannels(r.FormValue("channel"))
 		platform := r.FormValue("platform")
 
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
@@ -103,7 +103,7 @@ func main() {
 			}
 			writeJSON(w, submitResp{OK: true, Message: res.Message, UploadedCookies: res.UploadedCookies})
 		case "kick":
-			res, err := helper.PushKick(ctx, helper.KickRequest{Config: cfg, AccountID: accountID, Channel: channel})
+			res, err := helper.PushKick(ctx, helper.KickRequest{Config: cfg, AccountID: accountID, Channels: channels})
 			if err != nil {
 				writeJSON(w, submitResp{Error: err.Error()})
 				return
@@ -143,6 +143,36 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(ctx)
+}
+
+// splitKickChannels accepts comma/space/semicolon-separated channel
+// input and returns a deduped trimmed list. Mirrors the server-side
+// parseKickChannels so the GUI tolerates the same paste shapes the
+// /accounts login form does.
+func splitKickChannels(raw string) []string {
+	splitter := func(r rune) bool {
+		switch r {
+		case ',', ' ', '\t', '\n', '\r', ';':
+			return true
+		}
+		return false
+	}
+	parts := strings.FieldsFunc(raw, splitter)
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		key := strings.ToLower(p)
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, p)
+	}
+	return out
 }
 
 func writeJSON(w http.ResponseWriter, r submitResp) {
