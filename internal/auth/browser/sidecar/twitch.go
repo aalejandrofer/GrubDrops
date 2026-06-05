@@ -1,11 +1,15 @@
 package sidecar
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -263,7 +267,17 @@ func (t *Twitch) GQL(ctx context.Context, accountID string, body []byte) ([]byte
 			chromedp.Sleep(3*time.Second),
 		)
 	}
-	resp, status, err := t.evalFetch(tabCtx, body)
+	// Try Go-side HTTP first — extracts cookies via CDP and posts
+	// to gql.twitch.tv directly. Bypasses the browser CORS / fetch
+	// wrapper layer that was returning "Failed to fetch" on every
+	// gql call. If that fails (TLS fingerprint, missing cookie,
+	// etc.) fall through to the in-tab evalFetch as a backup.
+	resp, status, err := t.gqlGoHTTP(ctx, tabCtx, body)
+	if err != nil || status == 0 || status >= 500 {
+		slog.Info("gql go-http failed, falling back to evalFetch",
+			"account", accountID, "status", status, "err", err)
+		resp, status, err = t.evalFetch(tabCtx, body)
+	}
 	// For campaign discovery: ALWAYS scrape /drops/campaigns and union
 	// with gql results. gql only returns campaigns the user is enrolled
 	// in (e.g. 1 result for a user with just the Builder Cape reward),
@@ -1035,6 +1049,70 @@ func installTwitchCookies(ctx context.Context, session *pb.TwitchSession) error 
 // the raw response body and status code.
 func (t *Twitch) evalFetch(tabCtx context.Context, body []byte) ([]byte, int, error) {
 	return evalFetchPOST(tabCtx, "https://gql.twitch.tv/gql", "text/plain;charset=UTF-8", body)
+}
+
+// gqlGoHTTP sends a gql POST to gql.twitch.tv from the Go side using
+// cookies extracted from the browser tab via CDP. Bypasses the
+// browser's CORS / fetch-wrapper layer that breaks cross-origin gql
+// calls from chromedp. Mirrors DevilXD/TwitchDropsMiner's aiohttp
+// approach: browser owns auth, Go owns HTTP.
+//
+// Returns (responseBody, statusCode, err). Caller falls back to
+// in-tab evalFetch on err / 0 / 5xx.
+func (t *Twitch) gqlGoHTTP(ctx context.Context, tabCtx context.Context, body []byte) ([]byte, int, error) {
+	var cookies []*network.Cookie
+	// Network.GetCookies with the gql URL returns just the cookies
+	// scoped to that domain (auth-token, unique_id, etc).
+	if err := chromedp.Run(tabCtx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var err error
+			cookies, err = network.GetCookies().WithURLs([]string{"https://gql.twitch.tv/", "https://www.twitch.tv/"}).Do(ctx)
+			return err
+		}),
+	); err != nil {
+		return nil, 0, fmt.Errorf("get cookies from tab: %w", err)
+	}
+	var authToken, deviceID string
+	cookieHeader := make([]string, 0, len(cookies))
+	for _, c := range cookies {
+		cookieHeader = append(cookieHeader, c.Name+"="+c.Value)
+		switch c.Name {
+		case "auth-token":
+			authToken = c.Value
+		case "unique_id":
+			deviceID = c.Value
+		}
+	}
+	if authToken == "" {
+		return nil, 0, fmt.Errorf("auth-token cookie missing")
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://gql.twitch.tv/gql", bytes.NewReader(body))
+	if err != nil {
+		return nil, 0, fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "text/plain;charset=UTF-8")
+	req.Header.Set("Authorization", "OAuth "+authToken)
+	req.Header.Set("Client-Id", "kimne78kx3ncx6brgo4mv6wki5h1ko")
+	req.Header.Set("User-Agent", stealthUA)
+	req.Header.Set("Origin", "https://www.twitch.tv")
+	req.Header.Set("Referer", "https://www.twitch.tv/")
+	if deviceID != "" {
+		req.Header.Set("X-Device-Id", deviceID)
+	}
+	if len(cookieHeader) > 0 {
+		req.Header.Set("Cookie", strings.Join(cookieHeader, "; "))
+	}
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("http do: %w", err)
+	}
+	defer resp.Body.Close()
+	out, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("read body: %w", err)
+	}
+	return out, resp.StatusCode, nil
 }
 
 // evalFetchPOST runs a fetch() POST inside the tab's page context against
