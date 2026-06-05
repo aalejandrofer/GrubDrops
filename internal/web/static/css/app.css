@@ -705,13 +705,17 @@
     background: var(--surface);
   }
   .drawer-head {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 12px;
+    gap: 10px 12px;
     padding: 10px 16px;
     border-bottom: 1px solid var(--line);
+    min-width: 0;
   }
+  .drawer-head .filter { flex: 1 1 auto; min-width: 0; flex-wrap: wrap; }
+  .drawer-head .ev-account { flex: 0 0 auto; }
+  .drawer-head .live { flex: 0 0 auto; margin-left: auto; }
   .drawer-head h3 {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
