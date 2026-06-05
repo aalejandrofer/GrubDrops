@@ -31,6 +31,7 @@ require (
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/gonuts/binary v0.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/keybase/go-keychain v0.0.1 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

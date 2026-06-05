@@ -3,10 +3,9 @@ package sidecar
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 
-	cdp "github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 )
 
@@ -17,11 +16,13 @@ type Browser struct {
 	allocCtx    context.Context
 	allocCancel context.CancelFunc
 
-	mu         sync.Mutex
-	tabs       map[string]tabState
-	next       int
-	root       context.Context    // browser-attached context, lazy
-	rootCancel context.CancelFunc
+	// Stored to spawn isolated allocators for incognito-style work.
+	baseCtx  context.Context
+	baseOpts []chromedp.ExecAllocatorOption
+
+	mu   sync.Mutex
+	tabs map[string]tabState
+	next int
 }
 
 type tabState struct {
@@ -95,6 +96,8 @@ func New(ctx context.Context) *Browser {
 	return &Browser{
 		allocCtx:    allocCtx,
 		allocCancel: cancel,
+		baseCtx:     ctx,
+		baseOpts:    opts,
 		tabs:        map[string]tabState{},
 	}
 }
@@ -175,78 +178,38 @@ func (b *Browser) Close() {
 	b.allocCancel()
 }
 
-// rootCtx returns a long-lived chromedp context attached to the
-// underlying browser. Browser-level CDP commands (CreateBrowserContext
-// etc.) need a context with a live browser session — running them
-// against the bare allocator returns "invalid context". Lazily
-// initialized on first use; reused across calls.
-func (b *Browser) rootCtx() (context.Context, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.root != nil {
-		return b.root, nil
-	}
-	rootCtx, cancel := chromedp.NewContext(b.allocCtx)
-	if err := chromedp.Run(rootCtx); err != nil {
-		cancel()
-		return nil, err
-	}
-	b.root = rootCtx
-	b.rootCancel = cancel
-	return rootCtx, nil
-}
-
-// OpenIncognitoTab spawns a tab inside a fresh, isolated browser
-// context. Cookies + storage are NOT shared with other tabs. Use this
-// to scrape sites as a "logged-out" visitor even when other tabs in
-// the same process hold an authenticated session for the same domain.
+// OpenIncognitoTab spawns a fresh, isolated chrome process whose
+// cookie jar / storage is independent of the main browser. Used for
+// scraping sites as a "logged-out" visitor while authenticated tabs
+// for the same domain stay live.
 //
-// The cleanup func MUST be called to free the tab and the browser
-// context. The returned context is bound to the new target — running
-// chromedp.Run against it operates inside the isolated context.
+// We spawn a SECOND ExecAllocator (i.e. a second Chrome OS process)
+// instead of Target.createBrowserContext because chromedp/headless-shell
+// — what this container ships — rejects that CDP command with
+// "Not allowed (-32000)". A second process is heavier but isolated.
+//
+// The cleanup func MUST be called to terminate the chrome process and
+// release temp storage. The returned context is bound to the new
+// browser's first tab.
 func (b *Browser) OpenIncognitoTab() (context.Context, func(), error) {
-	root, err := b.rootCtx()
+	tmpDir, err := os.MkdirTemp("", "dropsminer-incog-*")
 	if err != nil {
-		return nil, nil, fmt.Errorf("root ctx: %w", err)
+		return nil, nil, fmt.Errorf("temp dir: %w", err)
 	}
-	var ctxID cdp.BrowserContextID
-	if err := chromedp.Run(root, chromedp.ActionFunc(func(c context.Context) error {
-		id, err := target.CreateBrowserContext().Do(c)
-		if err != nil {
-			return err
-		}
-		ctxID = id
-		return nil
-	})); err != nil {
-		return nil, nil, fmt.Errorf("create browser context: %w", err)
-	}
-	dispose := func() {
-		_ = chromedp.Run(root, chromedp.ActionFunc(func(c context.Context) error {
-			return target.DisposeBrowserContext(ctxID).Do(c)
-		}))
-	}
-	var targetID target.ID
-	if err := chromedp.Run(root, chromedp.ActionFunc(func(c context.Context) error {
-		id, err := target.CreateTarget("about:blank").WithBrowserContextID(ctxID).Do(c)
-		if err != nil {
-			return err
-		}
-		targetID = id
-		return nil
-	})); err != nil {
-		dispose()
-		return nil, nil, fmt.Errorf("create target: %w", err)
-	}
-	tabCtx, cancel := chromedp.NewContext(root, chromedp.WithTargetID(targetID))
-	// Drive the context once so the target attaches.
+	opts := append([]chromedp.ExecAllocatorOption{}, b.baseOpts...)
+	opts = append(opts, chromedp.UserDataDir(tmpDir))
+	allocCtx, allocCancel := chromedp.NewExecAllocator(b.baseCtx, opts...)
+	tabCtx, tabCancel := chromedp.NewContext(allocCtx)
 	if err := chromedp.Run(tabCtx); err != nil {
-		cancel()
-		dispose()
-		return nil, nil, fmt.Errorf("attach target: %w", err)
+		tabCancel()
+		allocCancel()
+		_ = os.RemoveAll(tmpDir)
+		return nil, nil, fmt.Errorf("incognito browser: %w", err)
 	}
 	cleanup := func() {
-		cancel()
-		dispose()
+		tabCancel()
+		allocCancel()
+		_ = os.RemoveAll(tmpDir)
 	}
 	return tabCtx, cleanup, nil
 }

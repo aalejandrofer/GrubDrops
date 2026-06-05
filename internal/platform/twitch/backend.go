@@ -3,6 +3,7 @@ package twitch
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
 
 	"github.com/aalejandrofer/dropsminer/internal/platform"
@@ -23,6 +24,16 @@ type Backend struct {
 	// reads from this map.
 	mu                      sync.Mutex
 	allowedLoginsByCampaign map[string][]string
+
+	// PubSub WebSocket — one per backend (per platform-account). Lazy
+	// init on first ListActiveCampaigns once we have the user_id +
+	// auth token. Real-time progress / claim / stream-down events feed
+	// callbacks set via SetPubSubHandlers.
+	pubsubMu       sync.Mutex
+	pubsub         *PubSubClient
+	pubsubCancel   context.CancelFunc
+	pubsubHandlers PubSubHandlers
+	pubsubDisabled bool // tests disable via newForTest
 }
 
 var _ platform.Backend = (*Backend)(nil)
@@ -52,6 +63,7 @@ func newForTest(endpoint string) *Backend {
 		watch:                   &watch{c: c},
 		claim:                   &claimer{c: c},
 		allowedLoginsByCampaign: map[string][]string{},
+		pubsubDisabled:          true,
 	}
 }
 
@@ -90,7 +102,82 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 		b.allowedLoginsByCampaign[cid] = logins
 	}
 	b.mu.Unlock()
+	// Best-effort PubSub bootstrap. Once-only — subsequent calls noop.
+	// Failures are non-fatal: the watcher falls back to polling.
+	b.ensurePubSub(s)
 	return camps, nil
+}
+
+// SetPubSubHandlers wires real-time callbacks. Must be called before
+// the first ListActiveCampaigns (which lazily connects). Safe to leave
+// nil — PubSub still connects + logs events for diagnostic purposes.
+func (b *Backend) SetPubSubHandlers(h PubSubHandlers) {
+	b.pubsubMu.Lock()
+	b.pubsubHandlers = h
+	b.pubsubMu.Unlock()
+}
+
+// ensurePubSub lazily starts the PubSub WebSocket on first use. Resolves
+// the user_id from the session, subscribes to user-drop-events +
+// onsite-notifications, then runs the read/ping loop in a goroutine.
+// video-playback-by-id topics are added per-channel by SubscribeChannel.
+func (b *Backend) ensurePubSub(s platform.Session) {
+	b.pubsubMu.Lock()
+	if b.pubsub != nil || b.pubsubDisabled {
+		b.pubsubMu.Unlock()
+		return
+	}
+	b.pubsubMu.Unlock()
+
+	userID, err := b.watch.resolveUserID(context.Background(), s)
+	if err != nil {
+		slog.Warn("pubsub: resolve user id failed, deferring", "err", err)
+		return
+	}
+	b.pubsubMu.Lock()
+	if b.pubsub != nil {
+		b.pubsubMu.Unlock()
+		return
+	}
+	handlers := b.pubsubHandlers
+	client := NewPubSubClient(s.AccessToken, handlers)
+	ctx, cancel := context.WithCancel(context.Background())
+	b.pubsub = client
+	b.pubsubCancel = cancel
+	b.pubsubMu.Unlock()
+	go func() {
+		topics := []string{
+			TopicUserDropEvents(userID),
+			TopicOnsiteNotifications(userID),
+		}
+		if err := client.Run(ctx, topics); err != nil && !errors.Is(err, context.Canceled) {
+			slog.Warn("pubsub run exited", "err", err)
+		}
+	}()
+}
+
+// SubscribeChannel adds (or refreshes) a video-playback-by-id.<id>
+// topic on the PubSub socket so stream-up/down events fire. Idempotent.
+// Caller passes the broadcaster's numeric channel id.
+func (b *Backend) SubscribeChannel(channelID string) {
+	b.pubsubMu.Lock()
+	client := b.pubsub
+	b.pubsubMu.Unlock()
+	if client == nil || channelID == "" {
+		return
+	}
+	client.AddTopic(TopicVideoPlaybackByID(channelID))
+}
+
+// UnsubscribeChannel drops a video-playback-by-id.<id> topic.
+func (b *Backend) UnsubscribeChannel(channelID string) {
+	b.pubsubMu.Lock()
+	client := b.pubsub
+	b.pubsubMu.Unlock()
+	if client == nil || channelID == "" {
+		return
+	}
+	client.RemoveTopic(TopicVideoPlaybackByID(channelID))
 }
 
 func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, c platform.Campaign) ([]platform.Stream, error) {
