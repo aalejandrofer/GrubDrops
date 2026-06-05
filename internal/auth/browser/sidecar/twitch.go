@@ -115,12 +115,136 @@ func (t *Twitch) Authenticate(ctx context.Context, accountID string, session *pb
 
 // GQL proxies one GraphQL POST through the account's twitch.tv tab.
 // Returns the raw response body and HTTP status.
+//
+// When a GQL request fails (PerimeterX, CSP, CORS — all the same wall
+// in practice), fall back to scraping the drops campaigns page state.
+// The page is SSR + Apollo, so window.__APOLLO_STATE__ carries the
+// data we need without any cross-origin XHR.
 func (t *Twitch) GQL(ctx context.Context, accountID string, body []byte) ([]byte, int, error) {
 	tabCtx, ok := t.tabFor(accountID)
 	if !ok {
 		return nil, 0, fmt.Errorf("no authenticated tab for account %s", accountID)
 	}
-	return t.evalFetch(tabCtx, body)
+	resp, status, err := t.evalFetch(tabCtx, body)
+	if err == nil && status == 200 {
+		return resp, status, nil
+	}
+	// Try the apollo-state fallback. Only useful for the campaign
+	// discovery query (ViewerDropsDashboard) — other ops still go
+	// through evalFetch and surface the original error.
+	if isCampaignsQuery(body) {
+		slog.Warn("gql evalFetch failed; falling back to drops page scrape", "account", accountID, "err", err, "status", status)
+		camps, scrapeErr := scrapeDropsCampaignsPage(tabCtx)
+		if scrapeErr != nil {
+			return resp, status, fmt.Errorf("evalFetch failed (%v) and scrape fallback failed: %w", err, scrapeErr)
+		}
+		envelope := buildViewerDropsDashboardEnvelope(camps)
+		return envelope, 200, nil
+	}
+	return resp, status, err
+}
+
+// isCampaignsQuery sniffs the gql body to decide if it's the
+// ViewerDropsDashboard query (the one our discovery cares about).
+func isCampaignsQuery(body []byte) bool {
+	return bytesContains(body, []byte("ViewerDropsDashboard"))
+}
+
+func bytesContains(b, sub []byte) bool {
+	if len(sub) == 0 {
+		return true
+	}
+	for i := 0; i+len(sub) <= len(b); i++ {
+		if string(b[i:i+len(sub)]) == string(sub) {
+			return true
+		}
+	}
+	return false
+}
+
+// scrapeDropsCampaignsPage navigates the tab to /drops/campaigns and
+// returns the parsed Apollo state. Same-origin so no CORS / fetch
+// wrapper issues. Apollo Client serialises its cache into a JSON blob
+// the page exposes as window.__APOLLO_STATE__.
+type apolloCampaign struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Game     string `json:"game"`
+	EndsAt   string `json:"endsAt"`
+	StartsAt string `json:"startsAt"`
+}
+
+func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) {
+	// Navigate first to the drops page, wait for hydration, then dump
+	// the Apollo cache. Wrapped in defer-restore so we don't lose the
+	// tab's main twitch.tv navigation.
+	script := `(() => {
+		const state = window.__APOLLO_STATE__ || {};
+		const out = [];
+		for (const k of Object.keys(state)) {
+			const v = state[k];
+			if (!v || typeof v !== 'object') continue;
+			if (v.__typename === 'DropCampaign' || (typeof k === 'string' && k.startsWith('DropCampaign:'))) {
+				out.push({
+					id: v.id || k.replace('DropCampaign:', ''),
+					name: v.name || '',
+					game: (v.game && (v.game.displayName || v.game.name)) || '',
+					endsAt: v.endAt || v.endsAt || '',
+					startsAt: v.startAt || v.startsAt || ''
+				});
+			}
+		}
+		return JSON.stringify(out);
+	})()`
+
+	var raw string
+	if err := chromedp.Run(tabCtx,
+		chromedp.Navigate("https://www.twitch.tv/drops/campaigns"),
+		chromedp.Sleep(6*time.Second),
+		chromedp.Evaluate(script, &raw),
+	); err != nil {
+		return nil, fmt.Errorf("scrape drops page: %w", err)
+	}
+	var camps []apolloCampaign
+	if err := json.Unmarshal([]byte(raw), &camps); err != nil {
+		return nil, fmt.Errorf("parse apollo state: %w (raw=%s)", err, truncate(raw, 200))
+	}
+	return camps, nil
+}
+
+// buildViewerDropsDashboardEnvelope synthesises a gql response with
+// the same shape ListActiveCampaigns expects, so the existing parser
+// in internal/platform/twitch/campaigns.go doesn't need to know about
+// the scrape fallback.
+func buildViewerDropsDashboardEnvelope(camps []apolloCampaign) []byte {
+	type campOut struct {
+		ID    string `json:"id"`
+		Name  string `json:"name"`
+		Game  struct {
+			Name string `json:"displayName"`
+		} `json:"game"`
+		EndAt   string `json:"endAt"`
+		StartAt string `json:"startAt"`
+	}
+	out := make([]campOut, 0, len(camps))
+	for _, c := range camps {
+		var co campOut
+		co.ID = c.ID
+		co.Name = c.Name
+		co.Game.Name = c.Game
+		co.EndAt = c.EndsAt
+		co.StartAt = c.StartsAt
+		out = append(out, co)
+	}
+	resp := map[string]any{
+		"data": map[string]any{
+			"currentUser": map[string]any{
+				"dropCampaigns": out,
+			},
+		},
+	}
+	b, _ := json.Marshal(resp)
+	return b
 }
 
 // OpenStream opens twitch.tv/<channel> in a fresh tab so the embedded
