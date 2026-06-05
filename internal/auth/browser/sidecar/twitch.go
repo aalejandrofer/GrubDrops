@@ -146,20 +146,29 @@ func (t *Twitch) GQL(ctx context.Context, accountID string, body []byte) ([]byte
 	unlock := t.lockTab(accountID)
 	defer unlock()
 	resp, status, err := t.evalFetch(tabCtx, body)
-	if err == nil && status == 200 {
-		return resp, status, nil
-	}
-	// Try the apollo-state fallback. Only useful for the campaign
-	// discovery query (ViewerDropsDashboard) — other ops still go
-	// through evalFetch and surface the original error.
+	// For campaign discovery: gql often returns 200 with an empty
+	// dropCampaigns array because the user is only "enrolled" in a
+	// subset. The /drops/campaigns page renders ALL active campaigns
+	// (enrolled + joinable). Trigger the scrape supplement whenever
+	// gql returned no campaigns OR errored.
 	if isCampaignsQuery(body) {
-		slog.Warn("gql evalFetch failed; falling back to drops page scrape", "account", accountID, "err", err, "status", status)
-		camps, scrapeErr := scrapeDropsCampaignsPage(tabCtx)
-		if scrapeErr != nil {
-			return resp, status, fmt.Errorf("evalFetch failed (%v) and scrape fallback failed: %w", err, scrapeErr)
+		needScrape := err != nil || status != 200 || gqlCampaignsEmpty(resp)
+		if needScrape {
+			if err == nil && status == 200 {
+				slog.Info("gql returned empty campaigns; supplementing via drops page scrape", "account", accountID)
+			} else {
+				slog.Warn("gql evalFetch failed; falling back to drops page scrape", "account", accountID, "err", err, "status", status)
+			}
+			camps, scrapeErr := scrapeDropsCampaignsPage(tabCtx)
+			if scrapeErr != nil {
+				if err == nil && status == 200 {
+					return resp, status, nil // keep empty result; scrape was best-effort
+				}
+				return resp, status, fmt.Errorf("evalFetch failed (%v) and scrape fallback failed: %w", err, scrapeErr)
+			}
+			envelope := buildViewerDropsDashboardEnvelope(camps)
+			return envelope, 200, nil
 		}
-		envelope := buildViewerDropsDashboardEnvelope(camps)
-		return envelope, 200, nil
 	}
 	return resp, status, err
 }
@@ -168,6 +177,24 @@ func (t *Twitch) GQL(ctx context.Context, accountID string, body []byte) ([]byte
 // ViewerDropsDashboard query (the one our discovery cares about).
 func isCampaignsQuery(body []byte) bool {
 	return bytesContains(body, []byte("ViewerDropsDashboard"))
+}
+
+// gqlCampaignsEmpty returns true when the response body parses as a
+// well-formed dropCampaigns response but the array is empty/null.
+// Triggers the scrape supplement so we still see un-enrolled active
+// campaigns the user could mine.
+func gqlCampaignsEmpty(body []byte) bool {
+	var env struct {
+		Data struct {
+			CurrentUser struct {
+				DropCampaigns []json.RawMessage `json:"dropCampaigns"`
+			} `json:"currentUser"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil {
+		return false
+	}
+	return len(env.Data.CurrentUser.DropCampaigns) == 0
 }
 
 func bytesContains(b, sub []byte) bool {
