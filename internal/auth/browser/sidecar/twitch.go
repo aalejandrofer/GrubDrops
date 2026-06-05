@@ -266,20 +266,25 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 				const container = findSiblingContainer(h);
 				if (!container) continue;
 				// Real drop campaign cards always have a game box-art
-				// image and a link to /drops/campaigns/<id>. Require both
-				// — that filters out the marketing paragraphs the
-				// heading walk would otherwise sweep up.
+				// image with non-empty alt. Twitch doesn't always
+				// expose a link to a campaign-detail page — the card
+				// may just have a "Join" button. Require img.alt AND
+				// at least 3 distinct lines of text (game name + drop
+				// name + time/CTA), filtering out marketing paragraphs.
 				Array.from(container.children).forEach((child) => {
 					const img = child.querySelector('img[alt]');
-					const link = child.querySelector('a[href*="/drops/campaigns/"]');
-					if (!img || !img.alt || !link) return;
+					if (!img || !img.alt) return;
 					const gameName = img.alt.trim();
 					if (!gameName) return;
 					const txt = (child.textContent || '').trim();
 					const lines = txt.split('\n').map(s => s.trim()).filter(Boolean);
-					// First line that's not the game name = campaign name.
+					if (lines.length < 2) return;
+					// Reject paragraph cards: too long single-line text
+					// is descriptive copy, not a card title.
+					if (lines[0].length > 120 && lines.length < 3) return;
 					const name = lines.find(l => l !== gameName) || lines[0] || '';
-					const href = link.getAttribute('href') || '';
+					const link = child.querySelector('a[href*="/drops/"]');
+					const href = link ? (link.getAttribute('href') || '') : '';
 					const idMatch = href.match(/\/drops\/campaigns\/([^/?#]+)/);
 					domOut.push({
 						id: idMatch ? idMatch[1] : ('dom-' + domOut.length),
