@@ -34,53 +34,82 @@
 {{end}}
 
 {{define "dashboard_account_row"}}
-{{/* One compact row per account. The state pill carries the kind in a
-     dedicated class so the CSS picks the right color. The activity
-     line is platform-neutral: drop name + progress + ETA when watching,
-     a brief reason otherwise. */}}
-<a class="account-row {{if not .Enabled}}disabled{{end}} state-{{.State}}"
-   href="#"
-   hx-get="/dashboard/account/{{.ID}}"
-   hx-target="#modal"
-   hx-swap="innerHTML"
-   role="button"
-   onclick="event.preventDefault()">
-  <span class="av">{{.AccountInitial}}</span>
-  <span class="who">
-    <span class="login">{{.Login}}</span>
-    <span class="name">{{.Name}}</span>
-  </span>
-  <span class="activity">
+{{/* <details> instead of <a>+modal — click to expand inline. Summary
+     row matches the previous layout; the expanded block shows just
+     the current drop + progress + next-up. */}}
+<details class="account-row-d {{if not .Enabled}}disabled{{end}} state-{{.State}}">
+  <summary class="account-row">
+    <span class="av">{{.AccountInitial}}</span>
+    <span class="who">
+      <span class="login">{{.Login}}</span>
+      <span class="name">{{.Name}}</span>
+    </span>
+    <span class="activity">
+      {{if eq .State "watching"}}
+        <span class="drop">{{if .DropName}}{{.DropName}}{{else}}—{{end}}</span>
+        <span class="meta">{{.DropMins}}/{{.DropReq}}m · ETA {{.DropETA}}</span>
+      {{else if eq .State "claiming"}}
+        <span class="drop">{{if .DropName}}{{.DropName}}{{else}}drop{{end}}</span>
+        <span class="meta">claim in flight</span>
+      {{else if eq .State "pick_stream"}}
+        <span class="meta">scanning channels{{if .DropCampaign}} · {{.DropCampaign}}{{end}}</span>
+      {{else if eq .State "needs_auth"}}
+        <span class="meta">login required</span>
+      {{else if eq .State "sleeping"}}
+        <span class="meta">no eligible campaign</span>
+      {{else}}
+        <span class="meta">{{if .StateSub}}{{.StateSub}}{{else}}—{{end}}</span>
+      {{end}}
+    </span>
+    <span class="state-pill pill-{{.State}}">
+      {{if eq .State "watching"}}watching
+      {{else if eq .State "claiming"}}claiming
+      {{else if eq .State "needs_auth"}}needs login
+      {{else if eq .State "sleeping"}}sleeping
+      {{else if eq .State "pick_stream"}}scanning
+      {{else if eq .State "pick_campaign"}}picking
+      {{else if eq .State "idle"}}idle
+      {{else}}{{.State}}{{end}}
+    </span>
     {{if eq .State "watching"}}
-      <span class="drop">{{if .DropName}}{{.DropName}}{{else}}—{{end}}</span>
-      <span class="meta">{{.DropMins}}/{{.DropReq}}m · ETA {{.DropETA}}</span>
-    {{else if eq .State "claiming"}}
-      <span class="drop">{{if .DropName}}{{.DropName}}{{else}}drop{{end}}</span>
-      <span class="meta">claim in flight</span>
-    {{else if eq .State "pick_stream"}}
-      <span class="meta">scanning channels{{if .DropCampaign}} · {{.DropCampaign}}{{end}}</span>
-    {{else if eq .State "needs_auth"}}
-      <span class="meta">login required</span>
-    {{else if eq .State "sleeping"}}
-      <span class="meta">no eligible campaign</span>
-    {{else}}
-      <span class="meta">{{if .StateSub}}{{.StateSub}}{{else}}—{{end}}</span>
+    <span class="pbar mini">
+      <span class="fill" style="width: {{.DropPercent}}%"></span>
+    </span>
     {{end}}
-  </span>
-  <span class="state-pill pill-{{.State}}">
-    {{if eq .State "watching"}}watching
-    {{else if eq .State "claiming"}}claiming
-    {{else if eq .State "needs_auth"}}needs login
-    {{else if eq .State "sleeping"}}sleeping
-    {{else if eq .State "pick_stream"}}scanning
-    {{else if eq .State "pick_campaign"}}picking
-    {{else if eq .State "idle"}}idle
-    {{else}}{{.State}}{{end}}
-  </span>
-  {{if eq .State "watching"}}
-  <span class="pbar mini">
-    <span class="fill" style="width: {{.DropPercent}}%"></span>
-  </span>
-  {{end}}
-</a>
+  </summary>
+
+  <div class="account-row-expand">
+    {{if eq .State "watching"}}
+    <div class="acc-exp-row">
+      <span class="acc-exp-k">drop</span>
+      <span class="acc-exp-v">{{if .DropName}}{{.DropName}}{{else}}—{{end}}</span>
+    </div>
+    <div class="acc-exp-row">
+      <span class="acc-exp-k">campaign</span>
+      <span class="acc-exp-v">{{if .DropCampaign}}{{.DropCampaign}}{{else}}—{{end}}</span>
+    </div>
+    <div class="acc-exp-row">
+      <span class="acc-exp-k">channel</span>
+      <span class="acc-exp-v">{{if .Channel}}<a href="https://www.twitch.tv/{{.Channel}}" target="_blank" rel="noopener">{{.Channel}}</a>{{else}}—{{end}}</span>
+    </div>
+    <div class="acc-exp-row">
+      <span class="acc-exp-k">progress</span>
+      <span class="acc-exp-v">{{.DropMins}}/{{.DropReq}}m · {{.DropPercent}}% · ETA {{.DropETA}}{{if .Uptime}} · {{.Uptime}} on stream{{end}}</span>
+    </div>
+    {{else}}
+    <div class="acc-exp-row">
+      <span class="acc-exp-k">state</span>
+      <span class="acc-exp-v">{{.State}}{{if .StateSub}} · {{.StateSub}}{{end}}</span>
+    </div>
+    {{end}}
+    {{if .Queue}}
+    <div class="acc-exp-row acc-exp-next">
+      <span class="acc-exp-k">next</span>
+      <span class="acc-exp-v">
+        {{range .Queue}}<span class="acc-exp-queue-item">{{.N}}. {{.Name}} <small>{{.Sub}} · {{.Req}}</small></span>{{end}}
+      </span>
+    </div>
+    {{end}}
+  </div>
+</details>
 {{end}}

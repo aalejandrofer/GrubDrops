@@ -324,6 +324,58 @@
     transition: background 0.12s;
   }
   .account-row .activity { text-align: right; min-width: 0; }
+
+  /* <details> wrapper around each row — click-to-expand inline. */
+  .account-row-d { border-top: 1px dashed var(--line); }
+  .mining-col .account-row-d:first-of-type { border-top: none; }
+  .account-row-d > summary {
+    list-style: none;
+    cursor: pointer;
+    /* re-apply the grid layout the bare .account-row had since
+       <summary> resets some user-agent display values. */
+    border-top: none;
+  }
+  .account-row-d > summary::-webkit-details-marker { display: none; }
+  .account-row-d > summary::marker { display: none; }
+  .account-row-d[open] > summary { background: var(--surface-2); }
+
+  .account-row-expand {
+    padding: 10px 14px 14px;
+    background: var(--surface-2);
+    border-top: 1px dashed var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .acc-exp-row {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 12px;
+    align-items: baseline;
+  }
+  .acc-exp-k {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+  }
+  .acc-exp-v {
+    color: var(--text);
+    word-break: break-word;
+  }
+  .acc-exp-v a { color: var(--accent); text-decoration: none; }
+  .acc-exp-v a:hover { text-decoration: underline; }
+  .acc-exp-next .acc-exp-v {
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .acc-exp-queue-item small {
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    margin-left: 6px;
+  }
   .mining-col .account-row:first-of-type { border-top: none; }
   .account-row:hover { background: var(--surface-2); }
   .account-row.disabled { opacity: 0.45; }
@@ -804,7 +856,7 @@
     grid-template-columns: 14px 64px 10px 1fr 160px;
     gap: 10px;
     align-items: center;
-    padding: 5px 16px 5px 14px;
+    padding: 5px 16px 5px 20px;
     cursor: pointer;
     list-style: none;
     line-height: 1.3;
