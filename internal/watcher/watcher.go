@@ -25,6 +25,14 @@ type CampaignPersister interface {
 	PersistCampaigns(ctx context.Context, camps []platform.Campaign) error
 }
 
+// ClaimRecorder writes a claims row after Backend.Claim succeeds so the
+// /drops Past tab + /history surface the operator's reward history.
+// Implementation lives in store; the seam keeps the watcher
+// independent of sqlc-generated types.
+type ClaimRecorder interface {
+	RecordClaim(ctx context.Context, accountID string, benefit platform.DropBenefit) error
+}
+
 type Config struct {
 	AccountID    string
 	Backend      platform.Backend
@@ -66,6 +74,11 @@ type Config struct {
 	// anything has been claimed. Non-whitelisted campaigns are NEVER
 	// passed to the persister.
 	Persister CampaignPersister
+
+	// ClaimRecorder, when set, persists a claims row each time the
+	// backend confirms a claim. Without it the /drops Past tab + the
+	// /history view stay empty.
+	ClaimRecorder ClaimRecorder
 }
 
 type Watcher struct {
@@ -869,6 +882,15 @@ func (w *Watcher) claim(ctx context.Context) error {
 	}
 	_ = w.cfg.Backend.StopWatch(ctx, handle)
 	w.unsubscribeCurrentChannel()
+
+	// Persist claim → claims table so /drops Past + /history surface
+	// it. Logged warn on failure; we don't want a transient DB hiccup
+	// to make us re-claim the same drop on the next tick.
+	if w.cfg.ClaimRecorder != nil {
+		if err := w.cfg.ClaimRecorder.RecordClaim(ctx, w.cfg.AccountID, benefit); err != nil {
+			slog.Warn("watcher record claim failed", "kind", "error", "account", w.cfg.AccountID, "benefit", benefit.ID, "err", err)
+		}
+	}
 
 	// P6: post-claim consistency probe. Soft signal — log drift but
 	// don't roll back the claim. DropCurrentSession returning the same

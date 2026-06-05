@@ -155,6 +155,10 @@ func run() error {
 	// into the campaigns table so the /drops page can render past +
 	// current + upcoming tabs. Shared by every watcher.
 	campaignPersister := store.NewCampaignPersister(q)
+	// ClaimRecorder persists a claims row after each successful
+	// Backend.Claim. Without it InsertClaim has no production caller
+	// and the /drops Past + /history views stay empty.
+	claimRecorder := store.NewClaimRecorder(q)
 
 	build := func(a gen.Account) (scheduler.Entry, error) {
 		b, ok := registry.Get(a.Platform)
@@ -228,8 +232,9 @@ func run() error {
 			AccountID: a.ID, Backend: b, Session: sess,
 			Notifier: notifier, TickInterval: 500 * time.Millisecond,
 			AllowGame: allow, GameRank: rank,
-			PriorityMode: priorityMode,
-			Persister:    campaignPersister,
+			PriorityMode:  priorityMode,
+			Persister:     campaignPersister,
+			ClaimRecorder: claimRecorder,
 		})
 		return scheduler.NewEntry(a.ID, w), nil
 	}
