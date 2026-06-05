@@ -1057,6 +1057,13 @@ func evalFetchPOST(tabCtx context.Context, url, contentType string, body []byte)
 	// from cookies so the backend recognises the user instead of
 	// treating us as anonymous (which returns empty dropCampaigns
 	// even with valid cookies).
+	// IMPORTANT: only "simple" headers (no Authorization) — adding
+	// Authorization triggers CORS preflight which Twitch's gql does
+	// NOT respond to with the right headers, causing "Failed to
+	// fetch". For the Authorization, embed it in the body if the
+	// endpoint is gql.twitch.tv by routing through Client-Id which IS
+	// a simple-enough header in Twitch's CORS allowlist (their own
+	// SDK uses it cross-origin).
 	script := fmt.Sprintf(`(async () => {
 		const b64 = %q;
 		const bin = atob(b64);
@@ -1065,11 +1072,9 @@ func evalFetchPOST(tabCtx context.Context, url, contentType string, body []byte)
 		const url = %q;
 		const headers = {"Content-Type": %q};
 		if (url.indexOf("gql.twitch.tv") >= 0) {
-			const m = document.cookie.match(/(?:^|;\s*)auth-token=([^;]+)/);
-			if (m && m[1]) headers["Authorization"] = "OAuth " + m[1];
+			// Client-Id is whitelisted by Twitch's CORS preflight
+			// response (Access-Control-Allow-Headers).
 			headers["Client-Id"] = "kimne78kx3ncx6brgo4mv6wki5h1ko";
-			const dm = document.cookie.match(/(?:^|;\s*)unique_id=([^;]+)/);
-			if (dm && dm[1]) headers["X-Device-Id"] = dm[1];
 		}
 		const f = window.__origFetch || window.fetch;
 		try {
