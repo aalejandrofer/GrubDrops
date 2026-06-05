@@ -579,6 +579,99 @@ func (t *Twitch) CloseAccount(accountID string) {
 	t.closeTab(accountID)
 }
 
+// ClaimedReward is one entry returned from ClaimRewards.
+type ClaimedReward struct {
+	Game  string
+	Title string
+}
+
+// ClaimRewards navigates the account's auth tab to /drops/inventory
+// and clicks every visible "Claim" / "Claim now" button whose tile
+// belongs to a game on allowedGames (case-insensitive name OR slug).
+// Empty allowedGames -> claim everything. Returns the list of titles
+// successfully clicked + soft errors per-tile. Re-uses the same tab
+// as ListActiveCampaigns so PerimeterX state stays warm.
+func (t *Twitch) ClaimRewards(ctx context.Context, accountID string, allowedGames []string) ([]ClaimedReward, []string, error) {
+	if accountID == "" {
+		return nil, nil, fmt.Errorf("account_id required")
+	}
+	release := t.lockTab(accountID)
+	defer release()
+	_, tabCtx, _, err := t.acquireTab(accountID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("acquire tab: %w", err)
+	}
+	allowJSON, _ := json.Marshal(allowedGames)
+	// Walk every tile on /drops/inventory. A claimable reward tile
+	// has a button whose accessible name contains "Claim". Climb up
+	// to the nearest container that mentions a game (img[alt]) so we
+	// can filter by allow-list. Click button, wait 600ms, capture
+	// title for response. Tiles with progress bars (in-progress
+	// watch-time drops) don't have the Claim button surfaced yet —
+	// they're naturally skipped.
+	script := `(async () => {
+		const allow = new Set((` + string(allowJSON) + ` || []).map(s => (s||'').toLowerCase()));
+		const out = [];
+		const errors = [];
+		const buttons = Array.from(document.querySelectorAll('button'));
+		for (const btn of buttons) {
+			const txt = (btn.textContent || '').trim().toLowerCase();
+			if (!/^claim( now| reward)?$/.test(txt)) continue;
+			let card = btn;
+			let title = '';
+			let game = '';
+			for (let i = 0; i < 8 && card; i++) {
+				card = card.parentElement;
+				if (!card) break;
+				const img = card.querySelector('img[alt]');
+				if (img && img.alt) {
+					const w = img.naturalWidth || img.width || 0;
+					const h = img.naturalHeight || img.height || 0;
+					if (w > 0 && h > 0 && (h > w * 1.1)) {
+						game = (img.alt || '').trim();
+					}
+				}
+				const headings = card.querySelectorAll('p,h1,h2,h3,h4,h5,span');
+				for (const el of headings) {
+					const t = (el.textContent || '').trim();
+					if (t && t.length > 2 && t.length < 120 && t.toLowerCase() !== 'claim') {
+						title = t;
+						break;
+					}
+				}
+				if (game && title) break;
+			}
+			if (allow.size > 0 && game && !allow.has(game.toLowerCase())) continue;
+			try {
+				btn.click();
+				await new Promise(r => setTimeout(r, 600));
+				out.push({game: game || 'unknown', title: title || 'unknown'});
+			} catch (e) {
+				errors.push(String(e));
+			}
+		}
+		return JSON.stringify({claimed: out, errors: errors});
+	})()`
+	var raw string
+	if err := chromedp.Run(tabCtx,
+		chromedp.Navigate("about:blank"),
+		chromedp.Sleep(500*time.Millisecond),
+		chromedp.Navigate("https://www.twitch.tv/drops/inventory"),
+		chromedp.Sleep(6*time.Second),
+		chromedp.Evaluate(script, &raw),
+	); err != nil {
+		return nil, nil, fmt.Errorf("claim rewards: %w", err)
+	}
+	var resp struct {
+		Claimed []ClaimedReward `json:"claimed"`
+		Errors  []string        `json:"errors"`
+	}
+	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
+		return nil, nil, fmt.Errorf("parse claim response (raw=%s): %w", truncate(raw, 200), err)
+	}
+	return resp.Claimed, resp.Errors, nil
+}
+
 // --- internals ---
 
 func (t *Twitch) acquireTab(accountID string) (string, context.Context, bool, error) {

@@ -31,6 +31,7 @@ const (
 	Browser_TwitchOpenStream_FullMethodName      = "/browser.v1.Browser/TwitchOpenStream"
 	Browser_TwitchHeartbeat_FullMethodName       = "/browser.v1.Browser/TwitchHeartbeat"
 	Browser_TwitchStopWatch_FullMethodName       = "/browser.v1.Browser/TwitchStopWatch"
+	Browser_TwitchClaimRewards_FullMethodName    = "/browser.v1.Browser/TwitchClaimRewards"
 )
 
 // BrowserClient is the client API for Browser service.
@@ -55,6 +56,11 @@ type BrowserClient interface {
 	TwitchOpenStream(ctx context.Context, in *TwitchOpenStreamRequest, opts ...grpc.CallOption) (*TwitchOpenStreamResponse, error)
 	TwitchHeartbeat(ctx context.Context, in *TwitchHeartbeatRequest, opts ...grpc.CallOption) (*TwitchHeartbeatResponse, error)
 	TwitchStopWatch(ctx context.Context, in *TwitchStopWatchRequest, opts ...grpc.CallOption) (*TwitchStopWatchResponse, error)
+	// TwitchClaimRewards visits /drops/inventory in the account's tab
+	// and clicks Claim on every unclaimed reward whose game is in the
+	// optional allow-list (empty list = claim all). Returns the list of
+	// reward titles successfully claimed.
+	TwitchClaimRewards(ctx context.Context, in *TwitchClaimRewardsRequest, opts ...grpc.CallOption) (*TwitchClaimRewardsResponse, error)
 }
 
 type browserClient struct {
@@ -185,6 +191,16 @@ func (c *browserClient) TwitchStopWatch(ctx context.Context, in *TwitchStopWatch
 	return out, nil
 }
 
+func (c *browserClient) TwitchClaimRewards(ctx context.Context, in *TwitchClaimRewardsRequest, opts ...grpc.CallOption) (*TwitchClaimRewardsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TwitchClaimRewardsResponse)
+	err := c.cc.Invoke(ctx, Browser_TwitchClaimRewards_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BrowserServer is the server API for Browser service.
 // All implementations must embed UnimplementedBrowserServer
 // for forward compatibility.
@@ -207,6 +223,11 @@ type BrowserServer interface {
 	TwitchOpenStream(context.Context, *TwitchOpenStreamRequest) (*TwitchOpenStreamResponse, error)
 	TwitchHeartbeat(context.Context, *TwitchHeartbeatRequest) (*TwitchHeartbeatResponse, error)
 	TwitchStopWatch(context.Context, *TwitchStopWatchRequest) (*TwitchStopWatchResponse, error)
+	// TwitchClaimRewards visits /drops/inventory in the account's tab
+	// and clicks Claim on every unclaimed reward whose game is in the
+	// optional allow-list (empty list = claim all). Returns the list of
+	// reward titles successfully claimed.
+	TwitchClaimRewards(context.Context, *TwitchClaimRewardsRequest) (*TwitchClaimRewardsResponse, error)
 	mustEmbedUnimplementedBrowserServer()
 }
 
@@ -252,6 +273,9 @@ func (UnimplementedBrowserServer) TwitchHeartbeat(context.Context, *TwitchHeartb
 }
 func (UnimplementedBrowserServer) TwitchStopWatch(context.Context, *TwitchStopWatchRequest) (*TwitchStopWatchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TwitchStopWatch not implemented")
+}
+func (UnimplementedBrowserServer) TwitchClaimRewards(context.Context, *TwitchClaimRewardsRequest) (*TwitchClaimRewardsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TwitchClaimRewards not implemented")
 }
 func (UnimplementedBrowserServer) mustEmbedUnimplementedBrowserServer() {}
 func (UnimplementedBrowserServer) testEmbeddedByValue()                 {}
@@ -490,6 +514,24 @@ func _Browser_TwitchStopWatch_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Browser_TwitchClaimRewards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TwitchClaimRewardsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BrowserServer).TwitchClaimRewards(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Browser_TwitchClaimRewards_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BrowserServer).TwitchClaimRewards(ctx, req.(*TwitchClaimRewardsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Browser_ServiceDesc is the grpc.ServiceDesc for Browser service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -544,6 +586,10 @@ var Browser_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "TwitchStopWatch",
 			Handler:    _Browser_TwitchStopWatch_Handler,
+		},
+		{
+			MethodName: "TwitchClaimRewards",
+			Handler:    _Browser_TwitchClaimRewards_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

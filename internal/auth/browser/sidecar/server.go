@@ -110,3 +110,15 @@ func (s *Server) TwitchStopWatch(ctx context.Context, req *pb.TwitchStopWatchReq
 	s.b.CloseTab(req.WatchHandle)
 	return &pb.TwitchStopWatchResponse{}, nil
 }
+
+func (s *Server) TwitchClaimRewards(ctx context.Context, req *pb.TwitchClaimRewardsRequest) (*pb.TwitchClaimRewardsResponse, error) {
+	claimed, soft, err := s.twitch.ClaimRewards(ctx, req.AccountId, req.AllowedGames)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*pb.TwitchClaimedReward, 0, len(claimed))
+	for _, c := range claimed {
+		out = append(out, &pb.TwitchClaimedReward{Game: c.Game, Title: c.Title})
+	}
+	return &pb.TwitchClaimRewardsResponse{Claimed: out, Errors: soft}, nil
+}

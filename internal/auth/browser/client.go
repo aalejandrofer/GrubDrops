@@ -114,3 +114,20 @@ func (c *Client) TwitchStopWatch(ctx context.Context, handle string) error {
 	_, err := c.api.TwitchStopWatch(ctx, &pb.TwitchStopWatchRequest{WatchHandle: handle})
 	return err
 }
+
+// TwitchClaimRewards returns two parallel slices (game, title) so the
+// caller can compose its own struct without importing this package's
+// types into a struct boundary. Length is always equal.
+func (c *Client) TwitchClaimRewards(ctx context.Context, accountID string, allowedGames []string) (games []string, titles []string, soft []string, err error) {
+	resp, err := c.api.TwitchClaimRewards(ctx, &pb.TwitchClaimRewardsRequest{AccountId: accountID, AllowedGames: allowedGames})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	games = make([]string, 0, len(resp.Claimed))
+	titles = make([]string, 0, len(resp.Claimed))
+	for _, c := range resp.Claimed {
+		games = append(games, c.Game)
+		titles = append(titles, c.Title)
+	}
+	return games, titles, resp.Errors, nil
+}

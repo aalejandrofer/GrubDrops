@@ -20,6 +20,20 @@ type Backend interface {
 	Claim(ctx context.Context, s Session, b DropBenefit) error
 }
 
+// RewardClaimer is an optional capability for backends that surface
+// one-click reward claims (e.g. Twitch /drops/inventory). Backends
+// that don't support this don't implement the interface; the watcher
+// type-asserts to discover support.
+type RewardClaimer interface {
+	ClaimRewards(ctx context.Context, s Session, allowedGames []string) ([]ClaimedReward, error)
+}
+
+// ClaimedReward is one entry returned by RewardClaimer.ClaimRewards.
+type ClaimedReward struct {
+	Game  string
+	Title string
+}
+
 type Registry struct {
 	backends map[string]Backend
 }

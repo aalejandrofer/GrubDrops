@@ -19,6 +19,7 @@ import (
 type BrowserBackend struct {
 	sender    TwitchGQLSender
 	auth      TwitchSidecarAuthenticator
+	rewards   TwitchRewardClaimer // nil-safe: ClaimRewards returns ErrNotSupported when nil
 	authFlow  *authFlow
 	clientsMu sync.Mutex
 	clients   map[string]*twitchAccount
@@ -35,6 +36,14 @@ type BrowserBackend struct {
 // call. Implemented by *browser.Client (same instance as TwitchGQLSender).
 type TwitchSidecarAuthenticator interface {
 	TwitchAuthenticate(ctx context.Context, accountID string, s *pb.TwitchSession) (*pb.TwitchAuthenticateResponse, error)
+}
+
+// TwitchRewardClaimer is the surface BrowserBackend needs to invoke
+// the sidecar's TwitchClaimRewards RPC. The two parallel slices map
+// 1:1 (games[i] is the game of titles[i]). Implemented by
+// *browser.Client.
+type TwitchRewardClaimer interface {
+	TwitchClaimRewards(ctx context.Context, accountID string, allowedGames []string) (games []string, titles []string, soft []string, err error)
 }
 
 type twitchAccount struct {
@@ -54,7 +63,7 @@ func NewBrowserBackend(client interface {
 	TwitchGQLSender
 	TwitchSidecarAuthenticator
 }) *BrowserBackend {
-	return &BrowserBackend{
+	bb := &BrowserBackend{
 		sender:                  client,
 		auth:                    client,
 		authFlow:                newAuthFlow(),
@@ -62,6 +71,10 @@ func NewBrowserBackend(client interface {
 		authed:                  map[string]bool{},
 		allowedLoginsByCampaign: map[string][]string{},
 	}
+	if r, ok := client.(TwitchRewardClaimer); ok {
+		bb.rewards = r
+	}
+	return bb
 }
 
 // ensureAuthenticated pushes the account's persisted cookies into the
@@ -239,6 +252,30 @@ func (b *BrowserBackend) Claim(ctx context.Context, s platform.Session, drop pla
 		return err
 	}
 	return b.accountFor(s.AccountID).claim.claim(ctx, s, drop)
+}
+
+// ClaimRewards satisfies platform.RewardClaimer. Delegates to the
+// sidecar TwitchClaimRewards RPC; returns an empty list when the
+// sidecar doesn't surface the RPC (older binary).
+func (b *BrowserBackend) ClaimRewards(ctx context.Context, s platform.Session, allowedGames []string) ([]platform.ClaimedReward, error) {
+	if b.rewards == nil {
+		return nil, nil
+	}
+	if err := b.ensureAuthenticated(ctx, s); err != nil {
+		return nil, err
+	}
+	games, titles, soft, err := b.rewards.TwitchClaimRewards(ctx, s.AccountID, allowedGames)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range soft {
+		slog.Warn("twitch reward claim soft error", "account", s.AccountID, "err", e)
+	}
+	out := make([]platform.ClaimedReward, 0, len(games))
+	for i := range games {
+		out = append(out, platform.ClaimedReward{Game: games[i], Title: titles[i]})
+	}
+	return out, nil
 }
 
 // AllowedChannelCount returns the number of channels in the cached

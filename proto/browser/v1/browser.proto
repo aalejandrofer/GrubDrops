@@ -24,6 +24,11 @@ service Browser {
   rpc TwitchOpenStream(TwitchOpenStreamRequest) returns (TwitchOpenStreamResponse);
   rpc TwitchHeartbeat(TwitchHeartbeatRequest) returns (TwitchHeartbeatResponse);
   rpc TwitchStopWatch(TwitchStopWatchRequest) returns (TwitchStopWatchResponse);
+  // TwitchClaimRewards visits /drops/inventory in the account's tab
+  // and clicks Claim on every unclaimed reward whose game is in the
+  // optional allow-list (empty list = claim all). Returns the list of
+  // reward titles successfully claimed.
+  rpc TwitchClaimRewards(TwitchClaimRewardsRequest) returns (TwitchClaimRewardsResponse);
 }
 
 message Cookie {
@@ -176,3 +181,21 @@ message TwitchStopWatchRequest {
 }
 
 message TwitchStopWatchResponse {}
+
+message TwitchClaimRewardsRequest {
+  string account_id = 1;
+  // Lowercased game names + slugs. Empty -> claim all visible rewards.
+  repeated string allowed_games = 2;
+}
+
+message TwitchClaimedReward {
+  string game = 1;
+  string title = 2;
+}
+
+message TwitchClaimRewardsResponse {
+  repeated TwitchClaimedReward claimed = 1;
+  // Soft errors per-reward — claim attempt that didn't crash but
+  // didn't succeed either. Caller logs and continues.
+  repeated string errors = 2;
+}

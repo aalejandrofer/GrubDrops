@@ -364,6 +364,37 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			"kind", "discovery",
 			"account", w.cfg.AccountID,
 			"count", skippedReward)
+		// Reaper: if the backend supports it, walk /drops/inventory
+		// and click Claim on any whitelisted reward we haven't
+		// surfaced through normal claim flow. Soft errors only —
+		// reaper failures don't poison the mining tick.
+		if rc, ok := w.cfg.Backend.(platform.RewardClaimer); ok {
+			allowed := make([]string, 0, len(whitelisted))
+			seen := map[string]bool{}
+			for _, c := range whitelisted {
+				if c.Kind == "reward" && !seen[c.Game] {
+					allowed = append(allowed, c.Game)
+					seen[c.Game] = true
+				}
+			}
+			sess := w.cfg.Session
+			sess.AccountID = w.cfg.AccountID
+			claimed, err := rc.ClaimRewards(ctx, sess, allowed)
+			if err != nil {
+				slog.Warn("watcher reward reaper failed",
+					"kind", "error",
+					"account", w.cfg.AccountID,
+					"err", err)
+			} else if len(claimed) > 0 {
+				for _, cr := range claimed {
+					slog.Info("watcher reward claimed",
+						"kind", "claim",
+						"account", w.cfg.AccountID,
+						"game", cr.Game,
+						"title", cr.Title)
+				}
+			}
+		}
 	}
 	if w.cfg.GameRank != nil {
 		sort.SliceStable(matched, func(i, j int) bool {
