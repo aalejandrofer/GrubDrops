@@ -182,13 +182,22 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 			camp.Status = "active"
 			// Skip detail fetch for scrape-synthesised IDs — those
 			// aren't real Twitch UUIDs and OpDropCampaignDetails will
-			// fail. Treat scraped campaigns as "discoverable, not
-			// mineable" — surfaces them in /drops + dashboard so user
-			// knows to enroll, but the watcher skips them (empty
-			// benefits = nothing to mine).
+			// fail. Synth a single default benefit per scrape-only
+			// campaign so the watcher's pickCampaign loop advances
+			// (it skips campaigns with len(Benefits)==0). Twitch
+			// credits minutes against the enrolled real drop in the
+			// user's account; our benefit row is a local placeholder
+			// for state tracking.
 			if strings.ContainsAny(c.ID, "| ") {
 				// e.g. "Minecraft|Builder Cape..." — scraped
-				camp.Benefits = nil
+				if kind != "reward" {
+					camp.Benefits = []platform.DropBenefit{{
+						ID:              c.ID + "_default",
+						CampaignID:      c.ID,
+						Name:            c.Name,
+						RequiredMinutes: 5,
+					}}
+				}
 			} else {
 				benefits, allowedLogins, err := d.fetchDetails(ctx, sess, c.ID)
 				if err != nil {

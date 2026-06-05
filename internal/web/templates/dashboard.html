@@ -72,10 +72,47 @@
     <div class="rule"></div>
     <div class="meta">{{len .Mining.Twitch}} twitch · {{len .Mining.Kick}} kick</div>
   </div>
-  <div id="mining-swap" hx-get="/dashboard/cards" hx-trigger="every 2s" hx-swap="innerHTML">
+  <div id="mining-swap" hx-get="/dashboard/cards" hx-trigger="every 10s" hx-swap="innerHTML">
     {{template "dashboard_mining_columns" .Mining}}
   </div>
 </section>
+<script>
+(function() {
+  // Persist <details> open state across hx-get refreshes of the
+  // Currently Mining columns. Track by account-id in localStorage.
+  var KEY = 'dm.openMiningRows';
+  function loadSet() {
+    try { return new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch (_) { return new Set(); }
+  }
+  function saveSet(s) {
+    try { localStorage.setItem(KEY, JSON.stringify(Array.from(s))); } catch (_) {}
+  }
+  function applyOpen() {
+    var set = loadSet();
+    document.querySelectorAll('#mining-swap details.account-row-d[data-account-id]').forEach(function(d) {
+      if (set.has(d.dataset.accountId)) d.setAttribute('open', '');
+    });
+  }
+  // Hook click on any summary inside mining-swap to persist state.
+  document.addEventListener('click', function(e) {
+    var sum = e.target && e.target.closest && e.target.closest('#mining-swap details.account-row-d summary');
+    if (!sum) return;
+    setTimeout(function() {
+      var d = sum.parentElement;
+      var id = d && d.dataset && d.dataset.accountId;
+      if (!id) return;
+      var s = loadSet();
+      if (d.open) s.add(id); else s.delete(id);
+      saveSet(s);
+    }, 0);
+  });
+  // Re-apply open state after htmx swaps.
+  document.body.addEventListener('htmx:afterSwap', function(e) {
+    if (e.target && e.target.id === 'mining-swap') applyOpen();
+  });
+  applyOpen();
+})();
+</script>
 
 {{/* Live pair — Events drawer + Live channels grid sit side by side,
      full width. Stacks under 1200px (see .live-pair media query). */}}
@@ -108,7 +145,7 @@
       <div class="events" id="events-list"
            hx-get="/dashboard/events"
            hx-include="#events-form"
-           hx-trigger="every 3s"
+           hx-trigger="every 10s"
            hx-swap="innerHTML">
         {{template "dashboard_events" .Events}}
       </div>
