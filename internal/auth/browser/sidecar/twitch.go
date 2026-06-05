@@ -546,15 +546,34 @@ func buildViewerDropsDashboardEnvelope(camps []apolloCampaign) []byte {
 
 // cleanCampaignName strips trailing date strings the scrape concatenates
 // onto the drop name ("Builder CapeSat, May 30, 3:30 PM UTC - Mon, Jun
-// 15, 6:59 AM UTC" -> "Builder Cape"). Heuristic: cut at the first
-// weekday abbreviation.
+// 15, 6:59 AM UTC" -> "Builder Cape"). Heuristic: cut at the EARLIEST
+// weekday abbreviation regardless of which day it is. The earlier
+// implementation iterated day-by-day and took the first hit, which
+// returned the wrong split when "Mon, " appeared later than the
+// embedded "Sat" in "CapeSat".
 func cleanCampaignName(s string) string {
+	earliest := -1
 	for _, day := range []string{"Sun, ", "Mon, ", "Tue, ", "Wed, ", "Thu, ", "Fri, ", "Sat, "} {
-		if i := stringsIndex(s, day); i > 0 {
-			return trimTrailingSpace(s[:i])
+		i := stringsIndex(s, day)
+		if i > 0 && (earliest < 0 || i < earliest) {
+			earliest = i
 		}
 	}
-	return s
+	// Also accept weekday-with-no-comma like "Thu" so "FooThu, Jan 1"
+	// trims at "Thu". The 3-char form is more aggressive — only apply
+	// when the comma-form failed.
+	if earliest < 0 {
+		for _, day := range []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"} {
+			i := stringsIndex(s, day)
+			if i > 0 && (earliest < 0 || i < earliest) {
+				earliest = i
+			}
+		}
+	}
+	if earliest <= 0 {
+		return s
+	}
+	return trimTrailingSpace(s[:earliest])
 }
 
 // stringsIndex / trimTrailingSpace inlined to avoid pulling in "strings"
