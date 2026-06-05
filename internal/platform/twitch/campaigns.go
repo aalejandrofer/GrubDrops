@@ -25,12 +25,15 @@ type discovery struct {
 type campaignsData struct {
 	CurrentUser struct {
 		DropCampaigns []struct {
-			ID             string    `json:"id"`
-			Name           string    `json:"name"`
-			Status         string    `json:"status"` // "ACTIVE" | "UPCOMING" | "EXPIRED"
-			StartAt        time.Time `json:"startAt"`
-			EndAt          time.Time `json:"endAt"`
-			AccountLinkURL string    `json:"accountLinkURL"`
+			ID     string `json:"id"`
+			Name   string `json:"name"`
+			Status string `json:"status"` // "ACTIVE" | "UPCOMING" | "EXPIRED"
+			// startAt/endAt come as ISO-8601 strings from gql but the
+			// scrape fallback may emit empty strings. Use string +
+			// best-effort parse so empties don't crash unmarshal.
+			StartAtRaw     string `json:"startAt"`
+			EndAtRaw       string `json:"endAt"`
+			AccountLinkURL string `json:"accountLinkURL"`
 			Self           struct {
 				IsAccountConnected bool `json:"isAccountConnected"`
 			} `json:"self"`
@@ -40,6 +43,21 @@ type campaignsData struct {
 			} `json:"game"`
 		} `json:"dropCampaigns"`
 	} `json:"currentUser"`
+}
+
+// parseISO is the lenient timestamp parser used by listActive. Returns
+// the zero Time for empty/garbage input — the watcher tolerates it.
+func parseISO(s string) time.Time {
+	if s == "" {
+		return time.Time{}
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t
+	}
+	if t, err := time.Parse("2006-01-02T15:04:05Z", s); err == nil {
+		return t
+	}
+	return time.Time{}
 }
 
 // campaignDetailsData decodes the DropCampaignDetails (OpDropCampaignDetails) response.
@@ -132,13 +150,20 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 		if sess.GameFilter != nil && !sess.GameFilter(c.Game.DisplayName) {
 			continue
 		}
+		// Skip scrape-fallback noise: campaigns with no game name AND
+		// dom-prefixed IDs are paragraphs the heading-anchored walk
+		// grabbed instead of real cards. Don't poison the discovery
+		// cache with them.
+		if c.Game.DisplayName == "" && strings.HasPrefix(c.ID, "dom-") {
+			continue
+		}
 		camp := platform.Campaign{
 			ID:             c.ID,
 			Platform:       "twitch",
 			Game:           c.Game.DisplayName,
 			Name:           c.Name,
-			StartsAt:       c.StartAt,
-			EndsAt:         c.EndAt,
+			StartsAt:       parseISO(c.StartAtRaw),
+			EndsAt:         parseISO(c.EndAtRaw),
 			AccountLinked:  c.Self.IsAccountConnected,
 			AccountLinkURL: c.AccountLinkURL,
 		}

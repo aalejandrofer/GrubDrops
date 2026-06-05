@@ -265,17 +265,26 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 			for (const h of dropHeads) {
 				const container = findSiblingContainer(h);
 				if (!container) continue;
-				// Each direct child likely a card; capture text + nested image alt as game hint.
+				// Real drop campaign cards always have a game box-art
+				// image and a link to /drops/campaigns/<id>. Require both
+				// — that filters out the marketing paragraphs the
+				// heading walk would otherwise sweep up.
 				Array.from(container.children).forEach((child) => {
+					const img = child.querySelector('img[alt]');
+					const link = child.querySelector('a[href*="/drops/campaigns/"]');
+					if (!img || !img.alt || !link) return;
+					const gameName = img.alt.trim();
+					if (!gameName) return;
 					const txt = (child.textContent || '').trim();
-					if (!txt) return;
 					const lines = txt.split('\n').map(s => s.trim()).filter(Boolean);
-					const img = child.querySelector('img');
-					const gameHint = (img && img.alt) || '';
+					// First line that's not the game name = campaign name.
+					const name = lines.find(l => l !== gameName) || lines[0] || '';
+					const href = link.getAttribute('href') || '';
+					const idMatch = href.match(/\/drops\/campaigns\/([^/?#]+)/);
 					domOut.push({
-						id: 'dom-' + domOut.length,
-						name: lines[0] ? lines[0].slice(0, 200) : '',
-						game: gameHint || (lines[1] || ''),
+						id: idMatch ? idMatch[1] : ('dom-' + domOut.length),
+						name: name.slice(0, 200),
+						game: gameName,
 						endsAt: '',
 						startsAt: ''
 					});
