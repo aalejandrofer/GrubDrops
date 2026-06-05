@@ -14,20 +14,71 @@
   {{if .Flash}}<div class="flash-ok">{{.Flash}}</div>{{end}}
 
   {{with .Page}}
-  <div class="form-card">
-    <form method="post" action="/settings">
-      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-      <label>Global Discord webhook URL <span style="text-transform:none;font-family:'IBM Plex Sans',sans-serif;letter-spacing:0;color:var(--muted);font-size:11px;">(per-account overrides this)</span>
-        <input type="url" name="discord_webhook" value="{{.GlobalDiscordWebhook}}" placeholder="https://discord.com/api/webhooks/…">
-      </label>
-      <label>Log retention (days)
-        <input type="number" name="log_retention_days" value="{{.LogRetentionDays}}" min="1" max="365" style="max-width:140px;">
-      </label>
-      <div class="row">
-        <a class="back-link" href="/">← back</a>
-        <button class="btn primary" type="submit">Save →</button>
+  <div class="settings-grid" style="display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start;">
+
+    <div class="form-card">
+      <h2 class="settings-h" style="margin:0 0 14px;font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.18em;color:var(--muted);">Notifications</h2>
+      <form method="post" action="/settings" id="settings-form">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <label>Global Discord webhook URL <span style="text-transform:none;font-family:'IBM Plex Sans',sans-serif;letter-spacing:0;color:var(--muted);font-size:11px;">(per-account overrides)</span>
+          <input type="url" name="discord_webhook" value="{{.GlobalDiscordWebhook}}" placeholder="https://discord.com/api/webhooks/…">
+        </label>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:6px;">
+          <label class="cb"><input type="checkbox" name="notify_claim" value="1" {{if .NotifyClaim}}checked{{end}}> claims</label>
+          <label class="cb"><input type="checkbox" name="notify_progress" value="1" {{if .NotifyProgress}}checked{{end}}> progress</label>
+          <label class="cb"><input type="checkbox" name="notify_auth" value="1" {{if .NotifyAuth}}checked{{end}}> auth</label>
+          <label class="cb"><input type="checkbox" name="notify_error" value="1" {{if .NotifyError}}checked{{end}}> errors</label>
+        </div>
+
+        <h2 class="settings-h" style="margin:24px 0 14px;font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.18em;color:var(--muted);">Runtime</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label>Watcher tick interval <span style="color:var(--muted);font-weight:400">(ms)</span>
+            <input type="number" name="tick_interval_ms" value="{{.TickIntervalMs}}" min="100" max="60000">
+          </label>
+          <label>Discovery interval <span style="color:var(--muted);font-weight:400">(seconds)</span>
+            <input type="number" name="discovery_interval_sec" value="{{.DiscoveryIntervalSec}}" min="30" max="3600">
+          </label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label>Log level <span style="color:var(--muted);font-weight:400">(blank = env <code>{{.LogLevelEnv}}</code>)</span>
+            <select name="log_level">
+              <option value="" {{if eq .LogLevel ""}}selected{{end}}>default</option>
+              <option value="debug" {{if eq .LogLevel "debug"}}selected{{end}}>debug</option>
+              <option value="info" {{if eq .LogLevel "info"}}selected{{end}}>info</option>
+              <option value="warn" {{if eq .LogLevel "warn"}}selected{{end}}>warn</option>
+              <option value="error" {{if eq .LogLevel "error"}}selected{{end}}>error</option>
+            </select>
+          </label>
+          <label>Log retention <span style="color:var(--muted);font-weight:400">(days)</span>
+            <input type="number" name="log_retention_days" value="{{.LogRetentionDays}}" min="1" max="365">
+          </label>
+        </div>
+
+        <div class="row" style="margin-top:16px;">
+          <a class="back-link" href="/">← back</a>
+          <button class="btn primary" type="submit">Save →</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="form-card">
+      <h2 class="settings-h" style="margin:0 0 14px;font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.18em;color:var(--muted);">Status</h2>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;display:grid;gap:8px;">
+        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding-bottom:6px;"><span style="color:var(--muted);">uptime</span><span>{{if .Uptime}}{{.Uptime}}{{else}}—{{end}}</span></div>
+        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding-bottom:6px;"><span style="color:var(--muted);">go</span><span>{{.GoVersion}}</span></div>
+        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding-bottom:6px;"><span style="color:var(--muted);">goroutines</span><span>{{.Goroutines}}</span></div>
+        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding-bottom:6px;"><span style="color:var(--muted);">sidecar</span><span style="font-size:11px;">{{if .BrowserURL}}{{.BrowserURL}}{{else}}—{{end}}</span></div>
+        {{if .GitCommit}}<div style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding-bottom:6px;"><span style="color:var(--muted);">commit</span><span>{{.GitCommit}}</span></div>{{end}}
+        {{if .Version}}<div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">version</span><span>{{.Version}}</span></div>{{end}}
       </div>
-    </form>
+      <h2 class="settings-h" style="margin:20px 0 10px;font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.18em;color:var(--muted);">Quick links</h2>
+      <ul style="list-style:none;padding:0;margin:0;font-family:'JetBrains Mono',monospace;font-size:12px;display:grid;gap:6px;">
+        <li><a href="/accounts" style="color:var(--accent);text-decoration:none;">Accounts →</a></li>
+        <li><a href="/drops" style="color:var(--accent);text-decoration:none;">Drops history →</a></li>
+        <li><a href="/" style="color:var(--accent);text-decoration:none;">Console →</a></li>
+      </ul>
+    </div>
+
   </div>
   {{end}}
 </div>
