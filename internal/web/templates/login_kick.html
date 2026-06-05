@@ -13,13 +13,27 @@
 
   <div class="auth-card method preferred">
     <div class="method-head">
-      <span class="method-tag">required</span>
-      <h2>Cookie paste</h2>
+      <span class="method-tag">recommended</span>
+      <h2>Helper CLI / pre-built app</h2>
+    </div>
+    <p>The helper opens your local browser, snapshots kick.com cookies (<code>kick_session</code>, <code>XSRF-TOKEN</code>, <code>cf_clearance</code>), and pushes them. No DevTools, no copy-paste.</p>
+    <div class="cli-box">
+      <div class="cli-label">one-liner</div>
+      <pre class="cli-code">go run ./cmd/dropsminer-helper kick {{.AccountID}} --channel STREAMER</pre>
+      <div class="cli-hint">Replace <code>STREAMER</code> with the kick channel login. Add <code>--miner URL</code> for a remote deployment, <code>--password PW</code> to skip the prompt.</div>
+    </div>
+    <p class="hint">No Go installed? Prebuilt binaries (<code>.exe</code> / <code>.app</code> / <code>AppImage</code>) ship from the same <code>cmd/dropsminer-helper</code> entry.</p>
+  </div>
+
+  <div class="auth-card method">
+    <div class="method-head">
+      <span class="method-tag muted">fallback</span>
+      <h2>Manual cookie paste</h2>
     </div>
     <ol class="steps">
       <li>Open <code>kick.com</code> in any browser and sign in.</li>
       <li>DevTools → Application → Cookies → <code>kick.com</code>.</li>
-      <li>Copy <code>kick_session</code> and <code>XSRF-TOKEN</code> (required). <code>cf_clearance</code> is optional — sidecar generates its own when needed.</li>
+      <li>Copy <code>kick_session</code> and <code>XSRF-TOKEN</code> (required). <code>cf_clearance</code> optional — sidecar generates its own when needed.</li>
       <li>Paste below + the channel you want to mine.</li>
     </ol>
   </div>
