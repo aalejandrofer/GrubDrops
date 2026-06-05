@@ -74,6 +74,11 @@ type commonFlags struct {
 	helper.Config
 }
 
+// boolFlagsByName lists the flag names that take no value, so
+// reorderArgs knows not to consume the following arg as a value.
+// Keep in sync with the BoolVar registrations below.
+var boolFlagsByName = map[string]bool{"insecure": true}
+
 func parseCommon(fs *flag.FlagSet, args []string, extra func(*flag.FlagSet)) (commonFlags, []string, error) {
 	cf := commonFlags{Config: helper.Config{
 		MinerURL: "https://drops.ryuzec.dev",
@@ -86,13 +91,54 @@ func parseCommon(fs *flag.FlagSet, args []string, extra func(*flag.FlagSet)) (co
 	if extra != nil {
 		extra(fs)
 	}
-	if err := fs.Parse(args); err != nil {
+	// Allow operators to write positional args before flags (e.g.
+	// `kick acc_id --channel oilrats`). Std flag.Parse stops at the
+	// first non-flag arg, so without reordering that command silently
+	// produces three positional args. Reorder shuffles all -flag/--flag
+	// tokens (with their values) to the front before parsing.
+	if err := fs.Parse(reorderArgs(args, boolFlagsByName)); err != nil {
 		return cf, nil, err
 	}
 	if cf.Password == "" {
 		return cf, nil, fmt.Errorf("missing --password (or MINER_PASSWORD env)")
 	}
 	return cf, fs.Args(), nil
+}
+
+// reorderArgs walks args once and emits all flag tokens before any
+// positional tokens. A flag is any arg starting with "-"; if it lacks
+// "=" and isn't a known bool flag, the next arg is treated as its
+// value. The "--" sentinel ends flag scanning — everything after is
+// positional.
+func reorderArgs(args []string, bools map[string]bool) []string {
+	flagToks := make([]string, 0, len(args))
+	posToks := make([]string, 0, len(args))
+	i := 0
+	for i < len(args) {
+		a := args[i]
+		if a == "--" {
+			posToks = append(posToks, args[i+1:]...)
+			break
+		}
+		if strings.HasPrefix(a, "-") && a != "-" {
+			flagToks = append(flagToks, a)
+			name := strings.TrimLeft(a, "-")
+			if eq := strings.Index(name, "="); eq >= 0 {
+				i++
+				continue
+			}
+			if !bools[name] && i+1 < len(args) {
+				flagToks = append(flagToks, args[i+1])
+				i += 2
+				continue
+			}
+			i++
+			continue
+		}
+		posToks = append(posToks, a)
+		i++
+	}
+	return append(flagToks, posToks...)
 }
 
 func runTwitch(args []string) error {

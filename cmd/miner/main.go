@@ -339,8 +339,10 @@ func (i *indirectNotifier) Notify(ctx context.Context, event string, fields map[
 // decodeKickChannels pulls the channel list out of a stored Kick
 // session blob. Prefers the new "channels" array but falls back to the
 // legacy "channel" string for back-compat with sessions written before
-// multi-channel support. Returns nil for non-Kick sessions or when no
-// channels were stored.
+// multi-channel support. Also handles the transitional case where
+// pre-upgrade clients posted "channel=a,b" against an old server — the
+// stored Channel string may contain commas/spaces. Returns nil for
+// non-Kick sessions or when no channels were stored.
 func decodeKickChannels(s platform.Session) []string {
 	blob := s.Cookies["kick"]
 	if blob == "" {
@@ -356,10 +358,37 @@ func decodeKickChannels(s platform.Session) []string {
 	if len(stored.Channels) > 0 {
 		return stored.Channels
 	}
-	if stored.Channel != "" {
-		return []string{stored.Channel}
+	if stored.Channel == "" {
+		return nil
 	}
-	return nil
+	// Legacy "channel" field may be a single name or a comma/space
+	// list pushed by a newer client to an older server.
+	splitter := func(r rune) bool {
+		switch r {
+		case ',', ' ', '\t', '\n', '\r', ';':
+			return true
+		}
+		return false
+	}
+	parts := strings.FieldsFunc(stored.Channel, splitter)
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		key := strings.ToLower(p)
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, p)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // loadAccountWhitelist materialises the per-account game allow-list
