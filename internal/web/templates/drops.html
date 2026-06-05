@@ -48,4 +48,19 @@
   {{template "drops_table" .}}
   {{end}}
 </div>
+
+<script>
+(function() {
+  // HTMX only swaps the table; the tab strip stays static, so the
+  // .on class never moves. Toggle it client-side on click.
+  document.querySelectorAll('.drops-tabs .drops-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      document.querySelectorAll('.drops-tabs .drops-tab').forEach(function(t) {
+        t.classList.remove('on');
+      });
+      tab.classList.add('on');
+    });
+  });
+})();
+</script>
 {{end}}
