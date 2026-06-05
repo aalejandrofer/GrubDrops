@@ -663,6 +663,9 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 
 	streams, err := w.cfg.Backend.ListEligibleChannels(ctx, w.cfg.Session, camp)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			return fmt.Errorf("list channels: %w", err)
+		}
 		slog.Error("watcher list channels failed", "kind", "error", "account", w.cfg.AccountID, "campaign", camp.Name, "err", err)
 		return fmt.Errorf("list channels: %w", err)
 	}
@@ -713,6 +716,9 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 	slog.Info("watcher starting watch", "kind", "state", "account", w.cfg.AccountID, "channel", s.Channel, "campaign", camp.Name, "eligible_count", len(streams))
 	h, err := w.cfg.Backend.StartWatch(ctx, w.cfg.Session, s)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			return fmt.Errorf("start watch: %w", err)
+		}
 		slog.Error("watcher StartWatch failed", "kind", "error", "account", w.cfg.AccountID, "channel", s.Channel, "err", err)
 		return fmt.Errorf("start watch: %w", err)
 	}
@@ -743,6 +749,9 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 	w.mu.Unlock()
 
 	if err := w.cfg.Backend.Heartbeat(ctx, handle); err != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			return fmt.Errorf("heartbeat: %w", err)
+		}
 		slog.Error("watcher heartbeat failed", "kind", "error", "account", w.cfg.AccountID, "channel", handle.Channel, "err", err)
 		return fmt.Errorf("heartbeat: %w", err)
 	}
@@ -852,6 +861,9 @@ func (w *Watcher) claim(ctx context.Context) error {
 	w.mu.Unlock()
 
 	if err := w.cfg.Backend.Claim(ctx, w.cfg.Session, benefit); err != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			return fmt.Errorf("claim: %w", err)
+		}
 		slog.Error("watcher claim failed", "kind", "error", "account", w.cfg.AccountID, "benefit", benefit.ID, "err", err)
 		return fmt.Errorf("claim: %w", err)
 	}
