@@ -198,21 +198,45 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 	// Navigate first to the drops page, wait for hydration, then dump
 	// the Apollo cache. Wrapped in defer-restore so we don't lose the
 	// tab's main twitch.tv navigation.
+	// Walk EVERY apollo state entry — Twitch's cache uses several
+	// __typename values for drop entries (DropCampaign, TimeBasedDrop,
+	// DropCampaignSummary in different builds). Accept anything with a
+	// game.{displayName,name} + a name/title + an end timestamp.
+	// Resolve nested {__ref} pointers so we get the actual game name
+	// instead of "{__ref:Game:12345}".
 	script := `(() => {
 		const state = window.__APOLLO_STATE__ || {};
+		const resolve = (v) => {
+			if (!v || typeof v !== 'object') return v;
+			if (v.__ref && state[v.__ref]) return state[v.__ref];
+			return v;
+		};
+		const getGame = (v) => {
+			const g = resolve(v && v.game);
+			if (!g || typeof g !== 'object') return '';
+			return g.displayName || g.name || '';
+		};
 		const out = [];
+		const seen = new Set();
 		for (const k of Object.keys(state)) {
 			const v = state[k];
 			if (!v || typeof v !== 'object') continue;
-			if (v.__typename === 'DropCampaign' || (typeof k === 'string' && k.startsWith('DropCampaign:'))) {
-				out.push({
-					id: v.id || k.replace('DropCampaign:', ''),
-					name: v.name || '',
-					game: (v.game && (v.game.displayName || v.game.name)) || '',
-					endsAt: v.endAt || v.endsAt || '',
-					startsAt: v.startAt || v.startsAt || ''
-				});
-			}
+			const isCampaign = (
+				v.__typename === 'DropCampaign' ||
+				v.__typename === 'DropCampaignSummary' ||
+				(typeof k === 'string' && (k.startsWith('DropCampaign:') || k.startsWith('DropCampaignSummary:')))
+			);
+			if (!isCampaign) continue;
+			const id = v.id || k.split(':').slice(1).join(':');
+			if (!id || seen.has(id)) continue;
+			seen.add(id);
+			out.push({
+				id: id,
+				name: v.name || v.title || '',
+				game: getGame(v),
+				endsAt: v.endAt || v.endsAt || v.endsAtTimestamp || '',
+				startsAt: v.startAt || v.startsAt || ''
+			});
 		}
 		return JSON.stringify(out);
 	})()`
@@ -220,10 +244,17 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 	var raw, debugInfo string
 	debugScript := `(() => {
 		const s = window.__APOLLO_STATE__;
-		if (!s) return JSON.stringify({apollo_state_present: false, keys: Object.keys(window).filter(k => k.startsWith('__')).slice(0, 20)});
+		if (!s) return JSON.stringify({apollo_state_present: false, win_keys: Object.keys(window).filter(k => k.startsWith('__')).slice(0, 20)});
 		const keys = Object.keys(s);
-		const sample = keys.filter(k => k.includes('Drop') || k.includes('Campaign')).slice(0, 10);
-		return JSON.stringify({apollo_state_present: true, total_keys: keys.length, drop_keys_sample: sample});
+		const typeCounts = {};
+		for (const k of keys) {
+			const v = s[k];
+			if (v && typeof v === 'object' && v.__typename) {
+				typeCounts[v.__typename] = (typeCounts[v.__typename] || 0) + 1;
+			}
+		}
+		const dropKeys = keys.filter(k => k.includes('Drop') || k.includes('Campaign')).slice(0, 15);
+		return JSON.stringify({total_keys: keys.length, typename_counts: typeCounts, drop_keys_sample: dropKeys});
 	})()`
 	if err := chromedp.Run(tabCtx,
 		chromedp.Navigate("https://www.twitch.tv/drops/campaigns"),
