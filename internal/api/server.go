@@ -171,6 +171,12 @@ func NewRouter(d Deps) http.Handler {
 	})
 	authed.Get("/accounts/{id}/twitch/paste", loginTwitchPaste.get)
 	authed.Post("/accounts/{id}/twitch/paste", loginTwitchPaste.post)
+	// Device-code path even when TwitchBrowser=true. The default
+	// /accounts/{id}/login redirects to paste, but Twitch's integrity
+	// gate rejects web-issued auth-tokens — device-code mints an
+	// Android-issued token that synthCookieBlob injects as the
+	// auth-token cookie in the sidecar tab, unblocking the gate.
+	authed.Get("/accounts/{id}/twitch/device", loginTwitch.get)
 	authed.Get("/accounts/{id}/login/poll", loginTwitch.status)
 	authed.Post("/accounts/{id}/login", func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
