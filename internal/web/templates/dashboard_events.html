@@ -1,11 +1,19 @@
 {{define "dashboard_events"}}
-{{if not .}}<div class="ev" style="color:var(--muted)"><span class="body">No events yet.</span></div>{{end}}
+{{if not .}}<div class="ev empty"><span class="body">No events yet.</span></div>{{end}}
 {{range .}}
-<div class="ev">
-  <span class="t">{{.Time}}</span>
-  <span class="lvl" style="color:var(--{{.Color}})">●</span>
-  <span class="body">{{.BodyHTML | safe}}</span>
-  <span class="ac">{{.Account}}</span>
-</div>
+<details class="ev ev-{{.Kind}}">
+  <summary>
+    <span class="t">{{.Time}}</span>
+    <span class="lvl" style="color:var(--{{.Color}})">●</span>
+    <span class="kind" style="color:var(--{{.Color}})">{{.Kind}}</span>
+    <span class="body">{{.BodyHTML | safe}}</span>
+    <span class="ac">{{.Account}}</span>
+  </summary>
+  {{if .Details}}
+  <div class="ev-detail">
+    {{range .Details}}<span class="kv"><span class="k">{{.Key}}</span><span class="eq">=</span><span class="v">{{.Value}}</span></span>{{end}}
+  </div>
+  {{end}}
+</details>
 {{end}}
 {{end}}

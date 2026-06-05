@@ -553,22 +553,79 @@
   }
   .drawer-head .live::before { content: "●"; animation: pulse 1.5s ease-in-out infinite; }
 
-  .events { padding: 4px 0; max-height: 280px; overflow: auto; }
+  .drawer-head .ev-account {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 2px 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    max-width: 220px;
+  }
+  .drawer-head .ev-account:focus { outline: 1px solid var(--accent); }
+
+  .events { padding: 4px 0; max-height: 320px; overflow: auto; }
+  /* Each .ev is a <details> element so the operator can click to
+     reveal the structured fields from the underlying log line. */
   .ev {
-    display: grid;
-    grid-template-columns: 90px 16px 1fr 120px;
-    gap: 14px;
-    align-items: center;
-    padding: 6px 18px;
+    border-top: 1px solid transparent;
+    border-bottom: 1px solid transparent;
     font-family: 'JetBrains Mono', monospace;
     font-size: 11.5px;
   }
+  .ev > summary {
+    display: grid;
+    grid-template-columns: 80px 12px 64px 1fr 140px;
+    gap: 14px;
+    align-items: center;
+    padding: 6px 18px;
+    cursor: pointer;
+    list-style: none;
+  }
+  .ev > summary::-webkit-details-marker { display: none; }
   .ev:hover { background: var(--surface-2); }
+  .ev[open] { background: var(--surface-2); border-color: var(--line); }
   .ev .t { color: var(--muted); }
-  .ev .body { color: var(--text); }
-  .ev .body em { color: var(--accent); font-style: normal; }
-  .ev .ac { color: var(--muted); font-size: 10.5px; text-align: right; }
+  .ev .body { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ev .body em {
+    color: var(--muted);
+    font-style: normal;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    margin-right: 4px;
+  }
+  .ev .kind {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .ev .ac { color: var(--muted); font-size: 10.5px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ev .lvl { font-size: 11px; }
+  .ev.empty { padding: 12px 18px; color: var(--muted); }
+  .ev-detail {
+    padding: 4px 18px 10px 96px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    font-size: 10.5px;
+  }
+  .ev-detail .kv { color: var(--muted); }
+  .ev-detail .kv .k { color: var(--muted); }
+  .ev-detail .kv .eq { color: var(--line); margin: 0 2px; }
+  .ev-detail .kv .v { color: var(--text); }
+
+  /* Color-coded left border per event kind */
+  .ev-claim { box-shadow: inset 3px 0 0 var(--green); }
+  .ev-progress { box-shadow: inset 3px 0 0 var(--amber); }
+  .ev-state { box-shadow: inset 3px 0 0 var(--blue); }
+  .ev-discovery { box-shadow: inset 3px 0 0 var(--muted); }
+  .ev-error { box-shadow: inset 3px 0 0 var(--red); }
+  .ev-auth { box-shadow: inset 3px 0 0 var(--accent); }
 
   /* SIDE PANEL */
   aside {
@@ -1225,3 +1282,229 @@
     font-size: 14px;
   }
   .empty a { color: var(--accent); }
+
+  /* /drops tab strip */
+  .drops-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--line);
+    margin: 16px 0 0;
+  }
+  .drops-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    color: var(--muted);
+    text-decoration: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    cursor: pointer;
+  }
+  .drops-tab:hover { color: var(--fg); }
+  .drops-tab.on {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .drops-tab .count {
+    display: inline-block;
+    padding: 1px 8px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+  .drops-tab.on .count { color: var(--accent); border-color: var(--accent); }
+  .drops-tabpanel { margin-top: 16px; }
+
+  /* CAMPAIGN MODAL — opened from .camp.clickable rows in the
+     Active Campaigns sidebar. Centered overlay with backdrop click
+     and ESC dismiss (wired in dashboard.html). */
+  .camp.clickable { cursor: pointer; }
+  .camp.clickable:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 40px 24px;
+    overflow-y: auto;
+  }
+  .modal-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    max-width: 720px;
+    width: 100%;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  }
+  .modal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 16px 20px 14px;
+    border-bottom: 1px solid var(--line);
+    gap: 16px;
+  }
+  .modal-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .modal-sub {
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .modal-sub .pip {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .modal-sub .pip.twitch { background: var(--purple); }
+  .modal-sub .pip.kick { background: var(--kick); }
+  .modal-close {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    width: 28px;
+    height: 28px;
+    border-radius: 2px;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .modal-close:hover { color: var(--text); border-color: var(--text); }
+  .modal-body { padding: 16px 20px 20px; }
+  .modal-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px 18px;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed var(--line);
+    margin-bottom: 14px;
+  }
+  .modal-row .kv { display: flex; flex-direction: column; gap: 2px; }
+  .modal-row .kv .k {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+  }
+  .modal-row .kv .v {
+    font-size: 12.5px;
+    color: var(--text);
+    word-break: break-all;
+  }
+  .modal-row .kv .v small.muted { color: var(--muted); }
+  .modal-section { margin-top: 14px; }
+  .modal-section h4 {
+    margin: 0 0 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .modal-section h4 .meta {
+    color: var(--accent);
+    font-size: 10px;
+  }
+  .modal-section summary {
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--muted);
+    padding: 6px 0;
+  }
+  .modal-section summary:hover { color: var(--text); }
+  .modal-empty {
+    padding: 8px 0;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .modal-benefits {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .modal-benefits li {
+    display: flex;
+    gap: 10px;
+    padding: 8px 10px;
+    background: var(--surface-2);
+    border-radius: 3px;
+    align-items: center;
+  }
+  .modal-benefits .benefit-img {
+    width: 36px; height: 36px;
+    object-fit: contain;
+    background: var(--bg);
+    border-radius: 2px;
+  }
+  .modal-benefits .benefit-name {
+    font-size: 12.5px;
+    color: var(--text);
+  }
+  .modal-benefits .benefit-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .modal-accounts {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .modal-accounts li {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    padding: 3px 8px;
+    border-radius: 2px;
+  }
+  .modal-json {
+    margin: 8px 0 0;
+    padding: 10px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+    max-height: 320px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }

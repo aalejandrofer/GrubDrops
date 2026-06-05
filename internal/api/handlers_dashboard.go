@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/alexedwards/scs/v2"
+	"github.com/go-chi/chi/v5"
 
 	mlog "github.com/aalejandrofer/rust-drops-miner/internal/log"
 	"github.com/aalejandrofer/rust-drops-miner/internal/scheduler"
@@ -74,14 +76,42 @@ type dashQueueItem struct {
 }
 
 type dashCampaign struct {
+	ID         string // platform-side campaign id; identifies the modal target
 	Name       string
 	Platform   string // "twitch" | "kick"
+	Game       string
 	Drops      int
 	Channels   int
 	EndsIn     string // "12d" or "18h"
 	EndsUrgent bool
 	Claimed    int
 	Total      int
+}
+
+// dashCampaignDetail backs the campaign-detail modal partial. It carries
+// the full set of fields the operator wants to inspect when they click a
+// row in the Active Campaigns sidebar.
+type dashCampaignDetail struct {
+	ID               string
+	Name             string
+	Platform         string
+	Game             string
+	Status           string
+	StartsAt         string // formatted, e.g. "2026-06-01 14:00 UTC" or "—"
+	EndsAt           string // formatted
+	EndsIn           string // "12d" or "18h"
+	EndsUrgent       bool
+	Benefits         []dashCampaignBenefit
+	EligibleAccounts []string // account IDs that have this campaign's game whitelisted
+	SourceAccounts   []string // account IDs whose backend surfaced the campaign
+	RawJSON          string   // pretty-printed JSON for debugging
+}
+
+type dashCampaignBenefit struct {
+	ID              string
+	Name            string
+	RequiredMinutes int
+	ImageURL        string
 }
 
 type dashPrioItem struct {
@@ -107,10 +137,27 @@ type dashLiveChannel struct {
 }
 
 type dashEvent struct {
+	ID       string // stable-ish identifier for the event row (used by the details toggle)
 	Time     string // "14:31:02"
+	Kind     string // "claim" | "progress" | "state" | "discovery" | "error" | "auth" | "info"
 	Color    string // CSS var name fragment, e.g. "green", "amber", "blue", "muted", "red"
 	BodyHTML string // pre-escaped HTML (we control this)
 	Account  string
+	// Details is the structured key=value pairs from the underlying log
+	// line. Rendered inside an expandable section under the row.
+	Details []dashEventField
+}
+
+type dashEventField struct {
+	Key   string
+	Value string
+}
+
+// dashEventAccount is a {ID, Login} pair fed into the per-account
+// filter dropdown. The handler matches incoming `?account=` against ID.
+type dashEventAccount struct {
+	ID    string
+	Label string
 }
 
 type dashPage struct {
@@ -121,9 +168,12 @@ type dashPage struct {
 	Priority      []dashPrioItem
 	LiveChannels  []dashLiveChannel // wide grid under the events drawer
 	Events        []dashEvent
-	UpdatedAt     string // "1.2s ago"
-	NodeAddr      string // "10.10.2.40"
-	Uptime        string // "17h 42m"
+	EventAccounts []dashEventAccount // options for the per-account filter
+	EventAccount  string             // currently selected account ID (or "")
+	EventFilter   string             // currently selected kind filter (or "all")
+	UpdatedAt     string             // "1.2s ago"
+	NodeAddr      string             // "10.10.2.40"
+	Uptime        string             // "17h 42m"
 }
 
 func (d dashboardDeps) collectPage(r *http.Request) dashPage {
@@ -145,17 +195,86 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 
 	allowed := allowedLoginsFor(r, d.q, accs)
 	page := dashPage{
-		Tele:         telemetryFrom(cards, snapshots),
-		Mining:       cards,
-		NextClaims:   nextClaimsFrom(cards),
-		ActiveCamps:  stubActiveCamps(),
-		Priority:     stubPriority(),
-		LiveChannels: liveChannelsFor(accs, snapshots, allowed),
-		Events:       eventsFromRing(d.ring, ""),
-		UpdatedAt:    nowPoll(time.Now()),
-		Uptime:       formatUptime(time.Since(d.start)),
+		Tele:          telemetryFrom(cards, snapshots),
+		Mining:        cards,
+		NextClaims:    nextClaimsFrom(cards),
+		ActiveCamps:   activeCampsFromDiscovery(d.sch),
+		Priority:      stubPriority(),
+		LiveChannels:  liveChannelsFor(accs, snapshots, allowed),
+		Events:        eventsFromRing(d.ring, "", ""),
+		EventAccounts: eventAccountsFrom(accs),
+		EventFilter:   "all",
+		UpdatedAt:     nowPoll(time.Now()),
+		Uptime:        formatUptime(time.Since(d.start)),
 	}
 	return page
+}
+
+// activeCampsFromDiscovery projects the scheduler's discovery snapshot
+// into the row shape the Active Campaigns sidebar renders. The whitelist
+// filter is already applied inside DiscoverySnapshot — every row here
+// has at least one account that opted into its game.
+func activeCampsFromDiscovery(sch *scheduler.Scheduler) []dashCampaign {
+	if sch == nil {
+		return nil
+	}
+	snap := sch.DiscoverySnapshot()
+	out := make([]dashCampaign, 0, len(snap))
+	now := time.Now()
+	for _, dc := range snap {
+		ends := ""
+		urgent := false
+		if !dc.EndsAt.IsZero() {
+			ends = formatEndsIn(dc.EndsAt.Sub(now))
+			urgent = dc.EndsAt.Sub(now) < 24*time.Hour && dc.EndsAt.After(now)
+		}
+		out = append(out, dashCampaign{
+			ID:         dc.ID,
+			Name:       dc.Name,
+			Platform:   dc.Platform,
+			Game:       dc.Game,
+			Drops:      len(dc.Benefits),
+			Channels:   0, // TODO(discovery): plumb eligible-channel counts from twitch.allowedLoginsByCampaign
+			EndsIn:     ends,
+			EndsUrgent: urgent,
+			Claimed:    0, // TODO(discovery): cross-reference InventoryProgress to count claimed benefits
+			Total:      len(dc.Benefits),
+		})
+	}
+	return out
+}
+
+// formatEndsIn renders a duration as "12d", "18h", or "42m" so the
+// Active Campaigns rows stay compact. Negative durations (already
+// expired) render as "ended".
+func formatEndsIn(d time.Duration) string {
+	if d <= 0 {
+		return "ended"
+	}
+	if d >= 24*time.Hour {
+		days := int(d / (24 * time.Hour))
+		return fmt.Sprintf("%dd", days)
+	}
+	if d >= time.Hour {
+		return fmt.Sprintf("%dh", int(d/time.Hour))
+	}
+	return fmt.Sprintf("%dm", int(d/time.Minute))
+}
+
+// eventAccountsFrom projects the account list down to {ID, Label}
+// pairs for the per-account event-filter dropdown. Sorted by display
+// name to match the rest of the dashboard's account ordering.
+func eventAccountsFrom(accs []gen.Account) []dashEventAccount {
+	out := make([]dashEventAccount, 0, len(accs))
+	for _, a := range accs {
+		label := a.DisplayName
+		if a.Login != "" {
+			label = a.DisplayName + " (@" + a.Login + ")"
+		}
+		out = append(out, dashEventAccount{ID: a.ID, Label: label})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Label < out[j].Label })
+	return out
 }
 
 // allowedLoginsFor returns the union of game-slug + game-name whitelists
@@ -360,56 +479,131 @@ func nextClaimsFrom(cards []dashMineCard) []dashMineCard {
 	return active
 }
 
-func eventsFromRing(ring *mlog.Ring, filter string) []dashEvent {
+// eventsFromRing transforms the in-memory log ring into the
+// dashboard's event drawer model. The ring stores typed entries
+// (LogLine.Kind, set by the watcher / login handlers / ringHandler);
+// when Kind is empty we fall back to substring matching on the message
+// so older un-tagged log lines still classify usefully.
+//
+// `kindFilter` is one of "" / "all" / "claim" / "progress" / "state" /
+// "discovery" / "error" / "auth"; anything else is treated as "all".
+// `accountFilter` is the account ID to keep ("" or "all" = keep all).
+func eventsFromRing(ring *mlog.Ring, kindFilter, accountFilter string) []dashEvent {
 	if ring == nil {
 		return nil
 	}
 	lines := ring.Snapshot()
 	out := make([]dashEvent, 0, len(lines))
 	// reverse — newest first
-	for i := len(lines) - 1; i >= 0 && len(out) < 60; i-- {
+	for i := len(lines) - 1; i >= 0 && len(out) < 80; i-- {
 		l := lines[i]
-		category := classifyEvent(l.Msg)
-		if filter != "" && filter != "all" && category != filter {
+		kind := l.Kind
+		if kind == "" {
+			kind = classifyEvent(l.Msg, l.Level)
+		}
+		if kindFilter != "" && kindFilter != "all" && kind != kindFilter {
+			continue
+		}
+		acc := fieldStr(l.Fields, "account")
+		if accountFilter != "" && accountFilter != "all" && acc != accountFilter {
 			continue
 		}
 		out = append(out, dashEvent{
+			ID:       fmt.Sprintf("ev-%d-%d", l.TS.UnixNano(), i),
 			Time:     l.TS.UTC().Format("15:04:05"),
-			Color:    colorFor(l.Level),
-			BodyHTML: fmt.Sprintf("<em>%s</em> · %s", category, htmlEscape(l.Msg)),
-			Account:  fieldStr(l.Fields, "account"),
+			Kind:     kind,
+			Color:    colorForKind(kind, l.Level),
+			BodyHTML: fmt.Sprintf("<em>%s</em> · %s", kind, htmlEscape(l.Msg)),
+			Account:  acc,
+			Details:  detailsFor(l),
 		})
 	}
 	return out
 }
 
-func classifyEvent(msg string) string {
+// classifyEvent is the fallback for log lines without an explicit
+// Kind. Conservative — only fires on unambiguous substrings. New
+// structured emitters should set Kind directly instead of relying on
+// this.
+func classifyEvent(msg, level string) string {
 	m := strings.ToLower(msg)
 	switch {
 	case strings.Contains(m, "claim"):
 		return "claim"
 	case strings.Contains(m, "progress") || strings.Contains(m, "heartbeat"):
 		return "progress"
-	case strings.Contains(m, "state") || strings.Contains(m, "watcher pickcampaign") || strings.Contains(m, "watcher pickstream"):
+	case strings.Contains(m, "auth") || strings.Contains(m, "login") || strings.Contains(m, "session") || strings.Contains(m, "device-code") || strings.Contains(m, "cookies"):
+		return "auth"
+	case strings.Contains(m, "state") || strings.Contains(m, "pickcampaign") || strings.Contains(m, "pickstream") || strings.Contains(m, "starting watch"):
 		return "state"
-	case strings.Contains(m, "error") || strings.Contains(m, "failed"):
+	case strings.Contains(m, "discovery") || strings.Contains(m, "campaign") || strings.Contains(m, "benefit") || strings.Contains(m, "inventory"):
+		return "discovery"
+	}
+	switch strings.ToUpper(level) {
+	case "ERROR", "WARN":
 		return "error"
 	}
 	return "info"
 }
 
-func colorFor(level string) string {
+// colorForKind maps a structured event kind to a CSS variable name.
+// `level` is consulted as a fallback so unknown kinds still surface
+// errors in red rather than the muted "info" grey.
+func colorForKind(kind, level string) string {
+	switch kind {
+	case "claim":
+		return "green"
+	case "progress":
+		return "amber"
+	case "state":
+		return "blue"
+	case "discovery":
+		return "muted"
+	case "error":
+		return "red"
+	case "auth":
+		return "accent"
+	}
 	switch strings.ToUpper(level) {
 	case "ERROR":
 		return "red"
 	case "WARN":
 		return "amber"
-	case "INFO":
-		return "green"
-	case "DEBUG":
-		return "muted"
 	}
 	return "muted"
+}
+
+// detailsFor flattens the structured fields of a log line into a
+// stable-ordered slice for rendering under each event row. Keys we
+// surface first (account, channel, campaign, benefit, state) get a
+// consistent ordering; remaining keys are sorted alphabetically.
+// The `kind` field is dropped because it already appears in the row
+// header as the colored chip.
+func detailsFor(l mlog.LogLine) []dashEventField {
+	if len(l.Fields) == 0 {
+		return nil
+	}
+	priority := []string{"account", "platform", "state", "prev", "campaign", "game", "channel", "benefit", "benefit_name", "min_watched", "required", "err"}
+	seen := map[string]bool{}
+	out := make([]dashEventField, 0, len(l.Fields))
+	for _, k := range priority {
+		if v, ok := l.Fields[k]; ok {
+			out = append(out, dashEventField{Key: k, Value: fmt.Sprintf("%v", v)})
+			seen[k] = true
+		}
+	}
+	rest := make([]string, 0, len(l.Fields))
+	for k := range l.Fields {
+		if k == "kind" || seen[k] {
+			continue
+		}
+		rest = append(rest, k)
+	}
+	sort.Strings(rest)
+	for _, k := range rest {
+		out = append(out, dashEventField{Key: k, Value: fmt.Sprintf("%v", l.Fields[k])})
+	}
+	return out
 }
 
 func fieldStr(f map[string]any, k string) string {
@@ -561,8 +755,93 @@ func (d dashboardDeps) cards(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d dashboardDeps) events(w http.ResponseWriter, r *http.Request) {
-	filter := r.URL.Query().Get("filter")
-	renderPartial(w, d.t, "dashboard_events", eventsFromRing(d.ring, filter))
+	kind := r.URL.Query().Get("filter")
+	account := r.URL.Query().Get("account")
+	renderPartial(w, d.t, "dashboard_events", eventsFromRing(d.ring, kind, account))
+}
+
+// campaignDetail renders the modal partial for a single discovered
+// campaign. HTMX hits this from each Active Campaigns row; the response
+// is dropped into the dashboard's #modal target.
+func (d dashboardDeps) campaignDetail(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, "missing campaign id", http.StatusBadRequest)
+		return
+	}
+	dc, ok := d.sch.FindDiscoveredCampaign(id)
+	if !ok {
+		http.Error(w, "campaign not in discovery cache", http.StatusNotFound)
+		return
+	}
+
+	// Map account IDs to friendlier "DisplayName (@login)" labels so
+	// the modal lists humans, not opaque UUIDs.
+	accs, _ := d.q.ListAllAccounts(r.Context())
+	labelByID := map[string]string{}
+	for _, a := range accs {
+		lbl := a.DisplayName
+		if a.Login != "" {
+			lbl = a.DisplayName + " (@" + a.Login + ")"
+		}
+		labelByID[a.ID] = lbl
+	}
+	relabel := func(ids []string) []string {
+		out := make([]string, 0, len(ids))
+		for _, id := range ids {
+			if lbl, ok := labelByID[id]; ok {
+				out = append(out, lbl)
+			} else {
+				out = append(out, id)
+			}
+		}
+		return out
+	}
+
+	now := time.Now()
+	endsIn := ""
+	urgent := false
+	if !dc.EndsAt.IsZero() {
+		endsIn = formatEndsIn(dc.EndsAt.Sub(now))
+		urgent = dc.EndsAt.Sub(now) < 24*time.Hour && dc.EndsAt.After(now)
+	}
+	startsAt := "—"
+	if !dc.StartsAt.IsZero() {
+		startsAt = dc.StartsAt.UTC().Format("2006-01-02 15:04 UTC")
+	}
+	endsAt := "—"
+	if !dc.EndsAt.IsZero() {
+		endsAt = dc.EndsAt.UTC().Format("2006-01-02 15:04 UTC")
+	}
+
+	benefits := make([]dashCampaignBenefit, 0, len(dc.Benefits))
+	for _, b := range dc.Benefits {
+		benefits = append(benefits, dashCampaignBenefit{
+			ID:              b.ID,
+			Name:            b.Name,
+			RequiredMinutes: b.RequiredMinutes,
+			ImageURL:        b.ImageURL,
+		})
+	}
+
+	rawJSON, _ := json.MarshalIndent(dc.Campaign, "", "  ")
+
+	detail := dashCampaignDetail{
+		ID:               dc.ID,
+		Name:             dc.Name,
+		Platform:         dc.Platform,
+		Game:             dc.Game,
+		Status:           dc.Status,
+		StartsAt:         startsAt,
+		EndsAt:           endsAt,
+		EndsIn:           endsIn,
+		EndsUrgent:       urgent,
+		Benefits:         benefits,
+		EligibleAccounts: relabel(dc.EligibleAccounts),
+		SourceAccounts:   relabel(dc.SourceAccounts),
+		RawJSON:          string(rawJSON),
+	}
+	renderPartial(w, d.t, "dashboard_campaign_modal", detail)
 }
 
 // nowPoll formats how long ago t was, for the "last poll" display.

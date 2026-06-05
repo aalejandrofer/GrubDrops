@@ -38,3 +38,59 @@ func TestNewWithRing_WritesToBoth(t *testing.T) {
 	assert.Equal(t, 1, len(rb.Snapshot()))
 	assert.Equal(t, "ping", rb.Snapshot()[0].Msg)
 }
+
+// Regression: structured emitters (e.g. the watcher) attach a "kind"
+// attribute; the ringHandler must capture it on LogLine.Kind so the
+// dashboard can color-code without falling back to substring guesswork.
+func TestNewWithRing_ExtractsKindAttr(t *testing.T) {
+	var buf bytes.Buffer
+	rb := NewRing(10)
+	l := NewWithRing(&buf, "debug", rb)
+	l.Info("watcher claim recorded", "kind", "claim", "account", "acc1", "benefit", "b1")
+
+	snap := rb.Snapshot()
+	require.Equal(t, 1, len(snap))
+	assert.Equal(t, "claim", snap[0].Kind)
+	assert.Equal(t, "acc1", snap[0].Fields["account"])
+}
+
+func TestPushEvent_AppendsAndCopiesFields(t *testing.T) {
+	rb := NewRing(4)
+	fields := map[string]any{"account": "acc1"}
+	rb.PushEvent(KindClaim, "", "claim recorded", fields)
+	// Mutating the caller's map must not corrupt the ring entry.
+	fields["account"] = "MUTATED"
+
+	snap := rb.Snapshot()
+	require.Equal(t, 1, len(snap))
+	assert.Equal(t, KindClaim, snap[0].Kind)
+	assert.Equal(t, "INFO", snap[0].Level)
+	assert.Equal(t, "acc1", snap[0].Fields["account"])
+}
+
+// A nil receiver must be a no-op — callers shouldn't have to guard
+// each emission.
+func TestPushEvent_NilReceiverIsNoop(t *testing.T) {
+	var rb *Ring
+	assert.NotPanics(t, func() {
+		rb.PushEvent(KindClaim, "", "msg", nil)
+	})
+}
+
+func TestNewRingFromEnv_DefaultWhenUnset(t *testing.T) {
+	t.Setenv("MINER_LOG_RING", "")
+	rb := NewRingFromEnv(7)
+	assert.Equal(t, 7, rb.size)
+}
+
+func TestNewRingFromEnv_HonoursValidEnv(t *testing.T) {
+	t.Setenv("MINER_LOG_RING", "42")
+	rb := NewRingFromEnv(7)
+	assert.Equal(t, 42, rb.size)
+}
+
+func TestNewRingFromEnv_FallsBackOnGarbage(t *testing.T) {
+	t.Setenv("MINER_LOG_RING", "not-a-number")
+	rb := NewRingFromEnv(7)
+	assert.Equal(t, 7, rb.size)
+}

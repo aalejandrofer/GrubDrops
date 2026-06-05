@@ -16,6 +16,15 @@ type Notifier interface {
 	Notify(ctx context.Context, event string, fields map[string]any) error
 }
 
+// CampaignPersister is the seam that lets the watcher write every campaign
+// it discovers — past, current, and upcoming — to the local DB so the
+// /drops page can show them. The watcher only calls this for campaigns
+// the per-account whitelist already accepted, so non-whitelisted rows
+// NEVER touch the campaigns table.
+type CampaignPersister interface {
+	PersistCampaigns(ctx context.Context, camps []platform.Campaign) error
+}
+
 type Config struct {
 	AccountID    string
 	Backend      platform.Backend
@@ -37,6 +46,13 @@ type Config struct {
 	// (lower = higher priority). Used to sort matching campaigns.
 	// Defaults to math.MaxInt when AllowGame is nil.
 	GameRank func(game string) int
+
+	// Persister, when set, receives every campaign the backend discovered
+	// after the watcher's whitelist filter has been applied. Used so the
+	// /drops page can render past + current + upcoming rows even before
+	// anything has been claimed. Non-whitelisted campaigns are NEVER
+	// passed to the persister.
+	Persister CampaignPersister
 }
 
 type Watcher struct {
@@ -81,6 +97,26 @@ func (w *Watcher) State() State {
 }
 
 func (w *Watcher) AccountID() string { return w.cfg.AccountID }
+
+// AllowGame exposes the per-account whitelist predicate so external
+// consumers (e.g. the dashboard's discovery union) can apply the same
+// filter as the watcher. May be nil for legacy "mine anything" config.
+func (w *Watcher) AllowGame() func(game string) bool { return w.cfg.AllowGame }
+
+// LastDiscovery returns a copy of the most recent successful
+// Backend.ListActiveCampaigns result, plus the time it was captured.
+// Returns (nil, zero-time) before the watcher has completed a
+// successful pickCampaign tick.
+func (w *Watcher) LastDiscovery() ([]platform.Campaign, time.Time) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.lastDiscovery) == 0 {
+		return nil, w.lastDiscoveryAt
+	}
+	out := make([]platform.Campaign, len(w.lastDiscovery))
+	copy(out, w.lastDiscovery)
+	return out, w.lastDiscoveryAt
+}
 
 // Snapshot is the dashboard-friendly view of a watcher's in-flight
 // state. Safe to call from any goroutine; returns a copy.
@@ -238,17 +274,48 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 		}
 	}
 
-	// Filter campaigns by per-account whitelist (if configured) and
-	// sort by the whitelist rank — lower rank = higher priority.
-	matched := campaigns
+	// Apply the per-account whitelist to EVERYTHING the backend returned —
+	// active, expired, upcoming. Non-whitelisted campaigns are dropped
+	// here so they never reach the persister or the mining loop.
+	var whitelisted []platform.Campaign
 	if w.cfg.AllowGame != nil {
-		filtered := matched[:0]
+		whitelisted = make([]platform.Campaign, 0, len(campaigns))
 		for _, c := range campaigns {
 			if w.cfg.AllowGame(c.Game) {
-				filtered = append(filtered, c)
+				whitelisted = append(whitelisted, c)
 			}
 		}
-		matched = filtered
+	} else {
+		whitelisted = campaigns
+	}
+
+	// Persist every whitelisted campaign (regardless of status) so the
+	// /drops page can render past + upcoming tabs. Persistence failures
+	// are non-fatal — we still want to mine even if the DB hiccups.
+	if w.cfg.Persister != nil && len(whitelisted) > 0 {
+		if err := w.cfg.Persister.PersistCampaigns(ctx, whitelisted); err != nil {
+			slog.Warn("watcher persist campaigns failed", "kind", "error", "account", w.cfg.AccountID, "err", err)
+		}
+	}
+
+	// Cache the whitelisted discovery for outside readers (dashboard +
+	// /drops fallback). Copy first so callers can't mutate our slice.
+	cached := make([]platform.Campaign, len(whitelisted))
+	copy(cached, whitelisted)
+	w.mu.Lock()
+	w.lastDiscovery = cached
+	w.lastDiscoveryAt = time.Now()
+	w.mu.Unlock()
+
+	// For mining, keep only ACTIVE campaigns and sort by whitelist rank
+	// (lower = higher priority). Empty Status is treated as "active" for
+	// backwards compatibility with the platformtest MockBackend.
+	matched := make([]platform.Campaign, 0, len(whitelisted))
+	for _, c := range whitelisted {
+		if c.Status != "" && c.Status != "active" {
+			continue
+		}
+		matched = append(matched, c)
 	}
 	if w.cfg.GameRank != nil {
 		sort.SliceStable(matched, func(i, j int) bool {
@@ -289,19 +356,19 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 
 	streams, err := w.cfg.Backend.ListEligibleChannels(ctx, w.cfg.Session, camp)
 	if err != nil {
-		slog.Error("watcher list channels failed", "account", w.cfg.AccountID, "campaign", camp.Name, "err", err)
+		slog.Error("watcher list channels failed", "kind", "error", "account", w.cfg.AccountID, "campaign", camp.Name, "err", err)
 		return fmt.Errorf("list channels: %w", err)
 	}
 	if len(streams) == 0 {
-		slog.Info("watcher no eligible streams live, sleeping", "account", w.cfg.AccountID, "campaign", camp.Name)
+		slog.Info("watcher no eligible streams live, sleeping", "kind", "discovery", "account", w.cfg.AccountID, "campaign", camp.Name)
 		w.setState(ctx, StateSleeping)
 		return nil
 	}
 	s := streams[0]
-	slog.Info("watcher starting watch", "account", w.cfg.AccountID, "channel", s.Channel, "campaign", camp.Name, "eligible_count", len(streams))
+	slog.Info("watcher starting watch", "kind", "state", "account", w.cfg.AccountID, "channel", s.Channel, "campaign", camp.Name, "eligible_count", len(streams))
 	h, err := w.cfg.Backend.StartWatch(ctx, w.cfg.Session, s)
 	if err != nil {
-		slog.Error("watcher StartWatch failed", "account", w.cfg.AccountID, "channel", s.Channel, "err", err)
+		slog.Error("watcher StartWatch failed", "kind", "error", "account", w.cfg.AccountID, "channel", s.Channel, "err", err)
 		return fmt.Errorf("start watch: %w", err)
 	}
 	w.mu.Lock()
@@ -321,7 +388,7 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 	w.mu.Unlock()
 
 	if err := w.cfg.Backend.Heartbeat(ctx, handle); err != nil {
-		slog.Error("watcher heartbeat failed", "account", w.cfg.AccountID, "channel", handle.Channel, "err", err)
+		slog.Error("watcher heartbeat failed", "kind", "error", "account", w.cfg.AccountID, "channel", handle.Channel, "err", err)
 		return fmt.Errorf("heartbeat: %w", err)
 	}
 
@@ -332,12 +399,12 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 	}
 	for _, p := range progress {
 		if p.BenefitID == benefit.ID {
-			slog.Debug("watcher progress", "account", w.cfg.AccountID, "benefit", benefit.ID, "min_watched", p.MinutesWatched, "required", benefit.RequiredMinutes, "claimed", p.Claimed)
+			slog.Info("watcher progress", "kind", "progress", "account", w.cfg.AccountID, "benefit", benefit.ID, "min_watched", p.MinutesWatched, "required", benefit.RequiredMinutes, "claimed", p.Claimed)
 			w.mu.Lock()
 			w.lastProgressMin = p.MinutesWatched
 			w.mu.Unlock()
 			if p.MinutesWatched >= benefit.RequiredMinutes {
-				slog.Info("watcher benefit complete, claiming", "account", w.cfg.AccountID, "benefit", benefit.ID)
+				slog.Info("watcher benefit complete, claiming", "kind", "claim", "account", w.cfg.AccountID, "benefit", benefit.ID, "benefit_name", benefit.Name, "channel", handle.Channel)
 				w.setState(ctx, StateClaiming)
 				return nil
 			}
@@ -357,9 +424,17 @@ func (w *Watcher) claim(ctx context.Context) error {
 	w.mu.Unlock()
 
 	if err := w.cfg.Backend.Claim(ctx, w.cfg.Session, benefit); err != nil {
+		slog.Error("watcher claim failed", "kind", "error", "account", w.cfg.AccountID, "benefit", benefit.ID, "err", err)
 		return fmt.Errorf("claim: %w", err)
 	}
 	_ = w.cfg.Backend.StopWatch(ctx, handle)
+
+	slog.Info("watcher claim recorded",
+		"kind", "claim",
+		"account", w.cfg.AccountID,
+		"benefit", benefit.ID,
+		"benefit_name", benefit.Name,
+		"channel", handle.Channel)
 
 	_ = w.cfg.Notifier.Notify(ctx, "claim", map[string]any{
 		"account": w.cfg.AccountID, "benefit": benefit.ID,

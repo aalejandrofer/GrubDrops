@@ -74,7 +74,7 @@ func (d *loginTwitchPasteDeps) post(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess := &pb.TwitchSession{Cookies: cookies}
-	slog.Info("twitch paste login attempt", "account", id, "cookie_count", len(cookies))
+	slog.Info("twitch paste login attempt", "kind", "auth", "account", id, "platform", "twitch", "cookie_count", len(cookies))
 
 	// Try to verify via the sidecar, but DO NOT block persistence on
 	// failure — the most common cause of failure (PerimeterX shimming
@@ -84,10 +84,10 @@ func (d *loginTwitchPasteDeps) post(w http.ResponseWriter, r *http.Request) {
 	var username, userID string
 	resp, vErr := d.browser.TwitchAuthenticate(r.Context(), id, sess)
 	if vErr != nil {
-		slog.Warn("twitch sidecar verify failed; persisting cookies anyway", "account", id, "err", vErr)
+		slog.Warn("twitch sidecar verify failed; persisting cookies anyway", "kind", "auth", "account", id, "platform", "twitch", "err", vErr)
 	} else {
 		username, userID = resp.Username, resp.UserId
-		slog.Info("twitch sidecar verified", "account", id, "username", username, "user_id", userID)
+		slog.Info("twitch sidecar verified", "kind", "auth", "account", id, "platform", "twitch", "username", username, "user_id", userID)
 	}
 
 	stored := twitchPastedSession{

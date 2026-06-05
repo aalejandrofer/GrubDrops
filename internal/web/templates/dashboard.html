@@ -60,21 +60,58 @@
     </section>
 
     <section class="drawer">
-      <div class="drawer-head">
+      <form class="drawer-head" id="events-form" autocomplete="off"
+            hx-get="/dashboard/events"
+            hx-target="#events-list"
+            hx-swap="innerHTML"
+            hx-trigger="change, click from:.filter a">
         <h3>Live events</h3>
-        <div class="filter">
-          <a class="on" hx-get="/dashboard/events?filter=all" hx-target="#events-list" hx-swap="innerHTML" href="#">all</a>
-          <a hx-get="/dashboard/events?filter=claim" hx-target="#events-list" hx-swap="innerHTML" href="#">claims</a>
-          <a hx-get="/dashboard/events?filter=progress" hx-target="#events-list" hx-swap="innerHTML" href="#">progress</a>
-          <a hx-get="/dashboard/events?filter=state" hx-target="#events-list" hx-swap="innerHTML" href="#">state</a>
-          <a hx-get="/dashboard/events?filter=error" hx-target="#events-list" hx-swap="innerHTML" href="#">errors</a>
+        <div class="filter" role="group" aria-label="event kind filter">
+          <input type="hidden" name="filter" id="ev-filter" value="all">
+          <a class="on" data-kind="all" href="#">all</a>
+          <a data-kind="claim" href="#" style="color:var(--green)">claims</a>
+          <a data-kind="progress" href="#" style="color:var(--amber)">progress</a>
+          <a data-kind="state" href="#" style="color:var(--blue)">state</a>
+          <a data-kind="discovery" href="#">discovery</a>
+          <a data-kind="auth" href="#" style="color:var(--accent)">auth</a>
+          <a data-kind="error" href="#" style="color:var(--red)">errors</a>
         </div>
+        <select name="account" id="ev-account" class="ev-account">
+          <option value="all">all accounts</option>
+          {{range .EventAccounts}}<option value="{{.ID}}">{{.Label}}</option>{{end}}
+        </select>
         <div class="live">streaming</div>
-      </div>
-      <div class="events" id="events-list" hx-get="/dashboard/events?filter=all" hx-trigger="every 3s" hx-swap="innerHTML">
+      </form>
+      <div class="events" id="events-list"
+           hx-get="/dashboard/events"
+           hx-include="#events-form"
+           hx-trigger="every 3s"
+           hx-swap="innerHTML">
         {{template "dashboard_events" .Events}}
       </div>
     </section>
+    <script>
+      // Filter tabs are pure anchors; click selects them and mirrors
+      // into the hidden #ev-filter input so HTMX requests carry the
+      // kind in the query string. Listing as a small inline script
+      // keeps the template self-contained and avoids a new JS bundle.
+      (function () {
+        var form = document.getElementById('events-form');
+        if (!form) return;
+        var hidden = document.getElementById('ev-filter');
+        var tabs = form.querySelectorAll('.filter a');
+        tabs.forEach(function (a) {
+          a.addEventListener('click', function (e) {
+            e.preventDefault();
+            tabs.forEach(function (t) { t.classList.remove('on'); });
+            a.classList.add('on');
+            hidden.value = a.getAttribute('data-kind') || 'all';
+            // Manually dispatch so HTMX picks up the new hidden value.
+            htmx.trigger(form, 'change');
+          });
+        });
+      })();
+    </script>
 
   </div>
 
@@ -86,15 +123,23 @@
         <span class="meta">{{len .ActiveCamps}} · auto-discovered</span>
       </div>
       <div class="panel-body">
+        {{if not .ActiveCamps}}
+        <div class="empty" style="padding: 18px; font-size: 12px;">No whitelisted campaigns discovered yet. Watchers populate this on the first successful poll.</div>
+        {{end}}
         {{range .ActiveCamps}}
-        <div class="camp">
+        <div class="camp clickable"
+             hx-get="/dashboard/campaign/{{.ID}}"
+             hx-target="#modal"
+             hx-swap="innerHTML"
+             role="button"
+             tabindex="0">
           <span class="pip {{.Platform}}"></span>
           <div class="body">
             <div class="name">{{.Name}}</div>
-            <div class="sub"><b>{{.Drops}}</b> drops · {{.Channels}} channels eligible</div>
+            <div class="sub"><b>{{.Drops}}</b> drops · {{if .Game}}{{.Game}}{{else}}—{{end}}</div>
           </div>
           <div class="right">
-            <div class="ends" {{if .EndsUrgent}}style="color: var(--red)"{{end}}>ends {{.EndsIn}}</div>
+            <div class="ends" {{if .EndsUrgent}}style="color: var(--red)"{{end}}>{{if .EndsIn}}ends {{.EndsIn}}{{else}}—{{end}}</div>
             <div class="pct">{{.Claimed}}/{{.Total}} claimed</div>
           </div>
         </div>
@@ -146,6 +191,30 @@
   <div class="live-channels-empty">no eligible channels live right now</div>
   {{end}}
 </section>
+
+{{/* Modal target — populated by hx-get on Active Campaigns rows.
+     Empty by default; the partial owns its own overlay markup. */}}
+<div id="modal"></div>
+<script>
+  (function () {
+    // ESC closes whatever modal is open.
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        var m = document.getElementById('modal');
+        if (m) m.innerHTML = '';
+      }
+    });
+    // Backdrop click closes — relies on the partial root having
+    // data-modal-backdrop set on the overlay element.
+    document.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t && t.hasAttribute && t.hasAttribute('data-modal-backdrop')) {
+        var m = document.getElementById('modal');
+        if (m) m.innerHTML = '';
+      }
+    });
+  })();
+</script>
 {{end}}
 {{end}}
 

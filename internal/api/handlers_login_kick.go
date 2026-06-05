@@ -95,7 +95,7 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pbSession := &pb.KickSession{Cookies: cookies, XsrfToken: xsrf}
-	slog.Info("kick login attempt", "account", id, "channel", channel, "cookie_count", len(cookies), "has_cf_clearance", cfClearance != "", "kick_session_len", len(kickSessionCookie), "xsrf_len", len(xsrf))
+	slog.Info("kick login attempt", "kind", "auth", "account", id, "platform", "kick", "channel", channel, "cookie_count", len(cookies), "has_cf_clearance", cfClearance != "", "kick_session_len", len(kickSessionCookie), "xsrf_len", len(xsrf))
 
 	// Same pattern as the Twitch paste handler: persist cookies even
 	// when the sidecar can't verify them right now. Verification can
@@ -107,10 +107,10 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 	var username string
 	resp, vErr := d.browser.Authenticate(r.Context(), pbSession)
 	if vErr != nil {
-		slog.Warn("kick sidecar verify failed; persisting cookies anyway", "account", id, "err", vErr)
+		slog.Warn("kick sidecar verify failed; persisting cookies anyway", "kind", "auth", "account", id, "platform", "kick", "err", vErr)
 	} else {
 		username = resp.Username
-		slog.Info("kick sidecar verified", "account", id, "username", username)
+		slog.Info("kick sidecar verified", "kind", "auth", "account", id, "platform", "kick", "username", username)
 	}
 
 	internal := kickSessionForStorage{

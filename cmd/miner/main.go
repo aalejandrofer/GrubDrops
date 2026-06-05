@@ -42,7 +42,7 @@ func run() error {
 		return err
 	}
 
-	ring := mlog.NewRing(1000)
+	ring := mlog.NewRingFromEnv(1000)
 	logger := mlog.NewWithRing(os.Stdout, cfg.LogLevel, ring)
 	slog.SetDefault(logger)
 	startTime := time.Now()
@@ -149,6 +149,11 @@ func run() error {
 
 	sched := scheduler.New(scheduler.Options{Notifier: notifier})
 
+	// Persister writes every whitelisted campaign the watcher discovers
+	// into the campaigns table so the /drops page can render past +
+	// current + upcoming tabs. Shared by every watcher.
+	campaignPersister := store.NewCampaignPersister(q)
+
 	build := func(a gen.Account) (scheduler.Entry, error) {
 		b, ok := registry.Get(a.Platform)
 		if !ok {
@@ -205,6 +210,7 @@ func run() error {
 			AccountID: a.ID, Backend: b, Session: sess,
 			Notifier: notifier, TickInterval: 500 * time.Millisecond,
 			AllowGame: allow, GameRank: rank,
+			Persister: campaignPersister,
 		})
 		return scheduler.NewEntry(a.ID, w), nil
 	}

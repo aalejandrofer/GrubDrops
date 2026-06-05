@@ -108,13 +108,13 @@ func (d *loginTwitchDeps) poll(accountID string, backend platform.Backend, st *t
 				slog.Debug("twitch device-code still pending", "account", accountID)
 				continue
 			}
-			slog.Error("twitch device-code poll failed", "account", accountID, "err", err)
+			slog.Error("twitch device-code poll failed", "kind", "auth", "account", accountID, "platform", "twitch", "err", err)
 			st.mu.Lock()
 			st.status = "error"
 			st.mu.Unlock()
 			return
 		}
-		slog.Info("twitch device-code authorized", "account", accountID, "expires_at", sess.ExpiresAt)
+		slog.Info("twitch device-code authorized", "kind", "auth", "account", accountID, "platform", "twitch", "expires_at", sess.ExpiresAt)
 		if err := d.sessions.Put(d.rootCtx, accountID, sess); err != nil {
 			slog.Error("persist twitch session failed", "account", accountID, "err", err)
 			st.mu.Lock()
@@ -135,7 +135,7 @@ func (d *loginTwitchDeps) poll(accountID string, backend platform.Backend, st *t
 		st.mu.Unlock()
 		return
 	}
-	slog.Warn("twitch device-code expired before user authorized", "account", accountID)
+	slog.Warn("twitch device-code expired before user authorized", "kind", "auth", "account", accountID, "platform", "twitch")
 	st.mu.Lock()
 	st.status = "expired"
 	st.mu.Unlock()
