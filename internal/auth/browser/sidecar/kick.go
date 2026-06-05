@@ -301,13 +301,57 @@ func (k *Kick) ScrapeActiveDrops(ctx context.Context, accountID string, session 
 		}
 	}
 
-	const dropsURL = "https://kick.com/drops"
-	var nuxtRaw, nextRaw, htmlRaw string
+	// Kick's canonical drops listing is /drops/all-campaigns (user-
+	// pointed). Force a fresh render via about:blank to avoid serving
+	// the cached degraded HTML when Cloudflare flagged us earlier.
+	const dropsURL = "https://kick.com/drops/all-campaigns"
+	var nuxtRaw, nextRaw, htmlRaw, domRaw string
+	const domScrapeScript = `(() => {
+		// Walk every img[alt] (game box-art) and climb to its card
+		// ancestor — same pattern as the Twitch scraper. Kick uses
+		// portrait box art for each campaign card.
+		const out = [];
+		const seen = new Set();
+		const imgs = Array.from(document.querySelectorAll('img[alt]'));
+		for (const img of imgs) {
+			const alt = (img.alt || '').trim();
+			if (!alt || alt.length > 80) continue;
+			const w = img.naturalWidth || img.width || 0;
+			const h = img.naturalHeight || img.height || 0;
+			if (w > 0 && h > 0 && (h <= w * 1.1)) continue;
+			let card = img.parentElement;
+			for (let i = 0; i < 6 && card; i++) {
+				const txt = (card.textContent || '').trim();
+				if (txt.length > alt.length + 4 && card.children.length >= 2) break;
+				card = card.parentElement;
+			}
+			if (!card) continue;
+			const txt = (card.textContent || '').trim();
+			if (txt.length < alt.length + 5) continue;
+			const lines = txt.split('\n').map(s => s.trim()).filter(Boolean);
+			const nameLine = lines.find(l => l && l !== alt);
+			const name = (nameLine || lines[0] || alt).slice(0, 200);
+			const link = card.querySelector('a[href*="/drops/"]');
+			const href = link ? (link.getAttribute('href') || '') : '';
+			const id = (href || (alt + '|' + name));
+			if (seen.has(id)) continue;
+			seen.add(id);
+			out.push({id: id, name: name, game: alt});
+		}
+		return JSON.stringify(out);
+	})()`
 	err = chromedp.Run(tabCtx,
+		chromedp.Navigate("about:blank"),
+		chromedp.Sleep(500*time.Millisecond),
 		chromedp.Navigate(dropsURL),
-		chromedp.Sleep(5*time.Second),
+		chromedp.Sleep(8*time.Second),
+		chromedp.Evaluate(`window.scrollTo(0,document.body.scrollHeight); 1`, new(int)),
+		chromedp.Sleep(3*time.Second),
+		chromedp.Evaluate(`window.scrollTo(0,0); 1`, new(int)),
+		chromedp.Sleep(2*time.Second),
 		chromedp.Evaluate(`JSON.stringify(window.__NUXT__ || {})`, &nuxtRaw),
 		chromedp.Evaluate(`JSON.stringify(window.__NEXT_DATA__ || {})`, &nextRaw),
+		chromedp.Evaluate(domScrapeScript, &domRaw),
 		chromedp.Evaluate(`document.documentElement.outerHTML`, &htmlRaw),
 	)
 	if err != nil {
@@ -319,18 +363,34 @@ func (k *Kick) ScrapeActiveDrops(ctx context.Context, accountID string, session 
 		slog.Info("kick scrape drops parsed state", "source", src, "count", len(camps))
 		return camps, nil
 	}
-	// Fallback: DOM scrape for drop cards. Kick.com may render the list
-	// purely client-side, in which case the state blob is empty until
-	// the SPA hydrates the cards. parseActiveDropsHTML pulls any
-	// [data-drop-card] / .drop-card style elements out of the markup.
+	// New: img[alt] walk via DOM script (mirrors Twitch scrape). Most
+	// reliable for the modern Kick app which doesn't expose state via
+	// __NUXT__ or __NEXT_DATA__ anymore.
+	if domRaw != "" {
+		var domCards []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+			Game string `json:"game"`
+		}
+		if err := json.Unmarshal([]byte(domRaw), &domCards); err == nil && len(domCards) > 0 {
+			out := make([]*pb.KickCampaign, 0, len(domCards))
+			for _, c := range domCards {
+				out = append(out, &pb.KickCampaign{Id: c.ID, Name: c.Name, Game: c.Game, Status: "active"})
+			}
+			slog.Info("kick scrape drops parsed dom-walk", "count", len(out))
+			return dedupCampaigns(out), nil
+		}
+	}
+	// Fallback: HTML data-attribute scan (legacy).
 	camps = parseActiveDropsHTML(htmlRaw)
 	if len(camps) > 0 {
-		slog.Info("kick scrape drops parsed dom", "count", len(camps))
+		slog.Info("kick scrape drops parsed dom-attr", "count", len(camps))
 		return camps, nil
 	}
 	slog.Warn("kick scrape drops: no campaigns found",
 		"nuxt_prefix", truncate(nuxtRaw, 200),
 		"next_prefix", truncate(nextRaw, 200),
+		"dom_prefix", truncate(domRaw, 200),
 		"html_prefix", truncate(htmlRaw, 200),
 	)
 	return nil, nil
