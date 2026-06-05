@@ -21,129 +21,118 @@
   {{if .Flash}}<div class="flash-ok">{{.Flash}}</div>{{end}}
 
   {{with .Page}}
-  <div class="settings-grid" style="display:grid;grid-template-columns:2fr 1fr;gap:20px;align-items:start;">
+  <div class="form-card wide">
 
-    <div class="form-card">
-      <h2 class="settings-h" style="margin:0 0 14px;font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.18em;color:var(--muted);">Notifications</h2>
-      <form method="post" action="/settings" id="settings-form">
-        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-        <label>Global Discord webhook URL <span style="text-transform:none;font-family:'IBM Plex Sans',sans-serif;letter-spacing:0;color:var(--muted);font-size:11px;">(per-account overrides)</span>
+    <form method="post" action="/settings" id="settings-form">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+
+      <section class="settings-block">
+        <header class="section-h"><h3>Notifications</h3><span class="meta">Discord webhook</span></header>
+        <label>Global Discord webhook URL
           <input type="url" name="discord_webhook" value="{{.GlobalDiscordWebhook}}" placeholder="https://discord.com/api/webhooks/…">
         </label>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:6px;">
+        <div class="settings-grid-4">
           <label class="cb"><input type="checkbox" name="notify_claim" value="1" {{if .NotifyClaim}}checked{{end}}> claims</label>
           <label class="cb"><input type="checkbox" name="notify_progress" value="1" {{if .NotifyProgress}}checked{{end}}> progress</label>
           <label class="cb"><input type="checkbox" name="notify_auth" value="1" {{if .NotifyAuth}}checked{{end}}> auth</label>
           <label class="cb"><input type="checkbox" name="notify_error" value="1" {{if .NotifyError}}checked{{end}}> errors</label>
         </div>
+      </section>
 
-        <h2 class="settings-h" style="margin:24px 0 14px;font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.18em;color:var(--muted);">Runtime</h2>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <label>Watcher tick interval <span style="color:var(--muted);font-weight:400">(ms)</span>
+      <section class="settings-block">
+        <header class="section-h"><h3>Runtime</h3><span class="meta">Reload required</span></header>
+        <div class="settings-grid-2">
+          <label>Watcher tick interval (ms)
             <input type="number" name="tick_interval_ms" value="{{.TickIntervalMs}}" min="100" max="60000">
           </label>
-          <label>Discovery interval <span style="color:var(--muted);font-weight:400">(seconds)</span>
+          <label>Discovery interval (seconds)
             <input type="number" name="discovery_interval_sec" value="{{.DiscoveryIntervalSec}}" min="30" max="3600">
           </label>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <label>Priority mode <span style="color:var(--muted);font-weight:400">(when multiple drops eligible)</span>
-            <select name="priority_mode">
-              <option value="ordered" {{if eq .PriorityMode "ordered"}}selected{{end}}>Ordered — top whitelist first</option>
-              <option value="ending_soonest" {{if eq .PriorityMode "ending_soonest"}}selected{{end}}>Ending soonest — claim expiring first</option>
-            </select>
-          </label>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <label>Log level <span style="color:var(--muted);font-weight:400">(blank = env <code>{{.LogLevelEnv}}</code>)</span>
+        <label>Priority mode
+          <select name="priority_mode">
+            <option value="ordered" {{if eq .PriorityMode "ordered"}}selected{{end}}>Ordered — top whitelist first</option>
+            <option value="ending_soonest" {{if eq .PriorityMode "ending_soonest"}}selected{{end}}>Ending soonest — claim expiring first</option>
+          </select>
+        </label>
+        <div class="settings-grid-2">
+          <label>Log level
             <select name="log_level">
-              <option value="" {{if eq .LogLevel ""}}selected{{end}}>default</option>
+              <option value="" {{if eq .LogLevel ""}}selected{{end}}>default ({{.LogLevelEnv}})</option>
               <option value="debug" {{if eq .LogLevel "debug"}}selected{{end}}>debug</option>
               <option value="info" {{if eq .LogLevel "info"}}selected{{end}}>info</option>
               <option value="warn" {{if eq .LogLevel "warn"}}selected{{end}}>warn</option>
               <option value="error" {{if eq .LogLevel "error"}}selected{{end}}>error</option>
             </select>
           </label>
-          <label>Log retention <span style="color:var(--muted);font-weight:400">(days)</span>
+          <label>Log retention (days)
             <input type="number" name="log_retention_days" value="{{.LogRetentionDays}}" min="1" max="365">
           </label>
         </div>
+      </section>
 
-        <div class="row" style="margin-top:16px;">
-          <a class="back-link" href="/">← back</a>
-          <button class="btn primary" type="submit">Save →</button>
-        </div>
-      </form>
+      <div class="row">
+        <a class="back-link" href="/">← back</a>
+        <button class="btn primary" type="submit">Save →</button>
+      </div>
+    </form>
 
-      <h2 class="settings-h" style="margin:24px 0 10px;font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.18em;color:var(--muted);">Global priority list</h2>
-      <p style="color: var(--muted); font-size: 12px; margin: 0 0 12px;">
-        Default priority for accounts whose per-account whitelist is empty. Drag to reorder — top = mined first.
-      </p>
+    <section class="settings-block">
+      <header class="section-h"><h3>Global priority list</h3><span class="meta">fallback when account list empty</span></header>
       <form method="post" action="/settings/global-games" id="global-games-form">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px;">
+        <div class="settings-grid-2">
           <div>
-            <div class="kicker" style="margin-bottom: 8px;">Selected · drag to reorder</div>
-            <ul id="global-selected" style="list-style:none;margin:0;padding:0;border:1px dashed var(--line);min-height:160px;">
+            <div class="kicker">Selected · drag to reorder</div>
+            <ul id="global-selected" class="rank-list">
               {{range .GlobalGames}}
-              <li draggable="true" data-game-id="{{.ID}}" style="padding:8px 12px;border-bottom:1px solid var(--line);cursor:grab;display:flex;align-items:center;justify-content:space-between;background:var(--bg-soft,#14151a);">
+              <li draggable="true" data-game-id="{{.ID}}">
                 <span>{{.Name}}</span>
-                <button type="button" class="alt" onclick="gpRemove('{{.ID}}')" style="border:none;background:transparent;color:var(--muted);cursor:pointer;">remove ×</button>
+                <button type="button" class="rank-rm" onclick="gpRemove('{{.ID}}')">remove ×</button>
               </li>
               {{end}}
               {{if not .GlobalGames}}
-              <li style="padding:12px;color:var(--muted);font-size:12px;text-align:center;">No global priority set — pick from the right →</li>
+              <li class="rank-empty">No global priority set — pick from the right →</li>
               {{end}}
             </ul>
           </div>
           <div>
-            <div class="kicker" style="margin-bottom: 8px;">Available</div>
-            <ul id="global-available" style="list-style:none;margin:0;padding:0;border:1px dashed var(--line);max-height:260px;overflow-y:auto;">
+            <div class="kicker">Available</div>
+            <ul id="global-available" class="rank-list rank-available">
               {{range .AllGames}}
               {{if not .Selected}}
-              <li data-game-id="{{.ID}}" style="padding:8px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;">
+              <li data-game-id="{{.ID}}">
                 <span>{{.Name}}</span>
-                <button type="button" class="alt" onclick="gpAdd('{{.ID}}','{{.Name}}')" style="border:none;background:transparent;color:var(--accent);cursor:pointer;">add +</button>
+                <button type="button" class="rank-add" onclick="gpAdd('{{.ID}}','{{.Name}}')">add +</button>
               </li>
               {{end}}
               {{end}}
             </ul>
           </div>
         </div>
-        <div class="row" style="margin-top: 14px;">
-          <span style="color:var(--muted);font-size:11px;">Order in the left column = mining priority for accounts without an override.</span>
+        <div class="row">
+          <span class="hint">Order in the left column = mining priority for accounts without an override.</span>
           <button class="btn primary" type="submit">Save priority →</button>
         </div>
       </form>
-    </div>
+    </section>
 
-    <div class="form-card">
-      <h2 class="settings-h" style="margin:0 0 14px;font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.18em;color:var(--muted);">Status</h2>
-      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;display:grid;gap:8px;">
-        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding-bottom:6px;"><span style="color:var(--muted);">uptime</span><span>{{if .Uptime}}{{.Uptime}}{{else}}—{{end}}</span></div>
-        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding-bottom:6px;"><span style="color:var(--muted);">go</span><span>{{.GoVersion}}</span></div>
-        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding-bottom:6px;"><span style="color:var(--muted);">goroutines</span><span>{{.Goroutines}}</span></div>
-        <div style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding-bottom:6px;"><span style="color:var(--muted);">sidecar</span><span style="font-size:11px;">{{if .BrowserURL}}{{.BrowserURL}}{{else}}—{{end}}</span></div>
-        {{if .GitCommit}}<div style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding-bottom:6px;"><span style="color:var(--muted);">commit</span><span>{{.GitCommit}}</span></div>{{end}}
-        {{if .Version}}<div style="display:flex;justify-content:space-between;"><span style="color:var(--muted);">version</span><span>{{.Version}}</span></div>{{end}}
+    <section class="settings-block">
+      <header class="section-h"><h3>Status</h3><span class="meta">read-only</span></header>
+      <div class="kvlist">
+        <div class="kvrow"><span class="k">uptime</span><span class="v">{{if .Uptime}}{{.Uptime}}{{else}}—{{end}}</span></div>
+        <div class="kvrow"><span class="k">go</span><span class="v">{{.GoVersion}}</span></div>
+        <div class="kvrow"><span class="k">goroutines</span><span class="v">{{.Goroutines}}</span></div>
+        <div class="kvrow"><span class="k">sidecar</span><span class="v">{{if .BrowserURL}}{{.BrowserURL}}{{else}}—{{end}}</span></div>
+        {{if .GitCommit}}<div class="kvrow"><span class="k">commit</span><span class="v">{{.GitCommit}}</span></div>{{end}}
+        {{if .Version}}<div class="kvrow"><span class="k">version</span><span class="v">{{.Version}}</span></div>{{end}}
       </div>
-      <h2 class="settings-h" style="margin:20px 0 10px;font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.18em;color:var(--muted);">Quick links</h2>
-      <ul style="list-style:none;padding:0;margin:0;font-family:'JetBrains Mono',monospace;font-size:12px;display:grid;gap:6px;">
-        <li><a href="/accounts" style="color:var(--accent);text-decoration:none;">Accounts →</a></li>
-        <li><a href="/drops" style="color:var(--accent);text-decoration:none;">Drops history →</a></li>
-        <li><a href="/" style="color:var(--accent);text-decoration:none;">Console →</a></li>
-      </ul>
-    </div>
+    </section>
 
   </div>
   {{end}}
 </div>
 
-<style>
-  #global-selected li.drag-over-top { box-shadow: inset 0 2px 0 0 var(--accent); }
-  #global-selected li.drag-over-bot { box-shadow: inset 0 -2px 0 0 var(--accent); }
-  #global-selected li.dragging { opacity: 0.4; }
-</style>
 <script>
 (function() {
   var sel = document.getElementById('global-selected');
@@ -155,50 +144,35 @@
     form.querySelectorAll('input[name="game_ids[]"]').forEach(function(n) { n.remove(); });
     sel.querySelectorAll('li[data-game-id]').forEach(function(li) {
       var i = document.createElement('input');
-      i.type = 'hidden';
-      i.name = 'game_ids[]';
-      i.value = li.dataset.gameId;
+      i.type = 'hidden'; i.name = 'game_ids[]'; i.value = li.dataset.gameId;
       form.appendChild(i);
     });
   }
-
   function clearDragCues() {
     sel.querySelectorAll('.drag-over-top, .drag-over-bot').forEach(function(n) {
       n.classList.remove('drag-over-top', 'drag-over-bot');
     });
   }
-
   window.gpAdd = function(id, name) {
     if (sel.querySelector('li[data-game-id="'+id+'"]')) return;
-    var ph = sel.querySelector('li:not([data-game-id])');
-    if (ph) ph.remove();
+    var ph = sel.querySelector('.rank-empty'); if (ph) ph.remove();
     var li = document.createElement('li');
-    li.dataset.gameId = id;
-    li.draggable = true;
-    li.style.cssText = 'padding:8px 12px;border-bottom:1px solid var(--line);cursor:grab;display:flex;align-items:center;justify-content:space-between;background:var(--bg-soft,#14151a);';
-    li.innerHTML = '<span>' + name + '</span><button type="button" class="alt" onclick="gpRemove(\''+id+'\')" style="border:none;background:transparent;color:var(--muted);cursor:pointer;">remove ×</button>';
+    li.dataset.gameId = id; li.draggable = true;
+    li.innerHTML = '<span>' + name + '</span><button type="button" class="rank-rm" onclick="gpRemove(\''+id+'\')">remove ×</button>';
     bindDrag(li);
     sel.appendChild(li);
-    var a = avail.querySelector('li[data-game-id="'+id+'"]');
-    if (a) a.remove();
+    var a = avail.querySelector('li[data-game-id="'+id+'"]'); if (a) a.remove();
   };
-
   window.gpRemove = function(id) {
-    var li = sel.querySelector('li[data-game-id="'+id+'"]');
-    if (!li) return;
-    var name = li.querySelector('span').textContent;
-    li.remove();
-    var a = document.createElement('li');
-    a.dataset.gameId = id;
-    a.style.cssText = 'padding:8px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;';
-    a.innerHTML = '<span>' + name + '</span><button type="button" class="alt" onclick="gpAdd(\''+id+'\',\''+name+'\')" style="border:none;background:transparent;color:var(--accent);cursor:pointer;">add +</button>';
+    var li = sel.querySelector('li[data-game-id="'+id+'"]'); if (!li) return;
+    var name = li.querySelector('span').textContent; li.remove();
+    var a = document.createElement('li'); a.dataset.gameId = id;
+    a.innerHTML = '<span>' + name + '</span><button type="button" class="rank-add" onclick="gpAdd(\''+id+'\',\''+name+'\')">add +</button>';
     avail.appendChild(a);
   };
-
   var dragSrc = null;
   function bindDrag(li) {
-    if (li.dataset.dragBound === '1') return;
-    li.dataset.dragBound = '1';
+    if (li.dataset.dragBound === '1') return; li.dataset.dragBound = '1';
     if (!li.hasAttribute('draggable')) li.setAttribute('draggable', 'true');
     li.addEventListener('dragstart', function(e) {
       dragSrc = li;

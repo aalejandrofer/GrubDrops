@@ -1580,6 +1580,104 @@
     padding: 28px 32px;
     max-width: 640px;
   }
+  .form-card.wide { max-width: none; }
+
+  /* Section header used inside settings + future config pages.
+     Mirrors the .drops-pane-h pattern but lives outside the
+     two-column drops grid so the page can have multiple sections
+     stacked vertically. See docs/DESIGN.md. */
+  .section-h {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed var(--line);
+  }
+  .section-h h3 {
+    margin: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--text);
+  }
+  .section-h .meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+  }
+  .settings-block { margin-bottom: 28px; }
+  .settings-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .settings-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  /* KV-style status read-out used in settings status panel. */
+  .kvlist {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    display: grid;
+    gap: 6px;
+  }
+  .kvlist .kvrow {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px dashed var(--line);
+    padding-bottom: 6px;
+  }
+  .kvlist .kvrow:last-child { border-bottom: none; }
+  .kvlist .k { color: var(--muted); }
+  .kvlist .v { color: var(--text); }
+
+  /* Drag-reorder rank picker. Shared by per-account whitelist editor
+     + Settings global priority list. */
+  .rank-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1px dashed var(--line);
+    min-height: 160px;
+  }
+  .rank-list.rank-available { max-height: 260px; overflow-y: auto; }
+  .rank-list li {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: grab;
+    background: var(--surface-2);
+    font-size: 12px;
+  }
+  .rank-list.rank-available li { cursor: default; background: transparent; }
+  .rank-list li:last-child { border-bottom: none; }
+  .rank-list li.dragging { opacity: 0.4; }
+  .rank-list li.drag-over-top { box-shadow: inset 0 2px 0 0 var(--accent); }
+  .rank-list li.drag-over-bot { box-shadow: inset 0 -2px 0 0 var(--accent); }
+  .rank-list .rank-empty {
+    cursor: default;
+    color: var(--muted);
+    font-size: 11.5px;
+    justify-content: center;
+    background: transparent;
+  }
+  .rank-list .rank-rm, .rank-list .rank-add {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .rank-list .rank-add { color: var(--accent); }
+  .rank-list .rank-rm:hover { color: var(--red); }
+  .hint {
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
   .form-card h2 {
     font-family: 'Bricolage Grotesque', sans-serif;
     font-weight: 500;
