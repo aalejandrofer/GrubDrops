@@ -231,6 +231,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/settings", settingsH.post)
 	authed.Get("/drops", dropsH.list)
 	authed.Get("/drops/campaigns/{id}/items", dropsH.items)
+	authed.Post("/drops/whitelist/add", dropsH.addWhitelist)
 	authed.Get("/history", historyH.get)
 
 	r.Mount("/", withSession(CSRF(authed)))

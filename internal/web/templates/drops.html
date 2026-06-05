@@ -64,15 +64,31 @@
       {{else}}
       <table class="tbl">
         <thead>
-          <tr><th>Platform</th><th>Kind</th><th>Game</th><th>Campaign</th></tr>
+          <tr><th>Platform</th><th>Kind</th><th>Game</th><th>Campaign</th><th>Add to whitelist</th></tr>
         </thead>
         <tbody>
+          {{$accts := .Accounts}}
+          {{$csrf := .CSRFToken}}
           {{range .UnlistedRows}}
           <tr>
             <td class="plat"><span class="{{.Platform}}">{{.Platform}}</span></td>
             <td>{{if eq .Kind "reward"}}<span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;padding:2px 7px;border:1px solid var(--accent);color:var(--accent);background:rgba(212,99,30,0.08);">reward</span>{{else}}<span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;padding:2px 7px;border:1px solid var(--line);color:var(--muted);">drop</span>{{end}}</td>
             <td>{{.Game}}</td>
             <td>{{.CampaignName}}</td>
+            <td>
+              {{if $accts}}
+              <form method="post" action="/drops/whitelist/add" style="display:flex;gap:6px;align-items:center;">
+                <input type="hidden" name="csrf_token" value="{{$csrf}}">
+                <input type="hidden" name="name" value="{{.Game}}">
+                <select name="account_id" style="background:var(--surface);color:var(--text);border:1px solid var(--line);font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:3px 6px;max-width:180px;">
+                  {{range $accts}}<option value="{{.ID}}">{{.Label}}</option>{{end}}
+                </select>
+                <button class="btn sm" type="submit">add +</button>
+              </form>
+              {{else}}
+              <span style="color:var(--muted);font-size:11px;">no accounts</span>
+              {{end}}
+            </td>
           </tr>
           {{end}}
         </tbody>

@@ -58,7 +58,14 @@ type dropsPage struct {
 	CurrentCount int
 	UpcomingCount int
 	Rows         []dropsRow
-	UnlistedRows []dropsRow // campaigns whose Game is not on any account whitelist
+	UnlistedRows []dropsRow      // campaigns whose Game is not on any account whitelist
+	Accounts     []dropsAccount  // for the "add to whitelist" dropdown on unlisted rows
+	CSRFToken    string          // mirrors templateData.CSRFToken for inline form
+}
+
+type dropsAccount struct {
+	ID    string
+	Label string // "@login (platform)"
 }
 
 // allowedGamesUnion returns the union of every enabled account's game
@@ -121,12 +128,27 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Populate accounts dropdown for the inline "add to whitelist"
+	// affordance on unlisted rows. Best-effort: empty dropdown disables
+	// the button server-side.
+	var accountsForPick []dropsAccount
+	if accs, err := d.q.ListAllAccounts(r.Context()); err == nil {
+		for _, a := range accs {
+			accountsForPick = append(accountsForPick, dropsAccount{
+				ID:    a.ID,
+				Label: "@" + a.Login + " (" + a.Platform + ")",
+			})
+		}
+	}
+
 	page := dropsPage{
 		Tab:           tab,
 		PastCount:     len(pastRows),
 		CurrentCount:  len(currentRows),
 		UpcomingCount: len(upcomingRows),
 		UnlistedRows:  unlistedRows,
+		Accounts:      accountsForPick,
+		CSRFToken:     csrfToken(r),
 	}
 	switch tab {
 	case tabPast:
@@ -286,6 +308,50 @@ type campaignBenefitRow struct {
 	Name            string
 	RequiredMinutes int64
 	ImageURL        string
+}
+
+// addWhitelist takes (account_id, name) from the inline form on the
+// /drops Discoverable table and reuses the same slug-and-upsert flow
+// as the per-account whitelist editor. Redirects back to /drops with
+// the current tab preserved.
+func (d *dropsDeps) addWhitelist(w http.ResponseWriter, r *http.Request) {
+	accID := r.FormValue("account_id")
+	name := strings.TrimSpace(r.FormValue("name"))
+	if accID == "" || name == "" {
+		http.Redirect(w, r, "/drops", http.StatusSeeOther)
+		return
+	}
+	if _, err := d.q.GetAccount(r.Context(), accID); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	slug := slugifyGame(name)
+	if slug == "" {
+		http.Redirect(w, r, "/drops", http.StatusSeeOther)
+		return
+	}
+	gameID := "g_" + slug
+	if err := d.q.UpsertGame(r.Context(), gen.UpsertGameParams{
+		ID: gameID, Name: name, Slug: slug, Priority: 0,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	existing, _ := d.q.ListAccountGames(r.Context(), accID)
+	rank := int64(len(existing))
+	for _, e := range existing {
+		if e.ID == gameID {
+			rank = e.Rank
+			break
+		}
+	}
+	if err := d.q.AddAccountGame(r.Context(), gen.AddAccountGameParams{
+		AccountID: accID, GameID: gameID, Rank: rank,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/drops", http.StatusSeeOther)
 }
 
 func (d *dropsDeps) items(w http.ResponseWriter, r *http.Request) {
