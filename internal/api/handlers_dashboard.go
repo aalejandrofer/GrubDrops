@@ -91,14 +91,19 @@ type dashPrioItem struct {
 	Enabled bool
 }
 
-type dashChannel struct {
+// dashLiveChannel is one card in the full-width "Live channels — eligible
+// for whitelisted drops" grid that lives under the live-events drawer.
+// Populated by liveChannelsFor() from watcher snapshots; the discovery
+// cache will later widen this beyond the currently-watched stream.
+type dashLiveChannel struct {
 	Login    string
+	Platform string // "twitch" | "kick"
+	URL      string // https://www.twitch.tv/<login> or https://kick.com/<login>
 	Initial  string
 	Game     string
-	Live     bool
-	Duration string // "4h27m" if live, "" otherwise
-	LastLive string // "6h ago" if offline
-	Views    string // "62.4k" or ""
+	Campaign string
+	Views    string // formatted, e.g. "62.4k"
+	ViewerN  int    // raw, used for sorting
 }
 
 type dashEvent struct {
@@ -114,9 +119,7 @@ type dashPage struct {
 	Mining        []dashMineCard
 	ActiveCamps   []dashCampaign
 	Priority      []dashPrioItem
-	ChannelTabs   []string // campaign names for the tabs
-	ChannelActive string
-	Channels      []dashChannel
+	LiveChannels  []dashLiveChannel // wide grid under the events drawer
 	Events        []dashEvent
 	UpdatedAt     string // "1.2s ago"
 	NodeAddr      string // "10.10.2.40"
@@ -140,20 +143,123 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 		cards = append(cards, mineCardFromSnap(a, snap))
 	}
 
+	allowed := allowedLoginsFor(r, d.q, accs)
 	page := dashPage{
-		Tele:          telemetryFrom(cards, snapshots),
-		Mining:        cards,
-		NextClaims:    nextClaimsFrom(cards),
-		ActiveCamps:   stubActiveCamps(),
-		Priority:      stubPriority(),
-		ChannelTabs:   []string{"All campaigns"},
-		ChannelActive: "All campaigns",
-		Channels:      stubChannels(),
-		Events:        eventsFromRing(d.ring, ""),
-		UpdatedAt:     nowPoll(time.Now()),
-		Uptime:        formatUptime(time.Since(d.start)),
+		Tele:         telemetryFrom(cards, snapshots),
+		Mining:       cards,
+		NextClaims:   nextClaimsFrom(cards),
+		ActiveCamps:  stubActiveCamps(),
+		Priority:     stubPriority(),
+		LiveChannels: liveChannelsFor(accs, snapshots, allowed),
+		Events:       eventsFromRing(d.ring, ""),
+		UpdatedAt:    nowPoll(time.Now()),
+		Uptime:       formatUptime(time.Since(d.start)),
 	}
 	return page
+}
+
+// allowedLoginsFor returns the union of game-slug + game-name whitelists
+// across every account, lowercased. A non-nil but empty result means
+// "no whitelist configured anywhere" — callers should treat that as
+// "show nothing" rather than "show everything" (matches watcher behaviour).
+func allowedLoginsFor(r *http.Request, q *gen.Queries, accs []gen.Account) map[string]struct{} {
+	allow := map[string]struct{}{}
+	for _, a := range accs {
+		rows, err := q.ListAccountGames(r.Context(), a.ID)
+		if err != nil {
+			continue
+		}
+		for _, g := range rows {
+			if g.Name != "" {
+				allow[strings.ToLower(g.Name)] = struct{}{}
+			}
+			if g.Slug != "" {
+				allow[strings.ToLower(g.Slug)] = struct{}{}
+			}
+		}
+	}
+	return allow
+}
+
+// liveChannelsFor aggregates the currently-watched stream from every
+// account's watcher snapshot, filtered by the union of per-account game
+// whitelists, sorted by viewer count desc, capped at 24.
+//
+// This is a stub aggregator until the parallel scheduler-side discovery
+// cache lands: today we only know about channels we're actively watching.
+// Once that cache exists, fold its per-campaign eligible-channels in
+// here too. Whitelist filtering already matches watcher semantics
+// (game name OR slug, lowercased) so the cache-backed widening will
+// just need to pass the same `allowed` set.
+func liveChannelsFor(accs []gen.Account, snaps []watcher.Snapshot, allowed map[string]struct{}) []dashLiveChannel {
+	platformByID := map[string]string{}
+	for _, a := range accs {
+		platformByID[a.ID] = a.Platform
+	}
+	seen := map[string]bool{} // platform|login dedupe
+	out := make([]dashLiveChannel, 0, len(snaps))
+	for _, s := range snaps {
+		if s.State != "watching" || s.Channel == "" {
+			continue
+		}
+		// Per-account whitelist union — if the whitelist is empty,
+		// allow everything (no whitelist configured = legacy behaviour).
+		if len(allowed) > 0 && s.CampaignGame != "" {
+			g := strings.ToLower(s.CampaignGame)
+			if _, ok := allowed[g]; !ok {
+				continue
+			}
+		}
+		plat := platformByID[s.AccountID]
+		key := plat + "|" + strings.ToLower(s.Channel)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, dashLiveChannel{
+			Login:    s.Channel,
+			Platform: plat,
+			URL:      channelURL(plat, s.Channel),
+			Initial:  initial(s.Channel),
+			Game:     s.CampaignGame,
+			Campaign: s.CampaignName,
+			Views:    formatViews(s.ViewerCount),
+			ViewerN:  s.ViewerCount,
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].ViewerN > out[j].ViewerN
+	})
+	if len(out) > 24 {
+		out = out[:24]
+	}
+	return out
+}
+
+func channelURL(plat, login string) string {
+	switch plat {
+	case "kick":
+		return "https://kick.com/" + login
+	case "twitch":
+		return "https://www.twitch.tv/" + login
+	}
+	return "#"
+}
+
+// formatViews renders a viewer count compactly: 1234 -> "1.2k",
+// 62400 -> "62.4k", 1_200_000 -> "1.2M". Zero renders as "—" so empty
+// cards stay legible rather than showing "0".
+func formatViews(n int) string {
+	if n <= 0 {
+		return "—"
+	}
+	switch {
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+	case n >= 1_000:
+		return fmt.Sprintf("%.1fk", float64(n)/1_000)
+	}
+	return fmt.Sprintf("%d", n)
 }
 
 func mineCardFromSnap(a gen.Account, s watcher.Snapshot) dashMineCard {
@@ -419,18 +525,6 @@ func stubPriority() []dashPrioItem {
 		{Rank: 3, Name: "Campaign C", Sub: "kick · main", Enabled: true},
 		{Rank: 4, Name: "Campaign D", Sub: "twitch · seasonal", Enabled: true},
 		{Rank: 5, Name: "Campaign E", Sub: "kick · seasonal", Enabled: false},
-	}
-}
-
-func stubChannels() []dashChannel {
-	// stub: placeholder channels, game name is illustrative only
-	return []dashChannel{
-		{Login: "streamer_one", Initial: "S", Game: "game", Live: true, Duration: "4h27m", Views: "62.4k"},
-		{Login: "streamer_two", Initial: "N", Game: "game", Live: true, Duration: "2h08m", Views: "31.2k"},
-		{Login: "streamer_three", Initial: "W", Game: "game", Live: true, Duration: "6h11m", Views: "18.7k"},
-		{Login: "streamer_four", Initial: "B", Game: "game", Live: false, LastLive: "6h ago"},
-		{Login: "streamer_five", Initial: "M", Game: "game", Live: false, LastLive: "2d ago"},
-		{Login: "streamer_six", Initial: "F", Game: "game", Live: false, LastLive: "1w ago"},
 	}
 }
 

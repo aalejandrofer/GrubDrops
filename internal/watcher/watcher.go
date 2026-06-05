@@ -51,6 +51,13 @@ type Watcher struct {
 	handle          *platform.WatchHandle
 	watchStartedAt  time.Time
 	lastProgressMin int
+
+	// lastDiscovery is the most recent successful
+	// Backend.ListActiveCampaigns result. Cached so the dashboard's
+	// Active Campaigns panel can union per-account discoveries without
+	// duplicating the backend call.
+	lastDiscovery   []platform.Campaign
+	lastDiscoveryAt time.Time
 }
 
 func New(cfg Config) *Watcher {
@@ -88,6 +95,7 @@ type Snapshot struct {
 	RequiredMinutes int
 	MinutesWatched  int
 	Channel         string
+	ViewerCount     int
 	StartedAt       time.Time
 }
 
@@ -110,6 +118,7 @@ func (w *Watcher) Snapshot() Snapshot {
 	}
 	if w.currentStream != nil {
 		s.Channel = w.currentStream.Channel
+		s.ViewerCount = w.currentStream.ViewerCount
 	}
 	s.MinutesWatched = w.lastProgressMin
 	s.StartedAt = w.watchStartedAt
@@ -118,8 +127,14 @@ func (w *Watcher) Snapshot() Snapshot {
 
 func (w *Watcher) setState(ctx context.Context, s State) {
 	w.mu.Lock()
+	prev := w.state
 	w.state = s
 	w.mu.Unlock()
+	slog.Info("watcher state change",
+		"kind", "state",
+		"account", w.cfg.AccountID,
+		"state", s.String(),
+		"prev", prev.String())
 	_ = w.cfg.Notifier.Notify(ctx, "state", map[string]any{
 		"account": w.cfg.AccountID, "state": s.String(),
 	})
@@ -208,12 +223,12 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 	slog.Debug("watcher pickCampaign", "account", w.cfg.AccountID)
 	campaigns, err := w.cfg.Backend.ListActiveCampaigns(ctx, w.cfg.Session)
 	if err != nil {
-		slog.Error("watcher list campaigns failed", "account", w.cfg.AccountID, "err", err)
+		slog.Error("watcher list campaigns failed", "kind", "error", "account", w.cfg.AccountID, "err", err)
 		return fmt.Errorf("list campaigns: %w", err)
 	}
 	progress, err := w.cfg.Backend.InventoryProgress(ctx, w.cfg.Session)
 	if err != nil {
-		slog.Error("watcher inventory failed", "account", w.cfg.AccountID, "err", err)
+		slog.Error("watcher inventory failed", "kind", "error", "account", w.cfg.AccountID, "err", err)
 		return fmt.Errorf("inventory: %w", err)
 	}
 	claimed := map[string]bool{}
@@ -240,7 +255,7 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			return w.cfg.GameRank(matched[i].Game) < w.cfg.GameRank(matched[j].Game)
 		})
 	}
-	slog.Debug("watcher discovery", "account", w.cfg.AccountID, "campaigns_total", len(campaigns), "campaigns_eligible", len(matched), "claimed_count", len(claimed))
+	slog.Info("watcher discovery", "kind", "discovery", "account", w.cfg.AccountID, "campaigns_total", len(campaigns), "campaigns_eligible", len(matched), "claimed_count", len(claimed))
 
 	for _, c := range matched {
 		for _, b := range c.Benefits {
@@ -252,7 +267,7 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			w.currentCampaign = &campaignCopy
 			w.currentBenefit = &benefitCopy
 			w.mu.Unlock()
-			slog.Info("watcher picked benefit", "account", w.cfg.AccountID, "campaign", c.Name, "game", c.Game, "benefit", b.ID, "required_min", b.RequiredMinutes)
+			slog.Info("watcher picked benefit", "kind", "discovery", "account", w.cfg.AccountID, "campaign", c.Name, "game", c.Game, "benefit", b.ID, "required_min", b.RequiredMinutes)
 			w.setState(ctx, StatePickStream)
 			return nil
 		}
@@ -312,7 +327,7 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 
 	progress, err := w.cfg.Backend.InventoryProgress(ctx, w.cfg.Session)
 	if err != nil {
-		slog.Error("watcher inventory failed", "account", w.cfg.AccountID, "err", err)
+		slog.Error("watcher inventory failed", "kind", "error", "account", w.cfg.AccountID, "err", err)
 		return fmt.Errorf("inventory: %w", err)
 	}
 	for _, p := range progress {

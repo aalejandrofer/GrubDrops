@@ -736,6 +736,92 @@
   }
   .ch .views.off { color: var(--dim); }
 
+  /* WIDE LIVE-CHANNELS GRID (under live events drawer) */
+  .live-channels {
+    margin-top: 24px;
+  }
+  .live-channels-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+  }
+  .live-channels-empty {
+    border: 1px dashed var(--line);
+    background: var(--surface);
+    padding: 24px;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .lch {
+    display: grid;
+    grid-template-columns: 36px 1fr auto;
+    gap: 10px;
+    padding: 10px 12px;
+    align-items: center;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .lch:hover {
+    background: var(--surface-2);
+    border-color: var(--accent);
+  }
+  .lch .av {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--surface-3), var(--dim));
+    border-radius: 50%;
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line);
+  }
+  .lch.twitch .av { border-color: var(--purple); box-shadow: 0 0 0 1px var(--purple); }
+  .lch.kick .av { border-color: var(--kick); box-shadow: 0 0 0 1px var(--kick); }
+  .lch .meta {
+    line-height: 1.3;
+    min-width: 0;
+  }
+  .lch .name {
+    font-size: 12.5px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lch .sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lch .tag {
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lch .views {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    align-self: start;
+  }
+
   /* ---- AUTH / FORM CARDS ---- */
   .auth-wrap {
     max-width: 460px;

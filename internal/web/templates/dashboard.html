@@ -119,35 +119,33 @@
       </div>
     </div>
 
-    {{$active := .ChannelActive}}
-    <div class="panel">
-      <div class="panel-head">
-        <h3>Channels — eligible</h3>
-        <span class="meta">{{.ChannelActive}}</span>
-      </div>
-      <div class="ch-tabs">
-        {{range .ChannelTabs}}
-        <a class="{{if eq . $active}}on{{end}}" href="#">{{.}}</a>
-        {{end}}
-      </div>
-      <div class="ch-list">
-        {{range .Channels}}
-        <div class="ch {{if .Live}}live{{end}}">
-          <span class="av">{{.Initial}}</span>
-          <div class="meta">
-            <div class="name">{{.Login}}</div>
-            <div class="sub">
-              {{if .Live}}<span class="live-tag">LIVE</span> · {{.Game}} · {{.Duration}}{{else}}offline · last live {{.LastLive}}{{end}}
-            </div>
-          </div>
-          <span class="views {{if not .Live}}off{{end}}">{{if .Live}}{{.Views}}{{else}}—{{end}}</span>
-        </div>
-        {{end}}
-      </div>
-    </div>
-
   </aside>
 </div>
+
+<section class="section live-channels">
+  <div class="sec-head">
+    <h2>Live channels — eligible for whitelisted drops</h2>
+    <div class="rule"></div>
+    <div class="meta">{{len .LiveChannels}} live · sorted by viewers</div>
+  </div>
+  {{if .LiveChannels}}
+  <div class="live-channels-grid">
+    {{range .LiveChannels}}
+    <a class="lch {{.Platform}}" href="{{.URL}}" target="_blank" rel="noopener">
+      <span class="av">{{.Initial}}</span>
+      <div class="meta">
+        <div class="name">{{.Login}}</div>
+        <div class="sub">{{if .Game}}{{.Game}}{{else}}—{{end}}</div>
+        {{if .Campaign}}<div class="tag">{{.Campaign}}</div>{{end}}
+      </div>
+      <span class="views">{{.Views}}</span>
+    </a>
+    {{end}}
+  </div>
+  {{else}}
+  <div class="live-channels-empty">no eligible channels live right now</div>
+  {{end}}
+</section>
 {{end}}
 {{end}}
 
