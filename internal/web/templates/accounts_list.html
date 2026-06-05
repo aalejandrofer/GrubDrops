@@ -6,7 +6,7 @@
 <div class="shell">
   <div class="ph">
     <div>
-      <div class="kicker">// accounts</div>
+      <div class="kicker">// settings / accounts</div>
       <h1>Accounts</h1>
     </div>
     <div class="actions">
@@ -17,6 +17,10 @@
       <a class="btn primary" href="/accounts/new">+ Add account</a>
     </div>
   </div>
+  <nav class="subnav" style="display:flex;gap:6px;margin:0 0 18px;padding:0 0 14px;border-bottom:1px solid var(--line);">
+    <a href="/settings" style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;padding:6px 14px;border:1px solid var(--line);color:var(--muted);text-decoration:none;">General</a>
+    <a href="/accounts" style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;padding:6px 14px;border:1px solid var(--accent);color:var(--accent);text-decoration:none;background:rgba(212,99,30,0.08);">Accounts</a>
+  </nav>
 
   {{if .Flash}}<div class="flash-ok">{{.Flash}}</div>{{end}}
 
