@@ -50,7 +50,7 @@
       <div class="modal-empty">No games selected. <a href="/accounts/{{.ID}}">Pick some →</a></div>
       {{else}}
       <ol class="modal-list">
-        {{range .Games}}<li><span class="rank">{{printf "%02d" .Rank}}</span>{{.Name}}</li>{{end}}
+        {{range .Games}}<li>{{.Name}}</li>{{end}}
       </ol>
       {{end}}
     </section>
