@@ -302,8 +302,11 @@ func (k *Kick) ScrapeActiveDrops(ctx context.Context, accountID string, session 
 	}
 
 	// Kick's canonical drops listing is /drops/all-campaigns (user-
-	// pointed). Force a fresh render via about:blank to avoid serving
-	// the cached degraded HTML when Cloudflare flagged us earlier.
+	// pointed). Warm via kick.com homepage first — this gives Cloudflare
+	// a natural first-party referer + lets its JS challenge settle once,
+	// then the second hop to /drops/all-campaigns reuses the trust.
+	// about:blank used to be the warmup but it strips referer entirely,
+	// which CF treats as suspicious for any deep link.
 	const dropsURL = "https://kick.com/drops/all-campaigns"
 	var nuxtRaw, nextRaw, htmlRaw, domRaw string
 	const domScrapeScript = `(() => {
@@ -341,21 +344,43 @@ func (k *Kick) ScrapeActiveDrops(ctx context.Context, accountID string, session 
 		return JSON.stringify(out);
 	})()`
 	err = chromedp.Run(tabCtx,
-		chromedp.Navigate("about:blank"),
-		chromedp.Sleep(500*time.Millisecond),
-		chromedp.Navigate(dropsURL),
-		chromedp.Sleep(8*time.Second),
-		chromedp.Evaluate(`window.scrollTo(0,document.body.scrollHeight); 1`, new(int)),
+		chromedp.Navigate("https://kick.com/"),
 		chromedp.Sleep(3*time.Second),
-		chromedp.Evaluate(`window.scrollTo(0,0); 1`, new(int)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("scrape drops warmup: %w", err)
+	}
+	if err := waitCloudflareSettled(tabCtx, 20*time.Second); err != nil {
+		slog.Warn("kick scrape: cloudflare interstitial did not settle on warmup", "err", err.Error())
+	}
+	err = chromedp.Run(tabCtx,
+		chromedp.Navigate(dropsURL),
+		chromedp.Sleep(3*time.Second),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("scrape drops navigate: %w", err)
+	}
+	if err := waitCloudflareSettled(tabCtx, 20*time.Second); err != nil {
+		slog.Warn("kick scrape: cloudflare interstitial did not settle on /drops", "err", err.Error())
+	}
+	err = chromedp.Run(tabCtx,
 		chromedp.Sleep(2*time.Second),
+		chromedp.Evaluate(`window.scrollTo(0,document.body.scrollHeight); 1`, new(int)),
+		chromedp.Sleep(2*time.Second),
+		chromedp.Evaluate(`window.scrollTo(0,0); 1`, new(int)),
+		chromedp.Sleep(1*time.Second),
 		chromedp.Evaluate(`JSON.stringify(window.__NUXT__ || {})`, &nuxtRaw),
 		chromedp.Evaluate(`JSON.stringify(window.__NEXT_DATA__ || {})`, &nextRaw),
 		chromedp.Evaluate(domScrapeScript, &domRaw),
 		chromedp.Evaluate(`document.documentElement.outerHTML`, &htmlRaw),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("scrape drops navigate: %w", err)
+		return nil, fmt.Errorf("scrape drops evaluate: %w", err)
+	}
+	if isCloudflareBlocked(htmlRaw) {
+		slog.Warn("kick scrape drops: cloudflare blocked page (security policy)",
+			"html_prefix", truncate(htmlRaw, 400))
+		return nil, fmt.Errorf("scrape drops: cloudflare blocked")
 	}
 
 	camps, src := parseActiveDropsState(nuxtRaw, nextRaw)
@@ -655,6 +680,64 @@ func parseActiveDropsHTML(html string) []*pb.KickCampaign {
 		}
 	}
 	return dedupCampaigns(filtered)
+}
+
+// waitCloudflareSettled polls the current document for the Cloudflare
+// interstitial signature ("Just a moment...", #challenge-running, or
+// cf-mitigated meta tag) and returns when the page transitions to
+// something else. Returns nil on settle, error on timeout. Caller may
+// log-and-continue on timeout — the subsequent scrape will catch a
+// hard-block via isCloudflareBlocked.
+func waitCloudflareSettled(ctx context.Context, max time.Duration) error {
+	const probe = `(() => {
+		const t = (document.title || '').toLowerCase();
+		if (t.includes('just a moment') || t.includes('checking your browser') || t.includes('attention required')) return 'challenge';
+		if (document.getElementById('challenge-running')) return 'challenge';
+		if (document.querySelector('meta[http-equiv="refresh"][content*="cf_chl"]')) return 'challenge';
+		const html = document.documentElement ? document.documentElement.outerHTML : '';
+		if (html.includes('cf-chl-bypass') || html.includes('cf_chl_opt')) return 'challenge';
+		return 'clear';
+	})()`
+	deadline := time.Now().Add(max)
+	for time.Now().Before(deadline) {
+		var state string
+		if err := chromedp.Run(ctx, chromedp.Evaluate(probe, &state)); err != nil {
+			return fmt.Errorf("cf settle probe: %w", err)
+		}
+		if state == "clear" {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(1 * time.Second):
+		}
+	}
+	return fmt.Errorf("cf settle: timed out after %s", max)
+}
+
+// isCloudflareBlocked detects the hard-block page CF serves when the
+// IP/fingerprint is permanently flagged (distinct from the transient
+// JS challenge). The page contains "Sorry, you have been blocked" or
+// a "Cloudflare Ray ID" footer attached to an error template.
+func isCloudflareBlocked(html string) bool {
+	if html == "" {
+		return false
+	}
+	lower := strings.ToLower(html)
+	if strings.Contains(lower, "sorry, you have been blocked") {
+		return true
+	}
+	if strings.Contains(lower, "request blocked by security policy") {
+		return true
+	}
+	// Combination signature — both phrases on the same page strongly
+	// implies the Cloudflare error template (not just any CF-served
+	// page, which always carries the Ray ID footer).
+	if strings.Contains(lower, "cloudflare ray id") && strings.Contains(lower, "what happened") {
+		return true
+	}
+	return false
 }
 
 // Claim drives the claim button for a specific benefit. If the click

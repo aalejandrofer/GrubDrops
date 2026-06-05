@@ -138,6 +138,39 @@ func TestParseActiveDropsHTML_NoGameMeansNoCampaign(t *testing.T) {
 	assert.Empty(t, got)
 }
 
+// isCloudflareBlocked must distinguish a hard-blocked page from a
+// page CF happens to serve. CF brands every served page with a Ray
+// ID footer; only the error-template page indicates a real block.
+func TestIsCloudflareBlocked(t *testing.T) {
+	cases := []struct {
+		name string
+		html string
+		want bool
+	}{
+		{"empty", "", false},
+		{"normal page", `<html><body>kick.com homepage</body></html>`, false},
+		{"normal page with cf footer", `<html><body>kick<footer>Cloudflare Ray ID: 89abcdef</footer></body></html>`, false},
+		{"hard block: 'you have been blocked'",
+			`<html><body><h1>Sorry, you have been blocked</h1><p>Cloudflare Ray ID: x</p></body></html>`,
+			true,
+		},
+		{"hard block: security policy phrase",
+			`<html><body>Request blocked by security policy</body></html>`,
+			true,
+		},
+		{"error template: ray id + what happened",
+			`<html><body><h2>What happened?</h2><p>Cloudflare Ray ID: x</p></body></html>`,
+			true,
+		},
+		{"case insensitive", `<HTML><BODY>SORRY, YOU HAVE BEEN BLOCKED</BODY></HTML>`, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isCloudflareBlocked(tc.html))
+		})
+	}
+}
+
 func TestParseKickUsername(t *testing.T) {
 	cases := []struct {
 		name   string
