@@ -240,7 +240,7 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 		NextClaims:    nextClaimsFrom(cards),
 		ActiveCamps:   activeCampsFromDiscovery(r.Context(), d.sch, d.channelCounters, d.q),
 		LiveChannels:  liveChannelsFor(accs, snapshots, allowed),
-		Events:        eventsFromRing(d.ring, "", ""),
+		Events:        eventsFromRing(d.ring, "", "", accs),
 		EventAccounts: eventAccountsFrom(accs),
 		EventFilter:   "all",
 		UpdatedAt:     nowPoll(time.Now()),
@@ -567,13 +567,19 @@ func nextClaimsFrom(cards []dashMineCard) []dashMineCard {
 // `kindFilter` is one of "" / "all" / "claim" / "progress" / "state" /
 // "discovery" / "error" / "auth"; anything else is treated as "all".
 // `accountFilter` is the account ID to keep ("" or "all" = keep all).
-func eventsFromRing(ring *mlog.Ring, kindFilter, accountFilter string) []dashEvent {
+func eventsFromRing(ring *mlog.Ring, kindFilter, accountFilter string, accs []gen.Account) []dashEvent {
 	if ring == nil {
 		return nil
 	}
+	// Build account_id -> @login map so events render the human handle
+	// instead of acc_XXXXXXXX... — matches how upstream
+	// TwitchDropsMiner labels output.
+	labelByID := make(map[string]string, len(accs))
+	for _, a := range accs {
+		labelByID[a.ID] = "@" + a.Login
+	}
 	lines := ring.Snapshot()
 	out := make([]dashEvent, 0, len(lines))
-	// reverse — newest first
 	for i := len(lines) - 1; i >= 0 && len(out) < 80; i-- {
 		l := lines[i]
 		kind := l.Kind
@@ -583,9 +589,13 @@ func eventsFromRing(ring *mlog.Ring, kindFilter, accountFilter string) []dashEve
 		if kindFilter != "" && kindFilter != "all" && kind != kindFilter {
 			continue
 		}
-		acc := fieldStr(l.Fields, "account")
-		if accountFilter != "" && accountFilter != "all" && acc != accountFilter {
+		accID := fieldStr(l.Fields, "account")
+		if accountFilter != "" && accountFilter != "all" && accID != accountFilter {
 			continue
+		}
+		label := labelByID[accID]
+		if label == "" {
+			label = accID
 		}
 		out = append(out, dashEvent{
 			ID:       fmt.Sprintf("ev-%d-%d", l.TS.UnixNano(), i),
@@ -593,7 +603,7 @@ func eventsFromRing(ring *mlog.Ring, kindFilter, accountFilter string) []dashEve
 			Kind:     kind,
 			Color:    colorForKind(kind, l.Level),
 			BodyHTML: fmt.Sprintf("<em>%s</em> · %s", kind, htmlEscape(l.Msg)),
-			Account:  acc,
+			Account:  label,
 			Details:  detailsFor(l),
 		})
 	}
@@ -827,7 +837,8 @@ func (d dashboardDeps) cards(w http.ResponseWriter, r *http.Request) {
 func (d dashboardDeps) events(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("filter")
 	account := r.URL.Query().Get("account")
-	renderPartial(w, d.t, "dashboard_events", eventsFromRing(d.ring, kind, account))
+	accs, _ := d.q.ListAllAccounts(r.Context())
+	renderPartial(w, d.t, "dashboard_events", eventsFromRing(d.ring, kind, account, accs))
 }
 
 // campaignDetail renders the modal partial for a single discovered
@@ -912,6 +923,165 @@ func (d dashboardDeps) campaignDetail(w http.ResponseWriter, r *http.Request) {
 		RawJSON:          string(rawJSON),
 	}
 	renderPartial(w, d.t, "dashboard_campaign_modal", detail)
+}
+
+// dashAccountDetail powers the per-account modal opened from
+// Currently mining rows. Shows what the watcher is doing right now,
+// the per-account whitelist + game priority, what campaigns the
+// account is eligible for, and the latest log lines tagged with this
+// account ID.
+type dashAccountDetail struct {
+	ID          string
+	Platform    string
+	Login       string
+	DisplayName string
+	Enabled     bool
+	State       string // raw watcher state
+	StateLabel  string // human label
+
+	// Current activity (watching/claiming)
+	CurrentCampaign  string
+	CurrentGame      string
+	CurrentBenefit   string
+	CurrentChannel   string
+	MinutesWatched  int
+	RequiredMinutes int
+	ProgressPct     int
+	WatchETA        string
+	Uptime          string
+
+	// Whitelist / priority
+	Games []dashAccountGameRow
+
+	// What this account can mine right now from discovery
+	EligibleCampaigns []dashAccountCampaignRow
+	UpcomingCampaigns []dashAccountCampaignRow
+
+	// Recent events tagged with this account
+	RecentEvents []dashEvent
+}
+
+type dashAccountGameRow struct {
+	Rank int
+	Name string
+}
+
+type dashAccountCampaignRow struct {
+	ID       string
+	Name     string
+	Game     string
+	EndsIn   string
+	StartsIn string // for upcoming only
+}
+
+func (d dashboardDeps) accountDetail(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, "missing account id", http.StatusBadRequest)
+		return
+	}
+	acc, err := d.q.GetAccount(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Pull watcher snapshot if present.
+	var snap watcher.Snapshot
+	for _, s := range d.sch.WatcherSnapshots() {
+		if s.AccountID == id {
+			snap = s
+			break
+		}
+	}
+	if snap.State == "" {
+		snap.State = "stopped"
+	}
+
+	detail := dashAccountDetail{
+		ID:              id,
+		Platform:        acc.Platform,
+		Login:           acc.Login,
+		DisplayName:     acc.DisplayName,
+		Enabled:         acc.Enabled == 1,
+		State:           snap.State,
+		StateLabel:      stateLabel(snap.State),
+		CurrentCampaign: snap.CampaignName,
+		CurrentGame:     snap.CampaignGame,
+		CurrentBenefit:  snap.BenefitName,
+		CurrentChannel:  snap.Channel,
+		MinutesWatched:  snap.MinutesWatched,
+		RequiredMinutes: snap.RequiredMinutes,
+		ProgressPct:     pct(snap.MinutesWatched, snap.RequiredMinutes),
+		WatchETA:        etaFrom(snap.MinutesWatched, snap.RequiredMinutes),
+	}
+	if !snap.StartedAt.IsZero() && snap.State == "watching" {
+		detail.Uptime = formatShort(time.Since(snap.StartedAt))
+	}
+
+	// Whitelist / priority
+	if games, err := d.q.ListAccountGames(r.Context(), id); err == nil {
+		for _, g := range games {
+			detail.Games = append(detail.Games, dashAccountGameRow{Rank: int(g.Rank) + 1, Name: g.Name})
+		}
+	}
+
+	// Per-account campaign eligibility from discovery cache.
+	now := time.Now()
+	for _, dc := range d.sch.DiscoverySnapshot() {
+		// Match by source/eligible account ID.
+		var matches bool
+		for _, aid := range dc.EligibleAccounts {
+			if aid == id {
+				matches = true
+				break
+			}
+		}
+		if !matches {
+			continue
+		}
+		row := dashAccountCampaignRow{ID: dc.ID, Name: dc.Name, Game: dc.Game}
+		if !dc.EndsAt.IsZero() {
+			row.EndsIn = formatEndsIn(dc.EndsAt.Sub(now))
+		}
+		if !dc.StartsAt.IsZero() && dc.StartsAt.After(now) {
+			row.StartsIn = formatEndsIn(dc.StartsAt.Sub(now))
+			detail.UpcomingCampaigns = append(detail.UpcomingCampaigns, row)
+		} else {
+			detail.EligibleCampaigns = append(detail.EligibleCampaigns, row)
+		}
+	}
+
+	// Filter events ring for this account.
+	if d.ring != nil {
+		all := eventsFromRing(d.ring, "", id, []gen.Account{acc})
+		if len(all) > 20 {
+			all = all[:20]
+		}
+		detail.RecentEvents = all
+	}
+
+	renderPartial(w, d.t, "dashboard_account_modal", detail)
+}
+
+func stateLabel(s string) string {
+	switch s {
+	case "watching":
+		return "watching"
+	case "claiming":
+		return "claiming"
+	case "pick_stream":
+		return "scanning channels"
+	case "pick_campaign", "idle":
+		return "looking for work"
+	case "sleeping":
+		return "no eligible campaign"
+	case "needs_auth":
+		return "needs login"
+	case "stopped":
+		return "stopped"
+	}
+	return s
 }
 
 // nowPoll formats how long ago t was, for the "last poll" display.

@@ -88,7 +88,7 @@ func Templates() (*PageTemplates, error) {
 	var pageFiles []string
 	for _, m := range matches {
 		name := m[len("templates/"):]
-		if strings.HasPrefix(name, "_") || name == "dashboard_mining_columns.html" || name == "dashboard_events.html" || name == "dashboard_campaign_modal.html" || name == "login_twitch_status.html" {
+		if strings.HasPrefix(name, "_") || name == "dashboard_mining_columns.html" || name == "dashboard_events.html" || name == "dashboard_campaign_modal.html" || name == "dashboard_account_modal.html" || name == "login_twitch_status.html" {
 			baseFiles = append(baseFiles, m)
 		} else {
 			pageFiles = append(pageFiles, m)

@@ -138,6 +138,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/dashboard/cards", dash.cards)
 	authed.Get("/dashboard/events", dash.events)
 	authed.Get("/dashboard/campaign/{id}", dash.campaignDetail)
+	authed.Get("/dashboard/account/{id}", dash.accountDetail)
 	authed.Get("/accounts", accs.list)
 	authed.Get("/accounts/new", accs.newGet)
 	authed.Post("/accounts/new", accs.newPost)

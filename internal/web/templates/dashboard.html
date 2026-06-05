@@ -25,69 +25,29 @@
   <div class="stat"><div class="label">Heartbeats / hr</div><div class="value">{{.Tele.HeartbeatsHour}}<sup>last hr</sup></div><div class="delta flat">—</div></div>
 </section>
 
-{{/* Upper layout: Next-claim ETAs in the main column flanked by the
-     Active Campaigns sidebar. Currently Mining and the Live pair sit
-     below this band as full-width sections so the new compact platform
-     columns can breathe. */}}
-<div class="layout">
-  <div>
-
-    <section class="section">
-      <div class="sec-head">
-        <h2>Next claim ETAs</h2>
-        <div class="rule"></div>
-        <div class="meta">auto-claim on completion · sorted by time</div>
-      </div>
-      <div class="pending">
-        {{range .NextClaims}}
-        <article class="pcard">
-          <div class="sprite" style="color: var(--muted);">▲</div>
-          <div class="meta">
-            <div class="nm">{{.DropName}} <span class="ac">{{.Login}}</span></div>
-            <div class="sub">{{.Platform}} · {{if .DropCampaign}}{{.DropCampaign}} · {{end}}{{.DropMins}} / {{.DropReq}}m</div>
-          </div>
-          <span class="claim" style="background:transparent;border:1px solid var(--line);color:var(--muted);">{{.DropETA}}</span>
-        </article>
-        {{end}}
-      </div>
-    </section>
-
+{{/* Next-claim ETAs spans full width — sidebar removed; Active
+     Campaigns lives on /drops now. */}}
+{{if .NextClaims}}
+<section class="section section-wide">
+  <div class="sec-head">
+    <h2>Next claim ETAs</h2>
+    <div class="rule"></div>
+    <div class="meta">auto-claim on completion · sorted by time</div>
   </div>
-
-  <aside>
-
-    <div class="panel">
-      <div class="panel-head">
-        <h3>Active campaigns</h3>
-        <span class="meta">{{len .ActiveCamps}} · auto-discovered</span>
+  <div class="pending">
+    {{range .NextClaims}}
+    <article class="pcard">
+      <div class="sprite" style="color: var(--muted);">▲</div>
+      <div class="meta">
+        <div class="nm">{{.DropName}} <span class="ac">{{.Login}}</span></div>
+        <div class="sub">{{.Platform}} · {{if .DropCampaign}}{{.DropCampaign}} · {{end}}{{.DropMins}} / {{.DropReq}}m</div>
       </div>
-      <div class="panel-body">
-        {{if not .ActiveCamps}}
-        <div class="empty" style="padding: 18px; font-size: 12px;">No whitelisted campaigns discovered yet. Watchers populate this on the first successful poll.</div>
-        {{end}}
-        {{range .ActiveCamps}}
-        <div class="camp clickable"
-             hx-get="/dashboard/campaign/{{.ID}}"
-             hx-target="#modal"
-             hx-swap="innerHTML"
-             role="button"
-             tabindex="0">
-          <span class="pip {{.Platform}}"></span>
-          <div class="body">
-            <div class="name">{{.Name}}</div>
-            <div class="sub"><b>{{.Drops}}</b> drops · {{if .Game}}{{.Game}}{{else}}—{{end}}</div>
-          </div>
-          <div class="right">
-            <div class="ends" {{if .EndsUrgent}}style="color: var(--red)"{{end}}>{{if .EndsIn}}ends {{.EndsIn}}{{else}}—{{end}}</div>
-            <div class="pct">{{.Claimed}}/{{.Total}} claimed</div>
-          </div>
-        </div>
-        {{end}}
-      </div>
-    </div>
-
-  </aside>
-</div>
+      <span class="claim" style="background:transparent;border:1px solid var(--line);color:var(--muted);">{{.DropETA}}</span>
+    </article>
+    {{end}}
+  </div>
+</section>
+{{end}}
 
 {{/* Currently mining — full-width band, split by platform into two
      compact account-row columns. HTMX polls /dashboard/cards every 2s

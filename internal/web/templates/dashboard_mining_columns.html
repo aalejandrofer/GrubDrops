@@ -38,7 +38,13 @@
      dedicated class so the CSS picks the right color. The activity
      line is platform-neutral: drop name + progress + ETA when watching,
      a brief reason otherwise. */}}
-<a class="account-row {{if not .Enabled}}disabled{{end}} state-{{.State}}" href="/accounts/{{.ID}}">
+<a class="account-row {{if not .Enabled}}disabled{{end}} state-{{.State}}"
+   href="#"
+   hx-get="/dashboard/account/{{.ID}}"
+   hx-target="#modal"
+   hx-swap="innerHTML"
+   role="button"
+   onclick="event.preventDefault()">
   <span class="av">{{.AccountInitial}}</span>
   <span class="who">
     <span class="login">{{.Login}}</span>

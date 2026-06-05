@@ -1,0 +1,112 @@
+{{define "dashboard_account_modal"}}
+<div class="modal-backdrop" data-modal-backdrop>
+  <div class="modal-card" role="dialog">
+    <div class="modal-head">
+      <div>
+        <div class="kicker">// {{.Platform}} · account</div>
+        <h2 class="modal-title">{{.DisplayName}} <span class="modal-sub">@{{.Login}}</span></h2>
+      </div>
+      <div class="modal-state">
+        <span class="state-pill state-{{if eq .State "watching"}}green{{else if eq .State "claiming"}}green{{else if eq .State "pick_stream"}}green{{else if eq .State "pick_campaign"}}green{{else if eq .State "idle"}}green{{else if eq .State "needs_auth"}}orange{{else}}orange{{end}}">● {{.StateLabel}}</span>
+        <button type="button" class="modal-close" data-modal-backdrop aria-label="Close">×</button>
+      </div>
+    </div>
+
+    {{if or (eq .State "watching") (eq .State "claiming")}}
+    <section class="modal-section">
+      <h3 class="modal-section-h">Now mining</h3>
+      <div class="modal-row">
+        <span class="modal-row-k">campaign</span>
+        <span class="modal-row-v">{{if .CurrentCampaign}}{{.CurrentCampaign}}{{else}}—{{end}}</span>
+      </div>
+      <div class="modal-row">
+        <span class="modal-row-k">game</span>
+        <span class="modal-row-v">{{if .CurrentGame}}{{.CurrentGame}}{{else}}—{{end}}</span>
+      </div>
+      <div class="modal-row">
+        <span class="modal-row-k">drop</span>
+        <span class="modal-row-v">{{if .CurrentBenefit}}{{.CurrentBenefit}}{{else}}—{{end}}</span>
+      </div>
+      <div class="modal-row">
+        <span class="modal-row-k">channel</span>
+        <span class="modal-row-v">{{if .CurrentChannel}}<a href="https://www.twitch.tv/{{.CurrentChannel}}" target="_blank">{{.CurrentChannel}}</a>{{else}}—{{end}}</span>
+      </div>
+      <div class="modal-row">
+        <span class="modal-row-k">progress</span>
+        <span class="modal-row-v">{{.MinutesWatched}} / {{.RequiredMinutes}}m · {{.ProgressPct}}% · ETA {{.WatchETA}}</span>
+      </div>
+      {{if .Uptime}}
+      <div class="modal-row">
+        <span class="modal-row-k">on stream</span>
+        <span class="modal-row-v">{{.Uptime}}</span>
+      </div>
+      {{end}}
+    </section>
+    {{end}}
+
+    <section class="modal-section">
+      <h3 class="modal-section-h">Whitelist priority</h3>
+      {{if not .Games}}
+      <div class="modal-empty">No games selected. <a href="/accounts/{{.ID}}">Pick some →</a></div>
+      {{else}}
+      <ol class="modal-list">
+        {{range .Games}}<li><span class="rank">{{printf "%02d" .Rank}}</span>{{.Name}}</li>{{end}}
+      </ol>
+      {{end}}
+    </section>
+
+    <section class="modal-section">
+      <h3 class="modal-section-h">Currently eligible <span class="modal-section-meta">{{len .EligibleCampaigns}}</span></h3>
+      {{if not .EligibleCampaigns}}
+      <div class="modal-empty">No active whitelisted campaigns right now.</div>
+      {{else}}
+      <ul class="modal-list">
+        {{range .EligibleCampaigns}}
+        <li>
+          <span class="modal-camp-name">{{.Name}}</span>
+          <span class="modal-camp-meta">{{.Game}}{{if .EndsIn}} · ends {{.EndsIn}}{{end}}</span>
+        </li>
+        {{end}}
+      </ul>
+      {{end}}
+    </section>
+
+    {{if .UpcomingCampaigns}}
+    <section class="modal-section">
+      <h3 class="modal-section-h">Upcoming <span class="modal-section-meta">{{len .UpcomingCampaigns}}</span></h3>
+      <ul class="modal-list">
+        {{range .UpcomingCampaigns}}
+        <li>
+          <span class="modal-camp-name">{{.Name}}</span>
+          <span class="modal-camp-meta">{{.Game}} · starts {{.StartsIn}}</span>
+        </li>
+        {{end}}
+      </ul>
+    </section>
+    {{end}}
+
+    <section class="modal-section">
+      <h3 class="modal-section-h">Recent activity <span class="modal-section-meta">{{len .RecentEvents}}</span></h3>
+      {{if not .RecentEvents}}
+      <div class="modal-empty">No events tagged with this account yet.</div>
+      {{else}}
+      <div class="modal-events">
+        {{range .RecentEvents}}
+        <div class="ev kind-{{.Kind}}">
+          <span class="t">{{.Time}}</span>
+          <span class="lvl" style="color:var(--{{.Color}})">●</span>
+          <span class="body">{{.BodyHTML | safe}}</span>
+        </div>
+        {{end}}
+      </div>
+      {{end}}
+    </section>
+
+    <div class="modal-foot">
+      <a class="btn" href="/accounts/{{.ID}}">Edit account →</a>
+      <a class="btn" href="/accounts/{{.ID}}/login">Re-authenticate →</a>
+      <button class="btn" type="button" data-modal-backdrop>Close</button>
+    </div>
+  </div>
+</div>
+{{end}}
