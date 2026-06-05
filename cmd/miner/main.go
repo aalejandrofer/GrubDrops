@@ -17,6 +17,7 @@ import (
 	"github.com/aalejandrofer/dropsminer/internal/api"
 	"github.com/aalejandrofer/dropsminer/internal/auth/browser"
 	"github.com/aalejandrofer/dropsminer/internal/config"
+	"github.com/aalejandrofer/dropsminer/internal/discovery"
 	mlog "github.com/aalejandrofer/dropsminer/internal/log"
 	"github.com/aalejandrofer/dropsminer/internal/notify"
 	"github.com/aalejandrofer/dropsminer/internal/platform"
@@ -239,6 +240,16 @@ func run() error {
 		return fmt.Errorf("initial scheduler boot: %w", err)
 	}
 
+	// Anonymous active-drops scraper: keeps the /drops page populated
+	// with every active whitelisted campaign even when no watcher has
+	// ticked recently (e.g. all accounts disabled, sessions expired).
+	// Providers borrow ONE shared session per platform — the first
+	// enabled account's — so we don't multiply the gql cost across the
+	// account roster. Whitelist is the union of every enabled account's
+	// game opt-ins; non-whitelisted games are never scraped.
+	discoveryInterval := parseDuration(os.Getenv("MINER_DISCOVERY_INTERVAL"), 5*time.Minute)
+	startDiscovery(ctx, logger, q, sessions, registry, campaignPersister, discoveryInterval)
+
 	// Avoid typed-nil-interface trap: only assign if the concrete pointer is non-nil.
 	var bc api.KickBrowserClient
 	var tbc api.TwitchBrowserClient
@@ -346,4 +357,59 @@ func loadAccountWhitelist(ctx context.Context, q *gen.Queries, accountID string)
 
 func hasAnyGame(allow func(string) bool) bool {
 	return allow != nil
+}
+
+// parseDuration parses a Go duration string (e.g. "5m", "30s") with a
+// fallback when the env var is empty or malformed. Matches the pattern
+// used elsewhere in the codebase for config-by-env.
+func parseDuration(raw string, fallback time.Duration) time.Duration {
+	if raw == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d <= 0 {
+		return fallback
+	}
+	return d
+}
+
+// startDiscovery wires the anonymous active-drops scraper. Providers
+// are added only when the prerequisite backend is registered; a missing
+// twitch/kick backend means that Provider is silently omitted (the
+// remaining ones still run).
+//
+// Falls back to a graceful no-op for each platform when:
+//   - the backend isn't registered (sidecar absent for Kick, etc.), OR
+//   - no enabled account on that platform has a usable session.
+//
+// In either case a single warning is logged and Run returns without
+// touching the persister. The persister is the same one the watchers
+// use, so duplicate writes are harmless (UPSERT).
+func startDiscovery(
+	ctx context.Context,
+	logger *slog.Logger,
+	q *gen.Queries,
+	sessions *store.SessionStore,
+	registry *platform.Registry,
+	persister *store.CampaignPersister,
+	interval time.Duration,
+) {
+	providers := make([]discovery.Provider, 0, 2)
+	if b, ok := registry.Get("twitch"); ok {
+		providers = append(providers, discovery.NewTwitchScraperFromStore(q, sessions, b))
+	} else {
+		logger.Warn("discovery: no twitch backend registered; skipping twitch scraper")
+	}
+	if b, ok := registry.Get("kick"); ok {
+		providers = append(providers, discovery.NewKickScraperFromStore(q, sessions, b))
+	} else {
+		logger.Warn("discovery: no kick backend registered (MINER_BROWSER_URL empty?); skipping kick scraper")
+	}
+	if len(providers) == 0 {
+		logger.Warn("discovery: no providers configured; /drops page will only show watcher-discovered campaigns")
+		return
+	}
+	scraper := discovery.New(persister, discovery.NewQueriesWhitelist(q), providers...)
+	logger.Info("discovery scraper started", "interval", interval, "providers", len(providers))
+	go scraper.Run(ctx, interval)
 }
