@@ -24,22 +24,16 @@
       {{if not .Claims}}
       <div class="empty">No claims yet.</div>
       {{else}}
-      <table class="tbl">
-        <thead>
-          <tr><th>When</th><th>Source</th><th>Game</th><th>Title</th><th>Account</th></tr>
-        </thead>
-        <tbody>
-          {{range .Claims}}
-          <tr>
-            <td class="handle">{{.When}}</td>
-            <td>{{if eq .Source "reward"}}<span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;padding:2px 7px;border:1px solid var(--accent);color:var(--accent);background:rgba(212,99,30,0.08);">reward</span>{{else}}<span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;padding:2px 7px;border:1px solid var(--line);color:var(--muted);">drop</span>{{end}}</td>
-            <td>{{if .Game}}{{.Game}}{{else}}—{{end}}</td>
-            <td class="name">{{.Title}}</td>
-            <td class="handle">{{if .Account}}{{.Account}}{{else}}—{{end}}</td>
-          </tr>
-          {{end}}
-        </tbody>
-      </table>
+      <div class="events">
+        {{range .Claims}}
+        <div class="ev kind-claim" style="display:flex;gap:10px;padding:4px 0;border-bottom:1px dashed var(--line);align-items:baseline;">
+          <span class="t" style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted);min-width:108px;">{{.When}}</span>
+          <span class="lvl" style="color:var(--{{if eq .Source "reward"}}accent{{else}}green{{end}});">●</span>
+          <span class="body" style="flex:1;font-size:12px;"><em style="color:var(--muted);font-style:normal;font-family:'JetBrains Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:0.1em;">{{.Source}}</em> · {{if .Game}}<span style="color:var(--muted);">{{.Game}}</span> · {{end}}{{.Title}}</span>
+          <span class="ac" style="color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:10.5px;">{{if .Account}}{{.Account}}{{else}}—{{end}}</span>
+        </div>
+        {{end}}
+      </div>
       {{end}}
     </section>
 
