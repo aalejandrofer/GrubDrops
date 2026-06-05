@@ -865,6 +865,16 @@ type ClaimedReward struct {
 	Title string
 }
 
+// InventoryHistoryEntry is one historical claimed-item tile scraped
+// from /drops/inventory during a ClaimRewards pass. Persisted by the
+// watcher so the /history page surfaces real on-disk claim history
+// instead of just the ring-buffered recent ones.
+type InventoryHistoryEntry struct {
+	Game  string `json:"game"`
+	Title string `json:"title"`
+	Date  string `json:"date"` // free-text e.g. "Jun 5, 2026"; empty when not surfaced
+}
+
 // ClaimRewards navigates the account's auth tab to /drops/inventory
 // and clicks every visible "Claim" / "Claim now" button whose tile
 // belongs to a game on allowedGames (case-insensitive name OR slug).
@@ -968,7 +978,56 @@ func (t *Twitch) ClaimRewards(ctx context.Context, accountID string, allowedGame
 				errors.push(String(e));
 			}
 		}
-		return JSON.stringify({claimed: out, errors: errors});
+		// Second pass: scan every tile on the page for already-claimed
+		// inventory items (no Claim button = either historical or in
+		// progress). Pull title + game + the surrounding date text if
+		// present. Used for /history page persistence — over-firing is
+		// fine, Go-side dedupes on (account, title).
+		const history = [];
+		try {
+			const imgs = Array.from(document.querySelectorAll('img[alt]'));
+			const seenH = new Set();
+			for (const img of imgs) {
+				const alt = (img.alt || '').trim();
+				if (!alt || alt.length > 80) continue;
+				const w = img.naturalWidth || img.width || 0;
+				const h = img.naturalHeight || img.height || 0;
+				// Inventory item images are roughly square; skip portrait
+				// game-boxart (those are game headers, not tiles).
+				if (w > 0 && h > 0 && (h > w * 1.4)) continue;
+				let card = img.parentElement;
+				let title = '';
+				let game = '';
+				let date = '';
+				for (let i = 0; i < 6 && card; i++) {
+					card = card.parentElement;
+					if (!card) break;
+					if (!title) {
+						const headings = card.querySelectorAll('p,h1,h2,h3,h4,h5');
+						for (const el of headings) {
+							const t = (el.textContent || '').trim();
+							if (t && t.length > 2 && t.length < 120 && t.toLowerCase() !== 'claim' && t !== alt) {
+								title = t;
+								break;
+							}
+						}
+					}
+					if (!date) {
+						const txt = (card.textContent || '');
+						const m = txt.match(/(?:Claimed|Earned)[\s:]+([A-Z][a-z]{2,8}\s\d{1,2},\s\d{4})/i);
+						if (m) date = m[1];
+					}
+					if (title) break;
+				}
+				if (!title) continue;
+				if (!game) game = findGameAbove(img);
+				const key = norm(title);
+				if (seenH.has(key)) continue;
+				seenH.add(key);
+				history.push({game: game || 'unknown', title: title, date: date});
+			}
+		} catch (e) {}
+		return JSON.stringify({claimed: out, errors: errors, history: history});
 	})()`
 	var raw string
 	if err := chromedp.Run(tabCtx,
@@ -981,8 +1040,9 @@ func (t *Twitch) ClaimRewards(ctx context.Context, accountID string, allowedGame
 		return nil, nil, fmt.Errorf("claim rewards: %w", err)
 	}
 	var resp struct {
-		Claimed []ClaimedReward `json:"claimed"`
-		Errors  []string        `json:"errors"`
+		Claimed []ClaimedReward      `json:"claimed"`
+		Errors  []string             `json:"errors"`
+		History []InventoryHistoryEntry `json:"history"`
 	}
 	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
 		return nil, nil, fmt.Errorf("parse claim response (raw=%s): %w", truncate(raw, 200), err)
@@ -990,7 +1050,40 @@ func (t *Twitch) ClaimRewards(ctx context.Context, accountID string, allowedGame
 	for _, c := range resp.Claimed {
 		t.markClaimed(accountID, c.Title)
 	}
+	// Log every historical claimed-tile we saw so the dashboard
+	// ring-buffer + /history feed picks them up. Mark seen titles so
+	// the next reaper pass doesn't double-log the same row.
+	for _, h := range resp.History {
+		if t.cachedClaim(accountID, h.Title) {
+			continue
+		}
+		t.markClaimed(accountID, h.Title)
+		slog.Info("watcher reward claimed",
+			"kind", "claim",
+			"account", accountID,
+			"game", h.Game,
+			"title", h.Title,
+			"date", h.Date,
+			"source", "inventory_history",
+		)
+	}
 	return resp.Claimed, resp.Errors, nil
+}
+
+// cachedClaim returns true if (account, title) has been marked
+// claimed in this process lifetime.
+func (t *Twitch) cachedClaim(accountID, title string) bool {
+	if accountID == "" || title == "" {
+		return false
+	}
+	key := normalizeTitle(title)
+	t.claimedMu.Lock()
+	defer t.claimedMu.Unlock()
+	m := t.claimed[accountID]
+	if m == nil {
+		return false
+	}
+	return m[key]
 }
 
 // --- internals ---
