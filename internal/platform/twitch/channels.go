@@ -3,9 +3,16 @@ package twitch
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
+
+// liveCheckConcurrency caps the in-flight OpGetStreamInfo requests
+// listEligible issues in parallel. Twitch's gql edge tolerates ~20
+// concurrent requests per session — DevilXD's bulk_check_online uses
+// the same batch size.
+const liveCheckConcurrency = 20
 
 type channels struct {
 	c *client
@@ -119,32 +126,69 @@ func (ch *channels) listEligible(ctx context.Context, sess platform.Session, _ p
 	if len(allowedLogins) == 0 {
 		return nil, nil
 	}
-	out := []platform.Stream{}
-	for _, login := range allowedLogins {
-		var sd streamLiveData
-		err := ch.c.gql(ctx, sess.AccessToken, OpGetStreamInfo,
-			map[string]any{"channel": login}, &sd)
-		if err != nil {
-			return nil, fmt.Errorf("stream live %s: %w", login, err)
+	// Parallel liveness probe (P2). Each OpGetStreamInfo call is
+	// independent; collapsing N RTTs into ~ceil(N/20) windows cuts
+	// pickStream latency from seconds to ~one RTT when allow.channels
+	// is long. First error wins to keep the existing failure shape.
+	results := make([]platform.Stream, len(allowedLogins))
+	hits := make([]bool, len(allowedLogins))
+	sem := make(chan struct{}, liveCheckConcurrency)
+	probeCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var firstErr error
+	var errMu sync.Mutex
+	var wg sync.WaitGroup
+	for i, login := range allowedLogins {
+		i, login := i, login
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if probeCtx.Err() != nil {
+				return
+			}
+			var sd streamLiveData
+			if err := ch.c.gql(probeCtx, sess.AccessToken, OpGetStreamInfo,
+				map[string]any{"channel": login}, &sd); err != nil {
+				errMu.Lock()
+				if firstErr == nil {
+					firstErr = fmt.Errorf("stream live %s: %w", login, err)
+					cancel()
+				}
+				errMu.Unlock()
+				return
+			}
+			if sd.User.Stream == nil {
+				return
+			}
+			gameID, gameName := "", ""
+			if sd.User.Stream.Game != nil {
+				gameID, gameName = sd.User.Stream.Game.ID, sd.User.Stream.Game.DisplayName
+			} else if sd.User.BroadcastSettings.Game != nil {
+				gameID, gameName = sd.User.BroadcastSettings.Game.ID, sd.User.BroadcastSettings.Game.DisplayName
+			}
+			results[i] = platform.Stream{
+				Channel:      sd.User.Login,
+				ViewerCount:  sd.User.Stream.ViewersCount,
+				DropsEnabled: true,
+				ChannelID:    sd.User.ID,
+				BroadcastID:  sd.User.Stream.ID,
+				GameID:       gameID,
+				Game:         gameName,
+			}
+			hits[i] = true
+		}()
+	}
+	wg.Wait()
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	out := make([]platform.Stream, 0, len(allowedLogins))
+	for i, hit := range hits {
+		if hit {
+			out = append(out, results[i])
 		}
-		if sd.User.Stream == nil {
-			continue
-		}
-		gameID, gameName := "", ""
-		if sd.User.Stream.Game != nil {
-			gameID, gameName = sd.User.Stream.Game.ID, sd.User.Stream.Game.DisplayName
-		} else if sd.User.BroadcastSettings.Game != nil {
-			gameID, gameName = sd.User.BroadcastSettings.Game.ID, sd.User.BroadcastSettings.Game.DisplayName
-		}
-		out = append(out, platform.Stream{
-			Channel:      sd.User.Login,
-			ViewerCount:  sd.User.Stream.ViewersCount,
-			DropsEnabled: true,
-			ChannelID:    sd.User.ID,
-			BroadcastID:  sd.User.Stream.ID,
-			GameID:       gameID,
-			Game:         gameName,
-		})
 	}
 	return out, nil
 }
