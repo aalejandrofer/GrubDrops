@@ -15,7 +15,7 @@ Operator's checklist for shipping a build to https://rdrops.ryuzec.dev.
 3. **Create the data dir on the host:**
 
    ```bash
-   ssh jandro@10.10.2.40 'sudo mkdir -p /home/jandro/localConfig/rust-drops-miner/data && sudo chown -R jandro:jandro /home/jandro/localConfig/rust-drops-miner'
+   ssh jandro@10.10.2.40 'sudo mkdir -p /home/jandro/localConfig/dropsminer/data && sudo chown -R jandro:jandro /home/jandro/localConfig/dropsminer'
    ```
 
 4. **Generate the master key (once):**
@@ -31,7 +31,7 @@ Operator's checklist for shipping a build to https://rdrops.ryuzec.dev.
 5. **Tag + push images:**
 
    ```bash
-   cd /Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/RustDropsMiner
+   cd /Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/DropsMiner
    git tag v0.1.0
    ./scripts/release.sh v0.1.0
    ```
@@ -42,7 +42,7 @@ Operator's checklist for shipping a build to https://rdrops.ryuzec.dev.
 
    ```bash
    ssh jandro@10.10.2.40
-   cd ~/deployments/humblewhale/rust-drops-miner   # path depends on homelab clone location
+   cd ~/deployments/humblewhale/dropsminer   # path depends on homelab clone location
    cp .env.example .env
    # Edit .env — paste MINER_MASTER_KEY from step 4
    nano .env
@@ -65,7 +65,7 @@ Operator's checklist for shipping a build to https://rdrops.ryuzec.dev.
    ```bash
    cd /Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab/update
    ./homelab-update
-   # Select humblewhale → rust-drops-miner → deploy
+   # Select humblewhale → dropsminer → deploy
    ```
 
    Option B — direct SSH:
@@ -74,10 +74,10 @@ Operator's checklist for shipping a build to https://rdrops.ryuzec.dev.
    ssh jandro@10.10.2.40 '
      cd ~/deployments/humblewhale &&
      git pull &&
-     cd rust-drops-miner &&
+     cd dropsminer &&
      docker compose pull &&
      docker compose up -d &&
-     docker compose logs --tail=40 rust-drops-miner
+     docker compose logs --tail=40 dropsminer
    '
    ```
 
@@ -102,7 +102,7 @@ If a release is bad:
 
 ```bash
 ssh jandro@10.10.2.40 '
-  cd ~/deployments/humblewhale/rust-drops-miner &&
+  cd ~/deployments/humblewhale/dropsminer &&
   # Edit compose.yml to pin the previous tag, then:
   docker compose pull &&
   docker compose up -d
@@ -114,7 +114,7 @@ For faster rollback, pin `compose.yml` images to specific tags (`:v0.1.0`) rathe
 ## Troubleshooting
 
 - **`*.ryuzec.dev` not resolving from LAN:** Blocky is the DNS authority. Confirm via `dig +short rdrops.ryuzec.dev @10.10.2.40` returns `10.10.2.40`.
-- **Traefik 404:** Verify the container joined `traeky_proxynet` (`docker network inspect traeky_proxynet | grep rust-drops-miner`). If absent, the label namespace or network name is wrong.
+- **Traefik 404:** Verify the container joined `traeky_proxynet` (`docker network inspect traeky_proxynet | grep dropsminer`). If absent, the label namespace or network name is wrong.
 - **Cert pending forever:** Cloudflare DNS-01 needs API tokens already set at the Traefik level (under the `letsencrypt-dns` resolver). They're already configured for `*.ryuzec.dev`.
 - **`MINER_MASTER_KEY is required`:** `.env` missing or empty on the host. Re-do step 6.
 - **`docker compose pull` 401s on ghcr:** the host machine needs `docker login ghcr.io` too if the images are private. Run the same login command from step 1 on the host.

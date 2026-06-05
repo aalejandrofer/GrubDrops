@@ -37,7 +37,7 @@ Headless, Docker-deployable drops miner for the game Rust (with general game sup
 ### Repo layout
 
 ```
-rust-drops-miner/
+dropsminer/
 ├── cmd/
 │   ├── miner/                # daemon entrypoint
 │   └── browser-sidecar/      # rod/chromedp login service
@@ -266,7 +266,7 @@ Two deployment shapes, same image:
 ```yaml
 services:
   miner:
-    image: rust-drops-miner:dev
+    image: dropsminer:dev
     build:
       context: ..
       dockerfile: deploy/Dockerfile.miner
@@ -278,7 +278,7 @@ services:
     volumes: ["./data:/data"]
 
   browser:
-    image: rust-drops-miner-browser:dev
+    image: dropsminer-browser:dev
     build:
       context: ..
       dockerfile: deploy/Dockerfile.browser
@@ -292,7 +292,7 @@ services:
 
 ### Homelab production (10.10.2.40 → rdrops.ryuzec.dev)
 
-Target lives in a sibling repo: `/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab/humblewhale/rust-drops-miner/compose.yml`. Inherits the homelab conventions:
+Target lives in a sibling repo: `/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab/humblewhale/dropsminer/compose.yml`. Inherits the homelab conventions:
 
 - Docker Compose stack under `humblewhale/<service>/compose.yml`
 - Image pulled (built and pushed separately, not built on host)
@@ -300,27 +300,27 @@ Target lives in a sibling repo: `/Users/jandro/Library/CloudStorage/OneDrive-Per
 - TLS via Cloudflare DNS-01 challenge handled by Traefik
 - Blocky DNS already maps `*.ryuzec.dev` → 10.10.2.40 by default
 - `.env` next to compose file (plain, gitignored); references `${DOMAIN}` and `${PROXY_NETWORK}` from shared `humblewhale/.env`
-- Bind-mount `/home/jandro/localConfig/rust-drops-miner/data` → `/data` for sqlite persistence
+- Bind-mount `/home/jandro/localConfig/dropsminer/data` → `/data` for sqlite persistence
 - Deployment via `update/` TUI (`homelab-update`) which SSHes to the server and runs `docker compose pull && docker compose up -d`
 
 Sketch:
 
 ```yaml
 services:
-  rust-drops-miner:
-    image: ghcr.io/aalejandrofer/rust-drops-miner:latest
-    container_name: rust-drops-miner
+  dropsminer:
+    image: ghcr.io/aalejandrofer/dropsminer:latest
+    container_name: dropsminer
     restart: unless-stopped
     env_file: ./.env
     volumes:
-      - /home/jandro/localConfig/rust-drops-miner/data:/data
+      - /home/jandro/localConfig/dropsminer/data:/data
     networks: [traeky_proxynet]
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.rust-drops-miner.rule=Host(`rdrops.ryuzec.dev`)"
-      - "traefik.http.routers.rust-drops-miner.entrypoints=websecure"
-      - "traefik.http.routers.rust-drops-miner.tls.certresolver=cloudflare"
-      - "traefik.http.services.rust-drops-miner.loadbalancer.server.port=8080"
+      - "traefik.http.routers.dropsminer.rule=Host(`rdrops.ryuzec.dev`)"
+      - "traefik.http.routers.dropsminer.entrypoints=websecure"
+      - "traefik.http.routers.dropsminer.tls.certresolver=cloudflare"
+      - "traefik.http.services.dropsminer.loadbalancer.server.port=8080"
 
 networks:
   traeky_proxynet:

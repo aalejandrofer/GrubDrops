@@ -116,7 +116,7 @@ syntax = "proto3";
 
 package browser.v1;
 
-option go_package = "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1;browserv1";
+option go_package = "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1;browserv1";
 
 // Browser is the sidecar's gRPC service. It owns a headless Chromium
 // instance and exposes Kick-specific drops operations to the main daemon.
@@ -421,7 +421,7 @@ import (
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 
-	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
 )
 
 // Kick wraps Browser with Kick.com-specific page logic.
@@ -683,7 +683,7 @@ package sidecar
 import (
 	"context"
 
-	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
 )
 
 // Server implements the gRPC service. Methods translate proto types
@@ -792,8 +792,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
-	"github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/sidecar"
+	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
+	"github.com/aalejandrofer/dropsminer/internal/auth/browser/sidecar"
 )
 
 func main() {
@@ -889,7 +889,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
 )
 
 // Client wraps the generated gRPC client with a friendlier surface.
@@ -968,7 +968,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
 )
 
 type stubServer struct {
@@ -1071,9 +1071,9 @@ package kick
 import (
 	"encoding/json"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
 
-	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
 )
 
 // kickSession is the JSON we serialize into platform.Session.Cookies +
@@ -1176,8 +1176,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/auth/browser"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/auth/browser"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
 
 // Backend implements platform.Backend for Kick by delegating page
@@ -1348,9 +1348,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
-	"github.com/aalejandrofer/rust-drops-miner/internal/auth/browser"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
+	"github.com/aalejandrofer/dropsminer/internal/auth/browser"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
 
 type stubServer struct {
@@ -1482,8 +1482,8 @@ ENTRYPOINT ["/browser-sidecar"]
 - [ ] **Step 2: Build the image**
 
 ```bash
-docker build -f deploy/Dockerfile.browser -t rust-drops-miner-browser:dev .
-docker images rust-drops-miner-browser:dev --format '{{.Size}}'
+docker build -f deploy/Dockerfile.browser -t dropsminer-browser:dev .
+docker images dropsminer-browser:dev --format '{{.Size}}'
 ```
 
 Expected: image size ~150–200MB (chromedp/headless-shell base ~130MB + Go binary ~15MB).
@@ -1491,7 +1491,7 @@ Expected: image size ~150–200MB (chromedp/headless-shell base ~130MB + Go bina
 - [ ] **Step 3: Smoke-run the container**
 
 ```bash
-docker run --rm -d -p 9090:9090 --name miner-browser-test rust-drops-miner-browser:dev
+docker run --rm -d -p 9090:9090 --name miner-browser-test dropsminer-browser:dev
 sleep 3
 docker logs miner-browser-test | head -5
 docker stop miner-browser-test
@@ -1576,8 +1576,8 @@ if cfg.BrowserURL != "" {
 Add imports:
 
 ```go
-"github.com/aalejandrofer/rust-drops-miner/internal/auth/browser"
-"github.com/aalejandrofer/rust-drops-miner/internal/platform/kick"
+"github.com/aalejandrofer/dropsminer/internal/auth/browser"
+"github.com/aalejandrofer/dropsminer/internal/platform/kick"
 ```
 
 - [ ] **Step 4: Build + tests**
@@ -1658,10 +1658,10 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
-	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
+	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/store"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
 // kickBrowserClient is the surface handlers_login_kick depends on. We
@@ -1881,7 +1881,7 @@ Replace `deploy/docker-compose.yml`:
 ```yaml
 services:
   miner:
-    image: rust-drops-miner:dev
+    image: dropsminer:dev
     build:
       context: ..
       dockerfile: deploy/Dockerfile.miner
@@ -1898,7 +1898,7 @@ services:
       - browser
 
   browser:
-    image: rust-drops-miner-browser:dev
+    image: dropsminer-browser:dev
     build:
       context: ..
       dockerfile: deploy/Dockerfile.browser
@@ -2091,4 +2091,4 @@ After Task 13:
 
 ## Next plan preview
 
-Plan 5: Production deploy to homelab. Push `rust-drops-miner` and `rust-drops-miner-browser` to ghcr.io, write `humblewhale/rust-drops-miner/compose.yml` with Traefik labels for `rdrops.ryuzec.dev`, wire to `traeky_proxynet`, ship via the homelab-update TUI.
+Plan 5: Production deploy to homelab. Push `dropsminer` and `dropsminer-browser` to ghcr.io, write `humblewhale/dropsminer/compose.yml` with Traefik labels for `rdrops.ryuzec.dev`, wire to `traeky_proxynet`, ship via the homelab-update TUI.

@@ -289,7 +289,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/store"
+	"github.com/aalejandrofer/dropsminer/internal/store"
 )
 
 func TestKVStore_CommitFindDelete(t *testing.T) {
@@ -534,7 +534,7 @@ func Templates() (*template.Template, error) {
   </form>
 </nav>
 {{else}}
-<nav><strong>rust-drops-miner</strong></nav>
+<nav><strong>dropsminer</strong></nav>
 {{end}}
 {{end}}
 ```
@@ -726,8 +726,8 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/auth"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/dropsminer/internal/auth"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
 type setupDeps struct {
@@ -851,8 +851,8 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/auth"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/dropsminer/internal/auth"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
 type authDeps struct {
@@ -944,7 +944,7 @@ func (w *Watcher) AccountID() string { return w.cfg.AccountID }
 // internal/scheduler/state.go
 package scheduler
 
-import "github.com/aalejandrofer/rust-drops-miner/internal/watcher"
+import "github.com/aalejandrofer/dropsminer/internal/watcher"
 
 type AccountState struct {
 	AccountID string
@@ -1058,8 +1058,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/notify"
-	"github.com/aalejandrofer/rust-drops-miner/internal/watcher"
+	"github.com/aalejandrofer/dropsminer/internal/notify"
+	"github.com/aalejandrofer/dropsminer/internal/watcher"
 )
 
 type runner interface {
@@ -1149,9 +1149,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform/fake"
-	"github.com/aalejandrofer/rust-drops-miner/internal/watcher"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/platform/fake"
+	"github.com/aalejandrofer/dropsminer/internal/watcher"
 )
 
 type counterNotifier struct{ claims atomic.Int64 }
@@ -1269,8 +1269,8 @@ import (
 	"html/template"
 	"net/http"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/scheduler"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/dropsminer/internal/scheduler"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
 type dashboardDeps struct {
@@ -1456,7 +1456,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
 type accountsDeps struct {
@@ -1984,8 +1984,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/scheduler"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/dropsminer/internal/scheduler"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
 type Deps struct {
@@ -2070,17 +2070,17 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/api"
-	"github.com/aalejandrofer/rust-drops-miner/internal/config"
-	mlog "github.com/aalejandrofer/rust-drops-miner/internal/log"
-	"github.com/aalejandrofer/rust-drops-miner/internal/notify"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform/fake"
-	"github.com/aalejandrofer/rust-drops-miner/internal/scheduler"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
-	"github.com/aalejandrofer/rust-drops-miner/internal/watcher"
-	"github.com/aalejandrofer/rust-drops-miner/internal/web"
+	"github.com/aalejandrofer/dropsminer/internal/api"
+	"github.com/aalejandrofer/dropsminer/internal/config"
+	mlog "github.com/aalejandrofer/dropsminer/internal/log"
+	"github.com/aalejandrofer/dropsminer/internal/notify"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/platform/fake"
+	"github.com/aalejandrofer/dropsminer/internal/scheduler"
+	"github.com/aalejandrofer/dropsminer/internal/store"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
+	"github.com/aalejandrofer/dropsminer/internal/watcher"
+	"github.com/aalejandrofer/dropsminer/internal/web"
 )
 
 func main() {

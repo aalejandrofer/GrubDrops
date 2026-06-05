@@ -50,7 +50,7 @@
 ## Task 0: Initial commit of design doc
 
 **Files:**
-- Existing: `docs/superpowers/specs/2026-06-04-rust-drops-miner-design.md`
+- Existing: `docs/superpowers/specs/2026-06-04-dropsminer-design.md`
 - Existing: `docs/superpowers/plans/2026-06-04-plan-01-foundation-vertical-slice.md`
 
 - [ ] **Step 1: Stage docs and create initial commit**
@@ -74,10 +74,10 @@ Expected: commit succeeds on `master`.
 - [ ] **Step 1: Initialize Go module**
 
 ```bash
-go mod init github.com/aalejandrofer/rust-drops-miner
+go mod init github.com/aalejandrofer/dropsminer
 ```
 
-Expected: creates `go.mod` with `module github.com/aalejandrofer/rust-drops-miner` and `go 1.22` (or newer).
+Expected: creates `go.mod` with `module github.com/aalejandrofer/dropsminer` and `go 1.22` (or newer).
 
 - [ ] **Step 2: Create `.gitignore`**
 
@@ -109,9 +109,9 @@ coverage.out
 - [ ] **Step 3: Create minimal `README.md`**
 
 ```markdown
-# rust-drops-miner
+# dropsminer
 
-Headless drops miner for Twitch and Kick, focused on the game Rust. See `docs/superpowers/specs/2026-06-04-rust-drops-miner-design.md` for design.
+Headless drops miner for Twitch and Kick, focused on the game Rust. See `docs/superpowers/specs/2026-06-04-dropsminer-design.md` for design.
 ```
 
 - [ ] **Step 4: Commit**
@@ -838,7 +838,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
 func openTest(t *testing.T) *sql.DB {
@@ -1172,7 +1172,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
 
 func TestFake_LifecycleClaims(t *testing.T) {
@@ -1225,7 +1225,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
 
 type Option func(*Backend)
@@ -1386,8 +1386,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform/fake"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/platform/fake"
 )
 
 type recordingNotifier struct{ events []string }
@@ -1481,7 +1481,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
 
 type Notifier interface {
@@ -1794,9 +1794,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform/fake"
-	"github.com/aalejandrofer/rust-drops-miner/internal/watcher"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/platform/fake"
+	"github.com/aalejandrofer/dropsminer/internal/watcher"
 )
 
 type captureNotifier struct{ claims atomic.Int64 }
@@ -1847,8 +1847,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/notify"
-	"github.com/aalejandrofer/rust-drops-miner/internal/watcher"
+	"github.com/aalejandrofer/dropsminer/internal/notify"
+	"github.com/aalejandrofer/dropsminer/internal/watcher"
 )
 
 type runner interface {
@@ -2059,16 +2059,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/api"
-	"github.com/aalejandrofer/rust-drops-miner/internal/config"
-	mlog "github.com/aalejandrofer/rust-drops-miner/internal/log"
-	"github.com/aalejandrofer/rust-drops-miner/internal/notify"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform/fake"
-	"github.com/aalejandrofer/rust-drops-miner/internal/scheduler"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
-	"github.com/aalejandrofer/rust-drops-miner/internal/watcher"
+	"github.com/aalejandrofer/dropsminer/internal/api"
+	"github.com/aalejandrofer/dropsminer/internal/config"
+	mlog "github.com/aalejandrofer/dropsminer/internal/log"
+	"github.com/aalejandrofer/dropsminer/internal/notify"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/platform/fake"
+	"github.com/aalejandrofer/dropsminer/internal/scheduler"
+	"github.com/aalejandrofer/dropsminer/internal/store"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
+	"github.com/aalejandrofer/dropsminer/internal/watcher"
 )
 
 func main() {
@@ -2253,8 +2253,8 @@ ENTRYPOINT ["/miner"]
 - [ ] **Step 3: Build image**
 
 ```bash
-docker build -f deploy/Dockerfile.miner -t rust-drops-miner:dev .
-docker images rust-drops-miner:dev
+docker build -f deploy/Dockerfile.miner -t dropsminer:dev .
+docker images dropsminer:dev
 ```
 
 Expected: image size <40MB.
@@ -2279,7 +2279,7 @@ git commit -m "feat(deploy): multi-stage distroless Dockerfile for miner"
 # deploy/docker-compose.yml
 services:
   miner:
-    image: rust-drops-miner:dev
+    image: dropsminer:dev
     build:
       context: ..
       dockerfile: deploy/Dockerfile.miner
@@ -2336,7 +2336,7 @@ git commit -m "feat(deploy): docker-compose for local end-to-end testing"
 ```bash
 mkdir -p e2e
 cd e2e
-go mod init github.com/aalejandrofer/rust-drops-miner-e2e
+go mod init github.com/aalejandrofer/dropsminer-e2e
 go get github.com/stretchr/testify@v1.9.0
 cd ..
 ```

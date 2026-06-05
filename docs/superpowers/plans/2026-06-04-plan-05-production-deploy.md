@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the daemon (+ browser sidecar) to the homelab so `https://rdrops.ryuzec.dev` serves the GUI. Images go to ghcr.io; a new homelab stack at `humblewhale/rust-drops-miner/compose.yml` joins `traeky_proxynet`; Traefik labels handle TLS via Cloudflare DNS-01. Deploy via the homelab's standard SSH + `docker compose pull && up -d` flow (or the `homelab-update` TUI).
+**Goal:** Ship the daemon (+ browser sidecar) to the homelab so `https://rdrops.ryuzec.dev` serves the GUI. Images go to ghcr.io; a new homelab stack at `humblewhale/dropsminer/compose.yml` joins `traeky_proxynet`; Traefik labels handle TLS via Cloudflare DNS-01. Deploy via the homelab's standard SSH + `docker compose pull && up -d` flow (or the `homelab-update` TUI).
 
-**Architecture:** Two-repo flow. The miner repo (this one) owns the source + a `scripts/release.sh` helper that tags and pushes images to `ghcr.io/aalejandrofer/rust-drops-miner` and `...-browser`. The homelab repo (sibling at `/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab`) gains a new stack directory with `compose.yml` and `.env.example`. Operator pushes images interactively (ghcr requires login), commits the homelab change, then runs `update/homelab-update` (or SSH directly) to pull and reload on 10.10.2.40.
+**Architecture:** Two-repo flow. The miner repo (this one) owns the source + a `scripts/release.sh` helper that tags and pushes images to `ghcr.io/aalejandrofer/dropsminer` and `...-browser`. The homelab repo (sibling at `/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab`) gains a new stack directory with `compose.yml` and `.env.example`. Operator pushes images interactively (ghcr requires login), commits the homelab change, then runs `update/homelab-update` (or SSH directly) to pull and reload on 10.10.2.40.
 
 **Tech Stack:** Existing Docker images, `ghcr.io` registry, Traefik (already running on the host), Cloudflare DNS challenge (already configured at the Traefik level), `homelab-update` TUI.
 
@@ -19,18 +19,18 @@
 
 ## File Map
 
-New files in this repo (`RustDropsMiner`):
+New files in this repo (`DropsMiner`):
 
 | File | Responsibility |
 |---|---|
 | `scripts/release.sh` | Tag + push miner + browser images to ghcr.io |
 | `docs/superpowers/notes/2026-06-04-plan-05-deploy-runbook.md` | Operator deploy walkthrough |
 
-New files in the homelab repo (`humblewhale/rust-drops-miner/`):
+New files in the homelab repo (`humblewhale/dropsminer/`):
 
 | File | Responsibility |
 |---|---|
-| `compose.yml` | Stack definition with Traefik labels for `rdrops.ryuzec.dev`, joins `traeky_proxynet`, bind-mount to `/home/jandro/localConfig/rust-drops-miner/data` |
+| `compose.yml` | Stack definition with Traefik labels for `rdrops.ryuzec.dev`, joins `traeky_proxynet`, bind-mount to `/home/jandro/localConfig/dropsminer/data` |
 | `.env.example` | Documented env vars; operator copies to `.env` on the homelab host with real secrets |
 | `CLAUDE.md` | One-paragraph stack note matching the convention of sibling stacks |
 
@@ -65,8 +65,8 @@ if [[ -z "$TAG" ]]; then
 fi
 
 REGISTRY="ghcr.io/aalejandrofer"
-MINER_IMAGE="$REGISTRY/rust-drops-miner"
-BROWSER_IMAGE="$REGISTRY/rust-drops-miner-browser"
+MINER_IMAGE="$REGISTRY/dropsminer"
+BROWSER_IMAGE="$REGISTRY/dropsminer-browser"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -95,7 +95,7 @@ echo "Released:"
 echo "  $MINER_IMAGE:$TAG"
 echo "  $BROWSER_IMAGE:$TAG"
 echo
-echo "Next: update humblewhale/rust-drops-miner/compose.yml image tags, commit, deploy."
+echo "Next: update humblewhale/dropsminer/compose.yml image tags, commit, deploy."
 ```
 
 - [ ] **Step 2: Make executable + verify**
@@ -111,7 +111,7 @@ Expected: usage line.
 
 ```bash
 ./scripts/release.sh v0.0.0-smoke --build-only
-docker images | grep -E 'ghcr.io/aalejandrofer/rust-drops-miner'
+docker images | grep -E 'ghcr.io/aalejandrofer/dropsminer'
 ```
 
 Expected: both `:v0.0.0-smoke` and `:latest` tags appear for both images.
@@ -119,8 +119,8 @@ Expected: both `:v0.0.0-smoke` and `:latest` tags appear for both images.
 Clean up the smoke tags:
 
 ```bash
-docker rmi ghcr.io/aalejandrofer/rust-drops-miner:v0.0.0-smoke || true
-docker rmi ghcr.io/aalejandrofer/rust-drops-miner-browser:v0.0.0-smoke || true
+docker rmi ghcr.io/aalejandrofer/dropsminer:v0.0.0-smoke || true
+docker rmi ghcr.io/aalejandrofer/dropsminer-browser:v0.0.0-smoke || true
 ```
 
 - [ ] **Step 4: Commit**
@@ -143,7 +143,7 @@ EOF
 ## Task 2: Homelab stack compose.yml
 
 **Files:**
-- Create: `/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab/humblewhale/rust-drops-miner/compose.yml`
+- Create: `/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab/humblewhale/dropsminer/compose.yml`
 
 - [ ] **Step 1: Inspect a reference stack for the exact label/network conventions**
 
@@ -164,31 +164,31 @@ If the reference stack uses different label keys, mirror those.
 - [ ] **Step 2: Write the stack**
 
 ```yaml
-# humblewhale/rust-drops-miner/compose.yml
+# humblewhale/dropsminer/compose.yml
 services:
-  rust-drops-miner:
-    image: ghcr.io/aalejandrofer/rust-drops-miner:latest
-    container_name: rust-drops-miner
+  dropsminer:
+    image: ghcr.io/aalejandrofer/dropsminer:latest
+    container_name: dropsminer
     restart: unless-stopped
     env_file: ./.env
     volumes:
-      - /home/jandro/localConfig/rust-drops-miner/data:/data
+      - /home/jandro/localConfig/dropsminer/data:/data
     networks:
       - traeky_proxynet
     depends_on:
-      - rust-drops-miner-browser
+      - dropsminer-browser
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.rust-drops-miner.rule=Host(`rdrops.ryuzec.dev`)"
-      - "traefik.http.routers.rust-drops-miner.entrypoints=websecure"
-      - "traefik.http.routers.rust-drops-miner.tls=true"
-      - "traefik.http.routers.rust-drops-miner.tls.certresolver=cloudflare"
-      - "traefik.http.services.rust-drops-miner.loadbalancer.server.port=8080"
+      - "traefik.http.routers.dropsminer.rule=Host(`rdrops.ryuzec.dev`)"
+      - "traefik.http.routers.dropsminer.entrypoints=websecure"
+      - "traefik.http.routers.dropsminer.tls=true"
+      - "traefik.http.routers.dropsminer.tls.certresolver=cloudflare"
+      - "traefik.http.services.dropsminer.loadbalancer.server.port=8080"
       - "traefik.docker.network=traeky_proxynet"
 
-  rust-drops-miner-browser:
-    image: ghcr.io/aalejandrofer/rust-drops-miner-browser:latest
-    container_name: rust-drops-miner-browser
+  dropsminer-browser:
+    image: ghcr.io/aalejandrofer/dropsminer-browser:latest
+    container_name: dropsminer-browser
     restart: unless-stopped
     networks:
       - traeky_proxynet
@@ -203,7 +203,7 @@ networks:
 - [ ] **Step 3: Lint the YAML (best-effort)**
 
 ```bash
-docker compose -f /Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab/humblewhale/rust-drops-miner/compose.yml config 2>&1 | head -30
+docker compose -f /Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab/humblewhale/dropsminer/compose.yml config 2>&1 | head -30
 ```
 
 Will likely fail because `traeky_proxynet` doesn't exist locally — that's expected. The lint is for YAML syntax + label keys. If `docker compose config` complains about an unknown field or malformed YAML, fix it. Network-not-found errors are OK.
@@ -214,7 +214,7 @@ Will likely fail because `traeky_proxynet` doesn't exist locally — that's expe
 
 ```bash
 cd /Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab
-git add humblewhale/rust-drops-miner/compose.yml
+git add humblewhale/dropsminer/compose.yml
 git status
 ```
 
@@ -227,8 +227,8 @@ DO NOT commit yet — Task 3 adds `.env.example` and `CLAUDE.md` so the director
 ## Task 3: Homelab stack docs + env template
 
 **Files:**
-- Create: `/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab/humblewhale/rust-drops-miner/.env.example`
-- Create: `/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab/humblewhale/rust-drops-miner/CLAUDE.md`
+- Create: `/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab/humblewhale/dropsminer/.env.example`
+- Create: `/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab/humblewhale/dropsminer/CLAUDE.md`
 
 - [ ] **Step 1: Write `.env.example`**
 
@@ -253,30 +253,30 @@ MINER_DISCORD_WEBHOOK=
 MINER_SECURE_COOKIES=true
 
 # Kick backend — uncomment to enable.
-MINER_BROWSER_URL=rust-drops-miner-browser:9090
+MINER_BROWSER_URL=dropsminer-browser:9090
 ```
 
 - [ ] **Step 2: Write `CLAUDE.md`**
 
 ```markdown
-# rust-drops-miner
+# dropsminer
 
 Self-hosted Twitch + Kick drops miner.
 
 - Web GUI: https://rdrops.ryuzec.dev
-- Data: bind-mount at `/home/jandro/localConfig/rust-drops-miner/data` (sqlite + age-encrypted sessions).
-- Browser sidecar (`rust-drops-miner-browser`) handles Kick. Twitch works without it.
-- Images: `ghcr.io/aalejandrofer/rust-drops-miner` and `...-browser`.
+- Data: bind-mount at `/home/jandro/localConfig/dropsminer/data` (sqlite + age-encrypted sessions).
+- Browser sidecar (`dropsminer-browser`) handles Kick. Twitch works without it.
+- Images: `ghcr.io/aalejandrofer/dropsminer` and `...-browser`.
 - Releases pushed from the source repo via `scripts/release.sh v0.X.Y`.
-- Source: ../../../RustDropsMiner (separate repo).
+- Source: ../../../DropsMiner (separate repo).
 
 To redeploy after a new image push:
 
 ```bash
-cd ~/deployments/humblewhale/rust-drops-miner   # or wherever this directory lives on the host
+cd ~/deployments/humblewhale/dropsminer   # or wherever this directory lives on the host
 docker compose pull
 docker compose up -d
-docker compose logs -f rust-drops-miner | head -40
+docker compose logs -f dropsminer | head -40
 ```
 
 First-time setup: copy `.env.example` to `.env`, fill in `MINER_MASTER_KEY` with the real value, then `docker compose up -d`. Visit `https://rdrops.ryuzec.dev/setup` to create the admin password.
@@ -286,7 +286,7 @@ First-time setup: copy `.env.example` to `.env`, fill in `MINER_MASTER_KEY` with
 
 ```bash
 cd /Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab
-git add humblewhale/rust-drops-miner/
+git add humblewhale/dropsminer/
 git status
 ```
 
@@ -296,16 +296,16 @@ Expected: 3 files staged (compose.yml from Task 2, .env.example, CLAUDE.md).
 
 ```bash
 git commit -m "$(cat <<'EOF'
-feat(rust-drops-miner): add stack for rdrops.ryuzec.dev
+feat(dropsminer): add stack for rdrops.ryuzec.dev
 
 New humblewhale stack:
-- ghcr.io/aalejandrofer/rust-drops-miner:latest behind Traefik
+- ghcr.io/aalejandrofer/dropsminer:latest behind Traefik
   with Cloudflare DNS-01 cert at rdrops.ryuzec.dev
-- ghcr.io/aalejandrofer/rust-drops-miner-browser:latest for Kick
+- ghcr.io/aalejandrofer/dropsminer-browser:latest for Kick
   via the chromedp sidecar
-- Bind-mount /home/jandro/localConfig/rust-drops-miner/data for sqlite
+- Bind-mount /home/jandro/localConfig/dropsminer/data for sqlite
 
-Initial release. See ../../../RustDropsMiner for source.
+Initial release. See ../../../DropsMiner for source.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -341,7 +341,7 @@ This runbook is the operator's checklist for shipping a build to https://rdrops.
 3. **Create the data dir on the host:**
 
    ```bash
-   ssh jandro@10.10.2.40 'sudo mkdir -p /home/jandro/localConfig/rust-drops-miner/data && sudo chown -R jandro:jandro /home/jandro/localConfig/rust-drops-miner'
+   ssh jandro@10.10.2.40 'sudo mkdir -p /home/jandro/localConfig/dropsminer/data && sudo chown -R jandro:jandro /home/jandro/localConfig/dropsminer'
    ```
 
 4. **Generate the master key (once):**
@@ -357,7 +357,7 @@ This runbook is the operator's checklist for shipping a build to https://rdrops.
 5. **Tag + push images:**
 
    ```bash
-   cd /Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/RustDropsMiner
+   cd /Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/DropsMiner
    git tag v0.1.0
    ./scripts/release.sh v0.1.0
    ```
@@ -368,7 +368,7 @@ This runbook is the operator's checklist for shipping a build to https://rdrops.
 
    ```bash
    ssh jandro@10.10.2.40
-   cd ~/deployments/humblewhale/rust-drops-miner   # path depends on homelab clone location
+   cd ~/deployments/humblewhale/dropsminer   # path depends on homelab clone location
    cp .env.example .env
    # Edit .env — paste MINER_MASTER_KEY from step 4
    nano .env
@@ -389,7 +389,7 @@ This runbook is the operator's checklist for shipping a build to https://rdrops.
    ```bash
    cd /Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/homelab/update
    ./homelab-update
-   # Select humblewhale → rust-drops-miner → deploy
+   # Select humblewhale → dropsminer → deploy
    ```
 
    Option B — direct SSH:
@@ -398,10 +398,10 @@ This runbook is the operator's checklist for shipping a build to https://rdrops.
    ssh jandro@10.10.2.40 '
      cd ~/deployments/humblewhale &&
      git pull &&
-     cd rust-drops-miner &&
+     cd dropsminer &&
      docker compose pull &&
      docker compose up -d &&
-     docker compose logs --tail=40 rust-drops-miner
+     docker compose logs --tail=40 dropsminer
    '
    ```
 
@@ -426,9 +426,9 @@ If a release is bad:
 
 ```bash
 ssh jandro@10.10.2.40 '
-  cd ~/deployments/humblewhale/rust-drops-miner &&
+  cd ~/deployments/humblewhale/dropsminer &&
   # pin previous tag in compose.yml manually OR:
-  docker compose pull ghcr.io/aalejandrofer/rust-drops-miner:v0.0.X
+  docker compose pull ghcr.io/aalejandrofer/dropsminer:v0.0.X
   docker compose up -d
 '
 ```
@@ -438,7 +438,7 @@ For a faster rollback, keep `compose.yml` images pinned to `:v0.1.0` (not `:late
 ## Troubleshooting
 
 - **`*.ryuzec.dev` not resolving from LAN:** Blocky is the DNS authority. Confirm via `dig +short rdrops.ryuzec.dev @10.10.2.40` returns `10.10.2.40`.
-- **Traefik 404:** Verify the container joined `traeky_proxynet` (`docker network inspect traeky_proxynet | grep rust-drops-miner`). If absent, the label namespace or network name is wrong.
+- **Traefik 404:** Verify the container joined `traeky_proxynet` (`docker network inspect traeky_proxynet | grep dropsminer`). If absent, the label namespace or network name is wrong.
 - **Cert pending forever:** Cloudflare DNS-01 needs Cloudflare API tokens already set in Traefik's env. They're already configured for `*.ryuzec.dev`; no per-stack work.
 - **`MINER_MASTER_KEY is required`:** `.env` missing or empty on the host. Re-do step 6.
 
@@ -453,7 +453,7 @@ For a faster rollback, keep `compose.yml` images pinned to `:v0.1.0` (not `:late
 - [ ] **Step 2: Commit**
 
 ```bash
-cd /Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/RustDropsMiner
+cd /Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/DropsMiner
 git add docs/superpowers/notes/2026-06-04-plan-05-deploy-runbook.md
 git commit -m "$(cat <<'EOF'
 docs(plan-05): operator runbook for first deploy + redeploys
@@ -470,7 +470,7 @@ EOF
 After Task 4:
 
 1. `scripts/release.sh` exists, is executable, builds both images locally.
-2. The homelab repo has `humblewhale/rust-drops-miner/{compose.yml, .env.example, CLAUDE.md}` committed locally (not yet pushed).
+2. The homelab repo has `humblewhale/dropsminer/{compose.yml, .env.example, CLAUDE.md}` committed locally (not yet pushed).
 3. The operator runbook documents the exact `docker login ghcr.io` + `release.sh` + `git push` + SSH deploy sequence.
 4. After the operator runs the runbook end-to-end, `https://rdrops.ryuzec.dev/healthz` returns `ok` from the LAN.
 
@@ -479,7 +479,7 @@ After Task 4:
 - All operator-credentialed steps (ghcr login, ssh, git push) live in the runbook, not in tasks. The implementer subagent has no PAT and no ssh key; it would BLOCK on them.
 - Image tag policy: each release writes `:vX.Y.Z` + `:latest`. compose.yml uses `:latest` for convenience; switch to pinned tags before any user except you depends on the deploy.
 - Cookie security: production deploy MUST set `MINER_SECURE_COOKIES=true` because everything is behind HTTPS via Traefik. The `.env.example` defaults to `true` accordingly.
-- Browser sidecar always starts in this stack (no compose profile), because the production deploy presumes Kick is wanted. To disable Kick on the host, set `MINER_BROWSER_URL=` in `.env` and stop the `rust-drops-miner-browser` service.
+- Browser sidecar always starts in this stack (no compose profile), because the production deploy presumes Kick is wanted. To disable Kick on the host, set `MINER_BROWSER_URL=` in `.env` and stop the `dropsminer-browser` service.
 
 ## Next steps after Plan 5
 
