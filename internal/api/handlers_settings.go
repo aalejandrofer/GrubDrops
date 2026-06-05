@@ -8,11 +8,15 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
+	"github.com/aalejandrofer/dropsminer/internal/scheduler"
 	"github.com/aalejandrofer/dropsminer/internal/store"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
 type settingsDeps struct {
 	s        *store.Settings
+	q        *gen.Queries // for inline accounts table
+	sch      *scheduler.Scheduler
 	t        Renderer
 	sm       *scs.SessionManager
 	onUpdate func()
@@ -22,6 +26,15 @@ type settingsDeps struct {
 	browserURL  string
 	gitCommit   string
 	version     string
+}
+
+type settingsAccountRow struct {
+	ID          string
+	DisplayName string
+	Platform    string
+	Login       string
+	Status      string
+	StatusClass string
 }
 
 type settingsPageData struct {
@@ -60,8 +73,36 @@ func (d *settingsDeps) get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	flash := d.sm.PopString(ctx, "flash")
+	// Inline accounts table — fail soft (settings still renders even if
+	// the accounts query errors).
+	var accountsRows []settingsAccountRow
+	if d.q != nil {
+		if rows, err := d.q.ListAllAccounts(ctx); err == nil {
+			stateByID := map[string]string{}
+			if d.sch != nil {
+				for _, s := range d.sch.Snapshot() {
+					stateByID[s.AccountID] = s.State
+				}
+			}
+			for _, a := range rows {
+				st := stateByID[a.ID]
+				if st == "" {
+					st = "stopped"
+				}
+				accountsRows = append(accountsRows, settingsAccountRow{
+					ID:          a.ID,
+					DisplayName: a.DisplayName,
+					Platform:    a.Platform,
+					Login:       a.Login,
+					Status:      st,
+					StatusClass: tierForState(a.Enabled == 1, st),
+				})
+			}
+		}
+	}
 	render(w, d.t, "settings.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "settings",
+		AccountsRows: accountsRows,
 		Page: settingsPageData{
 			GlobalDiscordWebhook: url,
 			LogRetentionDays:     days,

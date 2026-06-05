@@ -12,11 +12,12 @@ type Renderer interface {
 }
 
 type templateData struct {
-	AuthedAdmin bool
-	CSRFToken   string
-	Page        any
-	Flash       string
-	Active      string // "dashboard" | "accounts" | "drops" | "settings" — for nav highlight
+	AuthedAdmin  bool
+	CSRFToken    string
+	Page         any
+	Flash        string
+	Active       string // "dashboard" | "accounts" | "drops" | "settings" — for nav highlight
+	AccountsRows any    // optional: inline accounts table on settings page
 }
 
 func render(w http.ResponseWriter, t Renderer, name string, data templateData) {

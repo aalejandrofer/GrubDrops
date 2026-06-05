@@ -10,13 +10,29 @@
       <h1>Settings</h1>
     </div>
     <div class="actions">
-      <a class="btn" href="/accounts">Accounts →</a>
+      <a class="btn primary" href="/accounts/new">+ Add account</a>
     </div>
   </div>
-  <nav class="subnav" style="display:flex;gap:6px;margin:0 0 18px;padding:0 0 14px;border-bottom:1px solid var(--line);">
-    <a href="/settings" class="subnav-link {{if eq .Active "settings"}}on{{end}}" style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;padding:6px 14px;border:1px solid var(--line);color:var(--muted);text-decoration:none;">General</a>
-    <a href="/accounts" class="subnav-link {{if eq .Active "accounts"}}on{{end}}" style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;padding:6px 14px;border:1px solid var(--line);color:var(--muted);text-decoration:none;">Accounts</a>
-  </nav>
+
+  {{if .AccountsRows}}
+  <section class="form-card" style="margin-bottom:20px;">
+    <h2 class="settings-h" style="margin:0 0 12px;font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.18em;color:var(--muted);">Accounts</h2>
+    <table class="tbl">
+      <thead><tr><th>Display</th><th>Platform</th><th>Login</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {{range .AccountsRows}}
+        <tr>
+          <td class="name">{{.DisplayName}}</td>
+          <td>{{.Platform}}</td>
+          <td>{{.Login}}</td>
+          <td><span class="badge {{.StatusClass}}">{{.Status}}</span></td>
+          <td><a class="btn sm" href="/accounts/{{.ID}}">edit →</a></td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </section>
+  {{end}}
 
   {{if .Flash}}<div class="flash-ok">{{.Flash}}</div>{{end}}
 

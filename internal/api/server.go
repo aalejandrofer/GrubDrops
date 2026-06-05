@@ -212,6 +212,8 @@ func NewRouter(d Deps) http.Handler {
 
 	settingsH := &settingsDeps{
 		s:           d.SettingsStore,
+		q:           d.Q,
+		sch:         d.Scheduler,
 		t:           d.Templates,
 		sm:          d.Session,
 		onUpdate:    d.OnSettingsUpdate,
