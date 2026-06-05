@@ -6,11 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
 	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
 	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
+
+// isTabMissingErr matches the sidecar's "no authenticated tab for
+// account X" error which it returns after a sidecar restart loses
+// in-memory tabs while the miner's authed cache still says authed=true.
+func isTabMissingErr(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "no authenticated tab")
+}
 
 // BrowserBackend routes Twitch GraphQL through the chromedp sidecar so
 // Twitch's anti-bot integrity check sees a real browser context. The
@@ -75,6 +83,16 @@ func NewBrowserBackend(client interface {
 		bb.rewards = r
 	}
 	return bb
+}
+
+// invalidateAuth drops the cached "authed=true" flag for an account.
+// Called when a downstream sidecar call returns "no authenticated tab"
+// — implies the sidecar restarted and lost its in-memory tabs. The next
+// ensureAuthenticated call will re-install cookies and reopen the tab.
+func (b *BrowserBackend) invalidateAuth(accountID string) {
+	b.authedMu.Lock()
+	delete(b.authed, accountID)
+	b.authedMu.Unlock()
 }
 
 // ensureAuthenticated pushes the account's persisted cookies into the
@@ -185,6 +203,14 @@ func (b *BrowserBackend) ListActiveCampaigns(ctx context.Context, s platform.Ses
 	}
 	a := b.accountFor(s.AccountID)
 	camps, err := a.disc.listActive(ctx, s)
+	if isTabMissingErr(err) {
+		slog.Info("twitch sidecar tab missing on ListActiveCampaigns; re-authenticating", "account", s.AccountID)
+		b.invalidateAuth(s.AccountID)
+		if err := b.ensureAuthenticated(ctx, s); err != nil {
+			return nil, err
+		}
+		camps, err = a.disc.listActive(ctx, s)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +244,16 @@ func (b *BrowserBackend) InventoryProgress(ctx context.Context, s platform.Sessi
 	if err := b.ensureAuthenticated(ctx, s); err != nil {
 		return nil, err
 	}
-	return b.accountFor(s.AccountID).disc.inventory(ctx, s)
+	progs, err := b.accountFor(s.AccountID).disc.inventory(ctx, s)
+	if isTabMissingErr(err) {
+		slog.Info("twitch sidecar tab missing on InventoryProgress; re-authenticating", "account", s.AccountID)
+		b.invalidateAuth(s.AccountID)
+		if err := b.ensureAuthenticated(ctx, s); err != nil {
+			return nil, err
+		}
+		return b.accountFor(s.AccountID).disc.inventory(ctx, s)
+	}
+	return progs, err
 }
 
 func (b *BrowserBackend) StartWatch(ctx context.Context, s platform.Session, stream platform.Stream) (platform.WatchHandle, error) {
@@ -265,6 +300,14 @@ func (b *BrowserBackend) ClaimRewards(ctx context.Context, s platform.Session, a
 		return nil, err
 	}
 	games, titles, soft, err := b.rewards.TwitchClaimRewards(ctx, s.AccountID, allowedGames)
+	if isTabMissingErr(err) {
+		slog.Info("twitch sidecar tab missing on ClaimRewards; re-authenticating", "account", s.AccountID)
+		b.invalidateAuth(s.AccountID)
+		if err := b.ensureAuthenticated(ctx, s); err != nil {
+			return nil, err
+		}
+		games, titles, soft, err = b.rewards.TwitchClaimRewards(ctx, s.AccountID, allowedGames)
+	}
 	if err != nil {
 		return nil, err
 	}
