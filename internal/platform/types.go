@@ -33,6 +33,19 @@ type Campaign struct {
 	EndsAt   time.Time
 	Status   string
 	Benefits []DropBenefit
+
+	// AccountLinked indicates whether the user has connected the
+	// external account this campaign requires for claims (e.g. Mojang
+	// for Minecraft, Battle.net for Diablo). Source: Twitch
+	// dropCampaign.self.isAccountConnected. False = user cannot
+	// actually receive the drop even if minutes are watched, so the
+	// watcher must skip these campaigns and the dashboard should
+	// surface a "Link account →" call to action.
+	AccountLinked bool
+	// AccountLinkURL is the campaign-specific link-account page the
+	// operator should visit to make AccountLinked true. Empty if not
+	// provided by the platform.
+	AccountLinkURL string
 }
 
 type DropBenefit struct {
@@ -47,6 +60,15 @@ type Stream struct {
 	Channel      string
 	ViewerCount  int
 	DropsEnabled bool
+
+	// Fields populated for Twitch when listEligible fetches stream
+	// metadata. They feed the SendEvents heartbeat payload — without
+	// them the heartbeat is silently dropped server-side and minutes
+	// never accrue. Empty for backends that don't track them yet.
+	ChannelID   string // broadcaster user id (e.g. "491062114")
+	BroadcastID string // current live stream id
+	GameID      string // game/category id
+	Game        string // human-readable game name
 }
 
 type Progress struct {

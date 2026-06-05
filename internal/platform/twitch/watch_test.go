@@ -26,7 +26,7 @@ func TestWatch_HeartbeatSendsAuthHeader(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(srv.URL)
-	wt := &watch{c: c}
+	wt := &watch{c: c, cachedUserID: 12345} // skip CurrentUser fetch
 	h, err := wt.start(context.Background(), platform.Session{AccessToken: "tok123"},
 		platform.Stream{Channel: "fakestreamer"})
 	require.NoError(t, err)
@@ -46,7 +46,7 @@ func TestWatch_HeartbeatSendsGzippedBase64Mutation(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(srv.URL)
-	wt := &watch{c: c}
+	wt := &watch{c: c, cachedUserID: 12345}
 	h, err := wt.start(context.Background(), platform.Session{AccessToken: "tok"},
 		platform.Stream{Channel: "fakestreamer"})
 	require.NoError(t, err)

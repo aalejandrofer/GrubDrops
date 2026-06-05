@@ -11,12 +11,29 @@ type channels struct {
 	c *client
 }
 
+// streamLiveData decodes the VideoPlayerStreamInfoOverlayChannel
+// response. user.id = channel_id (broadcaster), stream.id = broadcast_id,
+// broadcastSettings.game.{id,displayName} = the live category. These IDs
+// feed the SendEvents heartbeat — Twitch tracks watch minutes against
+// (user_id watching, channel_id broadcasting, game_id, broadcast_id).
 type streamLiveData struct {
 	User struct {
-		Login  string `json:"login"`
+		ID                string `json:"id"`
+		Login             string `json:"login"`
+		BroadcastSettings struct {
+			Title string `json:"title"`
+			Game  *struct {
+				ID          string `json:"id"`
+				DisplayName string `json:"displayName"`
+			} `json:"game"`
+		} `json:"broadcastSettings"`
 		Stream *struct {
 			ID           string `json:"id"`
 			ViewersCount int    `json:"viewersCount"`
+			Game         *struct {
+				ID          string `json:"id"`
+				DisplayName string `json:"displayName"`
+			} `json:"game"`
 		} `json:"stream"`
 	} `json:"user"`
 }
@@ -36,10 +53,20 @@ func (ch *channels) listEligible(ctx context.Context, sess platform.Session, _ p
 		if sd.User.Stream == nil {
 			continue
 		}
+		gameID, gameName := "", ""
+		if sd.User.Stream.Game != nil {
+			gameID, gameName = sd.User.Stream.Game.ID, sd.User.Stream.Game.DisplayName
+		} else if sd.User.BroadcastSettings.Game != nil {
+			gameID, gameName = sd.User.BroadcastSettings.Game.ID, sd.User.BroadcastSettings.Game.DisplayName
+		}
 		out = append(out, platform.Stream{
 			Channel:      sd.User.Login,
 			ViewerCount:  sd.User.Stream.ViewersCount,
 			DropsEnabled: true,
+			ChannelID:    sd.User.ID,
+			BroadcastID:  sd.User.Stream.ID,
+			GameID:       gameID,
+			Game:         gameName,
 		})
 	}
 	return out, nil

@@ -320,15 +320,35 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 	w.lastDiscoveryAt = time.Now()
 	w.mu.Unlock()
 
-	// For mining, keep only ACTIVE campaigns and sort by whitelist rank
-	// (lower = higher priority). Empty Status is treated as "active" for
-	// backwards compatibility with the platformtest MockBackend.
+	// For mining, keep only ACTIVE + ACCOUNT-LINKED campaigns. Sort by
+	// whitelist rank (lower = higher priority). Empty Status is treated
+	// as "active" for backwards compatibility with the platformtest
+	// MockBackend. Non-linked campaigns stay visible in the discovery
+	// cache (so the dashboard can prompt "Link account →") but the
+	// watcher skips them — minutes watched on an unlinked campaign
+	// don't translate to a claimable drop.
 	matched := make([]platform.Campaign, 0, len(whitelisted))
+	skippedUnlinked := 0
 	for _, c := range whitelisted {
 		if c.Status != "" && c.Status != "active" {
 			continue
 		}
+		// AccountLinked defaults false for platforms that don't
+		// surface the flag yet (e.g. Kick), AND for backends that
+		// haven't populated it. Twitch DOES populate it. To avoid
+		// regressing Kick mining, only skip when the field is
+		// explicitly present and false — gated by Platform.
+		if c.Platform == "twitch" && !c.AccountLinked {
+			skippedUnlinked++
+			continue
+		}
 		matched = append(matched, c)
+	}
+	if skippedUnlinked > 0 {
+		slog.Info("watcher skipped unlinked campaigns",
+			"kind", "discovery",
+			"account", w.cfg.AccountID,
+			"count", skippedUnlinked)
 	}
 	if w.cfg.GameRank != nil {
 		sort.SliceStable(matched, func(i, j int) bool {

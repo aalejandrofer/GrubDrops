@@ -25,12 +25,16 @@ type discovery struct {
 type campaignsData struct {
 	CurrentUser struct {
 		DropCampaigns []struct {
-			ID      string    `json:"id"`
-			Name    string    `json:"name"`
-			Status  string    `json:"status"` // "ACTIVE" | "UPCOMING" | "EXPIRED"
-			StartAt time.Time `json:"startAt"`
-			EndAt   time.Time `json:"endAt"`
-			Game    struct {
+			ID             string    `json:"id"`
+			Name           string    `json:"name"`
+			Status         string    `json:"status"` // "ACTIVE" | "UPCOMING" | "EXPIRED"
+			StartAt        time.Time `json:"startAt"`
+			EndAt          time.Time `json:"endAt"`
+			AccountLinkURL string    `json:"accountLinkURL"`
+			Self           struct {
+				IsAccountConnected bool `json:"isAccountConnected"`
+			} `json:"self"`
+			Game struct {
 				ID          string `json:"id"`
 				DisplayName string `json:"displayName"`
 			} `json:"game"`
@@ -129,12 +133,14 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 			continue
 		}
 		camp := platform.Campaign{
-			ID:       c.ID,
-			Platform: "twitch",
-			Game:     c.Game.DisplayName,
-			Name:     c.Name,
-			StartsAt: c.StartAt,
-			EndsAt:   c.EndAt,
+			ID:             c.ID,
+			Platform:       "twitch",
+			Game:           c.Game.DisplayName,
+			Name:           c.Name,
+			StartsAt:       c.StartAt,
+			EndsAt:         c.EndAt,
+			AccountLinked:  c.Self.IsAccountConnected,
+			AccountLinkURL: c.AccountLinkURL,
 		}
 		switch c.Status {
 		case "ACTIVE":
