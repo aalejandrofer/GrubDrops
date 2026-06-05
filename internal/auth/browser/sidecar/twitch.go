@@ -696,7 +696,7 @@ func (t *Twitch) ClaimRewards(ctx context.Context, accountID string, allowedGame
 		chromedp.Sleep(500*time.Millisecond),
 		chromedp.Navigate("https://www.twitch.tv/drops/inventory"),
 		chromedp.Sleep(6*time.Second),
-		chromedp.Evaluate(script, &raw),
+		chromedp.Evaluate(script, &raw, awaitPromise),
 	); err != nil {
 		return nil, nil, fmt.Errorf("claim rewards: %w", err)
 	}
