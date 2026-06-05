@@ -326,9 +326,34 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 			win_keys: winKeys
 		});
 	})()`
+	// Dismiss OneTrust cookie banner + Terms-of-Service modal that
+	// commonly blank out the drops page in a fresh headless session.
+	// Pure JS clicks (no chromedp.Click) so missing elements are silent.
+	const dismissBanners = `(() => {
+		const tryClick = (sel) => { const e = document.querySelector(sel); if (e && e.offsetParent) { try { e.click(); return true; } catch (_) {} } return false; };
+		// OneTrust accept-all
+		tryClick('#onetrust-accept-btn-handler');
+		tryClick('#onetrust-reject-all-handler');
+		tryClick('[aria-label="Accept"]');
+		tryClick('[aria-label="Reject"]');
+		// Twitch ToS update modal — usually a single Accept button
+		const buttons = Array.from(document.querySelectorAll('button'));
+		for (const b of buttons) {
+			const t = (b.textContent || '').trim().toLowerCase();
+			if (t === 'accept' || t === 'i accept' || t === 'agree') {
+				try { b.click(); break; } catch (_) {}
+			}
+		}
+		return true;
+	})()`
+	var dummy bool
 	if err := chromedp.Run(tabCtx,
 		chromedp.Navigate("https://www.twitch.tv/drops/campaigns"),
-		chromedp.Sleep(12*time.Second),
+		chromedp.Sleep(4*time.Second),
+		chromedp.Evaluate(dismissBanners, &dummy),
+		chromedp.Sleep(2*time.Second),
+		chromedp.Evaluate(dismissBanners, &dummy), // belt + braces — second modal may appear after first dismissed
+		chromedp.Sleep(8*time.Second),
 		chromedp.Evaluate(debugScript, &debugInfo),
 		chromedp.Evaluate(script, &raw),
 	); err != nil {
