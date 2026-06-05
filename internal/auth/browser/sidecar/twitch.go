@@ -68,14 +68,23 @@ func (t *Twitch) Authenticate(ctx context.Context, accountID string, session *pb
 		}
 	}
 
-	// Pull /api/me-equivalent: call gql with a tiny CurrentUser query
-	// from the tab context to confirm auth-token cookie is honored.
+	// Best-effort verify: call a tiny CurrentUser gql query from the
+	// tab context to confirm auth-token cookie is honored. PerimeterX
+	// may poison fetch() on the first call; the watcher's later gql
+	// requests share the same tab and often succeed once the page has
+	// fully hydrated. Treat any verify failure as a warning, not a
+	// fatal error — the cookies are already installed and the watcher
+	// gets the real signal on its next ListActiveCampaigns.
 	body, status, err := t.evalFetch(tabCtx, currentUserQueryBody())
 	if err != nil {
-		return "", "", fmt.Errorf("verify auth fetch: %w", err)
+		slog.Warn("twitch sidecar verify fetch threw; tab still ready, watcher will retry",
+			"account", accountID, "tab", handle, "err", err)
+		return "", "", nil
 	}
 	if status != 200 {
-		return "", "", fmt.Errorf("verify auth: status %d body=%s", status, truncate(string(body), 200))
+		slog.Warn("twitch sidecar verify non-200; tab still ready, watcher will retry",
+			"account", accountID, "tab", handle, "status", status, "body", truncate(string(body), 200))
+		return "", "", nil
 	}
 	var resp struct {
 		Data struct {
@@ -86,10 +95,14 @@ func (t *Twitch) Authenticate(ctx context.Context, accountID string, session *pb
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
-		return "", "", fmt.Errorf("verify auth parse: %w body=%s", err, truncate(string(body), 200))
+		slog.Warn("twitch sidecar verify parse failed; tab still ready",
+			"account", accountID, "err", err, "body", truncate(string(body), 200))
+		return "", "", nil
 	}
 	if resp.Data.CurrentUser.Login == "" {
-		return "", "", fmt.Errorf("verify auth: empty login — cookies invalid")
+		slog.Warn("twitch sidecar verify empty login; tab still ready",
+			"account", accountID)
+		return "", "", nil
 	}
 	slog.Info("twitch sidecar authenticated", "account", accountID, "login", resp.Data.CurrentUser.Login, "user_id", resp.Data.CurrentUser.ID, "tab", handle)
 	return resp.Data.CurrentUser.Login, resp.Data.CurrentUser.ID, nil
