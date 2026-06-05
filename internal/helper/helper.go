@@ -9,15 +9,28 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 
 	"github.com/browserutils/kooky"
 	_ "github.com/browserutils/kooky/browser/all" // register cookie store finders
 )
+
+// debug returns true when MINER_HELPER_DEBUG=1 — prints every miner
+// HTTP request + response and lists which browser stores yielded
+// cookies.
+func debug() bool { return os.Getenv("MINER_HELPER_DEBUG") == "1" }
+
+func dlog(format string, args ...any) {
+	if debug() {
+		log.Printf("helper: "+format, args...)
+	}
+}
 
 // Config carries the connection details shared by every push.
 type Config struct {
@@ -154,6 +167,20 @@ func readDomainCookies(ctx context.Context, domain, browser string) ([]*kooky.Co
 		}
 		cookies = out
 	}
+	if debug() {
+		seen := map[string]int{}
+		for _, c := range cookies {
+			b := "unknown"
+			if c.Browser != nil {
+				b = c.Browser.Browser()
+			}
+			seen[b]++
+		}
+		dlog("found %d cookies for %s across browsers: %v", len(cookies), domain, seen)
+		if probeErr != nil {
+			dlog("(some browser stores failed to open: %v)", probeErr)
+		}
+	}
 	if len(cookies) == 0 {
 		if probeErr != nil {
 			return nil, fmt.Errorf("no cookies found for %s — none of the installed browsers' stores were readable: %w", domain, probeErr)
@@ -260,11 +287,13 @@ func (c *minerClient) get(ctx context.Context, path string) (string, error) {
 	u := *c.base
 	u.Path = path
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	dlog("GET %s", u.String())
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
+	dlog("← %s (%d bytes)", resp.Status, resp.ContentLength)
 	if resp.StatusCode >= 400 {
 		return "", fmt.Errorf("GET %s: %s", path, resp.Status)
 	}
@@ -280,10 +309,20 @@ func (c *minerClient) postRaw(ctx context.Context, path string, form url.Values)
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// nosurf rejects TLS POSTs that lack a same-origin Origin or Referer.
+	// Set both to the request URL so the check passes regardless of which
+	// header nosurf inspects first.
+	req.Header.Set("Origin", c.base.Scheme+"://"+c.base.Host)
+	req.Header.Set("Referer", u.String())
+	dlog("POST %s (origin=%s)", u.String(), req.Header.Get("Origin"))
 	prev := c.http.CheckRedirect
 	c.http.CheckRedirect = func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }
 	defer func() { c.http.CheckRedirect = prev }()
-	return c.http.Do(req)
+	resp, err := c.http.Do(req)
+	if err == nil {
+		dlog("← %s", resp.Status)
+	}
+	return resp, err
 }
 
 var csrfRE = regexp.MustCompile(`name="csrf_token"\s+value="([^"]+)"`)
