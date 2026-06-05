@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
 
 type Notifier interface {

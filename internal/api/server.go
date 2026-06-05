@@ -13,12 +13,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	mlog "github.com/aalejandrofer/rust-drops-miner/internal/log"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/scheduler"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
-	"github.com/aalejandrofer/rust-drops-miner/internal/web"
+	mlog "github.com/aalejandrofer/dropsminer/internal/log"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/scheduler"
+	"github.com/aalejandrofer/dropsminer/internal/store"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
+	"github.com/aalejandrofer/dropsminer/internal/web"
 )
 
 // applyRedirectTarget picks the post-/accounts/apply landing page from

@@ -31,7 +31,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/helper"
+	"github.com/aalejandrofer/dropsminer/internal/helper"
 )
 
 //go:embed index.html

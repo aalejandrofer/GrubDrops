@@ -11,9 +11,9 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/store"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
 type loginTwitchDeps struct {

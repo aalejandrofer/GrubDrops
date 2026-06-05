@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
 
 // Backend implements platform.Backend for Twitch using GraphQL persisted
@@ -128,4 +128,14 @@ func (b *Backend) setAllowedLogins(campaignID string, logins []string) {
 	b.mu.Lock()
 	b.allowedLoginsByCampaign[campaignID] = logins
 	b.mu.Unlock()
+}
+
+// AllowedChannelCount returns the number of channels in the cached
+// allow-list for campaignID. Zero when the campaign hasn't been seen
+// yet or has no allow-list. Used by the dashboard to fill in the
+// "channels" column on each Active Campaigns row.
+func (b *Backend) AllowedChannelCount(campaignID string) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.allowedLoginsByCampaign[campaignID])
 }

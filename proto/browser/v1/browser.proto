@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package browser.v1;
 
-option go_package = "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1;browserv1";
+option go_package = "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1;browserv1";
 
 service Browser {
   // Kick RPCs (unchanged).

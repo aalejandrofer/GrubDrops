@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"sync"
 
-	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
 
 // BrowserBackend routes Twitch GraphQL through the chromedp sidecar so
@@ -236,4 +236,14 @@ func (b *BrowserBackend) Claim(ctx context.Context, s platform.Session, drop pla
 		return err
 	}
 	return b.accountFor(s.AccountID).claim.claim(ctx, s, drop)
+}
+
+// AllowedChannelCount returns the number of channels in the cached
+// allow-list for campaignID. Mirrors twitch.Backend.AllowedChannelCount;
+// the dashboard uses it to populate the "channels" column on each
+// Active Campaigns row regardless of which Twitch backend is wired up.
+func (b *BrowserBackend) AllowedChannelCount(campaignID string) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.allowedLoginsByCampaign[campaignID])
 }

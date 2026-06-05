@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
 // CampaignPersister upserts every Campaign + Benefit the watcher discovers

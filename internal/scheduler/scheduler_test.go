@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform/platformtest"
-	"github.com/aalejandrofer/rust-drops-miner/internal/watcher"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/platform/platformtest"
+	"github.com/aalejandrofer/dropsminer/internal/watcher"
 )
 
 type captureNotifier struct{ claims atomic.Int64 }

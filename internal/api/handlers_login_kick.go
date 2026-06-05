@@ -10,10 +10,10 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
-	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
+	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/store"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
 // KickBrowserClient is the surface the Kick login handler depends on.

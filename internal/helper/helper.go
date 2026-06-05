@@ -1,7 +1,7 @@
 // Package helper is the shared core used by both the dropsminer-helper
 // CLI and the dropsminer-helper-gui binaries. It reads cookies from the
 // user's local browser via browserutils/kooky and uploads them to a
-// running rust-drops-miner deployment.
+// running dropsminer deployment.
 package helper
 
 import (

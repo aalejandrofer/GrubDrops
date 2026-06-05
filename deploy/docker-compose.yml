@@ -1,6 +1,6 @@
 services:
   miner:
-    image: rust-drops-miner:dev
+    image: dropsminer:dev
     build:
       context: ..
       dockerfile: deploy/Dockerfile.miner
@@ -16,7 +16,7 @@ services:
       - ./data:/data
 
   browser:
-    image: rust-drops-miner-browser:dev
+    image: dropsminer-browser:dev
     build:
       context: ..
       dockerfile: deploy/Dockerfile.browser

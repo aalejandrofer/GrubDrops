@@ -14,19 +14,19 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/api"
-	"github.com/aalejandrofer/rust-drops-miner/internal/auth/browser"
-	"github.com/aalejandrofer/rust-drops-miner/internal/config"
-	mlog "github.com/aalejandrofer/rust-drops-miner/internal/log"
-	"github.com/aalejandrofer/rust-drops-miner/internal/notify"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform/kick"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform/twitch"
-	"github.com/aalejandrofer/rust-drops-miner/internal/scheduler"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
-	"github.com/aalejandrofer/rust-drops-miner/internal/watcher"
-	"github.com/aalejandrofer/rust-drops-miner/internal/web"
+	"github.com/aalejandrofer/dropsminer/internal/api"
+	"github.com/aalejandrofer/dropsminer/internal/auth/browser"
+	"github.com/aalejandrofer/dropsminer/internal/config"
+	mlog "github.com/aalejandrofer/dropsminer/internal/log"
+	"github.com/aalejandrofer/dropsminer/internal/notify"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/platform/kick"
+	"github.com/aalejandrofer/dropsminer/internal/platform/twitch"
+	"github.com/aalejandrofer/dropsminer/internal/scheduler"
+	"github.com/aalejandrofer/dropsminer/internal/store"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
+	"github.com/aalejandrofer/dropsminer/internal/watcher"
+	"github.com/aalejandrofer/dropsminer/internal/web"
 )
 
 func main() {

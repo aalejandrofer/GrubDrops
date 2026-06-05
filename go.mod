@@ -1,4 +1,4 @@
-module github.com/aalejandrofer/rust-drops-miner
+module github.com/aalejandrofer/dropsminer
 
 go 1.26.2
 

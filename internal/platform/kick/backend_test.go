@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/auth/browser"
-	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/auth/browser"
+	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
 
 type stubServer struct {

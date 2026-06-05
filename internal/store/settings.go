@@ -6,7 +6,7 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
 const (

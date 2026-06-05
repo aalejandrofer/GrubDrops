@@ -19,8 +19,8 @@ if [[ -z "$TAG" ]]; then
 fi
 
 REGISTRY="ghcr.io/aalejandrofer"
-MINER_IMAGE="$REGISTRY/rust-drops-miner"
-BROWSER_IMAGE="$REGISTRY/rust-drops-miner-browser"
+MINER_IMAGE="$REGISTRY/dropsminer"
+BROWSER_IMAGE="$REGISTRY/dropsminer-browser"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"

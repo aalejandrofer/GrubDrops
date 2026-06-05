@@ -1,5 +1,5 @@
 // dropsminer-helper is a small CLI that copies cookies from the
-// user's local browser into the rust-drops-miner deployment.
+// user's local browser into the dropsminer deployment.
 //
 // Usage:
 //
@@ -21,7 +21,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/helper"
+	"github.com/aalejandrofer/dropsminer/internal/helper"
 )
 
 func main() {
@@ -52,7 +52,7 @@ func main() {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprint(w, `dropsminer-helper — push browser cookies to a rust-drops-miner deployment
+	fmt.Fprint(w, `dropsminer-helper — push browser cookies to a dropsminer deployment
 
 Usage:
   dropsminer-helper twitch <account-id> [--miner URL] [--password PW] [--browser NAME]

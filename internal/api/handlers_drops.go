@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
 type dropsDeps struct {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/store"
+	"github.com/aalejandrofer/dropsminer/internal/store"
 )
 
 type settingsDeps struct {

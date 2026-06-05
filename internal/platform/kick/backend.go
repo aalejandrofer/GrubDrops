@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/auth/browser"
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/auth/browser"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
 
 // Backend implements platform.Backend for Kick by delegating page
@@ -40,6 +40,24 @@ func (b *Backend) RegisterChannel(accountID, channel string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.channelByAcc[accountID] = channel
+}
+
+// AllowedChannelCount returns the number of distinct channels currently
+// registered across all accounts. Kick discovery doesn't surface a
+// per-campaign allow-list — each account picks a single channel — so
+// the campaignID argument is ignored and the dashboard treats the
+// result as the campaign-wide eligible channel count.
+func (b *Backend) AllowedChannelCount(_ string) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	seen := make(map[string]struct{}, len(b.channelByAcc))
+	for _, ch := range b.channelByAcc {
+		if ch == "" {
+			continue
+		}
+		seen[ch] = struct{}{}
+	}
+	return len(seen)
 }
 
 func (b *Backend) StartDeviceLogin(_ context.Context) (platform.DeviceChallenge, error) {

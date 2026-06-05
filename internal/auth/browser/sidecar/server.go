@@ -3,7 +3,7 @@ package sidecar
 import (
 	"context"
 
-	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
 )
 
 // Server implements the gRPC service. Methods translate proto types

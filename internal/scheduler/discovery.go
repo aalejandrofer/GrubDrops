@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aalejandrofer/rust-drops-miner/internal/platform"
-	"github.com/aalejandrofer/rust-drops-miner/internal/watcher"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/dropsminer/internal/watcher"
 )
 
 // AccountDiscovery is the per-account view of the most recent

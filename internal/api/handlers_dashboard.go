@@ -11,10 +11,10 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
-	mlog "github.com/aalejandrofer/rust-drops-miner/internal/log"
-	"github.com/aalejandrofer/rust-drops-miner/internal/scheduler"
-	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
-	"github.com/aalejandrofer/rust-drops-miner/internal/watcher"
+	mlog "github.com/aalejandrofer/dropsminer/internal/log"
+	"github.com/aalejandrofer/dropsminer/internal/scheduler"
+	"github.com/aalejandrofer/dropsminer/internal/store/gen"
+	"github.com/aalejandrofer/dropsminer/internal/watcher"
 )
 
 type dashboardDeps struct {
