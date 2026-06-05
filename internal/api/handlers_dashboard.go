@@ -188,6 +188,7 @@ type dashEvent struct {
 	Color    string // CSS var name fragment, e.g. "green", "amber", "blue", "muted", "red"
 	BodyHTML string // pre-escaped HTML (we control this)
 	Account  string
+	Platform string // "twitch" | "kick" — drives account label color
 	// Details is the structured key=value pairs from the underlying log
 	// line. Rendered inside an expandable section under the row.
 	Details []dashEventField
@@ -580,8 +581,10 @@ func eventsFromRing(ring *mlog.Ring, kindFilter, accountFilter string, accs []ge
 	// instead of acc_XXXXXXXX... — matches how upstream
 	// TwitchDropsMiner labels output.
 	labelByID := make(map[string]string, len(accs))
+	platformByID := make(map[string]string, len(accs))
 	for _, a := range accs {
 		labelByID[a.ID] = "@" + a.Login
+		platformByID[a.ID] = a.Platform
 	}
 	lines := ring.Snapshot()
 	out := make([]dashEvent, 0, len(lines))
@@ -609,6 +612,7 @@ func eventsFromRing(ring *mlog.Ring, kindFilter, accountFilter string, accs []ge
 			Color:    colorForKind(kind, l.Level),
 			BodyHTML: fmt.Sprintf("<em>%s</em> · %s", kind, htmlEscape(l.Msg)),
 			Account:  label,
+			Platform: platformByID[accID],
 			Details:  detailsFor(l),
 		})
 	}

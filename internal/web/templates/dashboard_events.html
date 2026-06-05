@@ -1,13 +1,13 @@
 {{define "dashboard_events"}}
 {{if not .}}<div class="ev empty"><span class="body">No events yet.</span></div>{{end}}
 {{range .}}
-<details class="ev kind-{{.Kind}}">
+<details class="ev kind-{{.Kind}}" id="{{.ID}}" hx-preserve="true">
   <summary>
     <span class="chev" aria-hidden="true">›</span>
     <span class="t">{{.Time}}</span>
     <span class="lvl" style="color:var(--{{.Color}})">●</span>
     <span class="body">{{.BodyHTML | safe}}</span>
-    <span class="ac">{{if .Account}}{{.Account}}{{else}}—{{end}}</span>
+    <span class="ac ac-{{if .Platform}}{{.Platform}}{{else}}none{{end}}">{{if .Account}}{{.Account}}{{else}}—{{end}}</span>
   </summary>
   {{if .Details}}
   <div class="ev-detail">

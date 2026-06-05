@@ -848,6 +848,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .ev .ac-twitch { color: var(--purple); }
+  .ev .ac-kick   { color: var(--kick); }
   .ev .lvl { font-size: 10px; line-height: 1; }
   .ev.empty { padding: 12px 18px; color: var(--muted); }
   .ev-detail {

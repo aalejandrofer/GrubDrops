@@ -102,11 +102,11 @@
   </div>
 
   <div class="live-pair-col live-pair-channels">
-    <div class="sec-head">
-      <h2>Live channels — eligible for whitelisted drops</h2>
-      <div class="rule"></div>
-      <div class="meta">{{len .LiveChannels}} live · sorted by viewers</div>
-    </div>
+    <section class="drawer">
+      <div class="drawer-head">
+        <h3>Live channels — eligible for whitelisted drops</h3>
+        <div class="live" style="margin-left:auto;color:var(--muted);">{{len .LiveChannels}} live · sorted by viewers</div>
+      </div>
     {{if .LiveChannels}}
     <div class="live-channels-grid">
       {{range .LiveChannels}}
@@ -124,6 +124,7 @@
     {{else}}
     <div class="live-channels-empty">no eligible channels live right now</div>
     {{end}}
+    </section>
   </div>
 
 </section>
