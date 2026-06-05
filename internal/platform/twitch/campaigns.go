@@ -170,12 +170,23 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 		switch c.Status {
 		case "ACTIVE":
 			camp.Status = "active"
-			benefits, allowedLogins, err := d.fetchDetails(ctx, sess, c.ID)
-			if err != nil {
-				return nil, err
+			// Skip detail fetch for scrape-synthesised IDs — those
+			// aren't real Twitch UUIDs and OpDropCampaignDetails will
+			// fail. Treat scraped campaigns as "discoverable, not
+			// mineable" — surfaces them in /drops + dashboard so user
+			// knows to enroll, but the watcher skips them (empty
+			// benefits = nothing to mine).
+			if strings.ContainsAny(c.ID, "| ") {
+				// e.g. "Minecraft|Builder Cape..." — scraped
+				camp.Benefits = nil
+			} else {
+				benefits, allowedLogins, err := d.fetchDetails(ctx, sess, c.ID)
+				if err != nil {
+					return nil, err
+				}
+				d.captureAllowed(c.ID, allowedLogins)
+				camp.Benefits = benefits
 			}
-			d.captureAllowed(c.ID, allowedLogins)
-			camp.Benefits = benefits
 		case "UPCOMING":
 			camp.Status = "upcoming"
 		case "EXPIRED":
