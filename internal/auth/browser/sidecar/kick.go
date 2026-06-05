@@ -113,13 +113,18 @@ func (k *Kick) VerifyAuth(ctx context.Context, session *pb.KickSession) (string,
 		return "", fmt.Errorf("install cookies: %w", err)
 	}
 	// Land on the kick.com origin so the subsequent fetch inherits
-	// first-party cookies + a real document context. 5s gives Cloudflare's
-	// JS challenge time to settle.
+	// first-party cookies + a real document context. Wait for any
+	// Cloudflare JS challenge to clear before issuing the API fetch —
+	// otherwise the fetch returns CF interstitial HTML instead of the
+	// /api/v1/user JSON and parseKickUsername fails.
 	if err := chromedp.Run(ctx,
 		chromedp.Navigate("https://kick.com/"),
-		chromedp.Sleep(5*time.Second),
+		chromedp.Sleep(3*time.Second),
 	); err != nil {
 		return "", fmt.Errorf("verify auth navigate kick.com: %w", err)
+	}
+	if err := waitCloudflareSettled(ctx, 20*time.Second); err != nil {
+		slog.Warn("kick verify auth: cloudflare interstitial did not settle", "err", err.Error())
 	}
 
 	const apiURL = "https://kick.com/api/v1/user"
