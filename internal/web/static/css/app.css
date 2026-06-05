@@ -1262,14 +1262,14 @@
   .live-pair {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    /* Two rows: heads share row 1, bodies share row 2. Nested
-       .live-pair-col + .drawer use chained subgrid so the two
-       drawer-heads grow together to the taller side's natural
-       height, keeping both bodies starting at the same y-coordinate
-       regardless of how the live-events filter row wraps. */
-    grid-template-rows: auto 1fr;
+    /* Heads share row 1 via chained subgrid so both bodies start at
+       the same y-coord even when left filter row wraps. Row 2 is
+       auto so each body sizes to its own content — the right column
+       doesn't stretch to match a tall left-side events list. */
+    grid-template-rows: auto auto;
     gap: 16px;
     margin-top: 8px;
+    align-items: start;
   }
   @media (max-width: 1200px) {
     .live-pair {
@@ -1283,13 +1283,19 @@
     display: grid;
     grid-template-rows: subgrid;
     grid-row: span 2;
+    align-self: start;
   }
   .live-pair .drawer {
     margin-top: 0;
     display: grid;
     grid-template-rows: subgrid;
     grid-row: span 2;
+    align-self: start;
   }
+  /* Channel cards shouldn't stretch to fill the grid row when there's
+     only one of them. */
+  .live-pair-channels .live-channels-grid { align-content: start; }
+  .live-pair-channels .lch { align-self: start; }
   /* Cap the events drawer height to roughly match the live-channels
      column so the two columns visually align. Internal .events
      already scrolls past max-height: 320px. */
@@ -1611,6 +1617,17 @@
     font-family: 'JetBrains Mono', monospace;
     font-size: 10.5px;
     margin: 0;
+  }
+  .method-cta {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+  .method-cta .hint {
+    flex: 1 1 200px;
+    min-width: 0;
   }
 
   /* paste form helper spans */
@@ -2001,7 +2018,8 @@
     padding: 1px 6px;
     font-size: 11px;
   }
-  .form-card label {
+  .form-card label,
+  .settings-card label {
     display: block;
     margin-bottom: 16px;
     font-family: 'JetBrains Mono', monospace;
@@ -2010,14 +2028,16 @@
     letter-spacing: 0.15em;
     color: var(--muted);
   }
-  .form-card label.cb {
+  .form-card label.cb,
+  .settings-card label.cb {
     display: flex; align-items: center; gap: 10px;
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.12em;
     margin-bottom: 22px;
   }
-  .form-card label.cb input[type="checkbox"] {
+  .form-card label.cb input[type="checkbox"],
+  .settings-card label.cb input[type="checkbox"] {
     width: 16px; height: 16px;
     accent-color: var(--accent);
   }
@@ -2025,7 +2045,12 @@
   .form-card input[type="url"],
   .form-card input[type="password"],
   .form-card input[type="number"],
-  .form-card select {
+  .form-card select,
+  .settings-card input[type="text"],
+  .settings-card input[type="url"],
+  .settings-card input[type="password"],
+  .settings-card input[type="number"],
+  .settings-card select {
     display: block;
     width: 100%;
     margin-top: 8px;
@@ -2039,8 +2064,10 @@
     outline: none;
     transition: border-color .15s;
   }
-  .form-card input:focus, .form-card select:focus { border-color: var(--accent); }
-  .form-card .row {
+  .form-card input:focus, .form-card select:focus,
+  .settings-card input:focus, .settings-card select:focus { border-color: var(--accent); }
+  .form-card .row,
+  .settings-card .row {
     display: flex; justify-content: space-between; align-items: center;
     margin-top: 14px;
   }

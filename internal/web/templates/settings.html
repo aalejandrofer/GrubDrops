@@ -24,6 +24,54 @@
   <div class="settings-stack">
 
     <section class="settings-card">
+      <header class="section-h"><h3>Global priority list</h3><span class="meta">Fallback when account list empty</span></header>
+      <form method="post" action="/settings/global-games" id="global-games-form">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <div class="settings-grid-2">
+          <div>
+            <div class="kicker">Selected · drag to reorder</div>
+            <ul id="global-selected" class="rank-list">
+              {{range .GlobalGames}}
+              <li draggable="true" data-game-id="{{.ID}}">
+                <span>{{.Name}}</span>
+                <button type="button" class="rank-rm" onclick="gpRemove('{{.ID}}')">remove ×</button>
+              </li>
+              {{end}}
+              {{if not .GlobalGames}}
+              <li class="rank-empty">No global priority set — pick from the right →</li>
+              {{end}}
+            </ul>
+          </div>
+          <div>
+            <div class="kicker">Available</div>
+            <ul id="global-available" class="rank-list rank-available">
+              {{range .AllGames}}
+              {{if not .Selected}}
+              <li data-game-id="{{.ID}}">
+                <span>{{.Name}}</span>
+                <button type="button" class="rank-add" onclick="gpAdd('{{.ID}}','{{.Name}}')">add +</button>
+              </li>
+              {{end}}
+              {{end}}
+            </ul>
+          </div>
+        </div>
+        <div class="row">
+          <span class="hint">Order in the left column = mining priority for accounts without an override.</span>
+          <button class="btn primary" type="submit">Save priority →</button>
+        </div>
+      </form>
+
+      <form method="post" action="/settings/global-games/add" class="add-by-name">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <span class="kicker">Add by name</span>
+        <input type="text" name="name" placeholder="e.g. Marathon" required>
+        <button class="btn" type="submit">Add →</button>
+        <span class="hint">Seed the list before scrape surfaces it.</span>
+      </form>
+    </section>
+
+    <section class="settings-card">
       <header class="section-h"><h3>Runtime · Notifications</h3><span class="meta">Reload required for tick/discovery</span></header>
       <form method="post" action="/settings" id="settings-form">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
@@ -72,54 +120,6 @@
           <a class="back-link" href="/">← back</a>
           <button class="btn primary" type="submit">Save →</button>
         </div>
-      </form>
-    </section>
-
-    <section class="settings-card">
-      <header class="section-h"><h3>Global priority list</h3><span class="meta">Fallback when account list empty</span></header>
-      <form method="post" action="/settings/global-games" id="global-games-form">
-        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-        <div class="settings-grid-2">
-          <div>
-            <div class="kicker">Selected · drag to reorder</div>
-            <ul id="global-selected" class="rank-list">
-              {{range .GlobalGames}}
-              <li draggable="true" data-game-id="{{.ID}}">
-                <span>{{.Name}}</span>
-                <button type="button" class="rank-rm" onclick="gpRemove('{{.ID}}')">remove ×</button>
-              </li>
-              {{end}}
-              {{if not .GlobalGames}}
-              <li class="rank-empty">No global priority set — pick from the right →</li>
-              {{end}}
-            </ul>
-          </div>
-          <div>
-            <div class="kicker">Available</div>
-            <ul id="global-available" class="rank-list rank-available">
-              {{range .AllGames}}
-              {{if not .Selected}}
-              <li data-game-id="{{.ID}}">
-                <span>{{.Name}}</span>
-                <button type="button" class="rank-add" onclick="gpAdd('{{.ID}}','{{.Name}}')">add +</button>
-              </li>
-              {{end}}
-              {{end}}
-            </ul>
-          </div>
-        </div>
-        <div class="row">
-          <span class="hint">Order in the left column = mining priority for accounts without an override.</span>
-          <button class="btn primary" type="submit">Save priority →</button>
-        </div>
-      </form>
-
-      <form method="post" action="/settings/global-games/add" class="add-by-name">
-        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-        <span class="kicker">Add by name</span>
-        <input type="text" name="name" placeholder="e.g. Marathon" required>
-        <button class="btn" type="submit">Add →</button>
-        <span class="hint">Seed the list before scrape surfaces it.</span>
       </form>
     </section>
 
