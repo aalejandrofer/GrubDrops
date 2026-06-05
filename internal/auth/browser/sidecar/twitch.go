@@ -240,35 +240,47 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 		if ((!state || Object.keys(state).length === 0) && window.__APOLLO_CLIENT__) {
 			try { state = window.__APOLLO_CLIENT__.cache.extract(); } catch (e) {}
 		}
-		// Last-resort DOM scrape: walk drop campaign cards.
+		// Last-resort DOM scrape: find the "Open Drop Campaigns" and
+		// "Open Reward Campaigns" section headings, then walk the
+		// container that follows. Twitch uses unlabelled tailwind divs
+		// for the cards — no stable selectors — so heading-anchored
+		// walk is the most robust approach.
 		const domOut = [];
 		try {
-			// Twitch /drops/campaigns renders each campaign as a card
-			// usually with role=link or an <article>. The most reliable
-			// anchor is the link to the individual campaign page
-			// (/drops/campaigns/<id> or /drops/<game-slug>/<id>).
-			const cards = document.querySelectorAll(
-				'[data-test-selector*="drop"], ' +
-				'[class*="drop-campaign"], ' +
-				'a[href^="/drops/campaigns/"], ' +
-				'a[href^="/drops/"][href*="/campaign"], ' +
-				'article[class*="DropsCampaign"], ' +
-				'div[role="link"][href*="drops"]'
-			);
-			cards.forEach((el) => {
-				const txt = el.textContent || '';
-				if (!txt.trim()) return;
-				// Use heading or first non-whitespace line for the name.
-				const head = el.querySelector('h1,h2,h3,h4,p,span');
-				const name = ((head && head.textContent) || txt).trim().split('\n')[0].slice(0, 200);
-				const meta = txt.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 6).join(' | ');
-				domOut.push({
-					id: el.getAttribute('href') || ('dom-' + domOut.length),
-					name: name,
-					game: meta,
-					endsAt: '', startsAt: ''
-				});
+			const findSiblingContainer = (heading) => {
+				let n = heading;
+				// Walk up until we find a node with a sibling list/grid.
+				for (let i = 0; i < 8 && n; i++) {
+					const sib = n.nextElementSibling;
+					if (sib && (sib.children.length >= 1)) return sib;
+					n = n.parentElement;
+				}
+				return null;
+			};
+			const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4'));
+			const dropHeads = headings.filter(h => {
+				const t = (h.textContent || '').trim().toLowerCase();
+				return t.includes('open drop') || t.includes('open reward') || t.includes('drop campaign');
 			});
+			for (const h of dropHeads) {
+				const container = findSiblingContainer(h);
+				if (!container) continue;
+				// Each direct child likely a card; capture text + nested image alt as game hint.
+				Array.from(container.children).forEach((child) => {
+					const txt = (child.textContent || '').trim();
+					if (!txt) return;
+					const lines = txt.split('\n').map(s => s.trim()).filter(Boolean);
+					const img = child.querySelector('img');
+					const gameHint = (img && img.alt) || '';
+					domOut.push({
+						id: 'dom-' + domOut.length,
+						name: lines[0] ? lines[0].slice(0, 200) : '',
+						game: gameHint || (lines[1] || ''),
+						endsAt: '',
+						startsAt: ''
+					});
+				});
+			}
 		} catch (e) {}
 		const resolve = (v) => {
 			if (!v || typeof v !== 'object') return v;
