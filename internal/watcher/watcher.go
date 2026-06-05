@@ -123,27 +123,56 @@ func (w *Watcher) Run(ctx context.Context) error {
 	t := time.NewTicker(w.cfg.TickInterval)
 	defer t.Stop()
 
+	// Exponential backoff on repeated step errors. Resets to zero
+	// after a successful step.
+	backoff := time.Duration(0)
+	const maxBackoff = 5 * time.Minute
+
 	for {
-		if err := w.step(ctx); err != nil {
+		err := w.step(ctx)
+		if err == nil {
+			backoff = 0
+		} else {
 			if errors.Is(err, errComplete) {
 				return nil
 			}
 			// Transient errors (gql 5xx, sidecar fetch poisoned by
-			// PerimeterX, etc) shouldn't kill the watcher — just log
-			// and retry on the next tick. The previous behaviour was
-			// to bubble up which left the account stuck in whatever
-			// state preceded the failure.
-			slog.Warn("watcher step error; will retry", "account", w.cfg.AccountID, "state", w.State().String(), "err", err)
-			// Reset to PickCampaign so the next tick re-runs discovery
-			// instead of, say, retrying a heartbeat whose handle is
-			// already invalidated.
+			// PerimeterX, etc) shouldn't kill the watcher. Reset state
+			// to PickCampaign for the next tick.
+			if backoff == 0 {
+				backoff = 5 * time.Second
+			} else if backoff < maxBackoff {
+				backoff *= 2
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
+			}
+			slog.Warn("watcher step error; will retry after backoff",
+				"account", w.cfg.AccountID, "state", w.State().String(),
+				"backoff", backoff, "err", err)
 			w.setState(ctx, StatePickCampaign)
 		}
 
+		// Pick the wait interval: ticker for the fast path, the backoff
+		// timer when we're recovering from an error.
+		var wait <-chan time.Time
+		var btimer *time.Timer
+		if backoff == 0 {
+			wait = t.C
+		} else {
+			btimer = time.NewTimer(backoff)
+			wait = btimer.C
+		}
 		select {
 		case <-ctx.Done():
+			if btimer != nil {
+				btimer.Stop()
+			}
 			return ctx.Err()
-		case <-t.C:
+		case <-wait:
+		}
+		if btimer != nil {
+			btimer.Stop()
 		}
 	}
 }
