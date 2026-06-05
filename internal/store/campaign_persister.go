@@ -2,11 +2,54 @@ package store
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/aalejandrofer/dropsminer/internal/platform"
 	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
+
+// gameIDFromName turns a Twitch/Kick display name into a stable
+// game_id used as the games.id primary key. "Minecraft" -> "g_minecraft",
+// "Apex Legends" -> "g_apex_legends". Mirrors slugify() in twitch
+// backend, prefixed with g_ so it can't collide with user-entered IDs.
+func gameIDFromName(name string) string {
+	out := make([]byte, 0, len(name)+2)
+	out = append(out, 'g', '_')
+	prev := byte(0)
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		switch {
+		case c >= 'A' && c <= 'Z':
+			c += 32
+		case c == ' ', c == '-', c == '_':
+			c = '_'
+		case (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'):
+			// keep
+		default:
+			continue
+		}
+		if c == '_' && prev == '_' {
+			continue
+		}
+		out = append(out, c)
+		prev = c
+	}
+	for len(out) > 2 && out[len(out)-1] == '_' {
+		out = out[:len(out)-1]
+	}
+	return string(out)
+}
+
+// slugFromName is the Twitch directory slug — same as gameIDFromName
+// minus the g_ prefix, dashes instead of underscores.
+func slugFromName(name string) string {
+	id := gameIDFromName(name)
+	if strings.HasPrefix(id, "g_") {
+		id = id[2:]
+	}
+	return strings.ReplaceAll(id, "_", "-")
+}
 
 // CampaignPersister upserts every Campaign + Benefit the watcher discovers
 // into the local DB so the /drops page can render past + current +
@@ -37,6 +80,17 @@ func (p *CampaignPersister) PersistCampaigns(ctx context.Context, camps []platfo
 	for _, c := range camps {
 		if c.ID == "" {
 			continue
+		}
+		// Auto-upsert the game so it shows in the account whitelist
+		// picker even if not in the migration seed. Idempotent —
+		// existing rows keep their priority.
+		if c.Game != "" {
+			_ = p.Q.UpsertGame(ctx, gen.UpsertGameParams{
+				ID:       gameIDFromName(c.Game),
+				Name:     c.Game,
+				Slug:     slugFromName(c.Game),
+				Priority: 100,
+			})
 		}
 		status := c.Status
 		if status == "" {
