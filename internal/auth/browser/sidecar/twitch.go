@@ -1049,9 +1049,31 @@ func evalFetchPOST(tabCtx context.Context, url, contentType string, body []byte)
 		for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
 		const XHR = window.__OrigXHR || window.XMLHttpRequest;
 		const xhr = new XHR();
-		xhr.open("POST", %q, true);
+		const url = %q;
+		xhr.open("POST", url, true);
 		xhr.withCredentials = true;
 		xhr.setRequestHeader("Content-Type", %q);
+		// Twitch gql endpoint requires Authorization: OAuth <auth-token>
+		// AND a Client-Id header. The auth-token cookie carries the
+		// access token; pluck it from document.cookie. Client-Id is
+		// twitch.tv's public web app id — same value the official site
+		// uses, copied verbatim. Without these, gql.twitch.tv accepts
+		// the request but returns the anonymous-user view (empty
+		// dropCampaigns even when the user is enrolled).
+		if (url.indexOf("gql.twitch.tv") >= 0) {
+			const m = document.cookie.match(/(?:^|;\s*)auth-token=([^;]+)/);
+			if (m && m[1]) {
+				xhr.setRequestHeader("Authorization", "OAuth " + m[1]);
+			}
+			xhr.setRequestHeader("Client-Id", "kimne78kx3ncx6brgo4mv6wki5h1ko");
+			// Forward the X-Device-Id Twitch attaches to its own
+			// requests; absent → backend may fall back to anonymous
+			// rate limiting which can return degraded responses.
+			const dm = document.cookie.match(/(?:^|;\s*)unique_id=([^;]+)/);
+			if (dm && dm[1]) {
+				xhr.setRequestHeader("X-Device-Id", dm[1]);
+			}
+		}
 		xhr.responseType = "text";
 		xhr.onload = () => resolve({status: xhr.status, body: btoa(unescape(encodeURIComponent(xhr.responseText)))});
 		xhr.onerror = (e) => reject(new Error("xhr error status=" + xhr.status + " readyState=" + xhr.readyState));
