@@ -1572,19 +1572,14 @@
     margin: 16px 0 0;
     padding: 0;
   }
-  /* Drops two-pane layout. Grid keeps both pane headers at the same
-     row so the tables start at the same vertical position even when
-     one side has fewer rows. align-items:start prevents stretching;
-     the inner #drops-tabpanel handles its own border + spacing. */
+  /* Drops two-pane layout — stacked vertically (whitelisted on top,
+     discoverable below). Single column so the wide table doesn't
+     have to fight for width with a narrower neighbour. */
   .drops-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
     margin-top: 16px;
-    align-items: start;
-  }
-  @media (max-width: 1100px) {
-    .drops-grid { grid-template-columns: 1fr; }
   }
   .drops-pane { min-width: 0; }
   .drops-pane-h {
