@@ -26,11 +26,29 @@ type Twitch struct {
 	b *Browser
 
 	mu       sync.Mutex
-	authTabs map[string]string // account_id -> tab handle
+	authTabs map[string]string     // account_id -> tab handle
+	tabMu    map[string]*sync.Mutex // account_id -> per-tab mutex (serialises navigations)
 }
 
 func NewTwitch(b *Browser) *Twitch {
-	return &Twitch{b: b, authTabs: map[string]string{}}
+	return &Twitch{b: b, authTabs: map[string]string{}, tabMu: map[string]*sync.Mutex{}}
+}
+
+// lockTab returns the per-account mutex used to serialise chromedp
+// operations that navigate or evaluate scripts in the auth tab. Two
+// concurrent ListActiveCampaigns calls (e.g. one from the watcher,
+// one from the discovery scraper) would otherwise step on each
+// other's Navigate and abort with net::ERR_ABORTED.
+func (t *Twitch) lockTab(accountID string) func() {
+	t.mu.Lock()
+	m, ok := t.tabMu[accountID]
+	if !ok {
+		m = &sync.Mutex{}
+		t.tabMu[accountID] = m
+	}
+	t.mu.Unlock()
+	m.Lock()
+	return m.Unlock
 }
 
 // Authenticate installs the supplied cookies, opens (or reuses) the
@@ -125,6 +143,8 @@ func (t *Twitch) GQL(ctx context.Context, accountID string, body []byte) ([]byte
 	if !ok {
 		return nil, 0, fmt.Errorf("no authenticated tab for account %s", accountID)
 	}
+	unlock := t.lockTab(accountID)
+	defer unlock()
 	resp, status, err := t.evalFetch(tabCtx, body)
 	if err == nil && status == 200 {
 		return resp, status, nil
