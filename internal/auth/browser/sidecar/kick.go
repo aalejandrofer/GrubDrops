@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 
-	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
 )
 
 // Kick wraps Browser with Kick.com-specific page logic.
@@ -37,31 +39,87 @@ func (k *Kick) InstallCookies(ctx context.Context, session *pb.KickSession) erro
 	)
 }
 
-// VerifyAuth navigates to /api/v1/user and returns the username from
-// the response. 401 / missing-username means invalid cookies.
+// VerifyAuth confirms the supplied cookies are valid and returns the
+// authenticated user's username. It installs the stealth shim, lands on
+// kick.com, then calls /api/v1/user from inside the authenticated page
+// context (instead of navigating directly to the JSON endpoint) so
+// Cloudflare treats the request as user-initiated. The response is
+// parsed against several known body shapes.
 func (k *Kick) VerifyAuth(ctx context.Context, session *pb.KickSession) (string, error) {
+	// Install stealth shim BEFORE navigation so it runs at the top of
+	// every document the tab loads.
+	if err := chromedp.Run(ctx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			_, err := page.AddScriptToEvaluateOnNewDocument(StealthScript).Do(ctx)
+			return err
+		}),
+	); err != nil {
+		return "", fmt.Errorf("install stealth: %w", err)
+	}
 	if err := k.InstallCookies(ctx, session); err != nil {
-		return "", err
+		return "", fmt.Errorf("install cookies: %w", err)
 	}
-	var raw string
-	err := chromedp.Run(ctx,
-		chromedp.Navigate("https://kick.com/api/v1/user"),
-		chromedp.Sleep(2*time.Second),
-		chromedp.Text("body", &raw),
-	)
+	// Land on the kick.com origin so the subsequent fetch inherits
+	// first-party cookies + a real document context. 5s gives Cloudflare's
+	// JS challenge time to settle.
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate("https://kick.com/"),
+		chromedp.Sleep(5*time.Second),
+	); err != nil {
+		return "", fmt.Errorf("verify auth navigate kick.com: %w", err)
+	}
+
+	const apiURL = "https://kick.com/api/v1/user"
+	body, status, err := evalFetchGET(ctx, apiURL)
 	if err != nil {
-		return "", fmt.Errorf("verify auth navigate: %w", err)
+		return "", fmt.Errorf("verify auth fetch %s: %w", apiURL, err)
 	}
-	var body struct {
+	if status != 200 {
+		return "", fmt.Errorf("verify auth: GET %s status=%d body=%s", apiURL, status, truncate(string(body), 200))
+	}
+
+	username, ok := parseKickUsername(body)
+	if !ok {
+		slog.Warn("kick verify auth: unrecognized body shape", "url", apiURL, "status", status, "body_prefix", truncate(string(body), 200))
+		return "", fmt.Errorf("verify auth: no username field in %s response (status=%d body=%s)", apiURL, status, truncate(string(body), 200))
+	}
+	return username, nil
+}
+
+// parseKickUsername attempts to pull a username out of any of the
+// shapes /api/v1/user has been observed to return:
+//   - {"username": "x", ...}              (legacy flat)
+//   - {"data": {"username": "x", ...}}    (JSON:API-style wrapper)
+//   - {"user": {"username": "x", ...}}    (nested "user" object)
+//
+// Returns ("", false) if the body isn't JSON or no shape matches with
+// a non-empty username.
+func parseKickUsername(raw []byte) (string, bool) {
+	// Try flat shape first.
+	var flat struct {
 		Username string `json:"username"`
 	}
-	if err := json.Unmarshal([]byte(raw), &body); err != nil {
-		return "", fmt.Errorf("verify auth parse: %w (body=%q)", err, raw)
+	if err := json.Unmarshal(raw, &flat); err == nil && flat.Username != "" {
+		return flat.Username, true
 	}
-	if body.Username == "" {
-		return "", fmt.Errorf("verify auth: empty username — cookies likely invalid")
+	// Try wrapped shapes.
+	var wrapped struct {
+		Data struct {
+			Username string `json:"username"`
+		} `json:"data"`
+		User struct {
+			Username string `json:"username"`
+		} `json:"user"`
 	}
-	return body.Username, nil
+	if err := json.Unmarshal(raw, &wrapped); err == nil {
+		if wrapped.Data.Username != "" {
+			return wrapped.Data.Username, true
+		}
+		if wrapped.User.Username != "" {
+			return wrapped.User.Username, true
+		}
+	}
+	return "", false
 }
 
 // OpenStream opens kick.com/<channel> in a new tab; the HLS player

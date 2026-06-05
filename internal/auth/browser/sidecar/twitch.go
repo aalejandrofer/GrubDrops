@@ -14,7 +14,7 @@ import (
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 
-	pb "github.com/aalejandrofer/rust-drops-miner/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
 )
 
 // Twitch keeps one persistent logged-in twitch.tv tab per account and
@@ -203,24 +203,50 @@ func installTwitchCookies(ctx context.Context, session *pb.TwitchSession) error 
 // https://gql.twitch.tv/gql with the supplied JSON body, returning
 // the raw response body and status code.
 func (t *Twitch) evalFetch(tabCtx context.Context, body []byte) ([]byte, int, error) {
-	// We base64-encode the body so JS string-escaping doesn't choke on
-	// embedded quotes or unicode in the GraphQL payload.
+	return evalFetchPOST(tabCtx, "https://gql.twitch.tv/gql", "text/plain;charset=UTF-8", body)
+}
+
+// evalFetchPOST runs a fetch() POST inside the tab's page context against
+// the supplied URL with the given content-type and body. Returns the raw
+// response body and HTTP status. The body is base64-encoded over the wire
+// so JS string-escaping doesn't choke on embedded quotes or unicode.
+func evalFetchPOST(tabCtx context.Context, url, contentType string, body []byte) ([]byte, int, error) {
 	bodyB64 := base64.StdEncoding.EncodeToString(body)
 	script := fmt.Sprintf(`(async () => {
 		const b64 = %q;
 		const bin = atob(b64);
 		const bytes = new Uint8Array(bin.length);
 		for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-		const resp = await fetch("https://gql.twitch.tv/gql", {
+		const resp = await fetch(%q, {
 			method: "POST",
 			credentials: "include",
-			headers: {"Content-Type": "text/plain;charset=UTF-8"},
+			headers: {"Content-Type": %q},
 			body: bytes,
 		});
 		const txt = await resp.text();
 		return {status: resp.status, body: btoa(unescape(encodeURIComponent(txt)))};
-	})()`, bodyB64)
+	})()`, bodyB64, url, contentType)
 
+	return runEvalFetch(tabCtx, script)
+}
+
+// evalFetchGET runs a fetch() GET inside the tab's page context against
+// the supplied URL with credentials included. Returns body + HTTP status.
+func evalFetchGET(tabCtx context.Context, url string) ([]byte, int, error) {
+	script := fmt.Sprintf(`(async () => {
+		const resp = await fetch(%q, {
+			method: "GET",
+			credentials: "include",
+			headers: {"Accept": "application/json"},
+		});
+		const txt = await resp.text();
+		return {status: resp.status, body: btoa(unescape(encodeURIComponent(txt)))};
+	})()`, url)
+
+	return runEvalFetch(tabCtx, script)
+}
+
+func runEvalFetch(tabCtx context.Context, script string) ([]byte, int, error) {
 	var result struct {
 		Status int    `json:"status"`
 		Body   string `json:"body"`
