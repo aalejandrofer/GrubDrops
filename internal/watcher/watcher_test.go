@@ -126,3 +126,53 @@ func TestWatcher_PersistsAllWhitelistedStatuses(t *testing.T) {
 	_, blockedSeen := ids["c-blocked"]
 	assert.False(t, blockedSeen, "non-whitelisted campaign must NEVER reach the persister")
 }
+
+// rewardOnlyBackend returns a single ACTIVE Twitch campaign of kind="reward"
+// with empty Benefits. The watcher MUST skip it from the mining loop AND
+// dispatch the reward reaper if the backend implements RewardClaimer.
+type rewardOnlyBackend struct {
+	*platformtest.MockBackend
+	calls    int
+	games    []string
+	claimRet []platform.ClaimedReward
+}
+
+func (r *rewardOnlyBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	return []platform.Campaign{
+		{ID: "minecraft|builder-cape", Platform: "twitch", Game: "Minecraft",
+			Status: "active", Kind: "reward", AccountLinked: true, Name: "Builder Cape"},
+	}, nil
+}
+
+func (r *rewardOnlyBackend) ClaimRewards(_ context.Context, _ platform.Session, allowed []string) ([]platform.ClaimedReward, error) {
+	r.calls++
+	r.games = append([]string{}, allowed...)
+	return r.claimRet, nil
+}
+
+// Watcher must fire the reward reaper when a whitelisted kind=reward
+// campaign is discovered and the backend implements RewardClaimer.
+func TestWatcher_RewardReaperFires(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	rec := &recordingPersister{}
+	notif := &recordingNotifier{}
+	backend := &rewardOnlyBackend{
+		MockBackend: platformtest.New(),
+		claimRet:    []platform.ClaimedReward{{Game: "Minecraft", Title: "Builder Cape"}},
+	}
+	w := New(Config{
+		AccountID:    "acc1",
+		Backend:      backend,
+		Session:      platform.Session{AccessToken: "tok"},
+		Notifier:     notif,
+		TickInterval: 5 * time.Millisecond,
+		AllowGame:    func(g string) bool { return g == "Minecraft" },
+		Persister:    rec,
+	})
+
+	_ = w.Run(ctx)
+	assert.GreaterOrEqual(t, backend.calls, 1, "ClaimRewards must be invoked at least once")
+	assert.Contains(t, backend.games, "Minecraft", "reaper must scope claim to whitelisted game")
+}
