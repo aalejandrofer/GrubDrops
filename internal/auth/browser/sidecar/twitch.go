@@ -33,6 +33,15 @@ type Twitch struct {
 	authTabs map[string]string     // account_id -> tab handle
 	tabMu    map[string]*sync.Mutex // account_id -> per-tab mutex (serialises navigations)
 
+	// Integrity token cache. Twitch's gql endpoint requires a
+	// Client-Integrity header for currentUser.dropCampaigns (and a
+	// few other privileged fields). Tokens are short-lived (~30 min)
+	// and issued by gql.twitch.tv/integrity in response to a POST
+	// with the same headers we use for gql.
+	integrityMu        sync.Mutex
+	integrityToken     string
+	integrityExpiresAt time.Time
+
 	// Last successful scrape result per account. Twitch's drops page
 	// is flaky in headless — sometimes renders campaigns, sometimes
 	// returns degraded HTML. Cache the last good result so an empty
@@ -273,6 +282,18 @@ func (t *Twitch) GQL(ctx context.Context, accountID string, body []byte) ([]byte
 	// gql call. If that fails (TLS fingerprint, missing cookie,
 	// etc.) fall through to the in-tab evalFetch as a backup.
 	resp, status, err := t.gqlGoHTTP(ctx, tabCtx, body)
+	// Retry once with a fresh integrity token if the response body
+	// contains "failed integrity check". Privileged fields like
+	// currentUser.dropCampaigns return null until a valid
+	// Client-Integrity header is attached.
+	if err == nil && status == 200 && bytesContains(resp, []byte("failed integrity check")) {
+		if ferr := t.fetchIntegrityToken(ctx, tabCtx); ferr != nil {
+			slog.Warn("integrity token fetch failed", "account", accountID, "err", ferr)
+		} else {
+			slog.Info("retrying gql with fresh integrity token", "account", accountID)
+			resp, status, err = t.gqlGoHTTP(ctx, tabCtx, body)
+		}
+	}
 	if err != nil || status == 0 || status >= 500 {
 		slog.Info("gql go-http failed, falling back to evalFetch",
 			"account", accountID, "status", status, "err", err)
@@ -1051,6 +1072,88 @@ func (t *Twitch) evalFetch(tabCtx context.Context, body []byte) ([]byte, int, er
 	return evalFetchPOST(tabCtx, "https://gql.twitch.tv/gql", "text/plain;charset=UTF-8", body)
 }
 
+// cachedIntegrityToken returns the cached token if still valid
+// (1-minute safety margin before expiry).
+func (t *Twitch) cachedIntegrityToken() string {
+	t.integrityMu.Lock()
+	defer t.integrityMu.Unlock()
+	if t.integrityToken == "" {
+		return ""
+	}
+	if time.Now().Add(1 * time.Minute).After(t.integrityExpiresAt) {
+		return ""
+	}
+	return t.integrityToken
+}
+
+// fetchIntegrityToken POSTs to gql.twitch.tv/integrity and stores the
+// returned token. Best-effort: returns nil on success, error otherwise.
+// Caller may call this once per gql cycle when integrity fails.
+func (t *Twitch) fetchIntegrityToken(ctx context.Context, tabCtx context.Context) error {
+	var cookies []*network.Cookie
+	if err := chromedp.Run(tabCtx,
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var err error
+			cookies, err = network.GetCookies().WithURLs([]string{"https://gql.twitch.tv/", "https://www.twitch.tv/"}).Do(ctx)
+			return err
+		}),
+	); err != nil {
+		return fmt.Errorf("get cookies: %w", err)
+	}
+	var authToken, deviceID string
+	for _, c := range cookies {
+		switch c.Name {
+		case "auth-token":
+			authToken = c.Value
+		case "unique_id":
+			deviceID = c.Value
+		}
+	}
+	if authToken == "" {
+		return fmt.Errorf("auth-token missing")
+	}
+	const androidClientID = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"
+	const androidUA = "Dalvik/2.1.0 (Linux; U; Android 14; Pixel 7 Build/UQ1A.240205.004) tv.twitch.android.app/19.1.0/1901000"
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://gql.twitch.tv/integrity", bytes.NewReader([]byte("{}")))
+	if err != nil {
+		return fmt.Errorf("build integrity req: %w", err)
+	}
+	req.Header.Set("Content-Type", "text/plain;charset=UTF-8")
+	req.Header.Set("Authorization", "OAuth "+authToken)
+	req.Header.Set("Client-Id", androidClientID)
+	req.Header.Set("User-Agent", androidUA)
+	if deviceID != "" {
+		req.Header.Set("X-Device-Id", deviceID)
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("integrity http: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("integrity status=%d body=%s", resp.StatusCode, truncate(string(body), 200))
+	}
+	var iresp struct {
+		Token      string `json:"token"`
+		Expiration int64  `json:"expiration"`
+	}
+	if err := json.Unmarshal(body, &iresp); err != nil {
+		return fmt.Errorf("parse integrity body: %w", err)
+	}
+	if iresp.Token == "" {
+		return fmt.Errorf("integrity body missing token: %s", truncate(string(body), 200))
+	}
+	t.integrityMu.Lock()
+	t.integrityToken = iresp.Token
+	// Expiration is in milliseconds since epoch.
+	t.integrityExpiresAt = time.UnixMilli(iresp.Expiration)
+	t.integrityMu.Unlock()
+	slog.Info("twitch integrity token issued", "expires_at", t.integrityExpiresAt.Format(time.RFC3339))
+	return nil
+}
+
 // gqlGoHTTP sends a gql POST to gql.twitch.tv from the Go side using
 // cookies extracted from the browser tab via CDP. Bypasses the
 // browser's CORS / fetch-wrapper layer that breaks cross-origin gql
@@ -1092,9 +1195,10 @@ func (t *Twitch) gqlGoHTTP(ctx context.Context, tabCtx context.Context, body []b
 	}
 	// Use the Twitch Android-app client identity — same trick
 	// DevilXD/TwitchDropsMiner uses to bypass the gql integrity
-	// challenge that only fires for web client. Auth-token cookie is
-	// per-user not per-client, so the Android client honors a token
-	// originally issued for the web client.
+	// challenge. Caveat: only effective if the auth-token cookie
+	// was ALSO issued for the Android client_id. Cookies scraped
+	// from a web browser session will fail integrity check
+	// regardless of which client headers we send.
 	const androidClientID = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"
 	const androidUA = "Dalvik/2.1.0 (Linux; U; Android 14; Pixel 7 Build/UQ1A.240205.004) tv.twitch.android.app/19.1.0/1901000"
 	req.Header.Set("Content-Type", "text/plain;charset=UTF-8")
@@ -1105,6 +1209,11 @@ func (t *Twitch) gqlGoHTTP(ctx context.Context, tabCtx context.Context, body []b
 	req.Header.Set("Accept", "*/*")
 	if deviceID != "" {
 		req.Header.Set("X-Device-Id", deviceID)
+	}
+	// Attach integrity token if we have one cached (issued via the
+	// browser tab's same-origin JS — see fetchIntegrityToken).
+	if tok := t.cachedIntegrityToken(); tok != "" {
+		req.Header.Set("Client-Integrity", tok)
 	}
 	if len(cookieHeader) > 0 {
 		req.Header.Set("Cookie", strings.Join(cookieHeader, "; "))
