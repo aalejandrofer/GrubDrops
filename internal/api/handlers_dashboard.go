@@ -871,41 +871,6 @@ func countActive(cards []dashMineCard) int {
 	return n
 }
 
-func stubNextClaims(cards []dashMineCard) []dashMineCard {
-	out := []dashMineCard{}
-	for i, c := range cards {
-		if i >= 4 {
-			break
-		}
-		out = append(out, c)
-	}
-	return out
-}
-
-func stubActiveCamps() []dashCampaign {
-	// stub: placeholder data, not real campaigns
-	return []dashCampaign{
-		{Name: "Active Campaign A", Platform: "twitch", Drops: 3, Channels: 12, EndsIn: "12d", Claimed: 1, Total: 3},
-		{Name: "Active Campaign B", Platform: "twitch", Drops: 2, Channels: 4, EndsIn: "5d", Claimed: 0, Total: 2},
-		{Name: "Active Campaign C", Platform: "kick", Drops: 5, Channels: 8, EndsIn: "21d", Claimed: 2, Total: 5},
-		{Name: "Active Campaign D", Platform: "kick", Drops: 1, Channels: 3, EndsIn: "8d", Claimed: 0, Total: 1},
-		{Name: "Active Campaign E", Platform: "twitch", Drops: 2, Channels: 6, EndsIn: "18h", EndsUrgent: true, Claimed: 0, Total: 2},
-	}
-}
-
-func stubEvents() []dashEvent {
-	return []dashEvent{
-		{Time: "14:31:02", Kind: "claim", Color: "green", BodyHTML: "<em>claim</em> · Wolf Helmet recorded", Account: "helmet_farmer"},
-		{Time: "14:30:44", Kind: "progress", Color: "amber", BodyHTML: "<em>progress</em> · Salvaged Cleaver 100% — claiming", Account: "demo_two"},
-		{Time: "14:24:17", Kind: "state", Color: "blue", BodyHTML: "<em>state</em> · pick_stream → watching (shroud)", Account: "helmet_farmer"},
-		{Time: "14:22:01", Kind: "discovery", Color: "muted", BodyHTML: "<em>discovery</em> · 8 active campaigns", Account: "—"},
-		{Time: "14:18:33", Kind: "claim", Color: "green", BodyHTML: "<em>claim</em> · Crate Skin recorded", Account: "backup_acc"},
-		{Time: "14:14:09", Kind: "auth", Color: "blue", BodyHTML: "<em>auth</em> · token refreshed", Account: "demo_two"},
-		{Time: "14:09:55", Kind: "error", Color: "red", BodyHTML: "<em>error</em> · sidecar timeout, retrying", Account: "demo_two"},
-		{Time: "14:03:21", Kind: "info", Color: "muted", BodyHTML: "<em>heartbeat</em> · 60 ticks / 60s", Account: "—"},
-	}
-}
-
 func (d dashboardDeps) page(w http.ResponseWriter, r *http.Request) {
 	var flash string
 	if d.sm != nil {
