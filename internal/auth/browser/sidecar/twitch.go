@@ -231,8 +231,27 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 	// game.{displayName,name} + a name/title + an end timestamp.
 	// Resolve nested {__ref} pointers so we get the actual game name
 	// instead of "{__ref:Game:12345}".
+	//
+	// Modern twitch.tv stopped exposing window.__APOLLO_STATE__; the
+	// Apollo client instance is at window.__APOLLO_CLIENT__ if at all.
+	// Try cache.extract() as a backup, then DOM scrape as last resort.
 	script := `(() => {
-		const state = window.__APOLLO_STATE__ || {};
+		let state = window.__APOLLO_STATE__ || {};
+		if ((!state || Object.keys(state).length === 0) && window.__APOLLO_CLIENT__) {
+			try { state = window.__APOLLO_CLIENT__.cache.extract(); } catch (e) {}
+		}
+		// Last-resort DOM scrape: walk drop campaign cards.
+		const domOut = [];
+		try {
+			const cards = document.querySelectorAll('[data-test-selector*="drop"], [class*="drop-campaign"], a[href*="/drops/campaigns/"]');
+			cards.forEach((el) => {
+				const name = (el.querySelector('h3,h4,[class*="name"],[class*="title"]')||{}).textContent || '';
+				const game = (el.querySelector('[class*="game"],[class*="category"]')||{}).textContent || '';
+				if (name) {
+					domOut.push({id: 'dom-' + domOut.length, name: name.trim(), game: game.trim(), endsAt: '', startsAt: ''});
+				}
+			});
+		} catch (e) {}
 		const resolve = (v) => {
 			if (!v || typeof v !== 'object') return v;
 			if (v.__ref && state[v.__ref]) return state[v.__ref];
@@ -265,27 +284,46 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 				startsAt: v.startAt || v.startsAt || ''
 			});
 		}
+		// If apollo walk produced nothing AND DOM scrape produced
+		// something, return DOM scrape as a fallback.
+		if (out.length === 0 && domOut.length > 0) {
+			return JSON.stringify(domOut);
+		}
 		return JSON.stringify(out);
 	})()`
 
 	var raw, debugInfo string
 	debugScript := `(() => {
-		const s = window.__APOLLO_STATE__;
-		if (!s) return JSON.stringify({apollo_state_present: false, win_keys: Object.keys(window).filter(k => k.startsWith('__')).slice(0, 20)});
-		const keys = Object.keys(s);
-		const typeCounts = {};
-		for (const k of keys) {
-			const v = s[k];
-			if (v && typeof v === 'object' && v.__typename) {
-				typeCounts[v.__typename] = (typeCounts[v.__typename] || 0) + 1;
-			}
+		const winKeys = Object.keys(window).filter(k => k.startsWith('__')).slice(0, 30);
+		const hasClient = !!window.__APOLLO_CLIENT__;
+		let cacheKeys = 0, typeCounts = {};
+		if (hasClient) {
+			try {
+				const cache = window.__APOLLO_CLIENT__.cache.extract();
+				cacheKeys = Object.keys(cache).length;
+				for (const k of Object.keys(cache)) {
+					const v = cache[k];
+					if (v && typeof v === 'object' && v.__typename) {
+						typeCounts[v.__typename] = (typeCounts[v.__typename] || 0) + 1;
+					}
+				}
+			} catch (e) {}
 		}
-		const dropKeys = keys.filter(k => k.includes('Drop') || k.includes('Campaign')).slice(0, 15);
-		return JSON.stringify({total_keys: keys.length, typename_counts: typeCounts, drop_keys_sample: dropKeys});
+		const domCards = document.querySelectorAll('[data-test-selector*="drop"], [class*="drop-campaign"], a[href*="/drops/campaigns/"]').length;
+		const title = document.title;
+		const url = location.href;
+		return JSON.stringify({
+			url, title,
+			apollo_client_present: hasClient,
+			apollo_cache_keys: cacheKeys,
+			typename_counts: typeCounts,
+			dom_drop_cards: domCards,
+			win_keys: winKeys
+		});
 	})()`
 	if err := chromedp.Run(tabCtx,
 		chromedp.Navigate("https://www.twitch.tv/drops/campaigns"),
-		chromedp.Sleep(7*time.Second),
+		chromedp.Sleep(12*time.Second),
 		chromedp.Evaluate(debugScript, &debugInfo),
 		chromedp.Evaluate(script, &raw),
 	); err != nil {
