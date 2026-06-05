@@ -74,16 +74,15 @@ type dropsAccount struct {
 	Label string // "@login (platform)"
 }
 
-// allowedGamesUnion returns the union of explicit per-account game
-// whitelists, keyed by lowercased name AND slug. Global games is a
-// priority/default seed list — NOT a whitelist source — so a fresh
-// install with 111 seeded games does not auto-mark every campaign as
-// "whitelisted". Operators must opt their accounts in per-game.
+// allowedGamesUnion returns the effective whitelist union across
+// every account, keyed by lowercased name AND slug. For each account:
+// per-account rows when present, otherwise the global priority list
+// (matching the watcher's loadAccountWhitelist resolution). The
+// global list is therefore picked up whenever any account leaves
+// its per-account override empty.
 //
-// Returns (map, true) whenever any account_games row exists;
-// (nil, false) when no account has opted into anything. In the empty
-// case callers treat everything as Discoverable so the operator can
-// pick games from the inline form.
+// Returns (map, true) whenever any row was contributed;
+// (nil, false) when there are no accounts AND no global games.
 func allowedGamesUnion(ctx context.Context, q *gen.Queries) (map[string]struct{}, bool) {
 	accs, err := q.ListAllAccounts(ctx)
 	if err != nil {
@@ -91,12 +90,41 @@ func allowedGamesUnion(ctx context.Context, q *gen.Queries) (map[string]struct{}
 	}
 	out := map[string]struct{}{}
 	anyRow := false
+	var globalLoaded bool
+	var globalRows []gen.ListGlobalGamesRow
+	loadGlobal := func() {
+		if globalLoaded {
+			return
+		}
+		globalLoaded = true
+		globalRows, _ = q.ListGlobalGames(ctx)
+	}
 	for _, a := range accs {
 		rows, err := q.ListAccountGames(ctx, a.ID)
 		if err != nil {
 			continue
 		}
+		if len(rows) == 0 {
+			loadGlobal()
+			for _, r := range globalRows {
+				anyRow = true
+				out[strings.ToLower(r.Name)] = struct{}{}
+				out[strings.ToLower(r.Slug)] = struct{}{}
+			}
+			continue
+		}
 		for _, r := range rows {
+			anyRow = true
+			out[strings.ToLower(r.Name)] = struct{}{}
+			out[strings.ToLower(r.Slug)] = struct{}{}
+		}
+	}
+	// If there are no accounts at all, still include global games so
+	// the /drops page reflects what the watcher would mine once
+	// accounts are added.
+	if len(accs) == 0 {
+		loadGlobal()
+		for _, r := range globalRows {
 			anyRow = true
 			out[strings.ToLower(r.Name)] = struct{}{}
 			out[strings.ToLower(r.Slug)] = struct{}{}
