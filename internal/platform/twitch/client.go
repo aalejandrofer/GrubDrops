@@ -244,6 +244,9 @@ func (c *client) do(ctx context.Context, token, opName string, body []byte, out 
 	if err != nil {
 		return err
 	}
+	// Always log the raw body prefix so we can tell whether the issue
+	// is empty data, application errors, or shape drift.
+	slog.Info("twitch gql response", "op", opName, "status", status, "body", truncate(string(rawBody), 800))
 	if status >= 500 {
 		slog.Error("twitch gql 5xx", "op", opName, "status", status, "body", truncate(string(rawBody), 500))
 		return fmt.Errorf("twitch gql %s: status %d", opName, status)
