@@ -67,6 +67,7 @@ type Watcher struct {
 	handle          *platform.WatchHandle
 	watchStartedAt  time.Time
 	lastProgressMin int
+	tickCount       int // increments each tickWatch, used to throttle stream-live re-checks
 
 	// lastDiscovery is the most recent successful
 	// Backend.ListActiveCampaigns result. Cached so the dashboard's
@@ -418,11 +419,42 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 	w.mu.Lock()
 	handle := *w.handle
 	benefit := *w.currentBenefit
+	campaign := *w.currentCampaign
+	w.tickCount++
+	tickN := w.tickCount
 	w.mu.Unlock()
 
 	if err := w.cfg.Backend.Heartbeat(ctx, handle); err != nil {
 		slog.Error("watcher heartbeat failed", "kind", "error", "account", w.cfg.AccountID, "channel", handle.Channel, "err", err)
 		return fmt.Errorf("heartbeat: %w", err)
+	}
+
+	// Every 5 ticks (~2.5s at 500ms cadence), check that the channel
+	// we're watching is still live + still eligible. Twitch's
+	// SendEvents heartbeat is fire-and-forget — minutes don't accrue
+	// after a stream ends but the mutation keeps returning 200, so we
+	// need this active probe to know when to swap.
+	if tickN%5 == 0 {
+		streams, err := w.cfg.Backend.ListEligibleChannels(ctx, w.cfg.Session, campaign)
+		if err == nil {
+			stillLive := false
+			for _, s := range streams {
+				if s.Channel == handle.Channel {
+					stillLive = true
+					break
+				}
+			}
+			if !stillLive {
+				slog.Info("watcher channel went offline; swapping",
+					"kind", "state",
+					"account", w.cfg.AccountID,
+					"channel", handle.Channel,
+					"alternatives", len(streams))
+				_ = w.cfg.Backend.StopWatch(ctx, handle)
+				w.setState(ctx, StatePickStream)
+				return nil
+			}
+		}
 	}
 
 	progress, err := w.cfg.Backend.InventoryProgress(ctx, w.cfg.Session)
