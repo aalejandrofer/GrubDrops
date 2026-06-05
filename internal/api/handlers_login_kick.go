@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -23,9 +24,10 @@ type KickBrowserClient interface {
 }
 
 // KickChannelRegistrar is implemented by the kick.Backend so the
-// handler can stash the channel selection at login time.
+// handler can stash the channel selection at login time. RegisterChannels
+// replaces the account's entire list; pass nil/empty to unregister.
 type KickChannelRegistrar interface {
-	RegisterChannel(accountID, channel string)
+	RegisterChannels(accountID string, channels []string)
 }
 
 // unexported aliases used within the package
@@ -79,7 +81,7 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 	kickSessionCookie := r.FormValue("kick_session")
 	xsrf := r.FormValue("xsrf_token")
 	cfClearance := r.FormValue("cf_clearance")
-	channel := r.FormValue("channel")
+	channels := parseKickChannels(r.FormValue("channel"))
 
 	cookies := []*pb.Cookie{
 		{Name: "kick_session", Value: kickSessionCookie, Domain: "kick.com", Path: "/"},
@@ -95,7 +97,7 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pbSession := &pb.KickSession{Cookies: cookies, XsrfToken: xsrf}
-	slog.Info("kick login attempt", "kind", "auth", "account", id, "platform", "kick", "channel", channel, "cookie_count", len(cookies), "has_cf_clearance", cfClearance != "", "kick_session_len", len(kickSessionCookie), "xsrf_len", len(xsrf))
+	slog.Info("kick login attempt", "kind", "auth", "account", id, "platform", "kick", "channels", channels, "cookie_count", len(cookies), "has_cf_clearance", cfClearance != "", "kick_session_len", len(kickSessionCookie), "xsrf_len", len(xsrf))
 
 	// Same pattern as the Twitch paste handler: persist cookies even
 	// when the sidecar can't verify them right now. Verification can
@@ -113,10 +115,15 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 		slog.Info("kick sidecar verified", "kind", "auth", "account", id, "platform", "kick", "username", username)
 	}
 
+	legacyChannel := ""
+	if len(channels) > 0 {
+		legacyChannel = channels[0]
+	}
 	internal := kickSessionForStorage{
 		Cookies:   stored,
 		XSRFToken: xsrf,
-		Channel:   channel,
+		Channel:   legacyChannel, // back-compat: first entry mirrors old single-channel field
+		Channels:  channels,
 		Username:  username,
 	}
 	raw, _ := json.Marshal(internal)
@@ -128,10 +135,10 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 		d.renderError(w, r, id, acc.DisplayName, "failed to persist session: "+err.Error())
 		return
 	}
-	slog.Info("kick session persisted", "account", id, "channel", channel, "username", username)
+	slog.Info("kick session persisted", "account", id, "channels", channels, "username", username)
 
 	if d.registrar != nil {
-		d.registrar.RegisterChannel(id, channel)
+		d.registrar.RegisterChannels(id, channels)
 	}
 
 	if d.reload != nil {
@@ -163,8 +170,45 @@ func (d *loginKickDeps) renderError(w http.ResponseWriter, r *http.Request, id, 
 type kickSessionForStorage struct {
 	Cookies   []cookieStored `json:"cookies"`
 	XSRFToken string         `json:"xsrf_token"`
-	Channel   string         `json:"channel"`
-	Username  string         `json:"username"`
+	// Channel is the legacy single-channel field. New sessions also
+	// populate Channels; readers should prefer Channels when non-empty
+	// and fall back to Channel for back-compat with stored sessions
+	// written before multi-channel support.
+	Channel  string   `json:"channel"`
+	Channels []string `json:"channels,omitempty"`
+	Username string   `json:"username"`
+}
+
+// parseKickChannels splits a free-form channel input into a clean list.
+// Accepts commas, whitespace, or both as separators so the operator can
+// paste "foo,bar baz" or "foo bar baz" — both yield three channels.
+func parseKickChannels(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	splitter := func(r rune) bool {
+		switch r {
+		case ',', ' ', '\t', '\n', '\r', ';':
+			return true
+		}
+		return false
+	}
+	parts := strings.FieldsFunc(raw, splitter)
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		key := strings.ToLower(p)
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, p)
+	}
+	return out
 }
 
 type cookieStored struct {

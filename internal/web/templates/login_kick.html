@@ -19,8 +19,8 @@
     <p>The helper opens your local browser, snapshots kick.com cookies (<code>kick_session</code>, <code>XSRF-TOKEN</code>, <code>cf_clearance</code>), and pushes them. No DevTools, no copy-paste.</p>
     <div class="cli-box">
       <div class="cli-label">one-liner</div>
-      <pre class="cli-code">go run ./cmd/dropsminer-helper kick {{.AccountID}} --channel STREAMER</pre>
-      <div class="cli-hint">Replace <code>STREAMER</code> with the kick channel login. Add <code>--miner URL</code> for a remote deployment, <code>--password PW</code> to skip the prompt.</div>
+      <pre class="cli-code">go run ./cmd/dropsminer-helper kick {{.AccountID}} --channel STREAMER[,STREAMER2,...]</pre>
+      <div class="cli-hint">Pass one or more Kick channel logins (comma-separated, or repeat <code>--channel</code>). Add <code>--miner URL</code> for a remote deployment, <code>--password PW</code> to skip the prompt.</div>
     </div>
     <p class="hint">No Go installed? Prebuilt binaries (<code>.exe</code> / <code>.app</code> / <code>AppImage</code>) ship from the same <code>cmd/dropsminer-helper</code> entry.</p>
   </div>
@@ -34,7 +34,7 @@
       <li>Open <code>kick.com</code> in any browser and sign in.</li>
       <li>DevTools → Application → Cookies → <code>kick.com</code>.</li>
       <li>Copy <code>kick_session</code> and <code>XSRF-TOKEN</code> (required). <code>cf_clearance</code> optional — sidecar generates its own when needed.</li>
-      <li>Paste below + the channel you want to mine.</li>
+      <li>Paste below + one or more channels (comma/space-separated).</li>
     </ol>
   </div>
   {{end}}
@@ -46,7 +46,7 @@
       <label>kick_session <span class="req">(required)</span><input type="text" name="kick_session" required autocomplete="off"></label>
       <label>XSRF-TOKEN <span class="req">(required)</span><input type="text" name="xsrf_token" required autocomplete="off"></label>
       <label>cf_clearance <span class="opt">(optional)</span><input type="text" name="cf_clearance" autocomplete="off"></label>
-      <label>Channel to mine <span class="req">(required)</span><input type="text" name="channel" required placeholder="streamer-login"></label>
+      <label>Channels to mine <span class="req">(required)</span><input type="text" name="channel" required placeholder="streamer1, streamer2, streamer3"></label>
       <div class="submit-row">
         <a class="alt" href="/accounts">← cancel</a>
         <button class="btn primary" type="submit">Authorize →</button>

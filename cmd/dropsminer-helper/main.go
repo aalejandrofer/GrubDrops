@@ -4,13 +4,14 @@
 // Usage:
 //
 //	dropsminer-helper twitch <account-id> [flags]
-//	dropsminer-helper kick   <account-id> --channel STREAMER [flags]
+//	dropsminer-helper kick   <account-id> --channel STREAMER[,STREAMER2,...] [flags]
 //
 // Flags:
 //
 //	--miner    URL    Base URL of the miner (default https://drops.ryuzec.dev)
 //	--password STR    Admin password. Falls back to MINER_PASSWORD env.
 //	--browser  NAME   Limit cookie search to a specific browser.
+//	--channel  NAMES  One or more Kick channels (comma/space-separated; repeatable).
 //	--insecure        Skip TLS verification (debug only).
 package main
 
@@ -20,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/aalejandrofer/dropsminer/internal/helper"
 )
@@ -56,13 +58,13 @@ func usage(w io.Writer) {
 
 Usage:
   dropsminer-helper twitch <account-id> [--miner URL] [--password PW] [--browser NAME]
-  dropsminer-helper kick   <account-id> [--miner URL] [--password PW] [--browser NAME] --channel NAME
+  dropsminer-helper kick   <account-id> [--miner URL] [--password PW] [--browser NAME] --channel NAMES
 
 Flags:
   --miner     base URL of the miner (default https://drops.ryuzec.dev)
   --password  admin password (or set MINER_PASSWORD)
   --browser   limit cookie search to this browser (chrome, firefox, safari, ...)
-  --channel   kick channel to mine (kick only, required)
+  --channel   one or more Kick channels (comma/space-separated; repeatable)
   --insecure  skip TLS verification
 
 `)
@@ -110,11 +112,50 @@ func runTwitch(args []string) error {
 	return nil
 }
 
+// channelList implements flag.Value so --channel can be repeated or
+// passed comma/space-separated.
+type channelList []string
+
+func (c *channelList) String() string { return strings.Join(*c, ",") }
+
+func (c *channelList) Set(v string) error {
+	for _, part := range splitChannels(v) {
+		*c = append(*c, part)
+	}
+	return nil
+}
+
+func splitChannels(raw string) []string {
+	splitter := func(r rune) bool {
+		switch r {
+		case ',', ' ', '\t', '\n', '\r', ';':
+			return true
+		}
+		return false
+	}
+	parts := strings.FieldsFunc(raw, splitter)
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		key := strings.ToLower(p)
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, p)
+	}
+	return out
+}
+
 func runKick(args []string) error {
 	fs := flag.NewFlagSet("kick", flag.ContinueOnError)
-	var channel string
+	var channels channelList
 	cf, rest, err := parseCommon(fs, args, func(fs *flag.FlagSet) {
-		fs.StringVar(&channel, "channel", "", "kick channel to mine (required)")
+		fs.Var(&channels, "channel", "Kick channel(s) to mine — repeat or comma-separate for multiple")
 	})
 	if err != nil {
 		return err
@@ -122,7 +163,10 @@ func runKick(args []string) error {
 	if len(rest) != 1 {
 		return fmt.Errorf("kick requires exactly one account-id argument")
 	}
-	res, err := helper.PushKick(context.Background(), helper.KickRequest{Config: cf.Config, AccountID: rest[0], Channel: channel})
+	if len(channels) == 0 {
+		return fmt.Errorf("--channel is required (one or more, e.g. --channel a,b or --channel a --channel b)")
+	}
+	res, err := helper.PushKick(context.Background(), helper.KickRequest{Config: cf.Config, AccountID: rest[0], Channels: channels})
 	if err != nil {
 		return err
 	}

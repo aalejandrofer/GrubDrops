@@ -49,10 +49,13 @@ type TwitchRequest struct {
 }
 
 // KickRequest pushes the local kick.com cookies + the channel choice.
+// Channel is kept for back-compat (single channel); Channels carries
+// the multi-channel list. If both are set, Channels wins.
 type KickRequest struct {
 	Config
 	AccountID string
-	Channel   string // streamer login to mine
+	Channel   string   // single-channel legacy field
+	Channels  []string // multi-channel list (preferred)
 }
 
 // Result is what every PushXxx returns. Echoed back to the user.
@@ -105,8 +108,12 @@ func PushKick(ctx context.Context, req KickRequest) (Result, error) {
 	if req.AccountID == "" {
 		return Result{}, fmt.Errorf("account-id is required")
 	}
-	if req.Channel == "" {
-		return Result{}, fmt.Errorf("channel is required")
+	channels := req.Channels
+	if len(channels) == 0 && req.Channel != "" {
+		channels = []string{req.Channel}
+	}
+	if len(channels) == 0 {
+		return Result{}, fmt.Errorf("at least one channel is required")
 	}
 	cookies, err := readDomainCookies(ctx, "kick.com", req.Browser)
 	if err != nil {
@@ -134,7 +141,8 @@ func PushKick(ctx context.Context, req KickRequest) (Result, error) {
 	if v, ok := picked["cf_clearance"]; ok {
 		form.Set("cf_clearance", v)
 	}
-	form.Set("channel", req.Channel)
+	// Server-side parseKickChannels accepts comma/space-separated input.
+	form.Set("channel", strings.Join(channels, ","))
 
 	if err := client.submit(ctx, "/accounts/"+req.AccountID+"/login", form); err != nil {
 		return Result{}, err
@@ -145,7 +153,7 @@ func PushKick(ctx context.Context, req KickRequest) (Result, error) {
 	}
 	return Result{
 		UploadedCookies: names,
-		Message:         fmt.Sprintf("uploaded kick cookies for account %s (channel %s)", req.AccountID, req.Channel),
+		Message:         fmt.Sprintf("uploaded kick cookies for account %s (channels %s)", req.AccountID, strings.Join(channels, ", ")),
 	}, nil
 }
 

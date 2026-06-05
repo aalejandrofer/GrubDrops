@@ -18,9 +18,9 @@ import (
 type Backend struct {
 	c *browser.Client
 
-	mu           sync.Mutex
-	handleByAcc  map[string]string // accountID -> watch handle
-	channelByAcc map[string]string
+	mu            sync.Mutex
+	handleByAcc   map[string]string // accountID -> watch handle
+	channelsByAcc map[string][]string
 }
 
 var _ platform.Backend = (*Backend)(nil)
@@ -28,39 +28,93 @@ var _ platform.Backend = (*Backend)(nil)
 // New requires a connected browser.Client. Caller manages its lifecycle.
 func New(c *browser.Client) *Backend {
 	return &Backend{
-		c:            c,
-		handleByAcc:  map[string]string{},
-		channelByAcc: map[string]string{},
+		c:             c,
+		handleByAcc:   map[string]string{},
+		channelsByAcc: map[string][]string{},
 	}
 }
 
 func (b *Backend) Name() string { return "kick" }
 
-// RegisterChannel stores the channel an account wants to mine. Called
-// from the GUI login flow (Plan 4 Task 11) after the user submits
-// cookies + channel together.
+// RegisterChannel stores a SINGLE channel for an account, replacing any
+// existing list. Retained for backward compatibility with the
+// dropsminer-helper CLI's one-channel flow; new code should call
+// RegisterChannels.
 func (b *Backend) RegisterChannel(accountID, channel string) {
+	if channel == "" {
+		b.RegisterChannels(accountID, nil)
+		return
+	}
+	b.RegisterChannels(accountID, []string{channel})
+}
+
+// RegisterChannels stores the full channel list an account wants to
+// mine. Replaces any previous list. Duplicate entries are deduplicated;
+// empty strings dropped. Pass nil/empty to unregister the account.
+func (b *Backend) RegisterChannels(accountID string, channels []string) {
+	cleaned := dedupeChannels(channels)
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.channelByAcc[accountID] = channel
+	if len(cleaned) == 0 {
+		delete(b.channelsByAcc, accountID)
+		return
+	}
+	b.channelsByAcc[accountID] = cleaned
+}
+
+// Channels returns the registered channel list for an account. Returns
+// nil when none registered. Caller must not mutate the returned slice.
+func (b *Backend) Channels(accountID string) []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	chs := b.channelsByAcc[accountID]
+	if len(chs) == 0 {
+		return nil
+	}
+	out := make([]string, len(chs))
+	copy(out, chs)
+	return out
 }
 
 // AllowedChannelCount returns the number of distinct channels currently
 // registered across all accounts. Kick discovery doesn't surface a
-// per-campaign allow-list — each account picks a single channel — so
-// the campaignID argument is ignored and the dashboard treats the
-// result as the campaign-wide eligible channel count.
+// per-campaign allow-list, so the campaignID argument is ignored and
+// the dashboard treats the result as the campaign-wide eligible channel
+// count.
 func (b *Backend) AllowedChannelCount(_ string) int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	seen := make(map[string]struct{}, len(b.channelByAcc))
-	for _, ch := range b.channelByAcc {
+	seen := make(map[string]struct{})
+	for _, chs := range b.channelsByAcc {
+		for _, ch := range chs {
+			if ch == "" {
+				continue
+			}
+			seen[ch] = struct{}{}
+		}
+	}
+	return len(seen)
+}
+
+func dedupeChannels(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(in))
+	seen := make(map[string]struct{}, len(in))
+	for _, ch := range in {
+		ch = strings.TrimSpace(ch)
 		if ch == "" {
 			continue
 		}
-		seen[ch] = struct{}{}
+		key := strings.ToLower(ch)
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, ch)
 	}
-	return len(seen)
+	return out
 }
 
 func (b *Backend) StartDeviceLogin(_ context.Context) (platform.DeviceChallenge, error) {
@@ -147,11 +201,16 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 	return out, nil
 }
 
-func (b *Backend) ListEligibleChannels(_ context.Context, _ platform.Session, _ platform.Campaign) ([]platform.Stream, error) {
+func (b *Backend) ListEligibleChannels(_ context.Context, s platform.Session, _ platform.Campaign) ([]platform.Stream, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	out := make([]platform.Stream, 0, len(b.channelByAcc))
-	for _, ch := range b.channelByAcc {
+	// Scope channels to the calling session's account. Returning every
+	// account's channels would let watcher A pick a stream that only
+	// account B has been authenticated for — Kick rejects watches on
+	// such mismatched sessions, and the heartbeat dies silently.
+	chs := b.channelsByAcc[s.AccountID]
+	out := make([]platform.Stream, 0, len(chs))
+	for _, ch := range chs {
 		out = append(out, platform.Stream{Channel: ch, DropsEnabled: true})
 	}
 	return out, nil

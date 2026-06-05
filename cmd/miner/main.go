@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -195,6 +196,17 @@ func run() error {
 			sess = s
 		}
 
+		// Re-register Kick channels from the persisted session blob so
+		// the in-memory channelsByAcc map survives daemon restarts. The
+		// browser login handler also calls this, but boot-time reload
+		// is required because the map is purely in-memory.
+		if a.Platform == "kick" && kickBackend != nil {
+			if chs := decodeKickChannels(sess); len(chs) > 0 {
+				kickBackend.RegisterChannels(a.ID, chs)
+				logger.Info("kick channels restored from session", "account", a.ID, "channels", chs)
+			}
+		}
+
 		allow, rank, err := loadAccountWhitelist(ctx, q, a.ID)
 		if err != nil {
 			logger.Warn("load account whitelist failed; mining nothing until fixed",
@@ -322,6 +334,32 @@ func (i *indirectNotifier) Notify(ctx context.Context, event string, fields map[
 	n := *i.ptr
 	i.mu.Unlock()
 	return n.Notify(ctx, event, fields)
+}
+
+// decodeKickChannels pulls the channel list out of a stored Kick
+// session blob. Prefers the new "channels" array but falls back to the
+// legacy "channel" string for back-compat with sessions written before
+// multi-channel support. Returns nil for non-Kick sessions or when no
+// channels were stored.
+func decodeKickChannels(s platform.Session) []string {
+	blob := s.Cookies["kick"]
+	if blob == "" {
+		return nil
+	}
+	var stored struct {
+		Channel  string   `json:"channel"`
+		Channels []string `json:"channels"`
+	}
+	if err := json.Unmarshal([]byte(blob), &stored); err != nil {
+		return nil
+	}
+	if len(stored.Channels) > 0 {
+		return stored.Channels
+	}
+	if stored.Channel != "" {
+		return []string{stored.Channel}
+	}
+	return nil
 }
 
 // loadAccountWhitelist materialises the per-account game allow-list

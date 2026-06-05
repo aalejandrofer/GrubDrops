@@ -182,10 +182,62 @@ func TestKickBackend_RegisterChannelExposesInList(t *testing.T) {
 	b := New(nil)
 	b.RegisterChannel("acc1", "fakestreamer")
 
-	out, err := b.ListEligibleChannels(context.Background(), platform.Session{}, platform.Campaign{ID: "x"})
+	// Session must carry AccountID so the backend can scope channels
+	// to the owning account (mining cross-account channels would fail
+	// the heartbeat since cookies belong to a different user).
+	out, err := b.ListEligibleChannels(context.Background(), platform.Session{AccountID: "acc1"}, platform.Campaign{ID: "x"})
 	require.NoError(t, err)
 	require.Len(t, out, 1)
 	assert.Equal(t, "fakestreamer", out[0].Channel)
+}
+
+// TestKickBackend_RegisterChannelsMulti: an account may register N
+// channels and ListEligibleChannels must return all of them (F6).
+func TestKickBackend_RegisterChannelsMulti(t *testing.T) {
+	b := New(nil)
+	b.RegisterChannels("acc1", []string{"alice", "bob", "carol"})
+
+	out, err := b.ListEligibleChannels(context.Background(), platform.Session{AccountID: "acc1"}, platform.Campaign{ID: "x"})
+	require.NoError(t, err)
+	require.Len(t, out, 3)
+	names := map[string]bool{}
+	for _, s := range out {
+		names[s.Channel] = true
+	}
+	assert.True(t, names["alice"])
+	assert.True(t, names["bob"])
+	assert.True(t, names["carol"])
+}
+
+// TestKickBackend_ListEligibleChannelsScopedToAccount: channels
+// registered for one account must NOT leak into another account's
+// session result.
+func TestKickBackend_ListEligibleChannelsScopedToAccount(t *testing.T) {
+	b := New(nil)
+	b.RegisterChannels("acc1", []string{"alice", "bob"})
+	b.RegisterChannels("acc2", []string{"carol"})
+
+	out1, err := b.ListEligibleChannels(context.Background(), platform.Session{AccountID: "acc1"}, platform.Campaign{})
+	require.NoError(t, err)
+	require.Len(t, out1, 2)
+
+	out2, err := b.ListEligibleChannels(context.Background(), platform.Session{AccountID: "acc2"}, platform.Campaign{})
+	require.NoError(t, err)
+	require.Len(t, out2, 1)
+	assert.Equal(t, "carol", out2[0].Channel)
+
+	outNone, err := b.ListEligibleChannels(context.Background(), platform.Session{AccountID: "acc3"}, platform.Campaign{})
+	require.NoError(t, err)
+	assert.Empty(t, outNone, "unknown account must see zero channels")
+}
+
+// TestKickBackend_RegisterChannels_DedupesAndTrims: ensures the
+// dedupe/trim contract is honored so callers can paste sloppy input.
+func TestKickBackend_RegisterChannels_DedupesAndTrims(t *testing.T) {
+	b := New(nil)
+	b.RegisterChannels("acc1", []string{" alice ", "Alice", "bob", "", " bob ", "carol"})
+	got := b.Channels("acc1")
+	assert.Equal(t, []string{"alice", "bob", "carol"}, got)
 }
 
 // TestKickBackend_AllowedChannelCountDistinct mirrors the contract the
