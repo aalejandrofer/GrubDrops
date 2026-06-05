@@ -240,59 +240,52 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 		if ((!state || Object.keys(state).length === 0) && window.__APOLLO_CLIENT__) {
 			try { state = window.__APOLLO_CLIENT__.cache.extract(); } catch (e) {}
 		}
-		// Last-resort DOM scrape: find the "Open Drop Campaigns" and
-		// "Open Reward Campaigns" section headings, then walk the
-		// container that follows. Twitch uses unlabelled tailwind divs
-		// for the cards — no stable selectors — so heading-anchored
-		// walk is the most robust approach.
+		// Last-resort DOM scrape: walk EVERY img[alt] in the document,
+		// then climb up to the nearest container that looks like a
+		// campaign card. Twitch's drop campaign cards always have a
+		// game box-art image with the game name as alt text. Other
+		// pages have nav icons / promo imagery — filter those by
+		// requiring the card's nearest semantic ancestor to mention
+		// "drop" or be inside the drops-page main content.
 		const domOut = [];
+		const seenGames = new Set();
 		try {
-			const findSiblingContainer = (heading) => {
-				let n = heading;
-				// Walk up until we find a node with a sibling list/grid.
-				for (let i = 0; i < 8 && n; i++) {
-					const sib = n.nextElementSibling;
-					if (sib && (sib.children.length >= 1)) return sib;
-					n = n.parentElement;
+			const imgs = Array.from(document.querySelectorAll('img[alt]'));
+			for (const img of imgs) {
+				const alt = (img.alt || '').trim();
+				if (!alt || alt.length > 80) continue; // game names are short
+				// Box-art aspect filter — drop campaign cards use
+				// portrait orientation (game cover). Drops site nav
+				// icons are square or wider.
+				const w = img.naturalWidth || img.width || 0;
+				const h = img.naturalHeight || img.height || 0;
+				if (w > 0 && h > 0 && (h <= w * 1.1)) continue;
+				// Climb up to the card root: nearest ancestor with
+				// multiple text lines that mention a time or "Drops".
+				let card = img.parentElement;
+				for (let i = 0; i < 6 && card; i++) {
+					const txt = (card.textContent || '').trim();
+					if (txt.length > alt.length + 4 && card.children.length >= 2) break;
+					card = card.parentElement;
 				}
-				return null;
-			};
-			const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4'));
-			const dropHeads = headings.filter(h => {
-				const t = (h.textContent || '').trim().toLowerCase();
-				return t.includes('open drop') || t.includes('open reward') || t.includes('drop campaign');
-			});
-			for (const h of dropHeads) {
-				const container = findSiblingContainer(h);
-				if (!container) continue;
-				// Real drop campaign cards always have a game box-art
-				// image with non-empty alt. Twitch doesn't always
-				// expose a link to a campaign-detail page — the card
-				// may just have a "Join" button. Require img.alt AND
-				// at least 3 distinct lines of text (game name + drop
-				// name + time/CTA), filtering out marketing paragraphs.
-				Array.from(container.children).forEach((child) => {
-					const img = child.querySelector('img[alt]');
-					if (!img || !img.alt) return;
-					const gameName = img.alt.trim();
-					if (!gameName) return;
-					const txt = (child.textContent || '').trim();
-					const lines = txt.split('\n').map(s => s.trim()).filter(Boolean);
-					if (lines.length < 2) return;
-					// Reject paragraph cards: too long single-line text
-					// is descriptive copy, not a card title.
-					if (lines[0].length > 120 && lines.length < 3) return;
-					const name = lines.find(l => l !== gameName) || lines[0] || '';
-					const link = child.querySelector('a[href*="/drops/"]');
-					const href = link ? (link.getAttribute('href') || '') : '';
-					const idMatch = href.match(/\/drops\/campaigns\/([^/?#]+)/);
-					domOut.push({
-						id: idMatch ? idMatch[1] : ('dom-' + domOut.length),
-						name: name.slice(0, 200),
-						game: gameName,
-						endsAt: '',
-						startsAt: ''
-					});
+				if (!card) continue;
+				const txt = (card.textContent || '').trim();
+				if (txt.length < alt.length + 5) continue;
+				const lines = txt.split('\n').map(s => s.trim()).filter(Boolean);
+				const nameLine = lines.find(l => l && l !== alt && !l.toLowerCase().startsWith('claim'));
+				const name = (nameLine || lines[0] || alt).slice(0, 200);
+				const link = card.querySelector('a[href*="/drops/"]');
+				const href = link ? (link.getAttribute('href') || '') : '';
+				const idMatch = href.match(/\/drops\/campaigns\/([^/?#]+)/);
+				const id = idMatch ? idMatch[1] : (alt + '|' + name);
+				if (seenGames.has(id)) continue;
+				seenGames.add(id);
+				domOut.push({
+					id: id,
+					name: name,
+					game: alt,
+					endsAt: '',
+					startsAt: ''
 				});
 			}
 		} catch (e) {}
