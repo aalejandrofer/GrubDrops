@@ -679,7 +679,37 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 	sort.SliceStable(streams, func(i, j int) bool {
 		return streams[i].ViewerCount > streams[j].ViewerCount
 	})
+	// P4: if the backend supports AvailableDrops, walk the sorted list
+	// until we find a channel that actually serves the target drop.
+	// Errors and "unknown" responses fall back to the head pick.
+	w.mu.Lock()
+	target := ""
+	if w.currentBenefit != nil {
+		target = w.currentBenefit.ID
+	}
+	w.mu.Unlock()
 	s := streams[0]
+	if checker, ok := w.cfg.Backend.(platform.AvailableDropsChecker); ok && target != "" {
+		for _, cand := range streams {
+			if cand.ChannelID == "" {
+				continue
+			}
+			drops, err := checker.AvailableDropIDs(ctx, w.cfg.Session, cand.ChannelID)
+			if err != nil {
+				slog.Debug("watcher AvailableDropIDs failed; falling back", "account", w.cfg.AccountID, "channel", cand.Channel, "err", err)
+				break
+			}
+			if len(drops) == 0 {
+				// "unknown" — accept this channel and move on.
+				s = cand
+				break
+			}
+			if _, hit := drops[target]; hit {
+				s = cand
+				break
+			}
+		}
+	}
 	slog.Info("watcher starting watch", "kind", "state", "account", w.cfg.AccountID, "channel", s.Channel, "campaign", camp.Name, "eligible_count", len(streams))
 	h, err := w.cfg.Backend.StartWatch(ctx, w.cfg.Session, s)
 	if err != nil {
@@ -827,6 +857,21 @@ func (w *Watcher) claim(ctx context.Context) error {
 	}
 	_ = w.cfg.Backend.StopWatch(ctx, handle)
 	w.unsubscribeCurrentChannel()
+
+	// P6: post-claim consistency probe. Soft signal — log drift but
+	// don't roll back the claim. DropCurrentSession returning the same
+	// drop after claim means Twitch hasn't yet cleared the in-progress
+	// row; usually catches up within a few seconds.
+	if checker, ok := w.cfg.Backend.(platform.CurrentSessionChecker); ok {
+		if cs, err := checker.CurrentSession(ctx, w.cfg.Session); err == nil && cs.DropID == benefit.ID {
+			slog.Info("watcher post-claim: drop still in current session, server lag expected",
+				"kind", "claim",
+				"account", w.cfg.AccountID,
+				"benefit", benefit.ID,
+				"current_min", cs.CurrentMinute,
+				"required_min", cs.RequiredMinute)
+		}
+	}
 
 	slog.Info("watcher claim recorded",
 		"kind", "claim",
