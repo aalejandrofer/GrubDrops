@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -17,10 +18,23 @@ import (
 )
 
 type accountsDeps struct {
-	q   *gen.Queries
-	t   Renderer
-	sm  *scs.SessionManager
-	sch *scheduler.Scheduler
+	q      *gen.Queries
+	t      Renderer
+	sm     *scs.SessionManager
+	sch    *scheduler.Scheduler
+	reload func(context.Context) error
+}
+
+// applyReload calls the scheduler reload hook if wired, swallowing
+// errors with a log. Used by every per-account whitelist mutation
+// so the watcher picks up new closures without manual Apply.
+func (d accountsDeps) applyReload(ctx context.Context) {
+	if d.reload == nil {
+		return
+	}
+	if err := d.reload(ctx); err != nil {
+		slog.Warn("accounts: scheduler reload failed after whitelist change", "err", err)
+	}
 }
 
 type accountRow struct {
@@ -208,7 +222,8 @@ func (d accountsDeps) addGame(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	d.sm.Put(r.Context(), "flash", "added "+name+" — click Apply changes to reload watchers")
+	d.applyReload(r.Context())
+	d.sm.Put(r.Context(), "flash", "added "+name)
 	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
 
@@ -252,7 +267,8 @@ func (d accountsDeps) useGlobal(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	d.sm.Put(r.Context(), "flash", "account whitelist cleared — now follows global priority. Click Apply changes to reload.")
+	d.applyReload(r.Context())
+	d.sm.Put(r.Context(), "flash", "account whitelist cleared — now follows global priority")
 	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
 
@@ -282,7 +298,8 @@ func (d accountsDeps) games(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	d.sm.Put(r.Context(), "flash", "games saved — click Apply changes to reload watchers")
+	d.applyReload(r.Context())
+	d.sm.Put(r.Context(), "flash", "games saved")
 	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
 
@@ -317,7 +334,8 @@ func (d accountsDeps) update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	d.sm.Put(r.Context(), "flash", "saved — click Apply changes to reload watchers")
+	d.applyReload(r.Context())
+	d.sm.Put(r.Context(), "flash", "saved")
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
 
@@ -327,7 +345,8 @@ func (d accountsDeps) delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	d.sm.Put(r.Context(), "flash", "deleted — click Apply changes to reload watchers")
+	d.applyReload(r.Context())
+	d.sm.Put(r.Context(), "flash", "deleted")
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
 

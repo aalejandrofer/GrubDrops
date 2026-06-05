@@ -109,7 +109,7 @@ func NewRouter(d Deps) http.Handler {
 		start:           startedAt,
 		channelCounters: channelCountersFromRegistry(d.Registry),
 	}
-	accs := accountsDeps{q: d.Q, t: d.Templates, sm: d.Session, sch: d.Scheduler}
+	accs := accountsDeps{q: d.Q, t: d.Templates, sm: d.Session, sch: d.Scheduler, reload: d.Reload}
 	loginTwitch := newLoginTwitchDeps(d, d.RootCtx)
 	loginKick := &loginKickDeps{
 		q:         d.Q,
@@ -225,6 +225,7 @@ func NewRouter(d Deps) http.Handler {
 		t:           d.Templates,
 		sm:          d.Session,
 		onUpdate:    d.OnSettingsUpdate,
+		reload:      d.Reload,
 		startedAt:   startedAt,
 		logLevelEnv: d.LogLevelEnv,
 		browserURL:  d.BrowserURLDisplay,

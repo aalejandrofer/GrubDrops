@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -21,6 +23,9 @@ type settingsDeps struct {
 	t        Renderer
 	sm       *scs.SessionManager
 	onUpdate func()
+	// reload re-spins the scheduler so whitelist/priority POSTs take
+	// effect without the operator clicking "Apply changes" first.
+	reload func(context.Context) error
 	// status fields surfaced read-only on the settings page
 	startedAt   time.Time
 	logLevelEnv string
@@ -210,7 +215,8 @@ func (d *settingsDeps) globalGamesAdd(w http.ResponseWriter, r *http.Request) {
 	if d.onUpdate != nil {
 		d.onUpdate()
 	}
-	d.sm.Put(ctx, "flash", "added "+name+" to global priority — click Apply changes to reload")
+	d.applyReload(ctx)
+	d.sm.Put(ctx, "flash", "added "+name+" to global priority")
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
 
@@ -243,6 +249,19 @@ func (d *settingsDeps) globalGamesPost(w http.ResponseWriter, r *http.Request) {
 	if d.onUpdate != nil {
 		d.onUpdate()
 	}
-	d.sm.Put(ctx, "flash", "global priority saved — click Apply changes to reload watchers")
+	d.applyReload(ctx)
+	d.sm.Put(ctx, "flash", "global priority saved")
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+}
+
+// applyReload calls the scheduler reload hook if wired. Logs but
+// otherwise swallows errors so a transient reload failure doesn't
+// 500 the form submit.
+func (d *settingsDeps) applyReload(ctx context.Context) {
+	if d.reload == nil {
+		return
+	}
+	if err := d.reload(ctx); err != nil {
+		slog.Warn("settings: scheduler reload failed after whitelist change", "err", err)
+	}
 }
