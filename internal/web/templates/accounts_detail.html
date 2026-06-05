@@ -21,9 +21,17 @@
     </div>
 
     {{if or (eq .Platform "twitch") (eq .Platform "kick")}}
-    <div class="reauth-row" style="margin: 16px 0; padding: 12px; border: 1px dashed var(--line); display: flex; gap: 12px; align-items: center;">
-      <a class="btn" href="/accounts/{{.ID}}/login">Re-authenticate →</a>
-      <span style="color: var(--muted); font-size: 12px;">Re-runs the login flow. Existing session is overwritten.</span>
+    <div class="reauth-row">
+      <div class="reauth-actions">
+        <a class="btn" href="/accounts/{{.ID}}/login">Re-authenticate →</a>
+        <span class="hint">Re-runs the login flow. Existing session is overwritten.</span>
+      </div>
+      <details class="reauth-cli">
+        <summary>Prefer the helper CLI / pre-built app</summary>
+        <p class="hint">Snapshots browser cookies and pushes them without DevTools or paste forms.</p>
+        <pre class="cli-code">go run ./cmd/dropsminer-helper {{.Platform}} {{.ID}}{{if eq .Platform "kick"}} --channel STREAMER{{end}}</pre>
+        <p class="hint">Add <code>--miner URL</code> for a remote deployment. Prebuilt <code>.exe</code> / <code>.app</code> / <code>AppImage</code> ship from the same entry point.</p>
+      </details>
     </div>
     {{end}}
 

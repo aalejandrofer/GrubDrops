@@ -3,32 +3,35 @@
 {{define "content"}}
 {{if .Flash}}<div class="flash-ok">{{.Flash}}</div>{{end}}
 {{with .Page}}
-{{if .Alerts}}
-<section class="alerts" style="margin-bottom:16px;display:grid;gap:8px;">
-  {{range .Alerts}}
-  <div class="alert" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--accent);background:rgba(212,99,30,0.08);border-radius:2px;">
-    <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.16em;text-transform:uppercase;color:var(--accent);">{{if eq .Kind "needs_auth"}}needs auth{{else}}needs drops{{end}}</span>
-    <span style="font-size:12.5px;color:var(--text);flex:1;">
-      <strong>{{.Account}}</strong>
-      {{if eq .Kind "needs_auth"}}— session expired or never authenticated{{else}}— sleeping with 0 enrolled drops (paste cookies fail integrity, use device code instead){{end}}
-    </span>
-    <a class="btn sm" href="{{.URL}}" style="border-color:var(--accent);color:var(--accent);">{{.Action}}</a>
-  </div>
-  {{end}}
-</section>
-{{end}}
 <div class="page-head">
   <div>
-    <div class="sub">// uptime {{.Uptime}} · last poll {{.UpdatedAt}}</div>
+    <div class="kicker">// console</div>
+    <h1>Console</h1>
+    <div class="sub">uptime {{.Uptime}} · last poll {{.UpdatedAt}}</div>
   </div>
   <div class="actions">
-    <form method="post" action="/accounts/apply" style="display:inline">
+    <form method="post" action="/accounts/apply" class="apply-form">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
       <button type="submit" class="btn">Reload</button>
     </form>
     <a class="btn primary" href="/accounts/new">+ Add account</a>
   </div>
 </div>
+
+{{if .Alerts}}
+<section class="alerts">
+  {{range .Alerts}}
+  <div class="alert alert-{{.Kind}}">
+    <span class="alert-tag">{{if eq .Kind "needs_auth"}}needs auth{{else}}needs drops{{end}}</span>
+    <span class="alert-body">
+      <strong>{{.Account}}</strong>
+      {{if eq .Kind "needs_auth"}}— session expired or never authenticated{{else}}— sleeping with 0 enrolled drops (paste cookies fail integrity, use helper CLI instead){{end}}
+    </span>
+    <a class="btn sm alert-cta" href="{{.URL}}">{{.Action}}</a>
+  </div>
+  {{end}}
+</section>
+{{end}}
 
 <section class="telemetry">
   <div class="stat"><div class="label">Watch time · today</div><div class="value">{{.Tele.WatchTimeToday}}<sup>h:m</sup></div><div class="delta flat">—</div></div>
@@ -51,12 +54,12 @@
   <div class="pending">
     {{range .NextClaims}}
     <article class="pcard">
-      <div class="sprite" style="color: var(--muted);">▲</div>
+      <div class="sprite muted">▲</div>
       <div class="meta">
         <div class="nm">{{.DropName}} <span class="ac">{{.Login}}</span></div>
         <div class="sub">{{.Platform}} · {{if .DropCampaign}}{{.DropCampaign}} · {{end}}{{.DropMins}} / {{.DropReq}}m</div>
       </div>
-      <span class="claim" style="background:transparent;border:1px solid var(--line);color:var(--muted);">{{.DropETA}}</span>
+      <span class="claim future">{{.DropETA}}</span>
     </article>
     {{end}}
   </div>
@@ -129,12 +132,12 @@
         <div class="filter" role="group" aria-label="event kind filter">
           <input type="hidden" name="filter" id="ev-filter" value="all">
           <a class="on" data-kind="all" href="#">all</a>
-          <a data-kind="claim" href="#" style="color:var(--green)">claims</a>
-          <a data-kind="progress" href="#" style="color:var(--amber)">progress</a>
-          <a data-kind="state" href="#" style="color:var(--blue)">state</a>
+          <a data-kind="claim" href="#">claims</a>
+          <a data-kind="progress" href="#">progress</a>
+          <a data-kind="state" href="#">state</a>
           <a data-kind="discovery" href="#">discovery</a>
-          <a data-kind="auth" href="#" style="color:var(--accent)">auth</a>
-          <a data-kind="error" href="#" style="color:var(--red)">errors</a>
+          <a data-kind="auth" href="#">auth</a>
+          <a data-kind="error" href="#">errors</a>
         </div>
         <select name="account" id="ev-account" class="ev-account">
           <option value="all">all accounts</option>
@@ -156,7 +159,7 @@
     <section class="drawer">
       <div class="drawer-head">
         <h3>Live channels — eligible for whitelisted drops</h3>
-        <div class="live" style="margin-left:auto;color:var(--muted);">{{len .LiveChannels}} live · sorted by viewers</div>
+        <div class="live live-meta">{{len .LiveChannels}} live · sorted by viewers</div>
       </div>
     {{if .LiveChannels}}
     <div class="live-channels-grid">

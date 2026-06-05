@@ -6,31 +6,52 @@
 {{with .Page}}
 <div class="auth-wrap wide">
   <div class="auth-card">
-    <div class="kicker">// twitch · cookie paste</div>
+    <div class="kicker">// twitch · authorize</div>
     <h1>Authorize {{.DisplayName}}</h1>
-    <p class="intro">Twitch's anti-bot integrity check blocks pure-HTTP drops mining. The sidecar's browser tab serves as the trust anchor — paste your browser cookies once and the sidecar replays them on every gql call.</p>
+    <p class="intro">Twitch's integrity check blocks pure-HTTP drops mining. The sidecar replays a real browser session on every gql call. Two ways to hand it your cookies — pick one.</p>
+  </div>
+
+  <div class="auth-card method preferred">
+    <div class="method-head">
+      <span class="method-tag">recommended</span>
+      <h2>Helper CLI / pre-built app</h2>
+    </div>
+    <p>The helper opens your local browser, snapshots <code>twitch.tv</code> cookies, and pushes them to the miner. No DevTools, no copy-paste. Cookies never touch this page.</p>
+    <div class="cli-box">
+      <div class="cli-label">one-liner</div>
+      <pre class="cli-code">go run ./cmd/dropsminer-helper twitch {{.AccountID}}</pre>
+      <div class="cli-hint">From the repo root. Add <code>--miner URL</code> to target a remote deployment, <code>--password PW</code> to skip the admin prompt.</div>
+    </div>
+    <p class="hint">No Go installed? Prebuilt binaries (<code>.exe</code> / <code>.app</code> / <code>AppImage</code>) ship from the same <code>cmd/dropsminer-helper</code> entry — see the repo README for download links.</p>
+  </div>
+
+  <div class="auth-card method">
+    <div class="method-head">
+      <span class="method-tag muted">fallback</span>
+      <h2>Manual cookie paste</h2>
+    </div>
     <ol class="steps">
       <li>Open <code>twitch.tv</code> in any browser and sign in.</li>
-      <li>Open DevTools → Application → Cookies → <code>https://www.twitch.tv</code>.</li>
-      <li>Copy at minimum <code>auth-token</code>. <code>persistent</code>, <code>server_session_id</code>, <code>twilight-user</code>, <code>unique_id</code>, <code>login</code>, <code>name</code> are optional but help Twitch treat the session as a returning user.</li>
+      <li>DevTools → Application → Cookies → <code>https://www.twitch.tv</code>.</li>
+      <li>Copy at minimum <code>auth-token</code>. The optional cookies help Twitch treat the session as a returning user.</li>
       <li>Paste below.</li>
     </ol>
   </div>
   {{end}}
-  {{if .Flash}}<div style="max-width:620px;margin:0 auto;padding:0 24px;"><div class="err">{{.Flash}}</div></div>{{end}}
+  {{if .Flash}}<div class="auth-flash"><div class="err">{{.Flash}}</div></div>{{end}}
   {{with .Page}}
-  <div class="auth-card" style="margin-top: 18px;">
+  <div class="auth-card">
     <form method="post" action="/accounts/{{.AccountID}}/twitch/paste">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-      <label>auth-token <span style="color:var(--accent)">(required)</span><input type="text" name="auth-token" required autocomplete="off"></label>
-      <label>persistent <span style="color:var(--muted);font-weight:400">(optional)</span><input type="text" name="persistent" autocomplete="off"></label>
-      <label>server_session_id <span style="color:var(--muted);font-weight:400">(optional)</span><input type="text" name="server_session_id" autocomplete="off"></label>
-      <label>twilight-user <span style="color:var(--muted);font-weight:400">(optional)</span><input type="text" name="twilight-user" autocomplete="off"></label>
-      <label>unique_id <span style="color:var(--muted);font-weight:400">(optional)</span><input type="text" name="unique_id" autocomplete="off"></label>
-      <label>login <span style="color:var(--muted);font-weight:400">(optional)</span><input type="text" name="login" autocomplete="off"></label>
-      <label>name <span style="color:var(--muted);font-weight:400">(optional)</span><input type="text" name="name" autocomplete="off"></label>
-      <label>raw paste <span style="color:var(--muted);font-weight:400">(optional — name=value lines, overrides empty fields above)</span>
-        <textarea name="raw" rows="6" style="font-family:'JetBrains Mono',monospace;font-size:12px;width:100%;" autocomplete="off"></textarea>
+      <label>auth-token <span class="req">(required)</span><input type="text" name="auth-token" required autocomplete="off"></label>
+      <label>persistent <span class="opt">(optional)</span><input type="text" name="persistent" autocomplete="off"></label>
+      <label>server_session_id <span class="opt">(optional)</span><input type="text" name="server_session_id" autocomplete="off"></label>
+      <label>twilight-user <span class="opt">(optional)</span><input type="text" name="twilight-user" autocomplete="off"></label>
+      <label>unique_id <span class="opt">(optional)</span><input type="text" name="unique_id" autocomplete="off"></label>
+      <label>login <span class="opt">(optional)</span><input type="text" name="login" autocomplete="off"></label>
+      <label>name <span class="opt">(optional)</span><input type="text" name="name" autocomplete="off"></label>
+      <label>raw paste <span class="opt">(optional — name=value lines, overrides empty fields above)</span>
+        <textarea name="raw" rows="6" class="raw-paste" autocomplete="off"></textarea>
       </label>
       <div class="submit-row">
         <a class="alt" href="/accounts">← cancel</a>
