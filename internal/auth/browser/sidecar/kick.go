@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/chromedp/cdproto/network"
@@ -17,9 +19,60 @@ import (
 // Kick wraps Browser with Kick.com-specific page logic.
 type Kick struct {
 	b *Browser
+
+	mu       sync.Mutex
+	authTabs map[string]string // account_id -> persistent tab handle
 }
 
-func NewKick(b *Browser) *Kick { return &Kick{b: b} }
+func NewKick(b *Browser) *Kick {
+	return &Kick{b: b, authTabs: map[string]string{}}
+}
+
+// acquireTab mirrors Twitch.acquireTab — returns the per-account
+// persistent tab (creating one + installing stealth+cookies if missing).
+// fresh=true indicates a brand-new tab where the caller must install
+// stealth/cookies and navigate from scratch.
+func (k *Kick) acquireTab(accountID string) (string, context.Context, bool, error) {
+	if accountID == "" {
+		// Anonymous mode (e.g. discovery without a logged-in account):
+		// always allocate a throwaway tab.
+		handle, tabCtx, err := k.b.OpenTab()
+		if err != nil {
+			return "", nil, false, err
+		}
+		return handle, tabCtx, true, nil
+	}
+	k.mu.Lock()
+	if h, ok := k.authTabs[accountID]; ok {
+		if c, ok := k.b.Tab(h); ok {
+			k.mu.Unlock()
+			return h, c, false, nil
+		}
+		delete(k.authTabs, accountID)
+	}
+	k.mu.Unlock()
+
+	handle, tabCtx, err := k.b.OpenTab()
+	if err != nil {
+		return "", nil, false, err
+	}
+	k.mu.Lock()
+	k.authTabs[accountID] = handle
+	k.mu.Unlock()
+	return handle, tabCtx, true, nil
+}
+
+// closeAuthTab tears down the persistent tab for an account (used on
+// fatal init errors so the next call starts fresh).
+func (k *Kick) closeAuthTab(accountID string) {
+	k.mu.Lock()
+	h, ok := k.authTabs[accountID]
+	delete(k.authTabs, accountID)
+	k.mu.Unlock()
+	if ok {
+		k.b.CloseTab(h)
+	}
+}
 
 // InstallCookies pushes the user-supplied session cookies into a tab
 // before navigation. Must be called before chromedp.Navigate.
@@ -201,6 +254,347 @@ func parseInventoryNextData(raw string) ([]*pb.DropProgress, error) {
 		})
 	}
 	return out, nil
+}
+
+// ScrapeActiveDrops loads https://kick.com/drops in the per-account
+// auth tab and returns every active drop campaign Kick currently
+// surfaces (not just Rust). Kick's /drops page is rendered by Nuxt /
+// Next.js so the page state lives in window.__NUXT__ or
+// window.__NEXT_DATA__. We grab both, then fall back to a DOM scrape
+// for [data-drop-card] cards if neither state object yields campaigns.
+//
+// The shape of Kick's state JSON has not been stable enough to lock to
+// a single struct, so parseActiveDropsJSON walks every nested
+// array/object looking for objects that look like a campaign (have an
+// "id" + "game" + "name"-ish key) and lifts them out.
+func (k *Kick) ScrapeActiveDrops(ctx context.Context, accountID string, session *pb.KickSession) ([]*pb.KickCampaign, error) {
+	handle, tabCtx, fresh, err := k.acquireTab(accountID)
+	if err != nil {
+		return nil, err
+	}
+	// For anonymous tabs (accountID == "") we own the handle and should
+	// close it on exit. For per-account tabs, leave them open — the next
+	// scrape reuses the same tab so Cloudflare keeps trusting us.
+	if accountID == "" {
+		defer k.b.CloseTab(handle)
+	}
+
+	if fresh {
+		if err := chromedp.Run(tabCtx,
+			chromedp.ActionFunc(func(ctx context.Context) error {
+				_, err := page.AddScriptToEvaluateOnNewDocument(StealthScript).Do(ctx)
+				return err
+			}),
+		); err != nil {
+			if accountID != "" {
+				k.closeAuthTab(accountID)
+			}
+			return nil, fmt.Errorf("install stealth: %w", err)
+		}
+		if session != nil && len(session.Cookies) > 0 {
+			if err := k.InstallCookies(tabCtx, session); err != nil {
+				if accountID != "" {
+					k.closeAuthTab(accountID)
+				}
+				return nil, fmt.Errorf("install cookies: %w", err)
+			}
+		}
+	}
+
+	const dropsURL = "https://kick.com/drops"
+	var nuxtRaw, nextRaw, htmlRaw string
+	err = chromedp.Run(tabCtx,
+		chromedp.Navigate(dropsURL),
+		chromedp.Sleep(5*time.Second),
+		chromedp.Evaluate(`JSON.stringify(window.__NUXT__ || {})`, &nuxtRaw),
+		chromedp.Evaluate(`JSON.stringify(window.__NEXT_DATA__ || {})`, &nextRaw),
+		chromedp.Evaluate(`document.documentElement.outerHTML`, &htmlRaw),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("scrape drops navigate: %w", err)
+	}
+
+	camps, src := parseActiveDropsState(nuxtRaw, nextRaw)
+	if len(camps) > 0 {
+		slog.Info("kick scrape drops parsed state", "source", src, "count", len(camps))
+		return camps, nil
+	}
+	// Fallback: DOM scrape for drop cards. Kick.com may render the list
+	// purely client-side, in which case the state blob is empty until
+	// the SPA hydrates the cards. parseActiveDropsHTML pulls any
+	// [data-drop-card] / .drop-card style elements out of the markup.
+	camps = parseActiveDropsHTML(htmlRaw)
+	if len(camps) > 0 {
+		slog.Info("kick scrape drops parsed dom", "count", len(camps))
+		return camps, nil
+	}
+	slog.Warn("kick scrape drops: no campaigns found",
+		"nuxt_prefix", truncate(nuxtRaw, 200),
+		"next_prefix", truncate(nextRaw, 200),
+		"html_prefix", truncate(htmlRaw, 200),
+	)
+	return nil, nil
+}
+
+// parseActiveDropsState scans the Nuxt/Next.js page state JSON for
+// objects shaped like a Kick drop campaign and returns them.
+// Returns the campaigns plus a tag indicating which source matched
+// (for logging only). Defensive against schema drift — Kick has
+// changed its /drops page state shape twice already in 2025-2026.
+func parseActiveDropsState(nuxtRaw, nextRaw string) ([]*pb.KickCampaign, string) {
+	if camps := scanForCampaigns(nuxtRaw); len(camps) > 0 {
+		return camps, "nuxt"
+	}
+	if camps := scanForCampaigns(nextRaw); len(camps) > 0 {
+		return camps, "next"
+	}
+	return nil, ""
+}
+
+// scanForCampaigns walks an arbitrary JSON tree pulling out every
+// object that looks like a Kick drop campaign. Recognized fields:
+//   - id (string) — required
+//   - game / gameName / gameSlug (string) — required
+//   - name / title (string) — required
+//   - startsAt / starts_at / startDate (string|number) — optional
+//   - endsAt / ends_at / endDate (string|number) — optional
+//   - status (string) — optional
+//   - benefits / rewards / drops (array) — optional
+func scanForCampaigns(raw string) []*pb.KickCampaign {
+	if raw == "" || raw == "{}" {
+		return nil
+	}
+	var root any
+	if err := json.Unmarshal([]byte(raw), &root); err != nil {
+		return nil
+	}
+	out := []*pb.KickCampaign{}
+	walkJSON(root, func(obj map[string]any) {
+		camp, ok := campaignFromObj(obj)
+		if ok {
+			out = append(out, camp)
+		}
+	})
+	return dedupCampaigns(out)
+}
+
+// walkJSON recursively walks an arbitrary JSON value invoking visit
+// for every map[string]any encountered.
+func walkJSON(v any, visit func(map[string]any)) {
+	switch x := v.(type) {
+	case map[string]any:
+		visit(x)
+		for _, vv := range x {
+			walkJSON(vv, visit)
+		}
+	case []any:
+		for _, vv := range x {
+			walkJSON(vv, visit)
+		}
+	}
+}
+
+func campaignFromObj(obj map[string]any) (*pb.KickCampaign, bool) {
+	id := firstString(obj, "id", "campaignId", "campaign_id", "slug")
+	name := firstString(obj, "name", "title", "campaignName")
+	game := firstString(obj, "game", "gameName", "game_name", "gameSlug", "game_slug")
+	// Drop-down for nested game object: {game: {name: "Rust"}}
+	if game == "" {
+		if g, ok := obj["game"].(map[string]any); ok {
+			game = firstString(g, "name", "slug", "title")
+		}
+	}
+	if id == "" || name == "" || game == "" {
+		return nil, false
+	}
+	camp := &pb.KickCampaign{
+		Id:       id,
+		Game:     game,
+		Name:     name,
+		StartsAt: firstUnix(obj, "startsAt", "starts_at", "startDate", "start_date", "startTime"),
+		EndsAt:   firstUnix(obj, "endsAt", "ends_at", "endDate", "end_date", "endTime"),
+		Status:   firstString(obj, "status", "state"),
+	}
+	if camp.Status == "" {
+		camp.Status = "active"
+	}
+	camp.Benefits = benefitsFromObj(obj)
+	return camp, true
+}
+
+func benefitsFromObj(obj map[string]any) []*pb.KickBenefit {
+	for _, key := range []string{"benefits", "rewards", "drops", "items"} {
+		arr, ok := obj[key].([]any)
+		if !ok {
+			continue
+		}
+		out := make([]*pb.KickBenefit, 0, len(arr))
+		for _, item := range arr {
+			m, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			id := firstString(m, "id", "benefitId", "benefit_id", "rewardId", "slug")
+			name := firstString(m, "name", "title", "label")
+			if id == "" && name == "" {
+				continue
+			}
+			if id == "" {
+				id = name
+			}
+			out = append(out, &pb.KickBenefit{
+				Id:              id,
+				Name:            name,
+				RequiredMinutes: int32(firstInt(m, "requiredMinutes", "required_minutes", "minutesRequired", "minutes")),
+				ImageUrl:        firstString(m, "imageUrl", "image_url", "image", "thumbnail"),
+			})
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	return nil
+}
+
+func firstString(obj map[string]any, keys ...string) string {
+	for _, k := range keys {
+		if v, ok := obj[k].(string); ok && v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func firstInt(obj map[string]any, keys ...string) int64 {
+	for _, k := range keys {
+		switch v := obj[k].(type) {
+		case float64:
+			return int64(v)
+		case int64:
+			return v
+		case int:
+			return int64(v)
+		case string:
+			// best effort numeric string
+			n := int64(0)
+			parsed := false
+			for _, c := range v {
+				if c < '0' || c > '9' {
+					parsed = false
+					break
+				}
+				n = n*10 + int64(c-'0')
+				parsed = true
+			}
+			if parsed {
+				return n
+			}
+		}
+	}
+	return 0
+}
+
+// firstUnix returns a unix-seconds timestamp from a JSON field. Accepts
+// either RFC3339 strings or already-numeric epoch values (seconds OR
+// milliseconds — values > 1e12 are assumed ms).
+func firstUnix(obj map[string]any, keys ...string) int64 {
+	for _, k := range keys {
+		switch v := obj[k].(type) {
+		case string:
+			if v == "" {
+				continue
+			}
+			if t, err := time.Parse(time.RFC3339, v); err == nil {
+				return t.Unix()
+			}
+			if t, err := time.Parse(time.RFC3339Nano, v); err == nil {
+				return t.Unix()
+			}
+		case float64:
+			n := int64(v)
+			if n > 1e12 {
+				return n / 1000
+			}
+			return n
+		}
+	}
+	return 0
+}
+
+func dedupCampaigns(in []*pb.KickCampaign) []*pb.KickCampaign {
+	if len(in) <= 1 {
+		return in
+	}
+	seen := make(map[string]struct{}, len(in))
+	out := make([]*pb.KickCampaign, 0, len(in))
+	for _, c := range in {
+		if _, ok := seen[c.Id]; ok {
+			continue
+		}
+		seen[c.Id] = struct{}{}
+		out = append(out, c)
+	}
+	return out
+}
+
+// parseActiveDropsHTML is the last-ditch fallback: pull data-drop-card
+// attributes (or a similar marker) straight out of the rendered HTML.
+// Kick has moved this markup around but the cards consistently carry a
+// data-* hook on the outer element. We accept several candidates so a
+// rename doesn't break us silently.
+func parseActiveDropsHTML(html string) []*pb.KickCampaign {
+	if html == "" {
+		return nil
+	}
+	// Look for "data-drop-card" / "data-campaign-id" / "data-drop-id"
+	// attributes. We don't actually need to parse HTML — the attribute
+	// itself carries the campaign id, and the surrounding aria-label /
+	// alt text typically carries the game + name. Best effort only.
+	out := []*pb.KickCampaign{}
+	for _, marker := range []string{"data-drop-card=", "data-campaign-id=", "data-drop-id="} {
+		idx := 0
+		for {
+			i := strings.Index(html[idx:], marker)
+			if i < 0 {
+				break
+			}
+			start := idx + i + len(marker)
+			// Expect: "ID"  (quoted)
+			if start >= len(html) || (html[start] != '"' && html[start] != '\'') {
+				idx = start
+				continue
+			}
+			quote := html[start]
+			end := strings.IndexByte(html[start+1:], quote)
+			if end < 0 {
+				break
+			}
+			id := html[start+1 : start+1+end]
+			idx = start + 1 + end
+			if id == "" {
+				continue
+			}
+			out = append(out, &pb.KickCampaign{
+				Id:     id,
+				Game:   "",
+				Name:   id,
+				Status: "active",
+			})
+		}
+		if len(out) > 0 {
+			break
+		}
+	}
+	// DOM fallback can't reliably surface game/name without a proper
+	// HTML parser. Drop entries with no game — they'd fail every
+	// whitelist anyway and pollute the dashboard.
+	filtered := out[:0]
+	for _, c := range out {
+		if c.Game != "" {
+			filtered = append(filtered, c)
+		}
+	}
+	return dedupCampaigns(filtered)
 }
 
 // Claim drives the claim button for a specific benefit. If the click

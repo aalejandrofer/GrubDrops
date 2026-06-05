@@ -12,6 +12,9 @@ service Browser {
   rpc StopWatch(StopWatchRequest) returns (StopWatchResponse);
   rpc Inventory(InventoryRequest) returns (InventoryResponse);
   rpc Claim(ClaimRequest) returns (ClaimResponse);
+  // KickScrapeActiveDrops scrapes https://kick.com/drops for the full
+  // list of active drop campaigns across every game (not just Rust).
+  rpc KickScrapeActiveDrops(KickScrapeActiveDropsRequest) returns (KickScrapeActiveDropsResponse);
 
   // Twitch RPCs. The sidecar keeps a logged-in twitch.tv tab open per
   // account and proxies GraphQL calls through it so Twitch's anti-bot
@@ -89,6 +92,35 @@ message ClaimRequest {
 
 message ClaimResponse {
   bool already_claimed = 1;
+}
+
+message KickBenefit {
+  string id = 1;
+  string name = 2;
+  int32 required_minutes = 3;
+  string image_url = 4;
+}
+
+message KickCampaign {
+  string id = 1;
+  string game = 2;
+  string name = 3;
+  int64 starts_at = 4; // unix seconds, 0 if unknown
+  int64 ends_at = 5;   // unix seconds, 0 if unknown
+  string status = 6;
+  repeated KickBenefit benefits = 7;
+}
+
+message KickScrapeActiveDropsRequest {
+  // account_id is used to reuse the per-account auth tab; the sidecar
+  // expects KickAuthenticate (or first ScrapeActiveDrops) to have
+  // primed cookies for this account already, OR a fresh session here.
+  string account_id = 1;
+  KickSession session = 2;
+}
+
+message KickScrapeActiveDropsResponse {
+  repeated KickCampaign campaigns = 1;
 }
 
 // ---- Twitch ----

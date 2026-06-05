@@ -27,11 +27,12 @@ type kickSessionSource func(ctx context.Context) (string, platform.Session, bool
 // kick.com without tripping the challenge. Without any Kick account
 // logged in we cannot scrape — Cloudflare will block the navigation.
 //
-// Whitelist note: the current kick.Backend only surfaces a synthetic
-// "kick-inventory" campaign tagged with Game="Rust". The GameFilter on
-// the session short-circuits the inventory call when "Rust" is not on
-// the whitelist (see kick.Backend.ListActiveCampaigns) — matching the
-// project_goal.md rule.
+// Whitelist note: kick.Backend.ListActiveCampaigns scrapes
+// https://kick.com/drops via the sidecar and surfaces every active
+// drop campaign Kick advertises, regardless of game. The per-account
+// GameFilter on the session prunes results down to whitelisted games
+// inside the backend (and we re-apply the same filter here as a
+// belt-and-suspenders guard).
 type KickScraper struct {
 	Backend platform.Backend
 	Source  kickSessionSource

@@ -67,6 +67,14 @@ func (s *Server) Claim(ctx context.Context, req *pb.ClaimRequest) (*pb.ClaimResp
 	return &pb.ClaimResponse{AlreadyClaimed: already}, nil
 }
 
+func (s *Server) KickScrapeActiveDrops(ctx context.Context, req *pb.KickScrapeActiveDropsRequest) (*pb.KickScrapeActiveDropsResponse, error) {
+	camps, err := s.kick.ScrapeActiveDrops(ctx, req.AccountId, req.Session)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.KickScrapeActiveDropsResponse{Campaigns: camps}, nil
+}
+
 // --- Twitch ---
 
 func (s *Server) TwitchAuthenticate(ctx context.Context, req *pb.TwitchAuthenticateRequest) (*pb.TwitchAuthenticateResponse, error) {

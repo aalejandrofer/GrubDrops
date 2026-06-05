@@ -17,8 +17,9 @@ import (
 
 type stubServer struct {
 	pb.UnimplementedBrowserServer
-	drops  []*pb.DropProgress
-	handle string
+	drops     []*pb.DropProgress
+	campaigns []*pb.KickCampaign
+	handle    string
 }
 
 func (s *stubServer) Inventory(_ context.Context, _ *pb.InventoryRequest) (*pb.InventoryResponse, error) {
@@ -31,6 +32,10 @@ func (s *stubServer) StartWatch(_ context.Context, _ *pb.StartWatchRequest) (*pb
 
 func (s *stubServer) Heartbeat(_ context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
 	return &pb.HeartbeatResponse{Alive: req.WatchHandle == "tab_42"}, nil
+}
+
+func (s *stubServer) KickScrapeActiveDrops(_ context.Context, _ *pb.KickScrapeActiveDropsRequest) (*pb.KickScrapeActiveDropsResponse, error) {
+	return &pb.KickScrapeActiveDropsResponse{Campaigns: s.campaigns}, nil
 }
 
 func startStub(t *testing.T, srv *stubServer) string {
@@ -90,23 +95,87 @@ func TestKickBackend_DeviceLoginRejected(t *testing.T) {
 	require.Error(t, err)
 }
 
-// When the per-account whitelist excludes "Rust", Kick's synthetic
-// campaign must be suppressed at the backend layer — the only game it
-// can mine is Rust, so a rejecting filter means "this account opted
-// out of Kick entirely". Crucially the backend must NOT issue a
-// sidecar Inventory call when the filter rejects the game.
-func TestKickBackend_ListActiveCampaigns_GameFilterShortCircuits(t *testing.T) {
-	// nil browser client is fine because the short-circuit must happen
-	// before any sidecar call. If the filter check is missing the test
-	// will panic on b.c.Inventory.
+// ListActiveCampaigns must no-op when the backend has no browser
+// client wired (e.g. MINER_BROWSER_URL empty) — discovery should
+// gracefully skip Kick rather than panic.
+func TestKickBackend_ListActiveCampaigns_NilClient(t *testing.T) {
 	b := New(nil)
-	sess := platform.Session{
-		Cookies:    map[string]string{"kick": `{}`},
-		GameFilter: func(game string) bool { return false },
-	}
+	sess := platform.Session{Cookies: map[string]string{"kick": `{}`}}
 	camps, err := b.ListActiveCampaigns(context.Background(), sess)
 	require.NoError(t, err)
 	assert.Empty(t, camps)
+}
+
+// ListActiveCampaigns is game-agnostic: it surfaces every active
+// campaign the sidecar scrapes, and the per-account GameFilter prunes
+// them down. Verifies (1) multiple games surface, (2) filter rejects
+// non-whitelisted ones, (3) Game / Name / Benefits round-trip.
+func TestKickBackend_ListActiveCampaigns_GameAgnosticFilter(t *testing.T) {
+	stub := &stubServer{campaigns: []*pb.KickCampaign{
+		{
+			Id: "c-rust", Game: "Rust", Name: "Rust Twitch Drops", Status: "active",
+			Benefits: []*pb.KickBenefit{{Id: "ben1", Name: "Crate", RequiredMinutes: 60}},
+		},
+		{
+			Id: "c-cs", Game: "Counter-Strike", Name: "CS Drops", Status: "active",
+			Benefits: []*pb.KickBenefit{{Id: "ben2", Name: "Sticker", RequiredMinutes: 30}},
+		},
+	}}
+	addr := startStub(t, stub)
+	c, err := browser.Dial(addr)
+	require.NoError(t, err)
+	defer c.Close()
+
+	b := New(c)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// No filter -> both surface.
+	all, err := b.ListActiveCampaigns(ctx, platform.Session{Cookies: map[string]string{"kick": `{}`}})
+	require.NoError(t, err)
+	require.Len(t, all, 2)
+	games := map[string]bool{all[0].Game: true, all[1].Game: true}
+	assert.True(t, games["Rust"] && games["Counter-Strike"])
+	for _, camp := range all {
+		assert.Equal(t, "kick", camp.Platform)
+		require.NotEmpty(t, camp.Benefits)
+		assert.Equal(t, camp.ID, camp.Benefits[0].CampaignID)
+	}
+
+	// Filter only Rust -> CS dropped.
+	sess := platform.Session{
+		Cookies:    map[string]string{"kick": `{}`},
+		GameFilter: func(game string) bool { return game == "Rust" },
+	}
+	only, err := b.ListActiveCampaigns(ctx, sess)
+	require.NoError(t, err)
+	require.Len(t, only, 1)
+	assert.Equal(t, "Rust", only[0].Game)
+}
+
+// Benefits with required_minutes==0 should default to 120 (2h) to
+// match Kick's typical drop threshold — the scraper can't always
+// recover the per-drop requirement from the page state.
+func TestKickBackend_ListActiveCampaigns_DefaultRequiredMinutes(t *testing.T) {
+	stub := &stubServer{campaigns: []*pb.KickCampaign{
+		{
+			Id: "c1", Game: "Rust", Name: "Drops", Status: "active",
+			Benefits: []*pb.KickBenefit{{Id: "b1", Name: "Reward"}},
+		},
+	}}
+	addr := startStub(t, stub)
+	c, err := browser.Dial(addr)
+	require.NoError(t, err)
+	defer c.Close()
+
+	b := New(c)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	camps, err := b.ListActiveCampaigns(ctx, platform.Session{Cookies: map[string]string{"kick": `{}`}})
+	require.NoError(t, err)
+	require.Len(t, camps, 1)
+	require.Len(t, camps[0].Benefits, 1)
+	assert.Equal(t, 120, camps[0].Benefits[0].RequiredMinutes)
 }
 
 func TestKickBackend_RegisterChannelExposesInList(t *testing.T) {

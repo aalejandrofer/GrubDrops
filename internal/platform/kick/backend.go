@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/aalejandrofer/dropsminer/internal/auth/browser"
 	"github.com/aalejandrofer/dropsminer/internal/platform"
@@ -79,39 +80,60 @@ func (b *Backend) RefreshSession(_ context.Context, s platform.Session) (platfor
 }
 
 func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) ([]platform.Campaign, error) {
-	// Kick currently only surfaces Rust drops via the sidecar (no
-	// per-game discovery API). Honor the per-account whitelist by
-	// short-circuiting when "Rust" is not on the list — saves an
-	// inventory roundtrip and keeps the whitelist canonical.
-	const kickGame = "Rust"
-	if s.GameFilter != nil && !s.GameFilter(kickGame) {
+	// Game-agnostic discovery: scrape https://kick.com/drops via the
+	// sidecar and surface every active campaign Kick advertises. The
+	// per-account whitelist filters the result — the backend never
+	// hardcodes a game name.
+	if b == nil || b.c == nil {
 		return nil, nil
 	}
 	ks, err := decodeSession(s)
 	if err != nil {
 		return nil, err
 	}
-	drops, err := b.c.Inventory(ctx, toProto(ks))
+	camps, err := b.c.KickScrapeActiveDrops(ctx, s.AccountID, toProto(ks))
 	if err != nil {
-		return nil, fmt.Errorf("kick inventory: %w", err)
+		return nil, fmt.Errorf("kick scrape drops: %w", err)
 	}
-	if len(drops) == 0 {
-		return nil, nil
+	out := make([]platform.Campaign, 0, len(camps))
+	for _, c := range camps {
+		if s.GameFilter != nil && !s.GameFilter(c.Game) {
+			continue
+		}
+		benefits := make([]platform.DropBenefit, 0, len(c.Benefits))
+		for _, ben := range c.Benefits {
+			required := int(ben.RequiredMinutes)
+			if required <= 0 {
+				required = 120 // Kick drops typically require ~2h
+			}
+			benefits = append(benefits, platform.DropBenefit{
+				ID:              ben.Id,
+				CampaignID:      c.Id,
+				Name:            ben.Name,
+				RequiredMinutes: required,
+				ImageURL:        ben.ImageUrl,
+			})
+		}
+		camp := platform.Campaign{
+			ID:       c.Id,
+			Platform: "kick",
+			Game:     c.Game,
+			Name:     c.Name,
+			Status:   c.Status,
+			Benefits: benefits,
+		}
+		if c.StartsAt > 0 {
+			camp.StartsAt = time.Unix(c.StartsAt, 0).UTC()
+		}
+		if c.EndsAt > 0 {
+			camp.EndsAt = time.Unix(c.EndsAt, 0).UTC()
+		}
+		if camp.Status == "" {
+			camp.Status = "active"
+		}
+		out = append(out, camp)
 	}
-	benefits := make([]platform.DropBenefit, 0, len(drops))
-	for _, d := range drops {
-		benefits = append(benefits, platform.DropBenefit{
-			ID:              d.BenefitId,
-			CampaignID:      "kick-inventory",
-			Name:            d.BenefitId,
-			RequiredMinutes: 120, // Kick drops typically require 2h; refine when sidecar surfaces per-drop threshold
-		})
-	}
-	return []platform.Campaign{{
-		ID: "kick-inventory", Platform: "kick", Game: kickGame,
-		Name: "Kick Rust Drops", Status: "active",
-		Benefits: benefits,
-	}}, nil
+	return out, nil
 }
 
 func (b *Backend) ListEligibleChannels(_ context.Context, _ platform.Session, _ platform.Campaign) ([]platform.Stream, error) {

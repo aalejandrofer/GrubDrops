@@ -19,17 +19,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Browser_Authenticate_FullMethodName       = "/browser.v1.Browser/Authenticate"
-	Browser_StartWatch_FullMethodName         = "/browser.v1.Browser/StartWatch"
-	Browser_Heartbeat_FullMethodName          = "/browser.v1.Browser/Heartbeat"
-	Browser_StopWatch_FullMethodName          = "/browser.v1.Browser/StopWatch"
-	Browser_Inventory_FullMethodName          = "/browser.v1.Browser/Inventory"
-	Browser_Claim_FullMethodName              = "/browser.v1.Browser/Claim"
-	Browser_TwitchAuthenticate_FullMethodName = "/browser.v1.Browser/TwitchAuthenticate"
-	Browser_TwitchGQL_FullMethodName          = "/browser.v1.Browser/TwitchGQL"
-	Browser_TwitchOpenStream_FullMethodName   = "/browser.v1.Browser/TwitchOpenStream"
-	Browser_TwitchHeartbeat_FullMethodName    = "/browser.v1.Browser/TwitchHeartbeat"
-	Browser_TwitchStopWatch_FullMethodName    = "/browser.v1.Browser/TwitchStopWatch"
+	Browser_Authenticate_FullMethodName          = "/browser.v1.Browser/Authenticate"
+	Browser_StartWatch_FullMethodName            = "/browser.v1.Browser/StartWatch"
+	Browser_Heartbeat_FullMethodName             = "/browser.v1.Browser/Heartbeat"
+	Browser_StopWatch_FullMethodName             = "/browser.v1.Browser/StopWatch"
+	Browser_Inventory_FullMethodName             = "/browser.v1.Browser/Inventory"
+	Browser_Claim_FullMethodName                 = "/browser.v1.Browser/Claim"
+	Browser_KickScrapeActiveDrops_FullMethodName = "/browser.v1.Browser/KickScrapeActiveDrops"
+	Browser_TwitchAuthenticate_FullMethodName    = "/browser.v1.Browser/TwitchAuthenticate"
+	Browser_TwitchGQL_FullMethodName             = "/browser.v1.Browser/TwitchGQL"
+	Browser_TwitchOpenStream_FullMethodName      = "/browser.v1.Browser/TwitchOpenStream"
+	Browser_TwitchHeartbeat_FullMethodName       = "/browser.v1.Browser/TwitchHeartbeat"
+	Browser_TwitchStopWatch_FullMethodName       = "/browser.v1.Browser/TwitchStopWatch"
 )
 
 // BrowserClient is the client API for Browser service.
@@ -43,6 +44,9 @@ type BrowserClient interface {
 	StopWatch(ctx context.Context, in *StopWatchRequest, opts ...grpc.CallOption) (*StopWatchResponse, error)
 	Inventory(ctx context.Context, in *InventoryRequest, opts ...grpc.CallOption) (*InventoryResponse, error)
 	Claim(ctx context.Context, in *ClaimRequest, opts ...grpc.CallOption) (*ClaimResponse, error)
+	// KickScrapeActiveDrops scrapes https://kick.com/drops for the full
+	// list of active drop campaigns across every game (not just Rust).
+	KickScrapeActiveDrops(ctx context.Context, in *KickScrapeActiveDropsRequest, opts ...grpc.CallOption) (*KickScrapeActiveDropsResponse, error)
 	// Twitch RPCs. The sidecar keeps a logged-in twitch.tv tab open per
 	// account and proxies GraphQL calls through it so Twitch's anti-bot
 	// integrity check sees a real browser context.
@@ -121,6 +125,16 @@ func (c *browserClient) Claim(ctx context.Context, in *ClaimRequest, opts ...grp
 	return out, nil
 }
 
+func (c *browserClient) KickScrapeActiveDrops(ctx context.Context, in *KickScrapeActiveDropsRequest, opts ...grpc.CallOption) (*KickScrapeActiveDropsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(KickScrapeActiveDropsResponse)
+	err := c.cc.Invoke(ctx, Browser_KickScrapeActiveDrops_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *browserClient) TwitchAuthenticate(ctx context.Context, in *TwitchAuthenticateRequest, opts ...grpc.CallOption) (*TwitchAuthenticateResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(TwitchAuthenticateResponse)
@@ -182,6 +196,9 @@ type BrowserServer interface {
 	StopWatch(context.Context, *StopWatchRequest) (*StopWatchResponse, error)
 	Inventory(context.Context, *InventoryRequest) (*InventoryResponse, error)
 	Claim(context.Context, *ClaimRequest) (*ClaimResponse, error)
+	// KickScrapeActiveDrops scrapes https://kick.com/drops for the full
+	// list of active drop campaigns across every game (not just Rust).
+	KickScrapeActiveDrops(context.Context, *KickScrapeActiveDropsRequest) (*KickScrapeActiveDropsResponse, error)
 	// Twitch RPCs. The sidecar keeps a logged-in twitch.tv tab open per
 	// account and proxies GraphQL calls through it so Twitch's anti-bot
 	// integrity check sees a real browser context.
@@ -217,6 +234,9 @@ func (UnimplementedBrowserServer) Inventory(context.Context, *InventoryRequest) 
 }
 func (UnimplementedBrowserServer) Claim(context.Context, *ClaimRequest) (*ClaimResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Claim not implemented")
+}
+func (UnimplementedBrowserServer) KickScrapeActiveDrops(context.Context, *KickScrapeActiveDropsRequest) (*KickScrapeActiveDropsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method KickScrapeActiveDrops not implemented")
 }
 func (UnimplementedBrowserServer) TwitchAuthenticate(context.Context, *TwitchAuthenticateRequest) (*TwitchAuthenticateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TwitchAuthenticate not implemented")
@@ -362,6 +382,24 @@ func _Browser_Claim_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Browser_KickScrapeActiveDrops_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(KickScrapeActiveDropsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BrowserServer).KickScrapeActiveDrops(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Browser_KickScrapeActiveDrops_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BrowserServer).KickScrapeActiveDrops(ctx, req.(*KickScrapeActiveDropsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Browser_TwitchAuthenticate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(TwitchAuthenticateRequest)
 	if err := dec(in); err != nil {
@@ -482,6 +520,10 @@ var Browser_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Claim",
 			Handler:    _Browser_Claim_Handler,
+		},
+		{
+			MethodName: "KickScrapeActiveDrops",
+			Handler:    _Browser_KickScrapeActiveDrops_Handler,
 		},
 		{
 			MethodName: "TwitchAuthenticate",

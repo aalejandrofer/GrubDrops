@@ -69,6 +69,17 @@ func (c *Client) Claim(ctx context.Context, s *pb.KickSession, benefitID string)
 	return resp.AlreadyClaimed, nil
 }
 
+// KickScrapeActiveDrops asks the sidecar to load https://kick.com/drops
+// in the per-account auth tab and return every active drop campaign
+// (game-agnostic, no longer Rust-only).
+func (c *Client) KickScrapeActiveDrops(ctx context.Context, accountID string, s *pb.KickSession) ([]*pb.KickCampaign, error) {
+	resp, err := c.api.KickScrapeActiveDrops(ctx, &pb.KickScrapeActiveDropsRequest{AccountId: accountID, Session: s})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Campaigns, nil
+}
+
 // --- Twitch ---
 
 func (c *Client) TwitchAuthenticate(ctx context.Context, accountID string, s *pb.TwitchSession) (*pb.TwitchAuthenticateResponse, error) {
