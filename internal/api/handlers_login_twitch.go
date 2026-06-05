@@ -123,6 +123,16 @@ func (d *loginTwitchDeps) poll(accountID string, backend platform.Backend, st *t
 			return
 		}
 		slog.Info("twitch session persisted", "account", accountID)
+		// Tell the browser-routed backend (if active) to discard its
+		// cached "authed" flag + PubSub client for this account so the
+		// next sidecar call re-installs the fresh Android-issued
+		// cookies. Without this the sidecar tab keeps serving GQL with
+		// the stale web-issued auth-token and integrity stays failed.
+		type authInvalidator interface{ InvalidateAuth(string) }
+		if inv, ok := backend.(authInvalidator); ok {
+			inv.InvalidateAuth(accountID)
+			slog.Info("twitch backend auth cache invalidated", "account", accountID)
+		}
 		if d.reload != nil {
 			if err := d.reload(d.rootCtx); err != nil {
 				slog.Error("scheduler reload after twitch login failed", "account", accountID, "err", err)

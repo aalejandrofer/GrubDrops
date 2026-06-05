@@ -94,6 +94,20 @@ func NewBrowserBackend(client interface {
 	return bb
 }
 
+// InvalidateAuth drops cached auth state + tears down PubSub for the
+// account so subsequent calls re-install cookies (e.g. after a fresh
+// device-code login replaces a web-issued auth-token with an
+// Android-issued one).
+func (b *BrowserBackend) InvalidateAuth(accountID string) {
+	b.invalidateAuth(accountID)
+	b.pubsubMu.Lock()
+	if client, ok := b.pubsubs[accountID]; ok {
+		_ = client
+		delete(b.pubsubs, accountID)
+	}
+	b.pubsubMu.Unlock()
+}
+
 // invalidateAuth drops the cached "authed=true" flag for an account.
 // Called when a downstream sidecar call returns "no authenticated tab"
 // — implies the sidecar restarted and lost its in-memory tabs. The next
