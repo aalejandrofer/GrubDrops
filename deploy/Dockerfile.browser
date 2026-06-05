@@ -10,7 +10,12 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/browser-sidecar ./cmd/browse
 # chromedp/headless-shell ships Chrome at /headless-shell/headless-shell.
 # Use it as runtime so chromedp.NewExecAllocator finds Chrome on PATH.
 FROM chromedp/headless-shell:latest
+# Copy the CA bundle from the alpine build stage so Go's TLS layer
+# can verify gql.twitch.tv etc when we POST from the sidecar
+# directly (Twitch gql Go-HTTP bypass path).
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /out/browser-sidecar /browser-sidecar
-ENV PATH="/headless-shell:${PATH}"
+ENV PATH="/headless-shell:${PATH}" \
+    SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
 EXPOSE 9090
 ENTRYPOINT ["/browser-sidecar"]
