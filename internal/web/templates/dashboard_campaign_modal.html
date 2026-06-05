@@ -9,6 +9,7 @@
           <span class="plat">{{.Platform}}</span>
           {{if .Game}} · <span class="game">{{.Game}}</span>{{end}}
           {{if .Status}} · <span class="status">{{.Status}}</span>{{end}}
+          {{if eq .Kind "reward"}} · <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;padding:1px 6px;border:1px solid var(--accent);color:var(--accent);background:rgba(212,99,30,0.08);">reward</span>{{end}}
         </div>
       </div>
       <button type="button" class="modal-close" onclick="document.getElementById('modal').innerHTML=''" aria-label="Close">×</button>

@@ -117,6 +117,7 @@ type dashCampaign struct {
 	Name       string
 	Platform   string // "twitch" | "kick"
 	Game       string
+	Kind       string // "drop" | "reward"
 	Drops      int
 	Channels   int
 	EndsIn     string // "12d" or "18h"
@@ -134,6 +135,7 @@ type dashCampaignDetail struct {
 	Platform         string
 	Game             string
 	Status           string
+	Kind             string // "drop" | "reward"
 	StartsAt         string // formatted, e.g. "2026-06-01 14:00 UTC" or "—"
 	EndsAt           string // formatted
 	EndsIn           string // "12d" or "18h"
@@ -313,6 +315,7 @@ func activeCampsFromDiscovery(ctx context.Context, sch *scheduler.Scheduler, cha
 			Name:       dc.Name,
 			Platform:   dc.Platform,
 			Game:       dc.Game,
+			Kind:       dc.Kind,
 			Drops:      len(dc.Benefits),
 			Channels:   channels,
 			EndsIn:     ends,
@@ -915,6 +918,7 @@ func (d dashboardDeps) campaignDetail(w http.ResponseWriter, r *http.Request) {
 		Platform:         dc.Platform,
 		Game:             dc.Game,
 		Status:           dc.Status,
+		Kind:             dc.Kind,
 		StartsAt:         startsAt,
 		EndsAt:           endsAt,
 		EndsIn:           endsIn,
