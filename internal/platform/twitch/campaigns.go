@@ -3,6 +3,7 @@ package twitch
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -99,10 +100,20 @@ type inventoryData struct {
 	} `json:"currentUser"`
 }
 
-// listActive returns all ACTIVE campaigns with their drop benefits.
-// EXPIRED and UPCOMING campaigns are discarded.
-// As a side effect it calls captureAllowed so that the caller (Backend) can
-// drain the allow-lists via drainAllowed() and store them in its own cache.
+// listActive returns ALL campaigns the user can see — ACTIVE, EXPIRED, and
+// UPCOMING — with their drop benefits (benefits are only fetched for ACTIVE
+// campaigns to save bandwidth; EXPIRED / UPCOMING are emitted with empty
+// benefit lists so the /drops page can show past + upcoming tabs filtered
+// by the whitelist). The Status field is lower-cased — "active", "expired",
+// or "upcoming" — matching the values persisted in the campaigns table.
+// The whitelist is ALWAYS applied: non-whitelisted campaigns are dropped
+// regardless of status.
+//
+// As a side effect listActive calls captureAllowed for ACTIVE campaigns so
+// that the caller (Backend) can drain the allow-lists via drainAllowed()
+// and store them in its own cache. The function name is kept for backward
+// compatibility with the watcher/mining flow; mining-side callers must
+// filter Status == "active" before attempting to mine.
 func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]platform.Campaign, error) {
 	var page campaignsData
 	if err := d.c.gql(ctx, sess.AccessToken, OpCampaigns, nil, &page); err != nil {
@@ -110,32 +121,39 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 	}
 	out := make([]platform.Campaign, 0, len(page.CurrentUser.DropCampaigns))
 	for _, c := range page.CurrentUser.DropCampaigns {
-		if c.Status != "ACTIVE" {
-			continue
-		}
-		// Honor the per-account game whitelist BEFORE the per-campaign
-		// detail fetch — non-whitelisted campaigns must not waste a gql
-		// roundtrip. The watcher will re-filter defensively, but the
-		// whitelist is the source of truth and we want backends to
-		// respect it at the earliest opportunity.
+		// Honor the per-account game whitelist BEFORE doing any work —
+		// non-whitelisted campaigns must not appear ANYWHERE (mining,
+		// /drops page, or persisted in the campaigns table). The
+		// whitelist is the canonical filter.
 		if sess.GameFilter != nil && !sess.GameFilter(c.Game.DisplayName) {
 			continue
 		}
-		benefits, allowedLogins, err := d.fetchDetails(ctx, sess, c.ID)
-		if err != nil {
-			return nil, err
-		}
-		d.captureAllowed(c.ID, allowedLogins)
-		out = append(out, platform.Campaign{
+		camp := platform.Campaign{
 			ID:       c.ID,
 			Platform: "twitch",
 			Game:     c.Game.DisplayName,
 			Name:     c.Name,
-			Status:   "active",
 			StartsAt: c.StartAt,
 			EndsAt:   c.EndAt,
-			Benefits: benefits,
-		})
+		}
+		switch c.Status {
+		case "ACTIVE":
+			camp.Status = "active"
+			benefits, allowedLogins, err := d.fetchDetails(ctx, sess, c.ID)
+			if err != nil {
+				return nil, err
+			}
+			d.captureAllowed(c.ID, allowedLogins)
+			camp.Benefits = benefits
+		case "UPCOMING":
+			camp.Status = "upcoming"
+		case "EXPIRED":
+			camp.Status = "expired"
+		default:
+			// Unknown status — record it lower-cased and continue.
+			camp.Status = strings.ToLower(c.Status)
+		}
+		out = append(out, camp)
 	}
 	return out, nil
 }

@@ -44,7 +44,11 @@ func TestBackend_ListActiveThenEligibleChannels(t *testing.T) {
 
 	camps, err := b.ListActiveCampaigns(context.Background(), sess)
 	require.NoError(t, err)
-	require.Len(t, camps, 1)
+	// listActive now also surfaces EXPIRED / UPCOMING campaigns so the
+	// /drops page can render past + upcoming tabs. ACTIVE remains the
+	// first entry in the fixture.
+	require.Len(t, camps, 2)
+	require.Equal(t, "active", camps[0].Status)
 
 	// After ListActiveCampaigns the fixture's allow.channels list is loaded
 	// (fakestreamer + another). The mock server returns a live stream for
@@ -78,7 +82,10 @@ func TestBackend_ListActiveCampaignsPopulatesAllowList(t *testing.T) {
 
 	camps, err := b.ListActiveCampaigns(context.Background(), sess)
 	require.NoError(t, err)
-	require.Len(t, camps, 1)
+	// listActive now returns ACTIVE + EXPIRED + UPCOMING. Allow-list
+	// fetches only happen for the ACTIVE entry.
+	require.Len(t, camps, 2)
+	require.Equal(t, "active", camps[0].Status)
 
 	// After ListActiveCampaigns, the allow-list cache should be populated
 	// from the fixture's allow.channels[].name field.

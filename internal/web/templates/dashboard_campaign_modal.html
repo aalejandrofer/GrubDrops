@@ -1,0 +1,75 @@
+{{define "dashboard_campaign_modal"}}
+<div class="modal-overlay" data-modal-backdrop>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-head">
+      <div>
+        <h3 id="modal-title" class="modal-title">{{.Name}}</h3>
+        <div class="modal-sub">
+          <span class="pip {{.Platform}}"></span>
+          <span class="plat">{{.Platform}}</span>
+          {{if .Game}} · <span class="game">{{.Game}}</span>{{end}}
+          {{if .Status}} · <span class="status">{{.Status}}</span>{{end}}
+        </div>
+      </div>
+      <button type="button" class="modal-close" onclick="document.getElementById('modal').innerHTML=''" aria-label="Close">×</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="modal-row">
+        <div class="kv"><span class="k">ID</span><span class="v">{{.ID}}</span></div>
+        <div class="kv"><span class="k">Starts</span><span class="v">{{.StartsAt}}</span></div>
+        <div class="kv">
+          <span class="k">Ends</span>
+          <span class="v" {{if .EndsUrgent}}style="color: var(--red)"{{end}}>
+            {{.EndsAt}}{{if .EndsIn}} <small class="muted">(in {{.EndsIn}})</small>{{end}}
+          </span>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <h4>Drop benefits <span class="meta">{{len .Benefits}}</span></h4>
+        {{if .Benefits}}
+        <ul class="modal-benefits">
+          {{range .Benefits}}
+          <li>
+            {{if .ImageURL}}<img src="{{.ImageURL}}" alt="" class="benefit-img">{{end}}
+            <div class="benefit-meta">
+              <div class="benefit-name">{{.Name}}</div>
+              <div class="benefit-sub">{{.RequiredMinutes}}m required · {{.ID}}</div>
+            </div>
+          </li>
+          {{end}}
+        </ul>
+        {{else}}
+        <div class="modal-empty">No benefits reported.</div>
+        {{end}}
+      </div>
+
+      <div class="modal-section">
+        <h4>Eligible accounts <span class="meta">{{len .EligibleAccounts}}</span></h4>
+        {{if .EligibleAccounts}}
+        <ul class="modal-accounts">
+          {{range .EligibleAccounts}}<li>{{.}}</li>{{end}}
+        </ul>
+        {{else}}
+        <div class="modal-empty">No account has this campaign's game whitelisted.</div>
+        {{end}}
+      </div>
+
+      {{if and .SourceAccounts (gt (len .SourceAccounts) (len .EligibleAccounts))}}
+      <div class="modal-section">
+        <h4>Also seen by <span class="meta">{{len .SourceAccounts}}</span></h4>
+        <ul class="modal-accounts">
+          {{range .SourceAccounts}}<li>{{.}}</li>{{end}}
+        </ul>
+      </div>
+      {{end}}
+
+      <details class="modal-section">
+        <summary>Raw campaign JSON</summary>
+        <pre class="modal-json">{{.RawJSON}}</pre>
+      </details>
+    </div>
+  </div>
+</div>
+{{end}}

@@ -87,6 +87,147 @@ func (q *Queries) ListBenefitsForCampaign(ctx context.Context, campaignID string
 	return items, nil
 }
 
+const listCurrentCampaigns = `-- name: ListCurrentCampaigns :many
+SELECT id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at FROM campaigns
+WHERE starts_at <= ? AND ends_at > ?
+ORDER BY ends_at ASC
+LIMIT ?
+`
+
+type ListCurrentCampaignsParams struct {
+	StartsAt int64 `json:"starts_at"`
+	EndsAt   int64 `json:"ends_at"`
+	Limit    int64 `json:"limit"`
+}
+
+// Campaigns currently in flight (starts_at <= now < ends_at).
+// Whitelist filtering is applied in Go.
+func (q *Queries) ListCurrentCampaigns(ctx context.Context, arg ListCurrentCampaignsParams) ([]Campaign, error) {
+	rows, err := q.db.QueryContext(ctx, listCurrentCampaigns, arg.StartsAt, arg.EndsAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Campaign
+	for rows.Next() {
+		var i Campaign
+		if err := rows.Scan(
+			&i.ID,
+			&i.Platform,
+			&i.Game,
+			&i.Name,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.Status,
+			&i.RawJson,
+			&i.DiscoveredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPastCampaigns = `-- name: ListPastCampaigns :many
+SELECT id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at FROM campaigns
+WHERE ends_at < ?
+ORDER BY ends_at DESC
+LIMIT ?
+`
+
+type ListPastCampaignsParams struct {
+	EndsAt int64 `json:"ends_at"`
+	Limit  int64 `json:"limit"`
+}
+
+// Campaigns that have ended. Whitelist filtering is applied in Go.
+func (q *Queries) ListPastCampaigns(ctx context.Context, arg ListPastCampaignsParams) ([]Campaign, error) {
+	rows, err := q.db.QueryContext(ctx, listPastCampaigns, arg.EndsAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Campaign
+	for rows.Next() {
+		var i Campaign
+		if err := rows.Scan(
+			&i.ID,
+			&i.Platform,
+			&i.Game,
+			&i.Name,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.Status,
+			&i.RawJson,
+			&i.DiscoveredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUpcomingCampaigns = `-- name: ListUpcomingCampaigns :many
+SELECT id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at FROM campaigns
+WHERE starts_at > ?
+ORDER BY starts_at ASC
+LIMIT ?
+`
+
+type ListUpcomingCampaignsParams struct {
+	StartsAt int64 `json:"starts_at"`
+	Limit    int64 `json:"limit"`
+}
+
+// Campaigns announced but not yet started. Whitelist filtering is
+// applied in Go.
+func (q *Queries) ListUpcomingCampaigns(ctx context.Context, arg ListUpcomingCampaignsParams) ([]Campaign, error) {
+	rows, err := q.db.QueryContext(ctx, listUpcomingCampaigns, arg.StartsAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Campaign
+	for rows.Next() {
+		var i Campaign
+		if err := rows.Scan(
+			&i.ID,
+			&i.Platform,
+			&i.Game,
+			&i.Name,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.Status,
+			&i.RawJson,
+			&i.DiscoveredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertBenefit = `-- name: UpsertBenefit :exec
 INSERT INTO benefits (id, campaign_id, name, required_minutes, image_url)
 VALUES (?, ?, ?, ?, ?)

@@ -1,0 +1,40 @@
+{{define "drops_table"}}
+<div id="drops-tabpanel" class="drops-tabpanel" role="tabpanel">
+  {{if not .Rows}}
+  <div class="empty">
+    {{if eq .Tab "past"}}
+      No past drops yet. Once a whitelisted campaign ends — or you claim a drop — it shows up here.
+    {{else if eq .Tab "current"}}
+      No in-flight whitelisted campaigns. Discovery populates this list each time a watcher polls.
+    {{else}}
+      No upcoming whitelisted campaigns announced yet.
+    {{end}}
+  </div>
+  {{else}}
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>{{if eq .Tab "past"}}When{{else if eq .Tab "current"}}Ends{{else}}Starts{{end}}</th>
+        <th>Platform</th>
+        <th>Game</th>
+        <th>Campaign</th>
+        <th>Drop</th>
+        <th>Account</th>
+      </tr>
+    </thead>
+    <tbody>
+    {{range .Rows}}
+      <tr>
+        <td class="handle">{{.When}}</td>
+        <td class="plat"><span class="{{.Platform}}">{{.Platform}}</span></td>
+        <td>{{.Game}}</td>
+        <td>{{.CampaignName}}</td>
+        <td class="name">{{if .BenefitName}}{{.BenefitName}}{{else}}—{{end}}</td>
+        <td class="handle">{{if .AccountName}}@{{.AccountName}}{{else}}—{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{end}}
+</div>
+{{end}}

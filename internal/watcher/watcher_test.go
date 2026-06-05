@@ -64,3 +64,65 @@ func TestWatcher_New_PropagatesAllowGameToSession(t *testing.T) {
 	assert.False(t, w.cfg.Session.GameFilter("Fortnite"))
 	assert.Equal(t, "acc1", w.cfg.Session.AccountID)
 }
+
+// recordingPersister captures every batch the watcher pushes to it so we
+// can assert the whitelist gate and status filter run BEFORE persistence.
+type recordingPersister struct {
+	batches [][]platform.Campaign
+}
+
+func (r *recordingPersister) PersistCampaigns(_ context.Context, camps []platform.Campaign) error {
+	r.batches = append(r.batches, append([]platform.Campaign(nil), camps...))
+	return nil
+}
+
+// multiStatusBackend mimics a Twitch backend that returns active +
+// expired + upcoming campaigns. It exists so the watcher test can verify
+// the persister sees ALL statuses while mining only touches the ACTIVE
+// one.
+type multiStatusBackend struct{ *platformtest.MockBackend }
+
+func (m *multiStatusBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	return []platform.Campaign{
+		{ID: "c-active", Game: "Rust", Status: "active", Name: "Active",
+			Benefits: []platform.DropBenefit{{ID: "drop1", CampaignID: "c-active", Name: "Drop", RequiredMinutes: 2}}},
+		{ID: "c-expired", Game: "Rust", Status: "expired", Name: "Past"},
+		{ID: "c-upcoming", Game: "Rust", Status: "upcoming", Name: "Future"},
+		{ID: "c-blocked", Game: "Fortnite", Status: "active", Name: "Blocked"},
+	}, nil
+}
+
+// Watcher must persist EVERY whitelisted campaign it sees (active +
+// expired + upcoming), regardless of status. Non-whitelisted campaigns
+// MUST NOT reach the persister.
+func TestWatcher_PersistsAllWhitelistedStatuses(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	rec := &recordingPersister{}
+	notif := &recordingNotifier{}
+	w := New(Config{
+		AccountID:    "acc1",
+		Backend:      &multiStatusBackend{platformtest.New()},
+		Session:      platform.Session{AccessToken: "tok"},
+		Notifier:     notif,
+		TickInterval: 5 * time.Millisecond,
+		AllowGame:    func(g string) bool { return g == "Rust" },
+		Persister:    rec,
+	})
+
+	_ = w.Run(ctx)
+	require.NotEmpty(t, rec.batches, "persister must be invoked at least once")
+	batch := rec.batches[0]
+
+	// Three Rust campaigns get persisted, Fortnite is dropped.
+	ids := map[string]string{}
+	for _, c := range batch {
+		ids[c.ID] = c.Status
+	}
+	assert.Equal(t, "active", ids["c-active"])
+	assert.Equal(t, "expired", ids["c-expired"])
+	assert.Equal(t, "upcoming", ids["c-upcoming"])
+	_, blockedSeen := ids["c-blocked"]
+	assert.False(t, blockedSeen, "non-whitelisted campaign must NEVER reach the persister")
+}

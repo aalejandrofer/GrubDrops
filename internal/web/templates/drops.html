@@ -4,43 +4,48 @@
 
 {{define "content"}}
 <div class="shell">
+  {{with .Page}}
   <div class="ph">
     <div>
-      <div class="kicker">// drops / history</div>
-      <h1>Drops history</h1>
+      <div class="kicker">// drops</div>
+      <h1>Drops</h1>
     </div>
     <div class="actions">
-      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.14em;">last {{len .Page}} claims</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.14em;">filtered by whitelist</span>
     </div>
   </div>
 
-  {{if not .Page}}
-  <div class="empty">No drops claimed yet. They show up here as the watchers complete them.</div>
-  {{else}}
-  <table class="tbl">
-    <thead>
-      <tr>
-        <th>When</th>
-        <th>Platform</th>
-        <th>Game</th>
-        <th>Campaign</th>
-        <th>Drop</th>
-        <th>Account</th>
-      </tr>
-    </thead>
-    <tbody>
-    {{range .Page}}
-      <tr>
-        <td class="handle">{{.ClaimedAtHuman}}</td>
-        <td class="plat"><span class="{{.Platform}}">{{.Platform}}</span></td>
-        <td>{{.Game}}</td>
-        <td>{{.CampaignName}}</td>
-        <td class="name">{{.BenefitName}}</td>
-        <td class="handle">@{{.AccountName}}</td>
-      </tr>
-    {{end}}
-    </tbody>
-  </table>
+  <div class="drops-tabs" role="tablist">
+    <a role="tab"
+       class="drops-tab {{if eq .Tab "past"}}on{{end}}"
+       hx-get="/drops?tab=past"
+       hx-target="#drops-tabpanel"
+       hx-swap="outerHTML"
+       hx-push-url="true"
+       href="/drops?tab=past">
+      Past <span class="count">{{.PastCount}}</span>
+    </a>
+    <a role="tab"
+       class="drops-tab {{if eq .Tab "current"}}on{{end}}"
+       hx-get="/drops?tab=current"
+       hx-target="#drops-tabpanel"
+       hx-swap="outerHTML"
+       hx-push-url="true"
+       href="/drops?tab=current">
+      Current <span class="count">{{.CurrentCount}}</span>
+    </a>
+    <a role="tab"
+       class="drops-tab {{if eq .Tab "upcoming"}}on{{end}}"
+       hx-get="/drops?tab=upcoming"
+       hx-target="#drops-tabpanel"
+       hx-swap="outerHTML"
+       hx-push-url="true"
+       href="/drops?tab=upcoming">
+      Upcoming <span class="count">{{.UpcomingCount}}</span>
+    </a>
+  </div>
+
+  {{template "drops_table" .}}
   {{end}}
 </div>
 {{end}}

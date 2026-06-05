@@ -26,9 +26,17 @@ type Querier interface {
 	ListAllAccounts(ctx context.Context) ([]Account, error)
 	ListAllGames(ctx context.Context) ([]Game, error)
 	ListBenefitsForCampaign(ctx context.Context, campaignID string) ([]Benefit, error)
+	// Campaigns currently in flight (starts_at <= now < ends_at).
+	// Whitelist filtering is applied in Go.
+	ListCurrentCampaigns(ctx context.Context, arg ListCurrentCampaignsParams) ([]Campaign, error)
 	ListEnabledAccounts(ctx context.Context) ([]Account, error)
+	// Campaigns that have ended. Whitelist filtering is applied in Go.
+	ListPastCampaigns(ctx context.Context, arg ListPastCampaignsParams) ([]Campaign, error)
 	ListRecentClaims(ctx context.Context, limit int64) ([]ListRecentClaimsRow, error)
 	ListUnclaimedProgressForAccount(ctx context.Context, arg ListUnclaimedProgressForAccountParams) ([]Progress, error)
+	// Campaigns announced but not yet started. Whitelist filtering is
+	// applied in Go.
+	ListUpcomingCampaigns(ctx context.Context, arg ListUpcomingCampaignsParams) ([]Campaign, error)
 	RemoveAccountGame(ctx context.Context, arg RemoveAccountGameParams) error
 	SetAccountEnabled(ctx context.Context, arg SetAccountEnabledParams) error
 	UpdateAccountDisplayName(ctx context.Context, arg UpdateAccountDisplayNameParams) error

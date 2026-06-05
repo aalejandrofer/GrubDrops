@@ -298,10 +298,14 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 		}
 	}
 
-	// Cache the whitelisted discovery for outside readers (dashboard +
-	// /drops fallback). Copy first so callers can't mutate our slice.
-	cached := make([]platform.Campaign, len(whitelisted))
-	copy(cached, whitelisted)
+	// Cache the FULL (unfiltered) discovery so the dashboard's
+	// DiscoverySnapshot can compute SourceAccounts — accounts whose
+	// backend saw a campaign even if they don't have its game
+	// whitelisted. EligibleAccounts is computed downstream by re-applying
+	// each watcher's AllowGame to this cache. Copy first so callers
+	// can't mutate our slice.
+	cached := make([]platform.Campaign, len(campaigns))
+	copy(cached, campaigns)
 	w.mu.Lock()
 	w.lastDiscovery = cached
 	w.lastDiscoveryAt = time.Now()

@@ -23,3 +23,26 @@ ORDER BY discovered_at DESC;
 
 -- name: ListBenefitsForCampaign :many
 SELECT * FROM benefits WHERE campaign_id = ?;
+
+-- name: ListPastCampaigns :many
+-- Campaigns that have ended. Whitelist filtering is applied in Go.
+SELECT * FROM campaigns
+WHERE ends_at < ?
+ORDER BY ends_at DESC
+LIMIT ?;
+
+-- name: ListCurrentCampaigns :many
+-- Campaigns currently in flight (starts_at <= now < ends_at).
+-- Whitelist filtering is applied in Go.
+SELECT * FROM campaigns
+WHERE starts_at <= ? AND ends_at > ?
+ORDER BY ends_at ASC
+LIMIT ?;
+
+-- name: ListUpcomingCampaigns :many
+-- Campaigns announced but not yet started. Whitelist filtering is
+-- applied in Go.
+SELECT * FROM campaigns
+WHERE starts_at > ?
+ORDER BY starts_at ASC
+LIMIT ?;
