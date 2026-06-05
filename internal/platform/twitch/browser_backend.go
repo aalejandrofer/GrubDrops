@@ -192,10 +192,13 @@ func (b *BrowserBackend) ListEligibleChannels(ctx context.Context, s platform.Se
 	b.mu.Lock()
 	allowed := b.allowedLoginsByCampaign[c.ID]
 	b.mu.Unlock()
-	if len(allowed) == 0 {
-		return nil, nil
+	if len(allowed) > 0 {
+		return a.chans.listEligible(ctx, s, c, allowed)
 	}
-	return a.chans.listEligible(ctx, s, c, allowed)
+	// Fall back to game directory when allow.channels is empty —
+	// same logic as Backend.ListEligibleChannels. Most public drop
+	// campaigns (Minecraft etc) have no channel restriction.
+	return a.chans.listForGameDirectory(ctx, s, slugify(c.Game))
 }
 
 func (b *BrowserBackend) InventoryProgress(ctx context.Context, s platform.Session) ([]platform.Progress, error) {

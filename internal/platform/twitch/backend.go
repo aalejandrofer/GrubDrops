@@ -97,10 +97,47 @@ func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, 
 	b.mu.Lock()
 	allowed := b.allowedLoginsByCampaign[c.ID]
 	b.mu.Unlock()
-	if len(allowed) == 0 {
-		return nil, nil
+	if len(allowed) > 0 {
+		return b.chans.listEligible(ctx, s, c, allowed)
 	}
-	return b.chans.listEligible(ctx, s, c, allowed)
+	// Empty allow-list = campaign accepts ANY live drops-enabled stream
+	// of the game. Fall back to the DirectoryPage_Game query — without
+	// this most public campaigns (Minecraft, Apex, etc) have nothing
+	// to watch and the watcher sleeps forever.
+	slug := slugify(c.Game)
+	return b.chans.listForGameDirectory(ctx, s, slug)
+}
+
+// slugify converts a game's display name to its Twitch directory slug.
+// Lowercase + spaces → dashes + drop apostrophes/periods. Good enough
+// for the popular cases (Minecraft → "minecraft", "Apex Legends" →
+// "apex-legends", "Counter-Strike 2" → "counter-strike-2"). Per-game
+// special-casing can be added when the heuristic misses.
+func slugify(name string) string {
+	if name == "" {
+		return ""
+	}
+	out := make([]byte, 0, len(name))
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		switch {
+		case c >= 'A' && c <= 'Z':
+			out = append(out, c+32)
+		case c >= 'a' && c <= 'z':
+			out = append(out, c)
+		case c >= '0' && c <= '9':
+			out = append(out, c)
+		case c == ' ' || c == '-' || c == '_':
+			if len(out) == 0 || out[len(out)-1] != '-' {
+				out = append(out, '-')
+			}
+		}
+		// drop everything else (apostrophes, periods, colons, etc.)
+	}
+	for len(out) > 0 && out[len(out)-1] == '-' {
+		out = out[:len(out)-1]
+	}
+	return string(out)
 }
 
 func (b *Backend) InventoryProgress(ctx context.Context, s platform.Session) ([]platform.Progress, error) {

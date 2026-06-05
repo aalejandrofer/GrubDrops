@@ -87,4 +87,21 @@ var (
 		Name: "DropCurrentSessionContext",
 		Hash: "4d06b702d25d652afb9ef835d2a550031f1cf762b193523a92166f40ea3d142b",
 	}
+
+	// OpGameDirectory returns live channels for a particular game, used
+	// when the campaign's allow.channels list is empty (i.e. the
+	// campaign is open to any drops-enabled stream of the game).
+	// DevilXD key: "GameDirectory".
+	OpGameDirectory = Operation{
+		Name: "DirectoryPage_Game",
+		Hash: "cb5dc816e139dcb8a118f14b4b677d59abc224a4b016c4bc2bb00a47fe0ddec4",
+	}
+
+	// OpSlugRedirect turns a game's display name into its directory
+	// slug (the path segment in /directory/category/<slug>). Needed
+	// because OpGameDirectory takes a slug, not a name.
+	OpSlugRedirect = Operation{
+		Name: "DirectoryGameRedirect",
+		Hash: "1f0300090caceec51f33c5e20647aceff9017f740f223c3c532ba6fa59f6b6cc",
+	}
 )
