@@ -478,6 +478,14 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 		w.setState(ctx, StateSleeping)
 		return nil
 	}
+	// Prefer highest-viewer-count streams: they stay live longer +
+	// have steadier metadata, so the watcher swaps less often.
+	// Backends already sort by VIEWER_COUNT desc when querying the
+	// directory page; redo it here so allow-list / sparse-API paths
+	// also benefit.
+	sort.SliceStable(streams, func(i, j int) bool {
+		return streams[i].ViewerCount > streams[j].ViewerCount
+	})
 	s := streams[0]
 	slog.Info("watcher starting watch", "kind", "state", "account", w.cfg.AccountID, "channel", s.Channel, "campaign", camp.Name, "eligible_count", len(streams))
 	h, err := w.cfg.Backend.StartWatch(ctx, w.cfg.Session, s)
