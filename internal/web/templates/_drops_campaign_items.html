@@ -4,6 +4,11 @@
   {{if .Status}}<span class="kv"><span class="k">status</span><span class="eq">=</span><span class="v">{{.Status}}</span></span>{{end}}
   {{if .Kind}}<span class="kv"><span class="k">kind</span><span class="eq">=</span><span class="v">{{.Kind}}</span></span>{{end}}
   {{if .When}}<span class="kv"><span class="k">ends</span><span class="eq">=</span><span class="v">{{.When}}</span></span>{{end}}
+  {{if eq .Platform "twitch"}}
+  <span class="kv"><span class="k">open</span><span class="eq">=</span><span class="v"><a href="https://www.twitch.tv/drops/campaigns" target="_blank" rel="noopener">twitch.tv/drops/campaigns →</a></span></span>
+  {{else if eq .Platform "kick"}}
+  <span class="kv"><span class="k">open</span><span class="eq">=</span><span class="v"><a href="https://kick.com/drops/all-campaigns" target="_blank" rel="noopener">kick.com/drops →</a></span></span>
+  {{end}}
 </div>
 {{if .Benefits}}
 <table class="tbl items" style="margin:6px 18px 10px;">
