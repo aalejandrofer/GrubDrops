@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alexedwards/scs/v2"
+
 	mlog "github.com/aalejandrofer/rust-drops-miner/internal/log"
 	"github.com/aalejandrofer/rust-drops-miner/internal/scheduler"
 	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
@@ -16,6 +18,7 @@ import (
 type dashboardDeps struct {
 	q     *gen.Queries
 	t     Renderer
+	sm    *scs.SessionManager
 	sch   *scheduler.Scheduler
 	ring  *mlog.Ring
 	start time.Time
@@ -66,7 +69,7 @@ type dashMineCard struct {
 type dashQueueItem struct {
 	N    int
 	Name string
-	Sub  string // "twitch · Rust Drops"
+	Sub  string // "twitch · Campaign A"
 	Req  string // "60m"
 }
 
@@ -143,8 +146,8 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 		NextClaims:    nextClaimsFrom(cards),
 		ActiveCamps:   stubActiveCamps(),
 		Priority:      stubPriority(),
-		ChannelTabs:   []string{"Rust Twitch Drops"},
-		ChannelActive: "Rust Twitch Drops",
+		ChannelTabs:   []string{"All campaigns"},
+		ChannelActive: "All campaigns",
 		Channels:      stubChannels(),
 		Events:        eventsFromRing(d.ring, ""),
 		UpdatedAt:     nowPoll(time.Now()),
@@ -398,33 +401,36 @@ func stubNextClaims(cards []dashMineCard) []dashMineCard {
 }
 
 func stubActiveCamps() []dashCampaign {
+	// stub: placeholder data, not real campaigns
 	return []dashCampaign{
-		{Name: "Rust Twitch Drops", Platform: "twitch", Drops: 3, Channels: 12, EndsIn: "12d", Claimed: 1, Total: 3},
-		{Name: "Holiday Drops", Platform: "twitch", Drops: 2, Channels: 4, EndsIn: "5d", Claimed: 0, Total: 2},
-		{Name: "Kick Rust Drops", Platform: "kick", Drops: 5, Channels: 8, EndsIn: "21d", Claimed: 2, Total: 5},
-		{Name: "Kick Holiday", Platform: "kick", Drops: 1, Channels: 3, EndsIn: "8d", Claimed: 0, Total: 1},
-		{Name: "Rust Tournament Drops", Platform: "twitch", Drops: 2, Channels: 6, EndsIn: "18h", EndsUrgent: true, Claimed: 0, Total: 2},
+		{Name: "Active Campaign A", Platform: "twitch", Drops: 3, Channels: 12, EndsIn: "12d", Claimed: 1, Total: 3},
+		{Name: "Active Campaign B", Platform: "twitch", Drops: 2, Channels: 4, EndsIn: "5d", Claimed: 0, Total: 2},
+		{Name: "Active Campaign C", Platform: "kick", Drops: 5, Channels: 8, EndsIn: "21d", Claimed: 2, Total: 5},
+		{Name: "Active Campaign D", Platform: "kick", Drops: 1, Channels: 3, EndsIn: "8d", Claimed: 0, Total: 1},
+		{Name: "Active Campaign E", Platform: "twitch", Drops: 2, Channels: 6, EndsIn: "18h", EndsUrgent: true, Claimed: 0, Total: 2},
 	}
 }
 
 func stubPriority() []dashPrioItem {
+	// stub: placeholder priority list
 	return []dashPrioItem{
-		{Rank: 1, Name: "Rust Tournament", Sub: "twitch · ends 18h", Enabled: true},
-		{Rank: 2, Name: "Rust Twitch Drops", Sub: "twitch · main", Enabled: true},
-		{Rank: 3, Name: "Kick Rust Drops", Sub: "kick · main", Enabled: true},
-		{Rank: 4, Name: "Holiday Drops", Sub: "twitch · seasonal", Enabled: true},
-		{Rank: 5, Name: "Kick Holiday", Sub: "kick · seasonal", Enabled: false},
+		{Rank: 1, Name: "Campaign A", Sub: "twitch · ends 18h", Enabled: true},
+		{Rank: 2, Name: "Campaign B", Sub: "twitch · main", Enabled: true},
+		{Rank: 3, Name: "Campaign C", Sub: "kick · main", Enabled: true},
+		{Rank: 4, Name: "Campaign D", Sub: "twitch · seasonal", Enabled: true},
+		{Rank: 5, Name: "Campaign E", Sub: "kick · seasonal", Enabled: false},
 	}
 }
 
 func stubChannels() []dashChannel {
+	// stub: placeholder channels, game name is illustrative only
 	return []dashChannel{
-		{Login: "shroud", Initial: "S", Game: "rust", Live: true, Duration: "4h27m", Views: "62.4k"},
-		{Login: "nickmercs", Initial: "N", Game: "rust", Live: true, Duration: "2h08m", Views: "31.2k"},
-		{Login: "welyn", Initial: "W", Game: "rust", Live: true, Duration: "6h11m", Views: "18.7k"},
-		{Login: "blooprint", Initial: "B", Game: "rust", Live: false, LastLive: "6h ago"},
-		{Login: "mendo", Initial: "M", Game: "rust", Live: false, LastLive: "2d ago"},
-		{Login: "facepunch", Initial: "F", Game: "rust", Live: false, LastLive: "1w ago"},
+		{Login: "streamer_one", Initial: "S", Game: "game", Live: true, Duration: "4h27m", Views: "62.4k"},
+		{Login: "streamer_two", Initial: "N", Game: "game", Live: true, Duration: "2h08m", Views: "31.2k"},
+		{Login: "streamer_three", Initial: "W", Game: "game", Live: true, Duration: "6h11m", Views: "18.7k"},
+		{Login: "streamer_four", Initial: "B", Game: "game", Live: false, LastLive: "6h ago"},
+		{Login: "streamer_five", Initial: "M", Game: "game", Live: false, LastLive: "2d ago"},
+		{Login: "streamer_six", Initial: "F", Game: "game", Live: false, LastLive: "1w ago"},
 	}
 }
 
@@ -442,10 +448,15 @@ func stubEvents() []dashEvent {
 }
 
 func (d dashboardDeps) page(w http.ResponseWriter, r *http.Request) {
+	var flash string
+	if d.sm != nil {
+		flash = d.sm.PopString(r.Context(), "flash")
+	}
 	render(w, d.t, "dashboard.html", templateData{
 		AuthedAdmin: true,
 		CSRFToken:   csrfToken(r),
 		Active:      "dashboard",
+		Flash:       flash,
 		Page:        d.collectPage(r),
 	})
 }

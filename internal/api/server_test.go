@@ -17,3 +17,26 @@ func TestHealthz(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "ok\n", rec.Body.String())
 }
+
+func TestApplyRedirectTarget(t *testing.T) {
+	cases := []struct {
+		name, referer, want string
+	}{
+		{"empty referer", "", "/"},
+		{"dashboard referer", "https://miner.example.com/", "/"},
+		{"accounts list referer", "https://miner.example.com/accounts", "/accounts"},
+		{"accounts detail referer", "https://miner.example.com/accounts/abc", "/accounts/abc"},
+		{"with query string", "https://miner.example.com/accounts?filter=on", "/accounts?filter=on"},
+		{"settings referer", "https://miner.example.com/settings", "/settings"},
+		{"unparseable referer", "::not a url::", "/"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/accounts/apply", nil)
+			if tc.referer != "" {
+				req.Header.Set("Referer", tc.referer)
+			}
+			assert.Equal(t, tc.want, applyRedirectTarget(req))
+		})
+	}
+}

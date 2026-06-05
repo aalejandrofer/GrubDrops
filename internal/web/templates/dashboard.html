@@ -1,6 +1,7 @@
 {{define "title"}}Dashboard · rust-drops-miner{{end}}
 
 {{define "content"}}
+{{if .Flash}}<div class="flash-ok">{{.Flash}}</div>{{end}}
 {{with .Page}}
 <div class="page-head">
   <div>

@@ -3,7 +3,10 @@ package api
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -17,6 +20,32 @@ import (
 	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
 	"github.com/aalejandrofer/rust-drops-miner/internal/web"
 )
+
+// applyRedirectTarget picks the post-/accounts/apply landing page from
+// the Referer header. The dashboard also has a Reload button, so we
+// avoid the old behavior of always bouncing the user to /accounts:
+//   - if the referer mentions /accounts, return that path (sticks the
+//     user on whichever /accounts page they were on);
+//   - otherwise, return the referer path so they stay put (e.g.
+//     dashboard "/");
+//   - fall back to "/" when the header is missing or unparseable.
+// Only the path+query of the referer is honored — never the host — to
+// avoid open-redirect vectors.
+func applyRedirectTarget(r *http.Request) string {
+	ref := strings.TrimSpace(r.Header.Get("Referer"))
+	if ref == "" {
+		return "/"
+	}
+	u, err := url.Parse(ref)
+	if err != nil || u.Path == "" {
+		return "/"
+	}
+	target := u.Path
+	if u.RawQuery != "" {
+		target += "?" + u.RawQuery
+	}
+	return target
+}
 
 type Deps struct {
 	DB              *sql.DB
@@ -65,7 +94,7 @@ func NewRouter(d Deps) http.Handler {
 	if startedAt.IsZero() {
 		startedAt = time.Now()
 	}
-	dash := dashboardDeps{q: d.Q, t: d.Templates, sch: d.Scheduler, ring: d.LogRing, start: startedAt}
+	dash := dashboardDeps{q: d.Q, t: d.Templates, sm: d.Session, sch: d.Scheduler, ring: d.LogRing, start: startedAt}
 	accs := accountsDeps{q: d.Q, t: d.Templates, sm: d.Session, sch: d.Scheduler}
 	loginTwitch := newLoginTwitchDeps(d, d.RootCtx)
 	loginKick := &loginKickDeps{
@@ -149,8 +178,19 @@ func NewRouter(d Deps) http.Handler {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		d.Session.Put(r.Context(), "flash", "watchers reloaded")
-		http.Redirect(w, r, "/accounts", http.StatusSeeOther)
+		// Count enabled accounts so the flash message is actually
+		// informative; a query failure is non-fatal — fall back to
+		// the bare success string.
+		msg := "watchers reloaded"
+		if accs, err := d.Q.ListEnabledAccounts(r.Context()); err == nil {
+			msg = fmt.Sprintf("watchers reloaded — %d enabled accounts", len(accs))
+		}
+		d.Session.Put(r.Context(), "flash", msg)
+		// Redirect back to where the user clicked Reload from
+		// instead of always bouncing to /accounts. The dashboard
+		// also has a Reload button, and bouncing the user off the
+		// dashboard each time is jarring.
+		http.Redirect(w, r, applyRedirectTarget(r), http.StatusSeeOther)
 	})
 	authed.Post("/logout", authH.logoutPost)
 
