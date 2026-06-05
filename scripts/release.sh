@@ -49,4 +49,4 @@ echo "Released:"
 echo "  $MINER_IMAGE:$TAG"
 echo "  $BROWSER_IMAGE:$TAG"
 echo
-echo "Next: update humblewhale/rust-drops-miner/compose.yml image tags, commit, deploy."
+echo "Next: update humblewhale/dropsminer/compose.yml image tags, commit, deploy."
