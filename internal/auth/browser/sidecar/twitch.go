@@ -312,12 +312,17 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 		const domCards = document.querySelectorAll('[data-test-selector*="drop"], [class*="drop-campaign"], a[href*="/drops/campaigns/"]').length;
 		const title = document.title;
 		const url = location.href;
+		const bodyText = (document.body && document.body.innerText || '').slice(0, 1500);
+		const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4')).slice(0, 12).map(h => (h.textContent||'').trim()).filter(Boolean);
+		const anchors = Array.from(document.querySelectorAll('a[href*="drops"]')).slice(0, 20).map(a => ({h: a.getAttribute('href'), t: (a.textContent||'').trim().slice(0,80)}));
 		return JSON.stringify({
 			url, title,
 			apollo_client_present: hasClient,
 			apollo_cache_keys: cacheKeys,
 			typename_counts: typeCounts,
 			dom_drop_cards: domCards,
+			headings, anchors,
+			body_text_prefix: bodyText,
 			win_keys: winKeys
 		});
 	})()`
