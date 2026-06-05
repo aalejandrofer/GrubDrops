@@ -158,14 +158,26 @@
           </select>
         </label>
       </div>
-      <label>Account ID <span style="text-transform:none;font-weight:400;color:var(--muted)">(copy from the miner's Accounts page)</span>
-        <input type="text" name="account_id" placeholder="acc_…" required>
-      </label>
-      <label class="kick-only hide">Kick channel
-        <input type="text" name="channel" placeholder="streamer-login">
-      </label>
+      <div style="margin-bottom: 14px;">
+        <div class="kicker">step 1 · sign in</div>
+        <button type="button" id="open-platform" style="background: var(--surface-2); color: var(--text); border: 1px solid var(--line); margin-top: 6px; width: 100%; padding: 12px;">
+          Open <span id="platform-label">Twitch</span> in a new tab →
+        </button>
+        <div style="font-size: 11px; color: var(--muted); margin-top: 6px;">
+          A new tab opens. Sign in there if you're not already, then return here.
+        </div>
+      </div>
+      <div>
+        <div class="kicker">step 2 · upload</div>
+        <label style="margin-top: 6px;">Account ID <span style="text-transform:none;font-weight:400;color:var(--muted)">(copy from the miner's Accounts page)</span>
+          <input type="text" name="account_id" placeholder="acc_…" required>
+        </label>
+        <label class="kick-only hide">Kick channel
+          <input type="text" name="channel" placeholder="streamer-login">
+        </label>
+      </div>
       <div class="submit-row">
-        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);">no data leaves your machine except cookies → miner</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);">cookies → miner. No data leaves your machine otherwise.</span>
         <button type="submit" id="submit">Upload →</button>
       </div>
     </form>
@@ -175,13 +187,24 @@
 <script>
 const form = document.getElementById('form');
 const platform = document.getElementById('platform');
+const platformLabel = document.getElementById('platform-label');
+const openBtn = document.getElementById('open-platform');
 const kickOnly = document.querySelector('.kick-only');
 const channelInput = kickOnly.querySelector('input');
 const status = document.getElementById('status');
 const submit = document.getElementById('submit');
 
+const PLATFORM_URL = {
+  twitch: 'https://www.twitch.tv/login',
+  kick:   'https://kick.com/'
+};
+
+let openedTab = null;
+
 function syncPlatform() {
-  if (platform.value === 'kick') {
+  const p = platform.value;
+  platformLabel.textContent = p === 'kick' ? 'Kick' : 'Twitch';
+  if (p === 'kick') {
     kickOnly.classList.remove('hide');
     channelInput.required = true;
   } else {
@@ -191,6 +214,16 @@ function syncPlatform() {
 }
 platform.addEventListener('change', syncPlatform);
 syncPlatform();
+
+openBtn.addEventListener('click', () => {
+  // Reuse the same window slot so repeated clicks don't spam tabs.
+  // Same-origin policy lets us close() this later because we opened it.
+  if (openedTab && !openedTab.closed) {
+    openedTab.focus();
+    return;
+  }
+  openedTab = window.open(PLATFORM_URL[platform.value], 'dm_helper_login');
+});
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -207,6 +240,11 @@ form.addEventListener('submit', async (e) => {
       status.textContent = '✓ ' + data.message;
       if (data.uploaded_cookies && data.uploaded_cookies.length) {
         status.textContent += '\n\nuploaded: ' + data.uploaded_cookies.join(', ');
+      }
+      // Close the login tab we opened — only works if we opened it.
+      if (openedTab && !openedTab.closed) {
+        try { openedTab.close(); } catch (_) {}
+        openedTab = null;
       }
     } else {
       status.classList.add('err');

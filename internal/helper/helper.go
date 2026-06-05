@@ -137,21 +137,30 @@ func PushKick(ctx context.Context, req KickRequest) (Result, error) {
 
 // --- cookie reading ---
 
+// readDomainCookies aggregates cookies for `domain` across every
+// browser kooky can find. kooky returns a non-nil error whenever
+// ANY store probe fails (missing browser binary, sandboxed file,
+// etc.) — that's noise here, since we only care that at least one
+// store had real cookies for this domain. Treat per-store failures
+// as warnings and only return an error when nothing came back.
 func readDomainCookies(ctx context.Context, domain, browser string) ([]*kooky.Cookie, error) {
-	cookies, err := kooky.ReadCookies(ctx, kooky.Valid, kooky.DomainHasSuffix(domain))
-	if err != nil {
-		return nil, err
-	}
-	if browser == "" {
-		return cookies, nil
-	}
-	out := cookies[:0]
-	for _, c := range cookies {
-		if c.Browser != nil && strings.EqualFold(c.Browser.Browser(), browser) {
-			out = append(out, c)
+	cookies, probeErr := kooky.ReadCookies(ctx, kooky.Valid, kooky.DomainHasSuffix(domain))
+	if browser != "" {
+		out := cookies[:0]
+		for _, c := range cookies {
+			if c.Browser != nil && strings.EqualFold(c.Browser.Browser(), browser) {
+				out = append(out, c)
+			}
 		}
+		cookies = out
 	}
-	return out, nil
+	if len(cookies) == 0 {
+		if probeErr != nil {
+			return nil, fmt.Errorf("no cookies found for %s — none of the installed browsers' stores were readable: %w", domain, probeErr)
+		}
+		return nil, fmt.Errorf("no cookies found for %s — are you signed in there in any browser?", domain)
+	}
+	return cookies, nil
 }
 
 func pickCookies(all []*kooky.Cookie, want []string) map[string]string {
