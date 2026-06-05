@@ -25,14 +25,35 @@ type tabState struct {
 	cancel context.CancelFunc
 }
 
+// stealthUA is a realistic, recent Chrome on Win10 desktop UA. Used
+// across both the launch flags and the per-tab Network.SetUserAgent
+// override below.
+const stealthUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+
 // New launches a headless Chrome via the system path. In the sidecar
 // container the binary lives at /headless-shell/headless-shell.
+//
+// Flags chosen to defeat PerimeterX / kasada-style anti-bot fingerprint
+// checks (the kind Twitch deploys via k.twitchcdn.net/p.js). The
+// default chromedp headless mode leaks navigator.webdriver=true and
+// other tells; --disable-blink-features=AutomationControlled removes
+// the worst offender, and a per-tab JS override patches the rest.
 func New(ctx context.Context) *Browser {
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true),
+		chromedp.Flag("headless", "new"),
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("no-sandbox", true),
 		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.Flag("disable-blink-features", "AutomationControlled"),
+		chromedp.Flag("disable-features", "IsolateOrigins,site-per-process"),
+		chromedp.Flag("disable-infobars", true),
+		chromedp.Flag("disable-extensions-except", ""),
+		chromedp.Flag("disable-default-apps", true),
+		chromedp.Flag("disable-popup-blocking", true),
+		chromedp.Flag("no-first-run", true),
+		chromedp.Flag("no-default-browser-check", true),
+		chromedp.Flag("lang", "en-US,en;q=0.9"),
+		chromedp.UserAgent(stealthUA),
 	)
 	allocCtx, cancel := chromedp.NewExecAllocator(ctx, opts...)
 	return &Browser{
@@ -41,6 +62,50 @@ func New(ctx context.Context) *Browser {
 		tabs:        map[string]tabState{},
 	}
 }
+
+// StealthScript is the JS payload evaluated on every new document
+// before page scripts run. It removes the standard "I'm a bot" tells
+// PerimeterX and friends look for: navigator.webdriver, missing
+// window.chrome.runtime, suspicious plugin/language counts.
+const StealthScript = `
+(() => {
+  // Hide navigator.webdriver
+  try {
+    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+  } catch(e) {}
+
+  // Fake window.chrome.runtime (headless Chrome leaves chrome.runtime undefined)
+  if (!window.chrome) { window.chrome = {}; }
+  if (!window.chrome.runtime) { window.chrome.runtime = {}; }
+  if (!window.chrome.app) {
+    window.chrome.app = {
+      isInstalled: false,
+      InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' },
+      RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' }
+    };
+  }
+
+  // Patch navigator.plugins to look like a real browser
+  try {
+    Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+  } catch(e) {}
+
+  // Patch navigator.languages
+  try {
+    Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+  } catch(e) {}
+
+  // Patch permission query so it doesn't reveal headless quirks
+  const originalQuery = navigator.permissions && navigator.permissions.query;
+  if (originalQuery) {
+    navigator.permissions.query = (parameters) => (
+      parameters.name === 'notifications'
+        ? Promise.resolve({state: Notification.permission})
+        : originalQuery(parameters)
+    );
+  }
+})();
+`
 
 // Close terminates the browser allocator and all open tabs.
 func (b *Browser) Close() {

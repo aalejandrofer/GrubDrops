@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 
@@ -39,6 +40,19 @@ func (t *Twitch) Authenticate(ctx context.Context, accountID string, session *pb
 	handle, tabCtx, fresh, err := t.acquireTab(accountID)
 	if err != nil {
 		return "", "", err
+	}
+	if fresh {
+		// Install the stealth shim BEFORE any navigation so it runs at
+		// the top of every document — including the first page load.
+		if err := chromedp.Run(tabCtx,
+			chromedp.ActionFunc(func(ctx context.Context) error {
+				_, err := page.AddScriptToEvaluateOnNewDocument(StealthScript).Do(ctx)
+				return err
+			}),
+		); err != nil {
+			t.closeTab(accountID)
+			return "", "", fmt.Errorf("install stealth: %w", err)
+		}
 	}
 	if err := installTwitchCookies(tabCtx, session); err != nil {
 		t.closeTab(accountID)
