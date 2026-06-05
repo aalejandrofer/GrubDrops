@@ -28,10 +28,49 @@ type Twitch struct {
 	mu       sync.Mutex
 	authTabs map[string]string     // account_id -> tab handle
 	tabMu    map[string]*sync.Mutex // account_id -> per-tab mutex (serialises navigations)
+
+	// Last successful scrape result per account. Twitch's drops page
+	// is flaky in headless — sometimes renders campaigns, sometimes
+	// returns degraded HTML. Cache the last good result so an empty
+	// scrape doesn't poison the watcher; we fall back to stale data
+	// for up to 30 minutes.
+	scrapeCacheMu sync.Mutex
+	scrapeCache   map[string]scrapedCampaignsCache
+}
+
+type scrapedCampaignsCache struct {
+	camps  []apolloCampaign
+	cached time.Time
 }
 
 func NewTwitch(b *Browser) *Twitch {
-	return &Twitch{b: b, authTabs: map[string]string{}, tabMu: map[string]*sync.Mutex{}}
+	return &Twitch{
+		b:           b,
+		authTabs:    map[string]string{},
+		tabMu:       map[string]*sync.Mutex{},
+		scrapeCache: map[string]scrapedCampaignsCache{},
+	}
+}
+
+// rememberScrape stores the last good scrape result for an account.
+func (t *Twitch) rememberScrape(accountID string, camps []apolloCampaign) {
+	if len(camps) == 0 {
+		return
+	}
+	t.scrapeCacheMu.Lock()
+	t.scrapeCache[accountID] = scrapedCampaignsCache{camps: camps, cached: time.Now()}
+	t.scrapeCacheMu.Unlock()
+}
+
+// recallScrape returns the cached scrape result if it's fresh enough.
+func (t *Twitch) recallScrape(accountID string) ([]apolloCampaign, bool) {
+	t.scrapeCacheMu.Lock()
+	defer t.scrapeCacheMu.Unlock()
+	c, ok := t.scrapeCache[accountID]
+	if !ok || time.Since(c.cached) > 30*time.Minute {
+		return nil, false
+	}
+	return c.camps, true
 }
 
 // lockTab returns the per-account mutex used to serialise chromedp
@@ -160,9 +199,17 @@ func (t *Twitch) GQL(ctx context.Context, accountID string, body []byte) ([]byte
 				slog.Warn("gql evalFetch failed; falling back to drops page scrape", "account", accountID, "err", err, "status", status)
 			}
 			camps, scrapeErr := scrapeDropsCampaignsPage(tabCtx)
-			if scrapeErr != nil {
+			if scrapeErr == nil && len(camps) > 0 {
+				t.rememberScrape(accountID, camps)
+			} else if len(camps) == 0 {
+				if cached, ok := t.recallScrape(accountID); ok {
+					slog.Info("scrape returned 0 campaigns; using cached result from earlier successful scrape", "account", accountID, "cached_count", len(cached))
+					camps = cached
+				}
+			}
+			if scrapeErr != nil && len(camps) == 0 {
 				if err == nil && status == 200 {
-					return resp, status, nil // keep empty result; scrape was best-effort
+					return resp, status, nil
 				}
 				return resp, status, fmt.Errorf("evalFetch failed (%v) and scrape fallback failed: %w", err, scrapeErr)
 			}
@@ -391,13 +438,18 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 		return true;
 	})()`
 	var dummy bool
+	// Force a hard reload by bouncing through about:blank — otherwise
+	// chromedp serves the cached degraded HTML from the last scrape
+	// attempt and we never see the drops list re-render.
 	if err := chromedp.Run(tabCtx,
+		chromedp.Navigate("about:blank"),
+		chromedp.Sleep(500*time.Millisecond),
 		chromedp.Navigate("https://www.twitch.tv/drops/campaigns"),
-		chromedp.Sleep(4*time.Second),
+		chromedp.Sleep(5*time.Second),
 		chromedp.Evaluate(dismissBanners, &dummy),
 		chromedp.Sleep(2*time.Second),
 		chromedp.Evaluate(dismissBanners, &dummy),
-		chromedp.Sleep(6*time.Second),
+		chromedp.Sleep(8*time.Second),
 		chromedp.Evaluate(scrollScript, &dummy),
 		chromedp.Sleep(4*time.Second),
 		chromedp.Evaluate(scrollScript, &dummy),
