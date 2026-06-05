@@ -252,7 +252,193 @@
   }
   .sec-head .meta b { color: var(--text); }
 
-  /* CURRENTLY MINING — rich cards */
+  /* Full-width sections (used for currently-mining and live-pair below
+     the 2-col upper layout). Breaks out of any narrower wrapper above
+     while still respecting the page's max-width via main's padding. */
+  .section-wide {
+    grid-column: 1 / -1;
+  }
+
+  /* CURRENTLY MINING — compact two-column platform layout. The wrapper
+     splits the row into a TWITCH column and a KICK column; each column
+     holds one .account-row per account. Old .mcard grid removed. */
+  .mining-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 1100px) {
+    .mining-columns { grid-template-columns: 1fr; }
+  }
+  .mining-col {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+  }
+  .mining-col-head {
+    display: grid;
+    grid-template-columns: 10px auto 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .mining-col-head .pip {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .mining-col-head .pip.twitch { background: var(--purple); box-shadow: 0 0 6px rgba(176, 121, 240, 0.5); }
+  .mining-col-head .pip.kick   { background: var(--kick);   box-shadow: 0 0 6px rgba(83, 231, 164, 0.4); }
+  .mining-col-head h3 {
+    margin: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--text);
+  }
+  .mining-col-head .count {
+    grid-column: 4;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Each account-row is an <a> so the whole row is a click-target into
+     the account detail page. Grid lays out: avatar · who · state pill ·
+     activity · progress bar. Progress bar slot is empty unless the row
+     is in the watching state — keeps the column rhythm consistent. */
+  .account-row {
+    display: grid;
+    grid-template-columns: 28px minmax(140px, 1fr) 96px minmax(180px, 2fr) 60px;
+    gap: 12px;
+    align-items: center;
+    padding: 9px 14px;
+    border-top: 1px dashed var(--line);
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.12s;
+  }
+  .mining-col .account-row:first-of-type { border-top: none; }
+  .account-row:hover { background: var(--surface-2); }
+  .account-row.disabled { opacity: 0.45; }
+  .account-row.empty {
+    padding: 18px 14px;
+    text-align: center;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  .account-row .av {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--surface-3), var(--dim));
+    border-radius: 50%;
+    font-family: 'Bricolage Grotesque', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line);
+  }
+  .mining-col-twitch .account-row .av { border-color: rgba(176, 121, 240, 0.5); }
+  .mining-col-kick   .account-row .av { border-color: rgba(83, 231, 164, 0.5); }
+  .account-row .who { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+  .account-row .who .login {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .account-row .who .name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* State pills — share the .state-pill base from the accounts table
+     so the visual vocabulary is consistent. Per-state overrides give
+     each kind a distinct color. */
+  .account-row .state-pill {
+    display: inline-block;
+    text-align: center;
+    padding: 3px 6px;
+    font-size: 9.5px;
+    line-height: 1.2;
+    letter-spacing: 0.12em;
+    border-radius: 2px;
+  }
+  .pill-watching   { color: var(--green);  border-color: rgba(111, 181, 107, 0.45); background: rgba(111, 181, 107, 0.06); }
+  .pill-claiming   { color: var(--amber);  border-color: rgba(225, 176, 74, 0.45);  background: rgba(225, 176, 74, 0.06); }
+  .pill-pick_stream,
+  .pill-pick_campaign { color: var(--blue); border-color: rgba(111, 141, 181, 0.45); background: rgba(111, 141, 181, 0.06); }
+  .pill-sleeping   { color: var(--muted);  border-color: var(--line); }
+  .pill-needs_auth { color: var(--accent); border-color: rgba(212, 99, 30, 0.5);    background: rgba(212, 99, 30, 0.08); }
+  .pill-idle,
+  .pill-stopped    { color: var(--dim);    border-color: var(--line); }
+  .account-row .activity {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+    min-width: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+  }
+  .account-row .activity .drop {
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .account-row .activity .meta {
+    color: var(--muted);
+    font-size: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Compact progress bar shown only on the watching row. Empty grid
+     cell when absent keeps the row alignment stable across states. */
+  .account-row .pbar.mini {
+    position: relative;
+    width: 100%;
+    height: 3px;
+    background: var(--surface-3);
+    overflow: hidden;
+  }
+  .account-row .pbar.mini .fill {
+    position: absolute; inset: 0 auto 0 0;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  }
+  @media (max-width: 720px) {
+    .account-row {
+      grid-template-columns: 28px 1fr auto;
+      grid-template-areas:
+        "av who pill"
+        "av act act"
+        "av bar bar";
+      row-gap: 4px;
+    }
+    .account-row .av       { grid-area: av; }
+    .account-row .who      { grid-area: who; }
+    .account-row .state-pill { grid-area: pill; }
+    .account-row .activity { grid-area: act; }
+    .account-row .pbar.mini { grid-area: bar; }
+  }
+
+  /* Legacy .mining-grid + .mcard styles kept below for any pages that
+     still reference them (none currently — dashboard moved to the
+     compact account-row layout above). Safe to delete once nothing
+     else points at them. */
   .mining-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
@@ -825,6 +1011,31 @@
     font-variant-numeric: tabular-nums;
   }
   .ch .views.off { color: var(--dim); }
+
+  /* LIVE PAIR — Live Events drawer + Live Channels grid, side by side
+     full-width. Stacks on narrow viewports so neither column gets
+     squeezed. */
+  .live-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-items: start;
+    margin-top: 8px;
+  }
+  @media (max-width: 1200px) {
+    .live-pair { grid-template-columns: 1fr; }
+  }
+  .live-pair-col { min-width: 0; }
+  .live-pair-events .drawer { margin-top: 0; }
+  /* Cap the events drawer height to roughly match the live-channels
+     column so the two columns visually align. Internal .events
+     already scrolls past max-height: 320px. */
+  .live-pair-events .events { max-height: 360px; }
+  .live-pair-channels .live-channels-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 8px;
+  }
 
   /* WIDE LIVE-CHANNELS GRID (under live events drawer) */
   .live-channels {

@@ -1,0 +1,80 @@
+{{define "dashboard_mining_columns"}}
+{{/* Two compact columns: TWITCH on the left, KICK on the right.
+     Each column renders one .account-row per account: avatar + handle +
+     state pill + a one-liner activity. Designed to fit 5–8 accounts per
+     column without scroll. The wrapping <div> is the HTMX swap target;
+     the polling endpoint refreshes its innerHTML every 2s. */}}
+<div class="mining-columns">
+
+  <section class="mining-col mining-col-twitch">
+    <header class="mining-col-head">
+      <span class="pip twitch"></span>
+      <h3>TWITCH</h3>
+      <span class="count">{{len .Twitch}}</span>
+    </header>
+    {{if not .Twitch}}
+    <div class="account-row empty">no twitch accounts</div>
+    {{end}}
+    {{range .Twitch}}{{template "dashboard_account_row" .}}{{end}}
+  </section>
+
+  <section class="mining-col mining-col-kick">
+    <header class="mining-col-head">
+      <span class="pip kick"></span>
+      <h3>KICK</h3>
+      <span class="count">{{len .Kick}}</span>
+    </header>
+    {{if not .Kick}}
+    <div class="account-row empty">no kick accounts</div>
+    {{end}}
+    {{range .Kick}}{{template "dashboard_account_row" .}}{{end}}
+  </section>
+
+</div>
+{{end}}
+
+{{define "dashboard_account_row"}}
+{{/* One compact row per account. The state pill carries the kind in a
+     dedicated class so the CSS picks the right color. The activity
+     line is platform-neutral: drop name + progress + ETA when watching,
+     a brief reason otherwise. */}}
+<a class="account-row {{if not .Enabled}}disabled{{end}} state-{{.State}}" href="/accounts/{{.ID}}">
+  <span class="av">{{.AccountInitial}}</span>
+  <span class="who">
+    <span class="login">{{.Login}}</span>
+    <span class="name">{{.Name}}</span>
+  </span>
+  <span class="state-pill pill-{{.State}}">
+    {{if eq .State "watching"}}watching
+    {{else if eq .State "claiming"}}claiming
+    {{else if eq .State "needs_auth"}}needs login
+    {{else if eq .State "sleeping"}}sleeping
+    {{else if eq .State "pick_stream"}}scanning
+    {{else if eq .State "pick_campaign"}}picking
+    {{else if eq .State "idle"}}idle
+    {{else}}{{.State}}{{end}}
+  </span>
+  <span class="activity">
+    {{if eq .State "watching"}}
+      <span class="drop">{{if .DropName}}{{.DropName}}{{else}}—{{end}}</span>
+      <span class="meta">{{.DropMins}}/{{.DropReq}}m · ETA {{.DropETA}}</span>
+    {{else if eq .State "claiming"}}
+      <span class="drop">{{if .DropName}}{{.DropName}}{{else}}drop{{end}}</span>
+      <span class="meta">claim in flight</span>
+    {{else if eq .State "pick_stream"}}
+      <span class="meta">scanning channels{{if .DropCampaign}} · {{.DropCampaign}}{{end}}</span>
+    {{else if eq .State "needs_auth"}}
+      <span class="meta">login required</span>
+    {{else if eq .State "sleeping"}}
+      <span class="meta">no eligible campaign</span>
+    {{else}}
+      <span class="meta">{{if .StateSub}}{{.StateSub}}{{else}}—{{end}}</span>
+    {{end}}
+  </span>
+  {{if eq .State "watching"}}
+  <span class="pbar mini">
+    <span class="fill" style="width: {{.DropPercent}}%"></span>
+  </span>
+  {{end}}
+</a>
+{{end}}

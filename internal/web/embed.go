@@ -30,14 +30,14 @@ func Static() fs.FS {
 // page's {{define "title"}} and {{define "content"}} blocks correctly override
 // the layout's {{block}} directives without conflicting with other pages.
 type PageTemplates struct {
-	base  *template.Template            // shared partials (nav, layout, dashboard_cards)
+	base  *template.Template            // shared partials (nav, layout, dashboard_mining_columns)
 	pages map[string]*template.Template // per-page clones
 }
 
 // ExecuteTemplate renders the named page or partial template into w.
 // Page templates (e.g. "setup.html") are rendered from their per-page clone
 // so that their "title"/"content" block overrides apply. Partial templates
-// (e.g. "dashboard_cards") are rendered from the shared base set.
+// (e.g. "dashboard_mining_columns") are rendered from the shared base set.
 func (p *PageTemplates) ExecuteTemplate(w io.Writer, name string, data any) error {
 	if tmpl, ok := p.pages[name]; ok {
 		return tmpl.ExecuteTemplate(w, name, data)
@@ -83,12 +83,12 @@ func Templates() (*PageTemplates, error) {
 	}
 
 	// Partition into base/shared files and page files.
-	// Base files: names starting with "_" or the partial "dashboard_cards.html".
+	// Base files: names starting with "_" or the named dashboard partials.
 	var baseFiles []string
 	var pageFiles []string
 	for _, m := range matches {
 		name := m[len("templates/"):]
-		if strings.HasPrefix(name, "_") || name == "dashboard_cards.html" || name == "dashboard_events.html" || name == "dashboard_campaign_modal.html" || name == "login_twitch_status.html" {
+		if strings.HasPrefix(name, "_") || name == "dashboard_mining_columns.html" || name == "dashboard_events.html" || name == "dashboard_campaign_modal.html" || name == "login_twitch_status.html" {
 			baseFiles = append(baseFiles, m)
 		} else {
 			pageFiles = append(pageFiles, m)

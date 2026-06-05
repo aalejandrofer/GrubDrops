@@ -73,14 +73,15 @@ type dashTelemetry struct {
 }
 
 type dashMineCard struct {
-	ID       string
-	Name     string
-	Login    string
-	Platform string // "twitch" | "kick"
-	State    string // "watching" | "claiming" | "pick_stream" | "sleeping" | "idle" | "stopped"
-	StateSub string // free-text aside
-	Uptime   string // "17m on stream" or "—"
-	Enabled  bool
+	ID             string
+	Name           string
+	Login          string
+	AccountInitial string // first letter of display name, "?" fallback
+	Platform       string // "twitch" | "kick"
+	State          string // "watching" | "claiming" | "pick_stream" | "sleeping" | "idle" | "stopped"
+	StateSub       string // free-text aside
+	Uptime         string // "17m on stream" or "—"
+	Enabled        bool
 
 	// Now-playing strip
 	Channel        string
@@ -150,11 +151,15 @@ type dashCampaignBenefit struct {
 	ImageURL        string
 }
 
-type dashPrioItem struct {
-	Rank    int
-	Name    string
-	Sub     string // "twitch · ends 18h"
-	Enabled bool
+// dashMiningColumns groups account rows by platform so the dashboard
+// can render two side-by-side compact columns ("TWITCH" and "KICK")
+// without the template re-bucketing on every render. Ordering inside
+// each slice mirrors the underlying account list (no resort) so the
+// per-account whitelist priority — set elsewhere — stays the visible
+// order on the dashboard.
+type dashMiningColumns struct {
+	Twitch []dashMineCard
+	Kick   []dashMineCard
 }
 
 // dashLiveChannel is one card in the full-width "Live channels — eligible
@@ -199,9 +204,8 @@ type dashEventAccount struct {
 type dashPage struct {
 	Tele          dashTelemetry
 	NextClaims    []dashMineCard // up to 4 items, sorted by ETA
-	Mining        []dashMineCard
+	Mining        dashMiningColumns
 	ActiveCamps   []dashCampaign
-	Priority      []dashPrioItem
 	LiveChannels  []dashLiveChannel // wide grid under the events drawer
 	Events        []dashEvent
 	EventAccounts []dashEventAccount // options for the per-account filter
@@ -232,10 +236,9 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 	allowed := allowedLoginsFor(r, d.q, accs)
 	page := dashPage{
 		Tele:          telemetryFrom(cards, snapshots),
-		Mining:        cards,
+		Mining:        bucketMiningByPlatform(cards),
 		NextClaims:    nextClaimsFrom(cards),
 		ActiveCamps:   activeCampsFromDiscovery(r.Context(), d.sch, d.channelCounters, d.q),
-		Priority:      stubPriority(),
 		LiveChannels:  liveChannelsFor(accs, snapshots, allowed),
 		Events:        eventsFromRing(d.ring, "", ""),
 		EventAccounts: eventAccountsFrom(accs),
@@ -244,6 +247,23 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 		Uptime:        formatUptime(time.Since(d.start)),
 	}
 	return page
+}
+
+// bucketMiningByPlatform splits the flat list of mining cards into the
+// two platform-keyed slices the new dashboard renders. Unknown
+// platforms are dropped — the dashboard only has columns for twitch
+// and kick today; new platforms must be wired here explicitly.
+func bucketMiningByPlatform(cards []dashMineCard) dashMiningColumns {
+	out := dashMiningColumns{}
+	for _, c := range cards {
+		switch c.Platform {
+		case "twitch":
+			out.Twitch = append(out.Twitch, c)
+		case "kick":
+			out.Kick = append(out.Kick, c)
+		}
+	}
+	return out
 }
 
 // claimedCounter is the subset of *gen.Queries the dashboard needs to
@@ -441,12 +461,13 @@ func formatViews(n int) string {
 
 func mineCardFromSnap(a gen.Account, s watcher.Snapshot) dashMineCard {
 	c := dashMineCard{
-		ID:       a.ID,
-		Name:     a.DisplayName,
-		Login:    "@" + a.Login,
-		Platform: a.Platform,
-		State:    s.State,
-		Enabled:  a.Enabled == 1,
+		ID:             a.ID,
+		Name:           a.DisplayName,
+		Login:          "@" + a.Login,
+		AccountInitial: initial(a.DisplayName),
+		Platform:       a.Platform,
+		State:          s.State,
+		Enabled:        a.Enabled == 1,
 	}
 	switch s.State {
 	case "watching":
@@ -769,17 +790,6 @@ func stubActiveCamps() []dashCampaign {
 	}
 }
 
-func stubPriority() []dashPrioItem {
-	// stub: placeholder priority list
-	return []dashPrioItem{
-		{Rank: 1, Name: "Campaign A", Sub: "twitch · ends 18h", Enabled: true},
-		{Rank: 2, Name: "Campaign B", Sub: "twitch · main", Enabled: true},
-		{Rank: 3, Name: "Campaign C", Sub: "kick · main", Enabled: true},
-		{Rank: 4, Name: "Campaign D", Sub: "twitch · seasonal", Enabled: true},
-		{Rank: 5, Name: "Campaign E", Sub: "kick · seasonal", Enabled: false},
-	}
-}
-
 func stubEvents() []dashEvent {
 	return []dashEvent{
 		{Time: "14:31:02", Kind: "claim", Color: "green", BodyHTML: "<em>claim</em> · Wolf Helmet recorded", Account: "helmet_farmer"},
@@ -808,8 +818,10 @@ func (d dashboardDeps) page(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d dashboardDeps) cards(w http.ResponseWriter, r *http.Request) {
-	// HTMX partial — refreshes just the mining cards block.
-	renderPartial(w, d.t, "dashboard_cards", d.collectPage(r).Mining)
+	// HTMX partial — refreshes just the mining columns block. The
+	// template name stays "dashboard_mining_columns" so the polling
+	// endpoint and the page render share the same partial.
+	renderPartial(w, d.t, "dashboard_mining_columns", d.collectPage(r).Mining)
 }
 
 func (d dashboardDeps) events(w http.ResponseWriter, r *http.Request) {

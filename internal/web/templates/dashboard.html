@@ -25,6 +25,10 @@
   <div class="stat"><div class="label">Heartbeats / hr</div><div class="value">{{.Tele.HeartbeatsHour}}<sup>last hr</sup></div><div class="delta flat">—</div></div>
 </section>
 
+{{/* Upper layout: Next-claim ETAs in the main column flanked by the
+     Active Campaigns sidebar. Currently Mining and the Live pair sit
+     below this band as full-width sections so the new compact platform
+     columns can breathe. */}}
 <div class="layout">
   <div>
 
@@ -47,71 +51,6 @@
         {{end}}
       </div>
     </section>
-
-    <section class="section" id="mining">
-      <div class="sec-head">
-        <h2>Currently mining</h2>
-        <div class="rule"></div>
-        <div class="meta">{{len .Mining}} accounts</div>
-      </div>
-      <div class="mining-grid" hx-get="/dashboard/cards" hx-trigger="every 2s" hx-swap="innerHTML">
-        {{template "dashboard_cards" .Mining}}
-      </div>
-    </section>
-
-    <section class="drawer">
-      <form class="drawer-head" id="events-form" autocomplete="off"
-            hx-get="/dashboard/events"
-            hx-target="#events-list"
-            hx-swap="innerHTML"
-            hx-trigger="change, click from:.filter a">
-        <h3>Live events</h3>
-        <div class="filter" role="group" aria-label="event kind filter">
-          <input type="hidden" name="filter" id="ev-filter" value="all">
-          <a class="on" data-kind="all" href="#">all</a>
-          <a data-kind="claim" href="#" style="color:var(--green)">claims</a>
-          <a data-kind="progress" href="#" style="color:var(--amber)">progress</a>
-          <a data-kind="state" href="#" style="color:var(--blue)">state</a>
-          <a data-kind="discovery" href="#">discovery</a>
-          <a data-kind="auth" href="#" style="color:var(--accent)">auth</a>
-          <a data-kind="error" href="#" style="color:var(--red)">errors</a>
-        </div>
-        <select name="account" id="ev-account" class="ev-account">
-          <option value="all">all accounts</option>
-          {{range .EventAccounts}}<option value="{{.ID}}">{{.Label}}</option>{{end}}
-        </select>
-        <div class="live">streaming</div>
-      </form>
-      <div class="events" id="events-list"
-           hx-get="/dashboard/events"
-           hx-include="#events-form"
-           hx-trigger="every 3s"
-           hx-swap="innerHTML">
-        {{template "dashboard_events" .Events}}
-      </div>
-    </section>
-    <script>
-      // Filter tabs are pure anchors; click selects them and mirrors
-      // into the hidden #ev-filter input so HTMX requests carry the
-      // kind in the query string. Listing as a small inline script
-      // keeps the template self-contained and avoids a new JS bundle.
-      (function () {
-        var form = document.getElementById('events-form');
-        if (!form) return;
-        var hidden = document.getElementById('ev-filter');
-        var tabs = form.querySelectorAll('.filter a');
-        tabs.forEach(function (a) {
-          a.addEventListener('click', function (e) {
-            e.preventDefault();
-            tabs.forEach(function (t) { t.classList.remove('on'); });
-            a.classList.add('on');
-            hidden.value = a.getAttribute('data-kind') || 'all';
-            // Manually dispatch so HTMX picks up the new hidden value.
-            htmx.trigger(form, 'change');
-          });
-        });
-      })();
-    </script>
 
   </div>
 
@@ -147,50 +86,110 @@
       </div>
     </div>
 
-    <div class="panel">
-      <div class="panel-head">
-        <h3>Priority list</h3>
-        <span class="meta">drag to reorder</span>
-      </div>
-      <div class="panel-body">
-        {{range .Priority}}
-        <div class="prio-item {{if not .Enabled}}off{{end}}">
-          <span class="rank">{{printf "%02d" .Rank}}</span>
-          <span class="grip">⋮⋮</span>
-          <span class="name">{{.Name}} <small>{{.Sub}}</small></span>
-          <span class="toggle">{{if .Enabled}}ON{{else}}OFF{{end}}</span>
-        </div>
-        {{end}}
-      </div>
-    </div>
-
   </aside>
 </div>
 
-<section class="section live-channels">
+{{/* Currently mining — full-width band, split by platform into two
+     compact account-row columns. HTMX polls /dashboard/cards every 2s
+     and swaps the inner .mining-columns wrapper. */}}
+<section class="section section-wide" id="mining">
   <div class="sec-head">
-    <h2>Live channels — eligible for whitelisted drops</h2>
+    <h2>Currently mining</h2>
     <div class="rule"></div>
-    <div class="meta">{{len .LiveChannels}} live · sorted by viewers</div>
+    <div class="meta">{{len .Mining.Twitch}} twitch · {{len .Mining.Kick}} kick</div>
   </div>
-  {{if .LiveChannels}}
-  <div class="live-channels-grid">
-    {{range .LiveChannels}}
-    <a class="lch {{.Platform}}" href="{{.URL}}" target="_blank" rel="noopener">
-      <span class="av">{{.Initial}}</span>
-      <div class="meta">
-        <div class="name">{{.Login}}</div>
-        <div class="sub">{{if .Game}}{{.Game}}{{else}}—{{end}}</div>
-        {{if .Campaign}}<div class="tag">{{.Campaign}}</div>{{end}}
+  <div id="mining-swap" hx-get="/dashboard/cards" hx-trigger="every 2s" hx-swap="innerHTML">
+    {{template "dashboard_mining_columns" .Mining}}
+  </div>
+</section>
+
+{{/* Live pair — Events drawer + Live channels grid sit side by side,
+     full width. Stacks under 1200px (see .live-pair media query). */}}
+<section class="section section-wide live-pair">
+
+  <div class="live-pair-col live-pair-events">
+    <section class="drawer">
+      <form class="drawer-head" id="events-form" autocomplete="off"
+            hx-get="/dashboard/events"
+            hx-target="#events-list"
+            hx-swap="innerHTML"
+            hx-trigger="change, click from:.filter a">
+        <h3>Live events</h3>
+        <div class="filter" role="group" aria-label="event kind filter">
+          <input type="hidden" name="filter" id="ev-filter" value="all">
+          <a class="on" data-kind="all" href="#">all</a>
+          <a data-kind="claim" href="#" style="color:var(--green)">claims</a>
+          <a data-kind="progress" href="#" style="color:var(--amber)">progress</a>
+          <a data-kind="state" href="#" style="color:var(--blue)">state</a>
+          <a data-kind="discovery" href="#">discovery</a>
+          <a data-kind="auth" href="#" style="color:var(--accent)">auth</a>
+          <a data-kind="error" href="#" style="color:var(--red)">errors</a>
+        </div>
+        <select name="account" id="ev-account" class="ev-account">
+          <option value="all">all accounts</option>
+          {{range .EventAccounts}}<option value="{{.ID}}">{{.Label}}</option>{{end}}
+        </select>
+        <div class="live">streaming</div>
+      </form>
+      <div class="events" id="events-list"
+           hx-get="/dashboard/events"
+           hx-include="#events-form"
+           hx-trigger="every 3s"
+           hx-swap="innerHTML">
+        {{template "dashboard_events" .Events}}
       </div>
-      <span class="views">{{.Views}}</span>
-    </a>
+    </section>
+  </div>
+
+  <div class="live-pair-col live-pair-channels">
+    <div class="sec-head">
+      <h2>Live channels — eligible for whitelisted drops</h2>
+      <div class="rule"></div>
+      <div class="meta">{{len .LiveChannels}} live · sorted by viewers</div>
+    </div>
+    {{if .LiveChannels}}
+    <div class="live-channels-grid">
+      {{range .LiveChannels}}
+      <a class="lch {{.Platform}}" href="{{.URL}}" target="_blank" rel="noopener">
+        <span class="av">{{.Initial}}</span>
+        <div class="meta">
+          <div class="name">{{.Login}}</div>
+          <div class="sub">{{if .Game}}{{.Game}}{{else}}—{{end}}</div>
+          {{if .Campaign}}<div class="tag">{{.Campaign}}</div>{{end}}
+        </div>
+        <span class="views">{{.Views}}</span>
+      </a>
+      {{end}}
+    </div>
+    {{else}}
+    <div class="live-channels-empty">no eligible channels live right now</div>
     {{end}}
   </div>
-  {{else}}
-  <div class="live-channels-empty">no eligible channels live right now</div>
-  {{end}}
+
 </section>
+
+<script>
+  // Filter tabs are pure anchors; click selects them and mirrors
+  // into the hidden #ev-filter input so HTMX requests carry the
+  // kind in the query string. Listing as a small inline script
+  // keeps the template self-contained and avoids a new JS bundle.
+  (function () {
+    var form = document.getElementById('events-form');
+    if (!form) return;
+    var hidden = document.getElementById('ev-filter');
+    var tabs = form.querySelectorAll('.filter a');
+    tabs.forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        tabs.forEach(function (t) { t.classList.remove('on'); });
+        a.classList.add('on');
+        hidden.value = a.getAttribute('data-kind') || 'all';
+        // Manually dispatch so HTMX picks up the new hidden value.
+        htmx.trigger(form, 'change');
+      });
+    });
+  })();
+</script>
 
 {{/* Modal target — populated by hx-get on Active Campaigns rows.
      Empty by default; the partial owns its own overlay markup. */}}
