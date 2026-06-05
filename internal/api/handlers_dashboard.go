@@ -219,6 +219,14 @@ type dashPage struct {
 	UpdatedAt     string             // "1.2s ago"
 	NodeAddr      string             // "10.10.2.40"
 	Uptime        string             // "17h 42m"
+	Alerts        []dashAlert        // top-of-page CTA banner items
+}
+
+type dashAlert struct {
+	Kind     string // "needs_auth" | "no_drops"
+	Account  string // display @login
+	URL      string // direct CTA link
+	Action   string // button label
 }
 
 func (d dashboardDeps) collectPage(r *http.Request) dashPage {
@@ -239,8 +247,29 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 	}
 
 	allowed := allowedLoginsFor(r, d.q, accs)
+	// Build alerts: any account in needs_auth state or sleeping with 0
+	// eligible drops gets a top banner pointing at the right CTA.
+	var alerts []dashAlert
+	for _, c := range cards {
+		switch c.State {
+		case "needs_auth":
+			alerts = append(alerts, dashAlert{
+				Kind: "needs_auth", Account: "@" + c.Login,
+				URL: "/accounts/" + c.ID + "/login", Action: "Re-authenticate →",
+			})
+		case "sleeping":
+			if c.Platform == "twitch" {
+				alerts = append(alerts, dashAlert{
+					Kind: "no_drops", Account: "@" + c.Login,
+					URL: "/accounts/" + c.ID + "/login", Action: "Switch to device-code login →",
+				})
+			}
+		}
+	}
+
 	page := dashPage{
 		Tele:          telemetryWithClaims(telemetryFrom(cards, snapshots), d.ring, d.q, r.Context()),
+		Alerts:        alerts,
 		Mining:        bucketMiningByPlatform(cards),
 		NextClaims:    nextClaimsFrom(cards),
 		ActiveCamps:   activeCampsFromDiscovery(r.Context(), d.sch, d.channelCounters, d.q),
