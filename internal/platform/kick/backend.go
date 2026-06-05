@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -93,6 +95,15 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 	}
 	camps, err := b.c.KickScrapeActiveDrops(ctx, s.AccountID, toProto(ks))
 	if err != nil {
+		// Cloudflare hard-blocks demote to soft-failure: return empty
+		// list so the watcher sees "no campaigns this cycle" and sleeps
+		// instead of looping into pick_campaign retries every 5 min.
+		// The error stays in logs at scrape time so we can still observe
+		// the block; here we just don't propagate it up.
+		if strings.Contains(err.Error(), "cloudflare blocked") {
+			slog.Warn("kick scrape blocked by cloudflare; treating as no campaigns this cycle", "account", s.AccountID)
+			return nil, nil
+		}
 		return nil, fmt.Errorf("kick scrape drops: %w", err)
 	}
 	out := make([]platform.Campaign, 0, len(camps))
