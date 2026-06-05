@@ -90,6 +90,25 @@ func TestKickBackend_DeviceLoginRejected(t *testing.T) {
 	require.Error(t, err)
 }
 
+// When the per-account whitelist excludes "Rust", Kick's synthetic
+// campaign must be suppressed at the backend layer — the only game it
+// can mine is Rust, so a rejecting filter means "this account opted
+// out of Kick entirely". Crucially the backend must NOT issue a
+// sidecar Inventory call when the filter rejects the game.
+func TestKickBackend_ListActiveCampaigns_GameFilterShortCircuits(t *testing.T) {
+	// nil browser client is fine because the short-circuit must happen
+	// before any sidecar call. If the filter check is missing the test
+	// will panic on b.c.Inventory.
+	b := New(nil)
+	sess := platform.Session{
+		Cookies:    map[string]string{"kick": `{}`},
+		GameFilter: func(game string) bool { return false },
+	}
+	camps, err := b.ListActiveCampaigns(context.Background(), sess)
+	require.NoError(t, err)
+	assert.Empty(t, camps)
+}
+
 func TestKickBackend_RegisterChannelExposesInList(t *testing.T) {
 	b := New(nil)
 	b.RegisterChannel("acc1", "fakestreamer")

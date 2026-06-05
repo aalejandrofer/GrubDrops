@@ -61,6 +61,14 @@ func (b *Backend) RefreshSession(_ context.Context, s platform.Session) (platfor
 }
 
 func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) ([]platform.Campaign, error) {
+	// Kick currently only surfaces Rust drops via the sidecar (no
+	// per-game discovery API). Honor the per-account whitelist by
+	// short-circuiting when "Rust" is not on the list — saves an
+	// inventory roundtrip and keeps the whitelist canonical.
+	const kickGame = "Rust"
+	if s.GameFilter != nil && !s.GameFilter(kickGame) {
+		return nil, nil
+	}
 	ks, err := decodeSession(s)
 	if err != nil {
 		return nil, err
@@ -82,7 +90,7 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 		})
 	}
 	return []platform.Campaign{{
-		ID: "kick-inventory", Platform: "kick", Game: "Rust",
+		ID: "kick-inventory", Platform: "kick", Game: kickGame,
 		Name: "Kick Rust Drops", Status: "active",
 		Benefits: benefits,
 	}}, nil

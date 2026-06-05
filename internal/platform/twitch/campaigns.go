@@ -113,6 +113,14 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 		if c.Status != "ACTIVE" {
 			continue
 		}
+		// Honor the per-account game whitelist BEFORE the per-campaign
+		// detail fetch — non-whitelisted campaigns must not waste a gql
+		// roundtrip. The watcher will re-filter defensively, but the
+		// whitelist is the source of truth and we want backends to
+		// respect it at the earliest opportunity.
+		if sess.GameFilter != nil && !sess.GameFilter(c.Game.DisplayName) {
+			continue
+		}
 		benefits, allowedLogins, err := d.fetchDetails(ctx, sess, c.ID)
 		if err != nil {
 			return nil, err

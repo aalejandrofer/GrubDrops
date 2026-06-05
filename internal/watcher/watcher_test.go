@@ -45,3 +45,22 @@ func TestWatcher_MinesUntilClaim(t *testing.T) {
 	// and transitions to StateSleeping before Run returns.
 	assert.Equal(t, StateSleeping, w.State())
 }
+
+// New() must plumb AllowGame into Session.GameFilter so backends can
+// short-circuit non-whitelisted games at the source. Regression guard:
+// if someone removes the plumbing the whitelist degrades to a
+// watcher-only filter and backends waste bandwidth.
+func TestWatcher_New_PropagatesAllowGameToSession(t *testing.T) {
+	allow := func(g string) bool { return g == "Rust" }
+	w := New(Config{
+		AccountID: "acc1",
+		Backend:   platformtest.New(),
+		Session:   platform.Session{AccessToken: "tok"},
+		Notifier:  &recordingNotifier{},
+		AllowGame: allow,
+	})
+	require.NotNil(t, w.cfg.Session.GameFilter)
+	assert.True(t, w.cfg.Session.GameFilter("Rust"))
+	assert.False(t, w.cfg.Session.GameFilter("Fortnite"))
+	assert.Equal(t, "acc1", w.cfg.Session.AccountID)
+}

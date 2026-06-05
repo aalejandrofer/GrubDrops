@@ -58,6 +58,12 @@ func New(cfg Config) *Watcher {
 		cfg.TickInterval = time.Minute
 	}
 	cfg.Session.AccountID = cfg.AccountID
+	// Plumb the whitelist into the Session so backends can short-circuit
+	// non-whitelisted games before doing per-campaign detail fetches.
+	// Same closure backs both layers — the whitelist is canonical.
+	if cfg.Session.GameFilter == nil {
+		cfg.Session.GameFilter = cfg.AllowGame
+	}
 	return &Watcher{cfg: cfg, state: StateIdle}
 }
 

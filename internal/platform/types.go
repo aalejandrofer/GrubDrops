@@ -14,6 +14,14 @@ type Session struct {
 	// so backends like the Twitch BrowserBackend can route per-account
 	// gRPC calls to the right sidecar tab.
 	AccountID string `json:"-"`
+
+	// GameFilter, when non-nil, returns true iff the given game name (or
+	// slug) is on this account's whitelist. Backends consult it inside
+	// ListActiveCampaigns to short-circuit non-whitelisted games BEFORE
+	// fanning out to per-campaign detail fetches (saves bandwidth and
+	// makes the whitelist canonical, not just a watcher-side filter).
+	// Match should be lenient — compare lowercased name OR slug.
+	GameFilter func(game string) bool `json:"-"`
 }
 
 type Campaign struct {
