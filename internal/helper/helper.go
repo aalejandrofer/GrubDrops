@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
@@ -309,12 +310,19 @@ func (c *minerClient) postRaw(ctx context.Context, path string, form url.Values)
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	// nosurf rejects TLS POSTs that lack a same-origin Origin or Referer.
-	// Set both to the request URL so the check passes regardless of which
-	// header nosurf inspects first.
+	// nosurf rejects TLS POSTs that lack a same-origin Origin/Referer.
+	// Sec-Fetch-Site: same-origin short-circuits the whole check, so
+	// set it AND Origin AND Referer for belt-and-braces.
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
 	req.Header.Set("Origin", c.base.Scheme+"://"+c.base.Host)
 	req.Header.Set("Referer", u.String())
-	dlog("POST %s (origin=%s)", u.String(), req.Header.Get("Origin"))
+	if debug() {
+		dlog("POST %s (origin=%s referer=%s)", u.String(), req.Header.Get("Origin"), req.Header.Get("Referer"))
+		for _, ck := range c.http.Jar.Cookies(&u) {
+			dlog("  cookie: %s=%s...", ck.Name, truncate(ck.Value, 16))
+		}
+		dlog("  form: %s", form.Encode())
+	}
 	prev := c.http.CheckRedirect
 	c.http.CheckRedirect = func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }
 	defer func() { c.http.CheckRedirect = prev }()
@@ -327,12 +335,15 @@ func (c *minerClient) postRaw(ctx context.Context, path string, form url.Values)
 
 var csrfRE = regexp.MustCompile(`name="csrf_token"\s+value="([^"]+)"`)
 
-func extractCSRF(html string) (string, error) {
-	m := csrfRE.FindStringSubmatch(html)
+func extractCSRF(body string) (string, error) {
+	m := csrfRE.FindStringSubmatch(body)
 	if len(m) < 2 {
 		return "", fmt.Errorf("csrf_token form field not found")
 	}
-	return m[1], nil
+	// Go html/template auto-escapes input value="..." attributes —
+	// "+" becomes "&#43;", "=" stays, etc. Unescape so we post the
+	// raw token nosurf actually generated.
+	return html.UnescapeString(m[1]), nil
 }
 
 func truncate(s string, n int) string {
