@@ -504,6 +504,60 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 				});
 			}
 		} catch (e) {}
+		// Second pass: walk every <a href*=/drops/campaigns/>. Modern
+		// Twitch may render cards without a portrait img[alt] (e.g. a
+		// thin banner-style card). Anchor-href is the more reliable
+		// discovery signal — every card links to /drops/campaigns/{id}.
+		// For each anchor, walk up looking for a game name in the
+		// ancestor headings OR a sibling img[alt]. Skip the link itself
+		// as the name source if it's blank/too-short.
+		try {
+			const anchors = Array.from(document.querySelectorAll('a[href*="/drops/campaigns/"]'));
+			for (const a of anchors) {
+				const href = a.getAttribute('href') || '';
+				const idMatch = href.match(/\/drops\/campaigns\/([^/?#]+)/);
+				if (!idMatch) continue;
+				const id = idMatch[1];
+				if (seenGames.has(id)) continue;
+				// Find a name: the anchor's own text, OR a heading inside.
+				let name = (a.textContent || '').trim().split('\n').map(s => s.trim()).filter(Boolean)[0] || '';
+				// Walk up to ~6 levels to find a game name. Game lives in
+				// either: an img[alt] with portrait aspect, OR a sibling
+				// link to /directory/category/{slug}, OR a heading.
+				let game = '';
+				let card = a;
+				for (let i = 0; i < 6 && card; i++) {
+					card = card.parentElement;
+					if (!card) break;
+					if (!game) {
+						const img = card.querySelector('img[alt]');
+						if (img && img.alt && img.alt.length > 0 && img.alt.length < 80) {
+							const w = img.naturalWidth || img.width || 0;
+							const h = img.naturalHeight || img.height || 0;
+							if (w === 0 || h === 0 || (h > w * 0.9)) {
+								game = img.alt.trim();
+							}
+						}
+					}
+					if (!game) {
+						const catLink = card.querySelector('a[href*="/directory/category/"]');
+						if (catLink) {
+							const t = (catLink.textContent || '').trim();
+							if (t && t.length < 80) game = t;
+						}
+					}
+					if (game) break;
+				}
+				if (!name) name = id;
+				const tlow = ((card && card.textContent) || '').toLowerCase();
+				const hasTime = /\b\d+\s*h\s*\d+\s*m\b|\b\d+\s*\/\s*\d+\s*h(?:ours?)?\b|watch\s+(?:for|to)|minutes?\s+to\s+claim/.test(tlow);
+				const hasReward = /\b(reward|claim)\b/.test(tlow);
+				const kind = hasTime ? 'drop' : (hasReward ? 'reward' : 'drop');
+				if (!game) continue; // can't whitelist without a game name
+				seenGames.add(id);
+				domOut.push({id: id, name: name.slice(0, 200), game: game, endsAt: '', startsAt: '', kind: kind});
+			}
+		} catch (e) {}
 		const resolve = (v) => {
 			if (!v || typeof v !== 'object') return v;
 			if (v.__ref && state[v.__ref]) return state[v.__ref];
@@ -536,10 +590,16 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 				startsAt: v.startAt || v.startsAt || ''
 			});
 		}
-		// If apollo walk produced nothing AND DOM scrape produced
-		// something, return DOM scrape as a fallback.
-		if (out.length === 0 && domOut.length > 0) {
-			return JSON.stringify(domOut);
+		// Merge: apollo entries are authoritative (real id + dates), DOM
+		// entries fill gaps. Dedupe by id so apollo wins on collision.
+		if (domOut.length > 0) {
+			const seenIDs = new Set(out.map(c => c.id));
+			for (const d of domOut) {
+				if (!seenIDs.has(d.id)) {
+					out.push(d);
+					seenIDs.add(d.id);
+				}
+			}
 		}
 		return JSON.stringify(out);
 	})()`
