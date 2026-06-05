@@ -143,7 +143,12 @@ type inventoryData struct {
 // filter Status == "active" before attempting to mine.
 func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]platform.Campaign, error) {
 	var page campaignsData
-	if err := d.c.gql(ctx, sess.AccessToken, OpCampaigns, nil, &page); err != nil {
+	// fetchRewardCampaigns: false matches DevilXD/TwitchDropsMiner's
+	// invocation of the ViewerDropsDashboard persisted query. Passing
+	// nil variables works too but may take a different server-side
+	// branch; matching DevilXD exactly removes one unknown.
+	vars := map[string]any{"fetchRewardCampaigns": false}
+	if err := d.c.gql(ctx, sess.AccessToken, OpCampaigns, vars, &page); err != nil {
 		return nil, fmt.Errorf("list campaigns: %w", err)
 	}
 	out := make([]platform.Campaign, 0, len(page.CurrentUser.DropCampaigns))

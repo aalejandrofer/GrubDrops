@@ -42,6 +42,16 @@ type Twitch struct {
 	integrityToken     string
 	integrityExpiresAt time.Time
 
+	// Anonymous catalog scrape — fresh chromedp tab WITHOUT cookies
+	// navigates twitch.tv/drops/campaigns to get the public catalog
+	// view. The authenticated per-account scrape is degraded by
+	// PerimeterX (renders blank for our session); the anonymous tab
+	// has no prior bot signal so the catalog renders. Refreshed
+	// roughly every 10 minutes.
+	anonScrapeMu        sync.Mutex
+	anonScrapeCamps     []apolloCampaign
+	anonScrapeFetchedAt time.Time
+
 	// Last successful scrape result per account. Twitch's drops page
 	// is flaky in headless — sometimes renders campaigns, sometimes
 	// returns degraded HTML. Cache the last good result so an empty
@@ -1206,7 +1216,7 @@ func (t *Twitch) fetchIntegrityToken(ctx context.Context, tabCtx context.Context
 		return fmt.Errorf("auth-token missing")
 	}
 	const androidClientID = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"
-	const androidUA = "Dalvik/2.1.0 (Linux; U; Android 14; Pixel 7 Build/UQ1A.240205.004) tv.twitch.android.app/19.1.0/1901000"
+	const androidUA = "Dalvik/2.1.0 (Linux; U; Android 16; SM-S911B Build/TP1A.220624.014) tv.twitch.android.app/25.3.0/2503006"
 	req, err := http.NewRequestWithContext(ctx, "POST", "https://gql.twitch.tv/integrity", bytes.NewReader([]byte("{}")))
 	if err != nil {
 		return fmt.Errorf("build integrity req: %w", err)
@@ -1293,7 +1303,7 @@ func (t *Twitch) gqlGoHTTP(ctx context.Context, tabCtx context.Context, body []b
 	// from a web browser session will fail integrity check
 	// regardless of which client headers we send.
 	const androidClientID = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"
-	const androidUA = "Dalvik/2.1.0 (Linux; U; Android 14; Pixel 7 Build/UQ1A.240205.004) tv.twitch.android.app/19.1.0/1901000"
+	const androidUA = "Dalvik/2.1.0 (Linux; U; Android 16; SM-S911B Build/TP1A.220624.014) tv.twitch.android.app/25.3.0/2503006"
 	req.Header.Set("Content-Type", "text/plain;charset=UTF-8")
 	req.Header.Set("Authorization", "OAuth "+authToken)
 	req.Header.Set("Client-Id", androidClientID)
