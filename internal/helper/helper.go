@@ -35,7 +35,7 @@ func dlog(format string, args ...any) {
 
 // Config carries the connection details shared by every push.
 type Config struct {
-	MinerURL string // e.g. https://rdrops.ryuzec.dev
+	MinerURL string // e.g. https://drops.ryuzec.dev
 	Password string // admin password
 	Browser  string // optional — limit cookie scan to a specific browser
 	Insecure bool   // skip TLS verify (debug)

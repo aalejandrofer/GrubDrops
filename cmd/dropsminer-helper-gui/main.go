@@ -58,7 +58,7 @@ func main() {
 
 	defaultMiner := os.Getenv("MINER_URL")
 	if defaultMiner == "" {
-		defaultMiner = "https://rdrops.ryuzec.dev"
+		defaultMiner = "https://drops.ryuzec.dev"
 	}
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

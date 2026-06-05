@@ -8,7 +8,7 @@
 //
 // Flags:
 //
-//	--miner    URL    Base URL of the miner (default https://rdrops.ryuzec.dev)
+//	--miner    URL    Base URL of the miner (default https://drops.ryuzec.dev)
 //	--password STR    Admin password. Falls back to MINER_PASSWORD env.
 //	--browser  NAME   Limit cookie search to a specific browser.
 //	--insecure        Skip TLS verification (debug only).
@@ -59,7 +59,7 @@ Usage:
   dropsminer-helper kick   <account-id> [--miner URL] [--password PW] [--browser NAME] --channel NAME
 
 Flags:
-  --miner     base URL of the miner (default https://rdrops.ryuzec.dev)
+  --miner     base URL of the miner (default https://drops.ryuzec.dev)
   --password  admin password (or set MINER_PASSWORD)
   --browser   limit cookie search to this browser (chrome, firefox, safari, ...)
   --channel   kick channel to mine (kick only, required)
@@ -74,7 +74,7 @@ type commonFlags struct {
 
 func parseCommon(fs *flag.FlagSet, args []string, extra func(*flag.FlagSet)) (commonFlags, []string, error) {
 	cf := commonFlags{Config: helper.Config{
-		MinerURL: "https://rdrops.ryuzec.dev",
+		MinerURL: "https://drops.ryuzec.dev",
 		Password: os.Getenv("MINER_PASSWORD"),
 	}}
 	fs.StringVar(&cf.MinerURL, "miner", cf.MinerURL, "base URL of the miner")
