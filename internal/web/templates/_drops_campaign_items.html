@@ -1,11 +1,12 @@
 {{define "drops_campaign_items"}}
 <div class="ev-detail">
-  <span class="kv"><span class="k">id</span><span class="eq">=</span><span class="v">{{.ID}}</span></span>
+  {{if .Platform}}<span class="kv"><span class="k">platform</span><span class="eq">=</span><span class="v">{{.Platform}}</span></span>{{end}}
+  {{if .Game}}<span class="kv"><span class="k">game</span><span class="eq">=</span><span class="v">{{.Game}}</span></span>{{end}}
   {{if .Status}}<span class="kv"><span class="k">status</span><span class="eq">=</span><span class="v">{{.Status}}</span></span>{{end}}
   {{if .Kind}}<span class="kv"><span class="k">kind</span><span class="eq">=</span><span class="v">{{.Kind}}</span></span>{{end}}
   {{if .When}}<span class="kv"><span class="k">ends</span><span class="eq">=</span><span class="v">{{.When}}</span></span>{{end}}
   {{if eq .Platform "twitch"}}
-  <span class="kv"><span class="k">open</span><span class="eq">=</span><span class="v"><a href="https://www.twitch.tv/drops/campaigns" target="_blank" rel="noopener">twitch.tv/drops/campaigns →</a></span></span>
+  <span class="kv"><span class="k">open</span><span class="eq">=</span><span class="v"><a href="https://www.twitch.tv/drops/campaigns" target="_blank" rel="noopener">twitch.tv/drops →</a></span></span>
   {{else if eq .Platform "kick"}}
   <span class="kv"><span class="k">open</span><span class="eq">=</span><span class="v"><a href="https://kick.com/drops/all-campaigns" target="_blank" rel="noopener">kick.com/drops →</a></span></span>
   {{end}}
