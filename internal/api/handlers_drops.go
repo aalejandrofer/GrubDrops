@@ -160,7 +160,7 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().Unix()
 	const limit = 200
 
-	pastRows, currentRows, upcomingRows, unlistedRows, err := d.collectAll(r.Context(), allow, hasWhitelist, now, limit)
+	pastRows, currentRows, upcomingRows, unlistedRows, err := d.collectAll(r.Context(), allow, hasWhitelist, now, limit, tab)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -212,17 +212,20 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 // collectAll runs all three queries (past, current, upcoming) and returns
 // rows filtered by the whitelist. PAST also unions in claim history so
 // that drops the operator has already claimed appear even if the campaign
-// row was evicted.
+// row was evicted. The unlisted slice mirrors whichever tab the caller
+// asked for (`tab` arg) so Discoverable always matches the active tab —
+// not a confusing cross-tab union.
 func (d *dropsDeps) collectAll(
 	ctx context.Context,
 	allow map[string]struct{}, hasWhitelist bool,
-	now int64, limit int64,
+	now int64, limit int64, tab dropTab,
 ) (past, current, upcoming, unlisted []dropsRow, err error) {
 	// Past: campaigns ended before now.
 	pastCamps, err := d.q.ListPastCampaigns(ctx, gen.ListPastCampaignsParams{EndsAt: now, Limit: limit})
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
+	var unlistedPast, unlistedCurrent, unlistedUpcoming []dropsRow
 	past = make([]dropsRow, 0, len(pastCamps))
 	for _, c := range pastCamps {
 		row := dropsRow{
@@ -237,7 +240,7 @@ func (d *dropsDeps) collectAll(
 		if passesWhitelist(allow, hasWhitelist, c.Game) {
 			past = append(past, row)
 		} else {
-			unlisted = append(unlisted, row)
+			unlistedPast = append(unlistedPast, row)
 		}
 	}
 
@@ -285,7 +288,7 @@ func (d *dropsDeps) collectAll(
 		if passesWhitelist(allow, hasWhitelist, c.Game) {
 			current = append(current, row)
 		} else {
-			unlisted = append(unlisted, row)
+			unlistedCurrent = append(unlistedCurrent, row)
 		}
 	}
 
@@ -310,8 +313,20 @@ func (d *dropsDeps) collectAll(
 		if passesWhitelist(allow, hasWhitelist, c.Game) {
 			upcoming = append(upcoming, row)
 		} else {
-			unlisted = append(unlisted, row)
+			unlistedUpcoming = append(unlistedUpcoming, row)
 		}
+	}
+
+	// Pick the per-tab unlisted bucket so Discoverable always matches
+	// the active tab. Cross-tab merging was confusing — Past tab would
+	// show non-past Discoverable rows.
+	switch tab {
+	case tabPast:
+		unlisted = unlistedPast
+	case tabUpcoming:
+		unlisted = unlistedUpcoming
+	default:
+		unlisted = unlistedCurrent
 	}
 
 	// Dedupe unlisted by (Platform, Game, CampaignName).

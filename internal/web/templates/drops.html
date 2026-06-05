@@ -34,6 +34,7 @@
        href="/drops?tab=current">
       Current <span class="count">{{.CurrentCount}}</span>
     </a>
+    {{if or (gt .UpcomingCount 0) (eq .Tab "upcoming")}}
     <a role="tab"
        class="drops-tab {{if eq .Tab "upcoming"}}on{{end}}"
        hx-get="/drops?tab=upcoming"
@@ -43,6 +44,7 @@
        href="/drops?tab=upcoming">
       Upcoming <span class="count">{{.UpcomingCount}}</span>
     </a>
+    {{end}}
   </div>
 
   <div class="drops-grid">
