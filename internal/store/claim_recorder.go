@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"time"
 
 	"github.com/aalejandrofer/dropsminer/internal/platform"
@@ -28,16 +29,31 @@ func NewClaimRecorder(q *gen.Queries) *ClaimRecorder {
 // collide on the PK; the (account_id, benefit_id) pair is the
 // reportable key, not the row ID.
 func (r *ClaimRecorder) RecordClaim(ctx context.Context, accountID string, b platform.DropBenefit) error {
+	return r.RecordClaimWithCode(ctx, accountID, b, "")
+}
+
+// RecordClaimWithCode writes a claim row and stores the redemption
+// code in value_meta_json so the /drops + /history surfaces can show
+// it. Used by the F9 onsite-notification path (Minecraft codes etc).
+// Empty code degrades to the same blob the bare-claim flow writes.
+func (r *ClaimRecorder) RecordClaimWithCode(ctx context.Context, accountID string, b platform.DropBenefit, code string) error {
 	if r == nil || r.Q == nil {
 		return nil
 	}
-	id := newClaimID()
+	meta := "{}"
+	if code != "" {
+		raw, _ := json.Marshal(struct {
+			Code        string `json:"code"`
+			BenefitName string `json:"benefit_name,omitempty"`
+		}{Code: code, BenefitName: b.Name})
+		meta = string(raw)
+	}
 	return r.Q.InsertClaim(ctx, gen.InsertClaimParams{
-		ID:            id,
+		ID:            newClaimID(),
 		AccountID:     accountID,
 		BenefitID:     b.ID,
 		ClaimedAt:     time.Now().Unix(),
-		ValueMetaJson: "{}",
+		ValueMetaJson: meta,
 	})
 }
 

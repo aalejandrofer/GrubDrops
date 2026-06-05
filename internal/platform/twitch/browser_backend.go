@@ -330,6 +330,7 @@ func (b *BrowserBackend) ensurePubSub(s platform.Session, a *twitchAccount) {
 			OnDropClaim:    hooks.OnDropClaim,
 			OnStreamDown:   hooks.OnStreamDown,
 			OnStreamUp:     hooks.OnStreamUp,
+			OnRewardCode:   hooks.OnRewardCode,
 		}
 	}
 	b.pubsubMu.Unlock()

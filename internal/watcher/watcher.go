@@ -134,6 +134,7 @@ func New(cfg Config) *Watcher {
 			OnDropClaim:    w.handlePubSubDropClaim,
 			OnStreamDown:   w.handlePubSubStreamDown,
 			OnStreamUp:     w.handlePubSubStreamUp,
+			OnRewardCode:   w.handlePubSubRewardCode,
 		})
 	}
 	return w
@@ -193,6 +194,48 @@ func (w *Watcher) handlePubSubStreamDown(channelID string) {
 // the channel naturally on the next tick. Reserved for future
 // back-off reset logic.
 func (w *Watcher) handlePubSubStreamUp(_ string) {}
+
+// handlePubSubRewardCode fires when an onsite-notification carries a
+// Mojang/Twitch redemption code. We don't know which benefit it maps
+// to (the notification only carries body text), so we log it for the
+// operator and forward to the ClaimRecorder with the current benefit
+// when one is in flight. Without a current benefit the code is still
+// logged so the user can recover it from logs even if state is lost.
+func (w *Watcher) handlePubSubRewardCode(notificationID, code, body string) {
+	w.mu.Lock()
+	var benefit platform.DropBenefit
+	if w.currentBenefit != nil {
+		benefit = *w.currentBenefit
+	}
+	w.mu.Unlock()
+	slog.Info("watcher reward code captured",
+		"kind", "claim",
+		"account", w.cfg.AccountID,
+		"notification_id", notificationID,
+		"code", code,
+		"benefit_id", benefit.ID,
+		"benefit_name", benefit.Name)
+	if w.cfg.ClaimRecorder == nil || benefit.ID == "" {
+		return
+	}
+	// Repurpose the existing claim recorder so the code lands in the
+	// claims table's value_meta_json. The /drops + /history surfaces
+	// already read from claims, so this gives operators the code
+	// without a schema migration.
+	recorderWithCode, ok := w.cfg.ClaimRecorder.(interface {
+		RecordClaimWithCode(ctx context.Context, accountID string, benefit platform.DropBenefit, code string) error
+	})
+	if !ok {
+		return
+	}
+	if err := recorderWithCode.RecordClaimWithCode(context.Background(), w.cfg.AccountID, benefit, code); err != nil {
+		slog.Warn("watcher record claim+code failed",
+			"kind", "error",
+			"account", w.cfg.AccountID,
+			"benefit", benefit.ID,
+			"err", err)
+	}
+}
 
 // campaignMinRemaining returns the smallest (RequiredMinutes -
 // MinutesWatched) across the campaign's benefits. Benefits with no

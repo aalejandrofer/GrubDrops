@@ -53,6 +53,11 @@ type PubSubHooks struct {
 	OnStreamDown func(channelID string)
 	// OnStreamUp mirrors OnStreamDown — fires on stream-up.
 	OnStreamUp func(channelID string)
+	// OnRewardCode fires when an onsite-notification carries a Twitch
+	// / Mojang-style redemption code (e.g. Minecraft cape codes).
+	// notificationID dedupes; body is the raw notification text so
+	// the receiver can extract game/drop context.
+	OnRewardCode func(notificationID, code, body string)
 }
 
 // PubSubAware is an optional backend capability. Backends that expose

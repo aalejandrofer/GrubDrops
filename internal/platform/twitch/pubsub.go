@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
@@ -49,6 +50,13 @@ type PubSubHandlers struct {
 	// channel can be re-picked without waiting for the discovery
 	// poll.
 	OnStreamUp func(channelID string)
+	// OnRewardCode fires when an onsite-notification payload carries
+	// a Twitch/Mojang-style redemption code (5 blocks of 5
+	// alphanumerics separated by hyphens — e.g. Minecraft cape codes).
+	// notificationID is the per-event identifier so the receiver can
+	// dedupe; body is the raw notification text so the receiver can
+	// capture surrounding context (game / drop name) when persisting.
+	OnRewardCode func(notificationID, code, body string)
 }
 
 // PubSubClient holds one WebSocket connection and the topics LISTENed
@@ -247,9 +255,11 @@ func (p *PubSubClient) dispatch(topic string, payload []byte) {
 		p.dispatchPlaybackEvent(topic, payload)
 	case startsWith(topic, "onsite-notifications."):
 		// Onsite notifications surface user_drop_reward_reminder + a
-		// pile of unrelated stuff. The drop-claim case is already
-		// covered by user-drop-events.drop-claim; ignore here unless we
-		// need it later.
+		// pile of unrelated stuff. Drop-claim is already covered by
+		// user-drop-events.drop-claim, so we only mine this stream
+		// for redemption codes (Minecraft etc) that aren't carried
+		// by the regular claim event.
+		p.dispatchNotification(payload)
 		return
 	default:
 		slog.Debug("pubsub unhandled topic", "topic", topic)
@@ -295,6 +305,73 @@ func (p *PubSubClient) dispatchDropEvent(payload []byte) {
 			p.handlers.OnDropClaim(d.DropID, d.DropInstanceID)
 		}
 	}
+}
+
+// codePattern matches Twitch reward redemption codes, which use the
+// 5-block uppercase form Mojang/Twitch issues (e.g.
+// "7Y64H-GKPXP-YKHMG-H7634-79D2Z"). Anchored case-sensitive to keep
+// false positives (sentence words, emails) out of the match. The
+// extractor is intentionally narrow — we'd rather miss a non-standard
+// code than misclassify random body text.
+var codePattern = regexp.MustCompile(`\b[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}\b`)
+
+// dispatchNotification decodes an onsite-notifications.<uid> payload
+// and emits drop-redemption codes via OnRewardCode when the body
+// matches the canonical "click here to redeem" shape. Best-effort —
+// if the shape changes or codes don't match the pattern we just log
+// at Debug and move on.
+func (p *PubSubClient) dispatchNotification(payload []byte) {
+	var env struct {
+		Type string          `json:"type"`
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(payload, &env); err != nil {
+		return
+	}
+	if env.Type != "create-notification" && env.Type != "" {
+		return
+	}
+	var d struct {
+		Notification struct {
+			ID      string `json:"id"`
+			Type    string `json:"type"`
+			Body    string `json:"body"`
+			Summary string `json:"summary"`
+		} `json:"notification"`
+	}
+	if err := json.Unmarshal(env.Data, &d); err != nil {
+		slog.Debug("pubsub notification decode failed", "err", err)
+		return
+	}
+	if d.Notification.Body == "" && d.Notification.Summary == "" {
+		return
+	}
+	text := d.Notification.Body
+	if text == "" {
+		text = d.Notification.Summary
+	}
+	code := codePattern.FindString(text)
+	if code == "" {
+		slog.Debug("pubsub notification: no code in body",
+			"notification_type", d.Notification.Type,
+			"body", truncateString(text, 200))
+		return
+	}
+	slog.Info("pubsub reward code extracted",
+		"kind", "claim",
+		"notification_id", d.Notification.ID,
+		"notification_type", d.Notification.Type,
+		"code", code)
+	if p.handlers.OnRewardCode != nil {
+		p.handlers.OnRewardCode(d.Notification.ID, code, text)
+	}
+}
+
+func truncateString(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
 }
 
 // dispatchPlaybackEvent decodes video-playback-by-id payloads. Topic
