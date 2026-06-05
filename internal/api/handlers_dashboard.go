@@ -141,6 +141,8 @@ type dashCampaignDetail struct {
 	Benefits         []dashCampaignBenefit
 	EligibleAccounts []string // account IDs that have this campaign's game whitelisted
 	SourceAccounts   []string // account IDs whose backend surfaced the campaign
+	AccountLinked    bool     // user's external account (Mojang etc) linked?
+	AccountLinkURL   string   // where to go to link
 	RawJSON          string   // pretty-printed JSON for debugging
 }
 
@@ -920,6 +922,8 @@ func (d dashboardDeps) campaignDetail(w http.ResponseWriter, r *http.Request) {
 		Benefits:         benefits,
 		EligibleAccounts: relabel(dc.EligibleAccounts),
 		SourceAccounts:   relabel(dc.SourceAccounts),
+		AccountLinked:    dc.AccountLinked,
+		AccountLinkURL:   dc.AccountLinkURL,
 		RawJSON:          string(rawJSON),
 	}
 	renderPartial(w, d.t, "dashboard_campaign_modal", detail)
