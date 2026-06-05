@@ -569,8 +569,13 @@
 
   .events { padding: 4px 0; max-height: 320px; overflow: auto; }
   /* Each .ev is a <details> element so the operator can click to
-     reveal the structured fields from the underlying log line. */
+     reveal the structured fields from the underlying log line. One
+     tight summary row: chevron · timestamp · kind-colored dot · body
+     (with inline <em>kind</em> upcased) · account handle. The
+     color-coded inset left border encodes the event kind so the eye
+     can scan vertically without reading. */
   .ev {
+    position: relative;
     border-top: 1px solid transparent;
     border-bottom: 1px solid transparent;
     font-family: 'JetBrains Mono', monospace;
@@ -578,37 +583,60 @@
   }
   .ev > summary {
     display: grid;
-    grid-template-columns: 80px 12px 64px 1fr 140px;
-    gap: 14px;
+    grid-template-columns: 14px 64px 10px 1fr 160px;
+    gap: 10px;
     align-items: center;
-    padding: 6px 18px;
+    padding: 5px 16px 5px 14px;
     cursor: pointer;
     list-style: none;
+    line-height: 1.3;
   }
-  .ev > summary::-webkit-details-marker { display: none; }
+  .ev > summary::-webkit-details-marker,
+  .ev > summary::marker { display: none; content: ""; }
   .ev:hover { background: var(--surface-2); }
   .ev[open] { background: var(--surface-2); border-color: var(--line); }
-  .ev .t { color: var(--muted); }
-  .ev .body { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ev .chev {
+    display: inline-block;
+    width: 14px;
+    color: var(--dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1;
+    text-align: center;
+    transition: transform 0.12s ease, color 0.12s;
+    transform-origin: 50% 50%;
+  }
+  .ev[open] > summary .chev { transform: rotate(90deg); color: var(--accent); }
+  .ev > summary:hover .chev { color: var(--text); }
+  .ev .t { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .ev .body {
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
   .ev .body em {
     color: var(--muted);
     font-style: normal;
     text-transform: uppercase;
     font-size: 10px;
-    letter-spacing: 0.08em;
-    margin-right: 4px;
-  }
-  .ev .kind {
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    font-size: 10px;
+    letter-spacing: 0.1em;
     font-weight: 600;
+    margin-right: 6px;
   }
-  .ev .ac { color: var(--muted); font-size: 10.5px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ev .lvl { font-size: 11px; }
+  .ev .ac {
+    color: var(--muted);
+    font-size: 10.5px;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ev .lvl { font-size: 10px; line-height: 1; }
   .ev.empty { padding: 12px 18px; color: var(--muted); }
   .ev-detail {
-    padding: 4px 18px 10px 96px;
+    padding: 4px 18px 10px 132px;
     display: flex;
     flex-wrap: wrap;
     gap: 6px 14px;
@@ -619,13 +647,18 @@
   .ev-detail .kv .eq { color: var(--line); margin: 0 2px; }
   .ev-detail .kv .v { color: var(--text); }
 
-  /* Color-coded left border per event kind */
-  .ev-claim { box-shadow: inset 3px 0 0 var(--green); }
-  .ev-progress { box-shadow: inset 3px 0 0 var(--amber); }
-  .ev-state { box-shadow: inset 3px 0 0 var(--blue); }
-  .ev-discovery { box-shadow: inset 3px 0 0 var(--muted); }
-  .ev-error { box-shadow: inset 3px 0 0 var(--red); }
-  .ev-auth { box-shadow: inset 3px 0 0 var(--accent); }
+  /* Color-coded left border per event kind. Both `.ev-<kind>` (legacy)
+     and `.kind-<kind>` (current template) selectors are honored so
+     templates can drift without breaking the visual cue. The inset
+     shadow lives in front of the row background so :hover keeps it
+     visible. */
+  .ev.kind-claim,    .ev.ev-claim    { box-shadow: inset 3px 0 0 var(--green);  }
+  .ev.kind-progress, .ev.ev-progress { box-shadow: inset 3px 0 0 var(--amber);  }
+  .ev.kind-state,    .ev.ev-state    { box-shadow: inset 3px 0 0 var(--blue);   }
+  .ev.kind-discovery,.ev.ev-discovery{ box-shadow: inset 3px 0 0 var(--dim);    }
+  .ev.kind-error,    .ev.ev-error    { box-shadow: inset 3px 0 0 var(--red);    }
+  .ev.kind-auth,     .ev.ev-auth     { box-shadow: inset 3px 0 0 var(--accent); }
+  .ev.kind-info,     .ev.ev-info     { box-shadow: inset 3px 0 0 var(--line);   }
 
   /* SIDE PANEL */
   aside {
@@ -1283,40 +1316,61 @@
   }
   .empty a { color: var(--accent); }
 
-  /* /drops tab strip */
+  /* /drops tab strip — refinery pill row. Each tab is an anchor
+     styled as a monospace caps pill with a thin border; the active
+     tab gets an orange underline and accent-colored text + count.
+     `text-decoration: none` and explicit `color` defeat the browser
+     default blue underline when the stylesheet's later rules don't
+     win on specificity. */
   .drops-tabs {
     display: flex;
     gap: 4px;
     border-bottom: 1px solid var(--line);
     margin: 16px 0 0;
+    padding: 0;
   }
-  .drops-tab {
+  .drops-tab,
+  a.drops-tab,
+  a.drops-tab:link,
+  a.drops-tab:visited {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 16px;
+    padding: 9px 14px;
     color: var(--muted);
+    background: transparent;
     text-decoration: none;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
+    font-size: 11px;
+    font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.14em;
+    border: 1px solid transparent;
     border-bottom: 2px solid transparent;
     margin-bottom: -1px;
     cursor: pointer;
+    transition: color 0.12s, border-color 0.12s, background 0.12s;
   }
-  .drops-tab:hover { color: var(--fg); }
-  .drops-tab.on {
+  .drops-tab:hover,
+  a.drops-tab:hover {
+    color: var(--text);
+    background: var(--surface-2);
+  }
+  .drops-tab.on,
+  a.drops-tab.on {
     color: var(--accent);
     border-bottom-color: var(--accent);
+    background: transparent;
   }
   .drops-tab .count {
     display: inline-block;
     padding: 1px 8px;
     border: 1px solid var(--line);
     border-radius: 999px;
-    font-size: 10.5px;
+    font-size: 10px;
+    line-height: 1.4;
     color: var(--muted);
+    font-variant-numeric: tabular-nums;
   }
   .drops-tab.on .count { color: var(--accent); border-color: var(--accent); }
   .drops-tabpanel { margin-top: 16px; }

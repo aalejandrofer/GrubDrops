@@ -782,14 +782,14 @@ func stubPriority() []dashPrioItem {
 
 func stubEvents() []dashEvent {
 	return []dashEvent{
-		{Time: "14:31:02", Color: "green", BodyHTML: "<em>claim</em> · Wolf Helmet recorded", Account: "helmet_farmer"},
-		{Time: "14:30:44", Color: "amber", BodyHTML: "progress · Salvaged Cleaver 100% — claiming", Account: "demo_two"},
-		{Time: "14:24:17", Color: "blue", BodyHTML: "state · pick_stream → watching (shroud)", Account: "helmet_farmer"},
-		{Time: "14:22:01", Color: "muted", BodyHTML: "discovery · 8 active campaigns", Account: "—"},
-		{Time: "14:18:33", Color: "green", BodyHTML: "<em>claim</em> · Crate Skin recorded", Account: "backup_acc"},
-		{Time: "14:14:09", Color: "blue", BodyHTML: "auth · token refreshed", Account: "demo_two"},
-		{Time: "14:09:55", Color: "red", BodyHTML: "error · sidecar timeout, retrying", Account: "demo_two"},
-		{Time: "14:03:21", Color: "muted", BodyHTML: "heartbeat · 60 ticks / 60s", Account: "—"},
+		{Time: "14:31:02", Kind: "claim", Color: "green", BodyHTML: "<em>claim</em> · Wolf Helmet recorded", Account: "helmet_farmer"},
+		{Time: "14:30:44", Kind: "progress", Color: "amber", BodyHTML: "<em>progress</em> · Salvaged Cleaver 100% — claiming", Account: "demo_two"},
+		{Time: "14:24:17", Kind: "state", Color: "blue", BodyHTML: "<em>state</em> · pick_stream → watching (shroud)", Account: "helmet_farmer"},
+		{Time: "14:22:01", Kind: "discovery", Color: "muted", BodyHTML: "<em>discovery</em> · 8 active campaigns", Account: "—"},
+		{Time: "14:18:33", Kind: "claim", Color: "green", BodyHTML: "<em>claim</em> · Crate Skin recorded", Account: "backup_acc"},
+		{Time: "14:14:09", Kind: "auth", Color: "blue", BodyHTML: "<em>auth</em> · token refreshed", Account: "demo_two"},
+		{Time: "14:09:55", Kind: "error", Color: "red", BodyHTML: "<em>error</em> · sidecar timeout, retrying", Account: "demo_two"},
+		{Time: "14:03:21", Kind: "info", Color: "muted", BodyHTML: "<em>heartbeat</em> · 60 ticks / 60s", Account: "—"},
 	}
 }
 
