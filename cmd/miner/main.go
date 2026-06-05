@@ -273,6 +273,10 @@ func run() error {
 		TwitchBrowser:       twitchBrowserEnabled && browserClient != nil,
 		LogRing:             ring,
 		StartTime:           startTime,
+		LogLevelEnv:         cfg.LogLevel,
+		BrowserURLDisplay:   cfg.BrowserURL,
+		GitCommit:           os.Getenv("GIT_COMMIT"),
+		Version:             os.Getenv("MINER_VERSION"),
 	}
 
 	srv := &http.Server{

@@ -68,6 +68,12 @@ type Deps struct {
 	TwitchBrowser bool
 	LogRing       *mlog.Ring
 	StartTime     time.Time
+
+	// Diagnostics surfaced on /settings (read-only).
+	LogLevelEnv       string // MINER_LOG_LEVEL value (config.Load)
+	BrowserURLDisplay string // MINER_BROWSER_URL value (config.Load)
+	GitCommit         string // build-time git commit short hash
+	Version           string // semver / release tag
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -205,10 +211,15 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/logout", authH.logoutPost)
 
 	settingsH := &settingsDeps{
-		s:        d.SettingsStore,
-		t:        d.Templates,
-		sm:       d.Session,
-		onUpdate: d.OnSettingsUpdate,
+		s:           d.SettingsStore,
+		t:           d.Templates,
+		sm:          d.Session,
+		onUpdate:    d.OnSettingsUpdate,
+		startedAt:   startedAt,
+		logLevelEnv: d.LogLevelEnv,
+		browserURL:  d.BrowserURLDisplay,
+		gitCommit:   d.GitCommit,
+		version:     d.Version,
 	}
 	dropsH := &dropsDeps{q: d.Q, t: d.Templates}
 

@@ -243,13 +243,31 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 		// Last-resort DOM scrape: walk drop campaign cards.
 		const domOut = [];
 		try {
-			const cards = document.querySelectorAll('[data-test-selector*="drop"], [class*="drop-campaign"], a[href*="/drops/campaigns/"]');
+			// Twitch /drops/campaigns renders each campaign as a card
+			// usually with role=link or an <article>. The most reliable
+			// anchor is the link to the individual campaign page
+			// (/drops/campaigns/<id> or /drops/<game-slug>/<id>).
+			const cards = document.querySelectorAll(
+				'[data-test-selector*="drop"], ' +
+				'[class*="drop-campaign"], ' +
+				'a[href^="/drops/campaigns/"], ' +
+				'a[href^="/drops/"][href*="/campaign"], ' +
+				'article[class*="DropsCampaign"], ' +
+				'div[role="link"][href*="drops"]'
+			);
 			cards.forEach((el) => {
-				const name = (el.querySelector('h3,h4,[class*="name"],[class*="title"]')||{}).textContent || '';
-				const game = (el.querySelector('[class*="game"],[class*="category"]')||{}).textContent || '';
-				if (name) {
-					domOut.push({id: 'dom-' + domOut.length, name: name.trim(), game: game.trim(), endsAt: '', startsAt: ''});
-				}
+				const txt = el.textContent || '';
+				if (!txt.trim()) return;
+				// Use heading or first non-whitespace line for the name.
+				const head = el.querySelector('h1,h2,h3,h4,p,span');
+				const name = ((head && head.textContent) || txt).trim().split('\n')[0].slice(0, 200);
+				const meta = txt.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 6).join(' | ');
+				domOut.push({
+					id: el.getAttribute('href') || ('dom-' + domOut.length),
+					name: name,
+					game: meta,
+					endsAt: '', startsAt: ''
+				});
 			});
 		} catch (e) {}
 		const resolve = (v) => {
@@ -346,14 +364,25 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 		}
 		return true;
 	})()`
+	// Scroll the page to trigger any lazy-loaded campaign list +
+	// give React + intersection observers time to mount everything.
+	const scrollScript = `(() => {
+		window.scrollTo(0, document.body.scrollHeight);
+		setTimeout(() => window.scrollTo(0, 0), 100);
+		return true;
+	})()`
 	var dummy bool
 	if err := chromedp.Run(tabCtx,
 		chromedp.Navigate("https://www.twitch.tv/drops/campaigns"),
 		chromedp.Sleep(4*time.Second),
 		chromedp.Evaluate(dismissBanners, &dummy),
 		chromedp.Sleep(2*time.Second),
-		chromedp.Evaluate(dismissBanners, &dummy), // belt + braces — second modal may appear after first dismissed
-		chromedp.Sleep(8*time.Second),
+		chromedp.Evaluate(dismissBanners, &dummy),
+		chromedp.Sleep(6*time.Second),
+		chromedp.Evaluate(scrollScript, &dummy),
+		chromedp.Sleep(4*time.Second),
+		chromedp.Evaluate(scrollScript, &dummy),
+		chromedp.Sleep(4*time.Second),
 		chromedp.Evaluate(debugScript, &debugInfo),
 		chromedp.Evaluate(script, &raw),
 	); err != nil {

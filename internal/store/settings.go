@@ -10,8 +10,15 @@ import (
 )
 
 const (
-	keyGlobalDiscord = "settings:discord_webhook"
-	keyLogRetention  = "settings:log_retention_days"
+	keyGlobalDiscord     = "settings:discord_webhook"
+	keyLogRetention      = "settings:log_retention_days"
+	keyLogLevel          = "settings:log_level"
+	keyTickIntervalMs    = "settings:tick_interval_ms"
+	keyDiscoveryIntvSec  = "settings:discovery_interval_sec"
+	keyNotifyClaim       = "settings:notify_claim"
+	keyNotifyProgress    = "settings:notify_progress"
+	keyNotifyAuth        = "settings:notify_auth"
+	keyNotifyError       = "settings:notify_error"
 )
 
 type Settings struct {
@@ -63,4 +70,78 @@ func (s *Settings) LogRetentionDays(ctx context.Context) (int, error) {
 
 func (s *Settings) SetLogRetentionDays(ctx context.Context, days int) error {
 	return s.setString(ctx, keyLogRetention, strconv.Itoa(days))
+}
+
+// LogLevel is the runtime log level. "" means "use the launch env
+// MINER_LOG_LEVEL"; explicit value here overrides it.
+func (s *Settings) LogLevel(ctx context.Context) (string, error) {
+	return s.getString(ctx, keyLogLevel)
+}
+
+func (s *Settings) SetLogLevel(ctx context.Context, level string) error {
+	return s.setString(ctx, keyLogLevel, level)
+}
+
+func (s *Settings) TickIntervalMs(ctx context.Context) (int, error) {
+	raw, err := s.getString(ctx, keyTickIntervalMs)
+	if err != nil || raw == "" {
+		return 500, err
+	}
+	n, _ := strconv.Atoi(raw)
+	if n <= 0 {
+		return 500, nil
+	}
+	return n, nil
+}
+
+func (s *Settings) SetTickIntervalMs(ctx context.Context, ms int) error {
+	return s.setString(ctx, keyTickIntervalMs, strconv.Itoa(ms))
+}
+
+func (s *Settings) DiscoveryIntervalSec(ctx context.Context) (int, error) {
+	raw, err := s.getString(ctx, keyDiscoveryIntvSec)
+	if err != nil || raw == "" {
+		return 300, err
+	}
+	n, _ := strconv.Atoi(raw)
+	if n <= 0 {
+		return 300, nil
+	}
+	return n, nil
+}
+
+func (s *Settings) SetDiscoveryIntervalSec(ctx context.Context, sec int) error {
+	return s.setString(ctx, keyDiscoveryIntvSec, strconv.Itoa(sec))
+}
+
+// NotifyKinds returns the boolean toggles for each Discord
+// notification category. Defaults: claim+error on, progress+auth off.
+func (s *Settings) NotifyKinds(ctx context.Context) (claim, progress, auth, errors bool) {
+	get := func(k string, def bool) bool {
+		v, _ := s.getString(ctx, k)
+		if v == "" {
+			return def
+		}
+		return v == "1"
+	}
+	return get(keyNotifyClaim, true), get(keyNotifyProgress, false), get(keyNotifyAuth, false), get(keyNotifyError, true)
+}
+
+func (s *Settings) SetNotifyKinds(ctx context.Context, claim, progress, auth, errors bool) error {
+	b := func(v bool) string {
+		if v {
+			return "1"
+		}
+		return "0"
+	}
+	if err := s.setString(ctx, keyNotifyClaim, b(claim)); err != nil {
+		return err
+	}
+	if err := s.setString(ctx, keyNotifyProgress, b(progress)); err != nil {
+		return err
+	}
+	if err := s.setString(ctx, keyNotifyAuth, b(auth)); err != nil {
+		return err
+	}
+	return s.setString(ctx, keyNotifyError, b(errors))
 }
