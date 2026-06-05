@@ -96,13 +96,25 @@ func (p *CampaignPersister) PersistCampaigns(ctx context.Context, camps []platfo
 		if status == "" {
 			status = "active"
 		}
+		// Default zero timestamps to plausible bounds so /drops's
+		// past/current/upcoming filter doesn't classify scraped
+		// campaigns as expired. Scrape supplies neither start nor
+		// end — best-effort: start=now, end=now+30d.
+		startsAt := c.StartsAt.Unix()
+		endsAt := c.EndsAt.Unix()
+		if c.StartsAt.IsZero() {
+			startsAt = now
+		}
+		if c.EndsAt.IsZero() {
+			endsAt = now + 30*24*3600
+		}
 		if err := p.Q.UpsertCampaign(ctx, gen.UpsertCampaignParams{
 			ID:           c.ID,
 			Platform:     c.Platform,
 			Game:         c.Game,
 			Name:         c.Name,
-			StartsAt:     c.StartsAt.Unix(),
-			EndsAt:       c.EndsAt.Unix(),
+			StartsAt:     startsAt,
+			EndsAt:       endsAt,
 			Status:       status,
 			RawJson:      "{}",
 			DiscoveredAt: now,
