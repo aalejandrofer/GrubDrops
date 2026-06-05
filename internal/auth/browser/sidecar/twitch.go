@@ -225,26 +225,30 @@ func (t *Twitch) evalFetch(tabCtx context.Context, body []byte) ([]byte, int, er
 // so JS string-escaping doesn't choke on embedded quotes or unicode.
 func evalFetchPOST(tabCtx context.Context, url, contentType string, body []byte) ([]byte, int, error) {
 	bodyB64 := base64.StdEncoding.EncodeToString(body)
-	// IMPORTANT: use window.__origFetch (captured by StealthScript before
-	// PerimeterX p.js loads) instead of plain fetch(). PerimeterX wraps
-	// fetch with a guard that throws "TypeError: Failed to fetch" when
-	// the caller's stack doesn't match an expected event trace —
-	// exactly what happens when chromedp.Evaluate invokes us.
-	script := fmt.Sprintf(`(async () => {
+	// Use XMLHttpRequest instead of fetch(). PerimeterX wraps fetch
+	// even when captured early — its bundle is shipped inline in the
+	// page's <head> and runs before our AddScriptToEvaluateOnNewDocument
+	// shim. XHR is wrapped less aggressively; if the original is
+	// captured via window.__OrigXHR we use that, falling back to
+	// XMLHttpRequest. Same-origin cookies are sent automatically
+	// because the tab is already on www.twitch.tv.
+	script := fmt.Sprintf(`(() => new Promise((resolve, reject) => {
 		const b64 = %q;
 		const bin = atob(b64);
 		const bytes = new Uint8Array(bin.length);
 		for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-		const f = window.__origFetch || window.fetch;
-		const resp = await f(%q, {
-			method: "POST",
-			credentials: "include",
-			headers: {"Content-Type": %q},
-			body: bytes,
-		});
-		const txt = await resp.text();
-		return {status: resp.status, body: btoa(unescape(encodeURIComponent(txt)))};
-	})()`, bodyB64, url, contentType)
+		const XHR = window.__OrigXHR || window.XMLHttpRequest;
+		const xhr = new XHR();
+		xhr.open("POST", %q, true);
+		xhr.withCredentials = true;
+		xhr.setRequestHeader("Content-Type", %q);
+		xhr.responseType = "text";
+		xhr.onload = () => resolve({status: xhr.status, body: btoa(unescape(encodeURIComponent(xhr.responseText)))});
+		xhr.onerror = (e) => reject(new Error("xhr error status=" + xhr.status + " readyState=" + xhr.readyState));
+		xhr.ontimeout = () => reject(new Error("xhr timeout"));
+		xhr.timeout = 15000;
+		xhr.send(bytes);
+	}))()`, bodyB64, url, contentType)
 
 	return runEvalFetch(tabCtx, script)
 }
