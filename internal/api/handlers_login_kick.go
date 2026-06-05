@@ -97,19 +97,27 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 	pbSession := &pb.KickSession{Cookies: cookies, XsrfToken: xsrf}
 	slog.Info("kick login attempt", "account", id, "channel", channel, "cookie_count", len(cookies), "has_cf_clearance", cfClearance != "", "kick_session_len", len(kickSessionCookie), "xsrf_len", len(xsrf))
 
-	resp, err := d.browser.Authenticate(r.Context(), pbSession)
-	if err != nil {
-		slog.Error("kick sidecar Authenticate rejected", "account", id, "err", err)
-		d.renderError(w, r, id, acc.DisplayName, "sidecar rejected session: "+err.Error())
-		return
+	// Same pattern as the Twitch paste handler: persist cookies even
+	// when the sidecar can't verify them right now. Verification can
+	// fail transiently (Cloudflare interstitial, missing channel, JS
+	// challenge needs a moment) — we don't want to throw away the
+	// operator's paste because of a flaky probe. The watcher retries
+	// on its own clock and surfaces needs_auth if cookies really are
+	// invalid.
+	var username string
+	resp, vErr := d.browser.Authenticate(r.Context(), pbSession)
+	if vErr != nil {
+		slog.Warn("kick sidecar verify failed; persisting cookies anyway", "account", id, "err", vErr)
+	} else {
+		username = resp.Username
+		slog.Info("kick sidecar verified", "account", id, "username", username)
 	}
-	slog.Info("kick sidecar authenticated", "account", id, "username", resp.Username)
 
 	internal := kickSessionForStorage{
 		Cookies:   stored,
 		XSRFToken: xsrf,
 		Channel:   channel,
-		Username:  resp.Username,
+		Username:  username,
 	}
 	raw, _ := json.Marshal(internal)
 	if err := d.sessions.Put(r.Context(), id, platform.Session{
@@ -120,7 +128,7 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 		d.renderError(w, r, id, acc.DisplayName, "failed to persist session: "+err.Error())
 		return
 	}
-	slog.Info("kick session persisted", "account", id, "channel", channel, "username", resp.Username)
+	slog.Info("kick session persisted", "account", id, "channel", channel, "username", username)
 
 	if d.registrar != nil {
 		d.registrar.RegisterChannel(id, channel)
@@ -134,7 +142,13 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	d.sm.Put(r.Context(), "flash", "Kick session authorized for "+resp.Username)
+	flash := "Kick cookies persisted"
+	if username != "" {
+		flash = "Kick session authorized for " + username
+	} else {
+		flash += " — sidecar could not verify yet; watcher will retry"
+	}
+	d.sm.Put(r.Context(), "flash", flash)
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
 
