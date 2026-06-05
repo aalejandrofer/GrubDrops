@@ -364,19 +364,29 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			"kind", "discovery",
 			"account", w.cfg.AccountID,
 			"count", skippedReward)
-		// Reaper: if the backend supports it, walk /drops/inventory
-		// and click Claim on any whitelisted reward we haven't
-		// surfaced through normal claim flow. Soft errors only —
-		// reaper failures don't poison the mining tick.
-		if rc, ok := w.cfg.Backend.(platform.RewardClaimer); ok {
-			allowed := make([]string, 0, len(whitelisted))
-			seen := map[string]bool{}
-			for _, c := range whitelisted {
-				if c.Kind == "reward" && !seen[c.Game] {
-					allowed = append(allowed, c.Game)
-					seen[c.Game] = true
-				}
+	}
+	// Reaper: fires whenever the account has at least one whitelisted
+	// campaign whose benefits we can't mine (kind="reward" OR
+	// scrape-synth ID with no benefits). The reaper itself filters by
+	// /drops/inventory state — it just clicks visible Claim buttons,
+	// so over-firing is harmless. Backends that don't support reward
+	// claiming (Kick) drop through via the type-assert.
+	if rc, ok := w.cfg.Backend.(platform.RewardClaimer); ok {
+		needsReap := false
+		allowed := make([]string, 0, len(whitelisted))
+		seen := map[string]bool{}
+		for _, c := range whitelisted {
+			isReward := c.Kind == "reward" || len(c.Benefits) == 0
+			if !isReward {
+				continue
 			}
+			needsReap = true
+			if !seen[c.Game] {
+				allowed = append(allowed, c.Game)
+				seen[c.Game] = true
+			}
+		}
+		if needsReap {
 			sess := w.cfg.Session
 			sess.AccountID = w.cfg.AccountID
 			claimed, err := rc.ClaimRewards(ctx, sess, allowed)
@@ -393,6 +403,11 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 						"game", cr.Game,
 						"title", cr.Title)
 				}
+			} else {
+				slog.Info("watcher reward reaper: nothing to claim",
+					"kind", "discovery",
+					"account", w.cfg.AccountID,
+					"games", allowed)
 			}
 		}
 	}
