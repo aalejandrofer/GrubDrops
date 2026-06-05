@@ -18,6 +18,7 @@ type Backend struct {
 	chans *channels
 	watch *watch
 	claim *claimer
+	adv   *advisory
 
 	// allowedLoginsByCampaign caches the allow-list pulled from
 	// dropCampaignDetails.allow.channels[].login. ListEligibleChannels
@@ -47,6 +48,7 @@ func New() *Backend {
 		chans:                   &channels{c: c},
 		watch:                   newWatch(),
 		claim:                   &claimer{c: c},
+		adv:                     &advisory{c: c},
 		allowedLoginsByCampaign: map[string][]string{},
 	}
 }
@@ -62,6 +64,7 @@ func newForTest(endpoint string) *Backend {
 		chans:                   &channels{c: c},
 		watch:                   &watch{c: c},
 		claim:                   &claimer{c: c},
+		adv:                     &advisory{c: c},
 		allowedLoginsByCampaign: map[string][]string{},
 		pubsubDisabled:          true,
 	}
@@ -245,6 +248,20 @@ func (b *Backend) StopWatch(ctx context.Context, h platform.WatchHandle) error {
 
 func (b *Backend) Claim(ctx context.Context, s platform.Session, drop platform.DropBenefit) error {
 	return b.claim.claim(ctx, s, drop)
+}
+
+// AvailableDropIDs satisfies platform.AvailableDropsChecker. Returns
+// the set of drop template IDs the channel is currently serving.
+// Empty result + nil error means "no info" — caller skips the gate.
+func (b *Backend) AvailableDropIDs(ctx context.Context, s platform.Session, channelID string) (map[string]struct{}, error) {
+	return b.adv.availableDropIDs(ctx, s, channelID)
+}
+
+// CurrentSession satisfies platform.CurrentSessionChecker. Returns the
+// active drop session for the authenticated user, or zero-value when
+// nothing is in flight.
+func (b *Backend) CurrentSession(ctx context.Context, s platform.Session) (platform.CurrentSession, error) {
+	return b.adv.currentSession(ctx, s)
 }
 
 // setAllowedLogins is exposed for tests / future allow-list wiring.

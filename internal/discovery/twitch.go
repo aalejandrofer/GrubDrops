@@ -94,11 +94,11 @@ func (s *TwitchScraper) Scrape(ctx context.Context, whitelist []string) ([]platf
 	if accountID != "" {
 		sess.AccountID = accountID
 	}
-	// Build the GameFilter from the whitelist union. The Twitch backend
-	// consults this BEFORE the per-campaign detail fan-out so we don't
-	// burn bandwidth on games no account opted into.
-	allow := buildAllowList(whitelist)
-	sess.GameFilter = allow
+	// GameFilter gates the per-campaign DropCampaignDetails fan-out so
+	// bandwidth stays bounded by whitelist size. Non-whitelisted
+	// campaigns are still emitted (without benefits) so the /drops
+	// Discoverable tab can list them.
+	sess.GameFilter = buildAllowList(whitelist)
 
 	camps, err := s.Backend.ListActiveCampaigns(ctx, sess)
 	if err != nil {
@@ -109,16 +109,12 @@ func (s *TwitchScraper) Scrape(ctx context.Context, whitelist []string) ([]platf
 		}
 		return nil, fmt.Errorf("twitch ListActiveCampaigns: %w", err)
 	}
-	// Defensive second-pass filter — the backend should have honored
-	// the GameFilter, but the persister is downstream of the watchers
-	// too, so we re-check before handing rows off.
-	out := make([]platform.Campaign, 0, len(camps))
-	for _, c := range camps {
-		if allow(c.Game) {
-			out = append(out, c)
-		}
-	}
-	return out, nil
+	// Emit every campaign the backend returned — whitelisted with full
+	// benefits, non-whitelisted as shell rows (Benefits empty, set by
+	// listActive when GameFilter rejected the game). The /drops
+	// Discoverable tab consumes the shell rows; the watcher's mining
+	// loop ignores them via its own AllowGame check.
+	return camps, nil
 }
 
 // buildAllowList collapses a slice of whitelist tokens (already

@@ -326,6 +326,15 @@ func (w *Watcher) Run(ctx context.Context) error {
 			if errors.Is(err, errComplete) {
 				return nil
 			}
+			// Scheduler.Reload (e.g. after a fresh login) tears down
+			// existing watcher contexts. The in-flight RPC returns
+			// "context canceled"; that's not a real error, just our
+			// own teardown propagating. Exit cleanly so the next
+			// builder spins up a fresh entry without spamming
+			// ERROR/WARN lines.
+			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+				return ctx.Err()
+			}
 			// Transient errors (gql 5xx, sidecar fetch poisoned by
 			// PerimeterX, etc) shouldn't kill the watcher. Reset state
 			// to PickCampaign for the next tick.
@@ -398,6 +407,9 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 	slog.Debug("watcher pickCampaign", "account", w.cfg.AccountID)
 	campaigns, err := w.cfg.Backend.ListActiveCampaigns(ctx, w.cfg.Session)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			return fmt.Errorf("list campaigns: %w", err)
+		}
 		slog.Error("watcher list campaigns failed", "kind", "error", "account", w.cfg.AccountID, "err", err)
 		return fmt.Errorf("list campaigns: %w", err)
 	}
@@ -733,6 +745,9 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 
 	progress, err := w.cfg.Backend.InventoryProgress(ctx, w.cfg.Session)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			return fmt.Errorf("inventory: %w", err)
+		}
 		slog.Error("watcher inventory failed", "kind", "error", "account", w.cfg.AccountID, "err", err)
 		return fmt.Errorf("inventory: %w", err)
 	}

@@ -71,9 +71,9 @@ func TestCampaigns_ListActive_ReturnsAllStatuses(t *testing.T) {
 
 // When Session.GameFilter rejects every active campaign's game,
 // listActive must NOT issue any OpDropCampaignDetails fetch — the
-// whitelist short-circuits before per-campaign roundtrips. This is the
-// guardrail that keeps bandwidth bounded by the whitelist size, not by
-// the total number of active campaigns Twitch is currently running.
+// whitelist short-circuits the per-campaign roundtrip. Campaigns are
+// still emitted (Benefits empty) so the /drops Discoverable tab can
+// surface opt-in candidates; bandwidth stays bounded by whitelist size.
 func TestCampaigns_ListActive_GameFilterShortCircuits(t *testing.T) {
 	var detailCalls int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +99,10 @@ func TestCampaigns_ListActive_GameFilterShortCircuits(t *testing.T) {
 	}
 	camps, err := d.listActive(context.Background(), sess)
 	require.NoError(t, err)
-	assert.Empty(t, camps)
+	assert.NotEmpty(t, camps, "campaigns are emitted for Discoverable even when whitelist rejects")
+	for _, c := range camps {
+		assert.Empty(t, c.Benefits, "rejected campaigns must have no benefits (no detail fetch)")
+	}
 	assert.Zero(t, detailCalls, "GameFilter must skip per-campaign detail fetches")
 }
 
@@ -135,6 +138,42 @@ func TestCampaigns_ListActive_GameFilterAllowsMatch(t *testing.T) {
 	for _, c := range camps {
 		assert.Equal(t, "Rust", c.Game)
 	}
+}
+
+// When the whitelist allows some campaigns but not others, listActive
+// emits BOTH — whitelisted with full benefits, non-whitelisted as
+// shell rows. The Discoverable tab depends on this contract.
+func TestCampaigns_ListActive_PartialWhitelistEmitsAll(t *testing.T) {
+	var detailCalls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req gqlRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		switch req.OperationName {
+		case OpCampaigns.Name:
+			_, _ = w.Write(loadFixture(t, "campaigns.json"))
+		case OpDropCampaignDetails.Name:
+			detailCalls++
+			_, _ = w.Write(loadFixture(t, "campaign_details.json"))
+		default:
+			t.Fatalf("unexpected op %q", req.OperationName)
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv.URL)
+	d := &discovery{c: c}
+	// Reject everything to simulate whitelist with no matches but
+	// still expect campaign shells back for Discoverable.
+	sess := platform.Session{AccessToken: "tok", GameFilter: func(string) bool { return false }}
+	camps, err := d.listActive(context.Background(), sess)
+	require.NoError(t, err)
+	require.NotEmpty(t, camps)
+	for _, c := range camps {
+		assert.NotEmpty(t, c.Game, "game name carries even when whitelist rejects")
+		assert.NotEmpty(t, c.Name, "campaign name carries even when whitelist rejects")
+		assert.Empty(t, c.Benefits)
+	}
+	assert.Zero(t, detailCalls)
 }
 
 // dedupeSynthVsReal drops scrape-synthesised campaigns whose game is

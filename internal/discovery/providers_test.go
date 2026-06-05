@@ -97,11 +97,13 @@ func TestTwitchScraper_SourceErrorPropagates(t *testing.T) {
 }
 
 // Happy path: session loaded → GameFilter wired → backend called →
-// non-whitelisted entries filtered out defensively.
+// every campaign passed through. The GameFilter is now a fetch-details
+// gate inside the backend, not a top-level drop, so non-whitelisted
+// campaigns appear with empty Benefits for the /drops Discoverable tab.
 func TestTwitchScraper_AttachesGameFilterAndFilters(t *testing.T) {
 	b := &stubBackend{result: []platform.Campaign{
 		{ID: "c-rust", Platform: "twitch", Game: "Rust"},
-		{ID: "c-apex", Platform: "twitch", Game: "Apex"}, // not on whitelist; must be dropped
+		{ID: "c-apex", Platform: "twitch", Game: "Apex"}, // non-WL: shell row reaches persister
 	}}
 	source := func(context.Context) (string, platform.Session, bool, error) {
 		return "acc-1", platform.Session{AccessToken: "tok"}, true, nil
@@ -110,8 +112,13 @@ func TestTwitchScraper_AttachesGameFilterAndFilters(t *testing.T) {
 	camps, err := s.Scrape(context.Background(), []string{"rust"})
 	require.NoError(t, err)
 
-	require.Len(t, camps, 1, "non-whitelisted campaign must be filtered")
-	assert.Equal(t, "c-rust", camps[0].ID)
+	require.Len(t, camps, 2, "both whitelisted and non-whitelisted campaigns emitted (Discoverable depends on shell rows)")
+	ids := map[string]bool{}
+	for _, c := range camps {
+		ids[c.ID] = true
+	}
+	assert.True(t, ids["c-rust"])
+	assert.True(t, ids["c-apex"])
 
 	b.mu.Lock()
 	defer b.mu.Unlock()

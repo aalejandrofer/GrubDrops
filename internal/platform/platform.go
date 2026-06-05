@@ -71,6 +71,30 @@ type ChannelSubscriber interface {
 	UnsubscribeChannel(accountID, channelID string)
 }
 
+// CurrentSession is the post-claim verification result. Empty
+// DropID/ChannelID mean "no active session" (no in-flight drop).
+type CurrentSession struct {
+	DropID         string
+	ChannelID      string
+	CurrentMinute  int
+	RequiredMinute int
+}
+
+// AvailableDropsChecker is an optional backend capability for verifying
+// a channel actually serves a target drop before committing watch time.
+// Returns nil set + nil error for "unknown" (caller treats as
+// permissive and proceeds).
+type AvailableDropsChecker interface {
+	AvailableDropIDs(ctx context.Context, s Session, channelID string) (map[string]struct{}, error)
+}
+
+// CurrentSessionChecker is an optional backend capability for the
+// DropCurrentSessionContext gql query (P6). Watcher uses it post-claim
+// as a soft consistency check.
+type CurrentSessionChecker interface {
+	CurrentSession(ctx context.Context, s Session) (CurrentSession, error)
+}
+
 type Registry struct {
 	backends map[string]Backend
 }

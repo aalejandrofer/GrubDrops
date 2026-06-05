@@ -153,13 +153,14 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 	}
 	out := make([]platform.Campaign, 0, len(page.CurrentUser.DropCampaigns))
 	for _, c := range page.CurrentUser.DropCampaigns {
-		// Honor the per-account game whitelist BEFORE doing any work —
-		// non-whitelisted campaigns must not appear ANYWHERE (mining,
-		// /drops page, or persisted in the campaigns table). The
-		// whitelist is the canonical filter.
-		if sess.GameFilter != nil && !sess.GameFilter(c.Game.DisplayName) {
-			continue
-		}
+		// GameFilter is now a "should-fetch-details" gate, not a
+		// drop-the-campaign gate. Non-whitelisted campaigns are still
+		// emitted (status + game + name) so the /drops Discoverable
+		// tab can surface them — but we skip the per-campaign detail
+		// + allow-list fetches to keep bandwidth bounded by whitelist
+		// size. The watcher applies the whitelist again before mining,
+		// so emitting a non-whitelisted campaign here is safe.
+		shouldFetchDetails := sess.GameFilter == nil || sess.GameFilter(c.Game.DisplayName)
 		// Skip scrape-fallback noise: campaigns with no game name AND
 		// dom-prefixed IDs are paragraphs the heading-anchored walk
 		// grabbed instead of real cards. Don't poison the discovery
@@ -189,6 +190,13 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 		switch c.Status {
 		case "ACTIVE":
 			camp.Status = "active"
+			// Non-whitelisted: emit shell row only (no detail fetch,
+			// no synth benefit). The /drops Discoverable tab uses this
+			// to advertise opt-in candidates. Watcher won't mine it
+			// because Benefits is empty.
+			if !shouldFetchDetails {
+				break
+			}
 			// Skip detail fetch for scrape-synthesised IDs — those
 			// aren't real Twitch UUIDs and OpDropCampaignDetails will
 			// fail. Synth a single default benefit per scrape-only
