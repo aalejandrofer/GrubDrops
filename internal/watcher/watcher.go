@@ -47,6 +47,12 @@ type Config struct {
 	// Defaults to math.MaxInt when AllowGame is nil.
 	GameRank func(game string) int
 
+	// PriorityMode picks the ordering policy when multiple
+	// whitelisted campaigns are eligible. "ordered" sorts by
+	// GameRank (whitelist top-down); "ending_soonest" sorts by the
+	// campaign's EndsAt ascending. Empty defaults to "ordered".
+	PriorityMode string
+
 	// Persister, when set, receives every campaign the backend discovered
 	// after the watcher's whitelist filter has been applied. Used so the
 	// /drops page can render past + current + upcoming rows even before
@@ -411,7 +417,21 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			}
 		}
 	}
-	if w.cfg.GameRank != nil {
+	if w.cfg.PriorityMode == "ending_soonest" {
+		sort.SliceStable(matched, func(i, j int) bool {
+			// Treat 0/missing EndsAt as MaxInt so they sort last —
+			// don't pick a campaign whose end we don't know first.
+			ai := matched[i].EndsAt
+			aj := matched[j].EndsAt
+			if ai.IsZero() {
+				return false
+			}
+			if aj.IsZero() {
+				return true
+			}
+			return ai.Before(aj)
+		})
+	} else if w.cfg.GameRank != nil {
 		sort.SliceStable(matched, func(i, j int) bool {
 			return w.cfg.GameRank(matched[i].Game) < w.cfg.GameRank(matched[j].Game)
 		})

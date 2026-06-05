@@ -47,6 +47,14 @@
           </label>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <label>Priority mode <span style="color:var(--muted);font-weight:400">(when multiple drops eligible)</span>
+            <select name="priority_mode">
+              <option value="ordered" {{if eq .PriorityMode "ordered"}}selected{{end}}>Ordered — top whitelist first</option>
+              <option value="ending_soonest" {{if eq .PriorityMode "ending_soonest"}}selected{{end}}>Ending soonest — claim expiring first</option>
+            </select>
+          </label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <label>Log level <span style="color:var(--muted);font-weight:400">(blank = env <code>{{.LogLevelEnv}}</code>)</span>
             <select name="log_level">
               <option value="" {{if eq .LogLevel ""}}selected{{end}}>default</option>

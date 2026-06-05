@@ -207,11 +207,17 @@ func run() error {
 			return scheduler.NewEntry(a.ID, nopRunner{}), nil
 		}
 
+		// PriorityMode is a global setting — read once per build (i.e.
+		// per Reload). Watcher snapshots the value for the lifetime of
+		// the entry; the next Reload picks up changes.
+		priorityMode, _ := settingsStore.PriorityMode(ctx)
+
 		w := watcher.New(watcher.Config{
 			AccountID: a.ID, Backend: b, Session: sess,
 			Notifier: notifier, TickInterval: 500 * time.Millisecond,
 			AllowGame: allow, GameRank: rank,
-			Persister: campaignPersister,
+			PriorityMode: priorityMode,
+			Persister:    campaignPersister,
 		})
 		return scheduler.NewEntry(a.ID, w), nil
 	}

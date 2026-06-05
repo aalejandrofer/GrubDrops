@@ -44,6 +44,7 @@ type settingsPageData struct {
 	LogLevelEnv          string
 	TickIntervalMs       int
 	DiscoveryIntervalSec int
+	PriorityMode         string // "ordered" | "ending_soonest"
 	NotifyClaim          bool
 	NotifyProgress       bool
 	NotifyAuth           bool
@@ -65,6 +66,7 @@ func (d *settingsDeps) get(w http.ResponseWriter, r *http.Request) {
 	level, _ := d.s.LogLevel(ctx)
 	tick, _ := d.s.TickIntervalMs(ctx)
 	discIv, _ := d.s.DiscoveryIntervalSec(ctx)
+	prio, _ := d.s.PriorityMode(ctx)
 	nc, np, na, ne := d.s.NotifyKinds(ctx)
 
 	uptime := ""
@@ -82,6 +84,7 @@ func (d *settingsDeps) get(w http.ResponseWriter, r *http.Request) {
 			LogLevelEnv:          d.logLevelEnv,
 			TickIntervalMs:       tick,
 			DiscoveryIntervalSec: discIv,
+			PriorityMode:         prio,
 			NotifyClaim:          nc,
 			NotifyProgress:       np,
 			NotifyAuth:           na,
@@ -120,6 +123,7 @@ func (d *settingsDeps) post(w http.ResponseWriter, r *http.Request) {
 			_ = d.s.SetDiscoveryIntervalSec(ctx, n)
 		}
 	}
+	_ = d.s.SetPriorityMode(ctx, r.FormValue("priority_mode"))
 	on := func(name string) bool { return r.FormValue(name) == "1" }
 	_ = d.s.SetNotifyKinds(ctx, on("notify_claim"), on("notify_progress"), on("notify_auth"), on("notify_error"))
 

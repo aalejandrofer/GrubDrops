@@ -19,6 +19,18 @@ const (
 	keyNotifyProgress    = "settings:notify_progress"
 	keyNotifyAuth        = "settings:notify_auth"
 	keyNotifyError       = "settings:notify_error"
+	keyPriorityMode      = "settings:priority_mode"
+)
+
+// PriorityMode controls campaign pick ordering when multiple
+// whitelisted campaigns are eligible.
+//   - "ordered" (default): sort by whitelist rank, top = first.
+//   - "ending_soonest": sort by ends_at ascending so campaigns near
+//     expiry get mined first.
+// Mirrors DevilXD/TwitchDropsMiner's PRIORITY_ORDER toggle.
+const (
+	PriorityModeOrdered       = "ordered"
+	PriorityModeEndingSoonest = "ending_soonest"
 )
 
 type Settings struct {
@@ -125,6 +137,24 @@ func (s *Settings) NotifyKinds(ctx context.Context) (claim, progress, auth, erro
 		return v == "1"
 	}
 	return get(keyNotifyClaim, true), get(keyNotifyProgress, false), get(keyNotifyAuth, false), get(keyNotifyError, true)
+}
+
+func (s *Settings) PriorityMode(ctx context.Context) (string, error) {
+	v, err := s.getString(ctx, keyPriorityMode)
+	if err != nil || v == "" {
+		return PriorityModeOrdered, err
+	}
+	if v != PriorityModeOrdered && v != PriorityModeEndingSoonest {
+		return PriorityModeOrdered, nil
+	}
+	return v, nil
+}
+
+func (s *Settings) SetPriorityMode(ctx context.Context, mode string) error {
+	if mode != PriorityModeOrdered && mode != PriorityModeEndingSoonest {
+		mode = PriorityModeOrdered
+	}
+	return s.setString(ctx, keyPriorityMode, mode)
 }
 
 func (s *Settings) SetNotifyKinds(ctx context.Context, claim, progress, auth, errors bool) error {
