@@ -1050,45 +1050,41 @@ func evalFetchPOST(tabCtx context.Context, url, contentType string, body []byte)
 	// captured via window.__OrigXHR we use that, falling back to
 	// XMLHttpRequest. Same-origin cookies are sent automatically
 	// because the tab is already on www.twitch.tv.
-	script := fmt.Sprintf(`(() => new Promise((resolve, reject) => {
+	// Use the pristine fetch captured by StealthScript at __origFetch.
+	// XHR fails network-level on Twitch's gql endpoint (PerimeterX
+	// intercepts XMLHttpRequest more aggressively than fetch). For
+	// gql.twitch.tv, also set Authorization + Client-Id + X-Device-Id
+	// from cookies so the backend recognises the user instead of
+	// treating us as anonymous (which returns empty dropCampaigns
+	// even with valid cookies).
+	script := fmt.Sprintf(`(async () => {
 		const b64 = %q;
 		const bin = atob(b64);
 		const bytes = new Uint8Array(bin.length);
 		for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-		const XHR = window.__OrigXHR || window.XMLHttpRequest;
-		const xhr = new XHR();
 		const url = %q;
-		xhr.open("POST", url, true);
-		xhr.withCredentials = true;
-		xhr.setRequestHeader("Content-Type", %q);
-		// Twitch gql endpoint requires Authorization: OAuth <auth-token>
-		// AND a Client-Id header. The auth-token cookie carries the
-		// access token; pluck it from document.cookie. Client-Id is
-		// twitch.tv's public web app id — same value the official site
-		// uses, copied verbatim. Without these, gql.twitch.tv accepts
-		// the request but returns the anonymous-user view (empty
-		// dropCampaigns even when the user is enrolled).
+		const headers = {"Content-Type": %q};
 		if (url.indexOf("gql.twitch.tv") >= 0) {
 			const m = document.cookie.match(/(?:^|;\s*)auth-token=([^;]+)/);
-			if (m && m[1]) {
-				xhr.setRequestHeader("Authorization", "OAuth " + m[1]);
-			}
-			xhr.setRequestHeader("Client-Id", "kimne78kx3ncx6brgo4mv6wki5h1ko");
-			// Forward the X-Device-Id Twitch attaches to its own
-			// requests; absent → backend may fall back to anonymous
-			// rate limiting which can return degraded responses.
+			if (m && m[1]) headers["Authorization"] = "OAuth " + m[1];
+			headers["Client-Id"] = "kimne78kx3ncx6brgo4mv6wki5h1ko";
 			const dm = document.cookie.match(/(?:^|;\s*)unique_id=([^;]+)/);
-			if (dm && dm[1]) {
-				xhr.setRequestHeader("X-Device-Id", dm[1]);
-			}
+			if (dm && dm[1]) headers["X-Device-Id"] = dm[1];
 		}
-		xhr.responseType = "text";
-		xhr.onload = () => resolve({status: xhr.status, body: btoa(unescape(encodeURIComponent(xhr.responseText)))});
-		xhr.onerror = (e) => reject(new Error("xhr error status=" + xhr.status + " readyState=" + xhr.readyState));
-		xhr.ontimeout = () => reject(new Error("xhr timeout"));
-		xhr.timeout = 15000;
-		xhr.send(bytes);
-	}))()`, bodyB64, url, contentType)
+		const f = window.__origFetch || window.fetch;
+		try {
+			const resp = await f(url, {
+				method: "POST",
+				credentials: "include",
+				headers: headers,
+				body: bytes,
+			});
+			const txt = await resp.text();
+			return {status: resp.status, body: btoa(unescape(encodeURIComponent(txt)))};
+		} catch (e) {
+			throw new Error("fetch error: " + (e && e.message ? e.message : String(e)));
+		}
+	})()`, bodyB64, url, contentType)
 
 	return runEvalFetch(tabCtx, script)
 }
