@@ -225,10 +225,12 @@ func NewRouter(d Deps) http.Handler {
 		version:     d.Version,
 	}
 	dropsH := &dropsDeps{q: d.Q, t: d.Templates}
+	historyH := &historyDeps{q: d.Q, ring: d.LogRing, t: d.Templates}
 
 	authed.Get("/settings", settingsH.get)
 	authed.Post("/settings", settingsH.post)
 	authed.Get("/drops", dropsH.list)
+	authed.Get("/history", historyH.get)
 
 	r.Mount("/", withSession(CSRF(authed)))
 	return r
