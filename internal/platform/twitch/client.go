@@ -262,8 +262,18 @@ func (c *client) do(ctx context.Context, token, opName string, body []byte, out 
 		for _, e := range envelope.Errors {
 			msgs = append(msgs, e.Message)
 		}
-		slog.Error("twitch gql application error", "op", opName, "status", status, "errors", msgs, "body", truncate(string(rawBody), 500))
-		return fmt.Errorf("twitch gql %s: %s", opName, strings.Join(msgs, "; "))
+		// Twitch returns partial responses for some queries — e.g.
+		// DirectoryPage_Game often emits per-edge "service timeout"
+		// while still populating the rest of the stream list. Treat
+		// non-empty data as success and downgrade the log; only fail
+		// when data is truly missing.
+		dataEmpty := len(envelope.Data) == 0 || string(envelope.Data) == "null" || string(envelope.Data) == "{}"
+		if dataEmpty {
+			slog.Error("twitch gql application error", "op", opName, "status", status, "errors", msgs, "body", truncate(string(rawBody), 500))
+			return fmt.Errorf("twitch gql %s: %s", opName, strings.Join(msgs, "; "))
+		}
+		slog.Warn("twitch gql partial response (returning data anyway)",
+			"op", opName, "status", status, "errors", msgs, "body", truncate(string(rawBody), 500))
 	}
 	if out == nil {
 		return nil
