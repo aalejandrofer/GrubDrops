@@ -93,9 +93,9 @@ func (m *multiStatusBackend) ListActiveCampaigns(_ context.Context, _ platform.S
 	}, nil
 }
 
-// Watcher must persist EVERY whitelisted campaign it sees (active +
-// expired + upcoming), regardless of status. Non-whitelisted campaigns
-// MUST NOT reach the persister.
+// Watcher must persist EVERY campaign it sees — whitelisted and
+// non-whitelisted alike (the /drops Discoverable tab depends on the
+// latter). Status filtering happens downstream, not at the persister.
 func TestWatcher_PersistsAllWhitelistedStatuses(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -116,7 +116,6 @@ func TestWatcher_PersistsAllWhitelistedStatuses(t *testing.T) {
 	require.NotEmpty(t, rec.batches, "persister must be invoked at least once")
 	batch := rec.batches[0]
 
-	// Three Rust campaigns get persisted, Fortnite is dropped.
 	ids := map[string]string{}
 	for _, c := range batch {
 		ids[c.ID] = c.Status
@@ -124,8 +123,10 @@ func TestWatcher_PersistsAllWhitelistedStatuses(t *testing.T) {
 	assert.Equal(t, "active", ids["c-active"])
 	assert.Equal(t, "expired", ids["c-expired"])
 	assert.Equal(t, "upcoming", ids["c-upcoming"])
-	_, blockedSeen := ids["c-blocked"]
-	assert.False(t, blockedSeen, "non-whitelisted campaign must NEVER reach the persister")
+	// Non-whitelisted campaigns are persisted as shell rows so the
+	// /drops Discoverable tab can list them; the watcher's mining
+	// loop still skips them via AllowGame.
+	assert.Equal(t, "active", ids["c-blocked"], "non-whitelisted campaign must reach persister for Discoverable")
 }
 
 // rewardOnlyBackend returns a single ACTIVE Twitch campaign of kind="reward"

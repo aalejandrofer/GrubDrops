@@ -434,9 +434,21 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 		}
 	}
 
+	// Persist EVERY campaign the backend returned — whitelisted and
+	// non-whitelisted alike. The /drops page renders whitelisted ones
+	// in the main tabs and non-whitelisted ones in the Discoverable
+	// tab. Persistence failures are non-fatal — we still want to mine
+	// even if the DB hiccups.
+	if w.cfg.Persister != nil && len(campaigns) > 0 {
+		if err := w.cfg.Persister.PersistCampaigns(ctx, campaigns); err != nil {
+			slog.Warn("watcher persist campaigns failed", "kind", "error", "account", w.cfg.AccountID, "err", err)
+		}
+	}
+
 	// Apply the per-account whitelist to EVERYTHING the backend returned —
 	// active, expired, upcoming. Non-whitelisted campaigns are dropped
-	// here so they never reach the persister or the mining loop.
+	// here so they never reach the mining loop. (They DID reach the
+	// persister above so /drops Discoverable can list them.)
 	var whitelisted []platform.Campaign
 	if w.cfg.AllowGame != nil {
 		whitelisted = make([]platform.Campaign, 0, len(campaigns))
@@ -447,15 +459,6 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 		}
 	} else {
 		whitelisted = campaigns
-	}
-
-	// Persist every whitelisted campaign (regardless of status) so the
-	// /drops page can render past + upcoming tabs. Persistence failures
-	// are non-fatal — we still want to mine even if the DB hiccups.
-	if w.cfg.Persister != nil && len(whitelisted) > 0 {
-		if err := w.cfg.Persister.PersistCampaigns(ctx, whitelisted); err != nil {
-			slog.Warn("watcher persist campaigns failed", "kind", "error", "account", w.cfg.AccountID, "err", err)
-		}
 	}
 
 	// Cache the FULL (unfiltered) discovery so the dashboard's
