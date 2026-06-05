@@ -189,6 +189,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/accounts/{id}/update", accs.update)
 	authed.Post("/accounts/{id}/games", accs.games)
 	authed.Post("/accounts/{id}/games/add", accs.addGame)
+	authed.Post("/accounts/{id}/games/use-global", accs.useGlobal)
 	authed.Post("/accounts/{id}/delete", accs.delete)
 	authed.Post("/accounts/apply", func(w http.ResponseWriter, r *http.Request) {
 		if err := d.Reload(r.Context()); err != nil {
@@ -230,6 +231,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/settings", settingsH.get)
 	authed.Post("/settings", settingsH.post)
 	authed.Post("/settings/global-games", settingsH.globalGamesPost)
+	authed.Post("/settings/global-games/add", settingsH.globalGamesAdd)
 	authed.Get("/drops", dropsH.list)
 	authed.Get("/drops/campaigns/{id}/items", dropsH.items)
 	authed.Post("/drops/whitelist/add", dropsH.addWhitelist)

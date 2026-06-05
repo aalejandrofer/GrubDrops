@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -161,6 +162,55 @@ func (d *settingsDeps) post(w http.ResponseWriter, r *http.Request) {
 		d.onUpdate()
 	}
 	d.sm.Put(ctx, "flash", "settings saved — restart container to apply tick/discovery intervals")
+	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+}
+
+// globalGamesAdd handles POST /settings/global-games/add — accepts a
+// free-text game name, slugs it, upserts a games row, and appends to
+// the global priority list at the next rank slot. Mirrors the
+// per-account /accounts/:id/games/add flow so the user can pre-seed
+// the global list before any campaign scrape surfaces the game.
+func (d *settingsDeps) globalGamesAdd(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if d.q == nil {
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		return
+	}
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		return
+	}
+	slug := slugifyGame(name)
+	if slug == "" {
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		return
+	}
+	gameID := "g_" + slug
+	if err := d.q.UpsertGame(ctx, gen.UpsertGameParams{
+		ID: gameID, Name: name, Slug: slug, Priority: 0,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	existing, _ := d.q.ListGlobalGames(ctx)
+	rank := int64(len(existing))
+	for _, e := range existing {
+		if e.ID == gameID {
+			rank = e.Rank
+			break
+		}
+	}
+	if err := d.q.AddGlobalGame(ctx, gen.AddGlobalGameParams{
+		GameID: gameID, Rank: rank,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if d.onUpdate != nil {
+		d.onUpdate()
+	}
+	d.sm.Put(ctx, "flash", "added "+name+" to global priority — click Apply changes to reload")
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
 

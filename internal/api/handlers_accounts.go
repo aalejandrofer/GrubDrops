@@ -239,6 +239,23 @@ func slugifyGame(s string) string {
 	return string(out)
 }
 
+// useGlobal handles POST /accounts/:id/games/use-global — clears the
+// per-account whitelist so the watcher falls back to the global
+// priority list (loadAccountWhitelist branches on len==0). Idempotent.
+func (d accountsDeps) useGlobal(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := d.q.ClearAccountGames(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	d.sm.Put(r.Context(), "flash", "account whitelist cleared — now follows global priority. Click Apply changes to reload.")
+	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
+}
+
 // games handles POST /accounts/:id/games — rewrites the per-account
 // whitelist from the form's `game_ids[]` field. Order matters: position
 // in the slice becomes the rank.

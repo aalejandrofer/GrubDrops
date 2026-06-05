@@ -102,6 +102,12 @@
       <button class="btn" type="submit">Add →</button>
       <span style="color:var(--muted);font-size:11px;">Whitelist a game before discovery surfaces it.</span>
     </form>
+
+    <form method="post" action="/accounts/{{.Account.ID}}/games/use-global" style="margin-top:12px;display:flex;gap:8px;align-items:center;" onsubmit="return confirm('Clear this account whitelist and follow the global priority list?');">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <button class="btn" type="submit">Use global priority list</button>
+      <span style="color:var(--muted);font-size:11px;">Clears the account override. Watcher reads Settings → Global priority.</span>
+    </form>
   </div>
 </div>
 

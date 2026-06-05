@@ -115,6 +115,14 @@
           <button class="btn primary" type="submit">Save priority →</button>
         </div>
       </form>
+
+      <form method="post" action="/settings/global-games/add" class="inline-form" style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);display:flex;gap:8px;align-items:center;">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <span class="kicker" style="margin:0;">Add by name:</span>
+        <input type="text" name="name" placeholder="e.g. Marathon" required style="flex:1;max-width:280px;padding:6px 10px;background:var(--surface);border:1px solid var(--line);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:13px;">
+        <button class="btn" type="submit">Add →</button>
+        <span class="hint">Seed the global list before scrape surfaces it.</span>
+      </form>
     </section>
 
     <section class="settings-block">

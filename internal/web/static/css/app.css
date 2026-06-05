@@ -1001,6 +1001,25 @@
      templates can drift without breaking the visual cue. The inset
      shadow lives in front of the row background so :hover keeps it
      visible. */
+  /* Static row variant — same visual as .ev but no <details>/expand.
+     Used on the accounts list where rows don't have extra detail. */
+  .ev.static { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; border-top:1px solid transparent; border-bottom:1px solid transparent; }
+  .ev.static .ev-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) 10px minmax(0, 2fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 16px 8px 20px;
+  }
+  .ev.static .row-link {
+    margin-left: 10px;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 11px;
+  }
+  .ev.static .row-link:hover { text-decoration: underline; }
+  .ev.static:hover { background: var(--surface-2); }
+
   .ev.kind-claim,    .ev.ev-claim    { box-shadow: inset 3px 0 0 var(--green);  }
   .ev.kind-progress, .ev.ev-progress { box-shadow: inset 3px 0 0 var(--amber);  }
   .ev.kind-state,    .ev.ev-state    { box-shadow: inset 3px 0 0 var(--blue);   }

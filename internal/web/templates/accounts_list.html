@@ -31,18 +31,17 @@
     {{else}}
     <div class="events accounts-rows">
       {{range .Page}}
-      <details class="ev kind-{{if eq .StateTier "green"}}claim{{else if eq .StateTier "orange"}}auth{{else}}info{{end}}">
-        <summary>
-          <span class="chev" aria-hidden="true">›</span>
+      <div class="ev kind-{{if eq .StateTier "green"}}claim{{else if eq .StateTier "orange"}}auth{{else}}info{{end}} static">
+        <div class="ev-row">
           <span class="t">{{.DisplayName}}</span>
           <span class="lvl" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">●</span>
           <span class="body"><em>{{.Platform}}</em> · @{{.Login}}
-            <a href="/accounts/{{.ID}}" onclick="event.stopPropagation()" style="margin-left:10px;color:var(--accent);text-decoration:none;font-size:11px;">edit →</a>
-            {{if eq .State "needs_auth"}}<a href="/accounts/{{.ID}}/login" onclick="event.stopPropagation()" style="margin-left:8px;color:var(--accent);text-decoration:none;font-size:11px;">re-auth →</a>{{end}}
+            <a href="/accounts/{{.ID}}" class="row-link">edit →</a>
+            <a href="/accounts/{{.ID}}/login" class="row-link">re-auth →</a>
           </span>
           <span class="ac"><span class="state-pill state-{{.StateTier}}">{{if eq .StateTier "green"}}● {{.State}}{{else if eq .StateTier "orange"}}● {{if eq .State "needs_auth"}}needs login{{else if eq .State "sleeping"}}sleeping{{else}}{{.State}}{{end}}{{else}}○ disabled{{end}}</span></span>
-        </summary>
-      </details>
+        </div>
+      </div>
       {{end}}
     </div>
     {{end}}
