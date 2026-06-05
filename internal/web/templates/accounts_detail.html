@@ -97,6 +97,11 @@
   </div>
 </div>
 
+<style>
+  #selected-list li.drag-over-top { box-shadow: inset 0 2px 0 0 var(--accent, #7cf); }
+  #selected-list li.drag-over-bot { box-shadow: inset 0 -2px 0 0 var(--accent, #7cf); }
+  #selected-list li.dragging { opacity: 0.4; }
+</style>
 <script>
 (function() {
   const sel = document.getElementById('selected-list');
@@ -112,6 +117,12 @@
       i.name = 'game_ids[]';
       i.value = li.dataset.gameId;
       form.appendChild(i);
+    });
+  }
+
+  function clearDragCues() {
+    sel.querySelectorAll('.drag-over-top, .drag-over-bot').forEach(n => {
+      n.classList.remove('drag-over-top', 'drag-over-bot');
     });
   }
 
@@ -145,24 +156,67 @@
 
   let dragSrc = null;
   function bindDrag(li) {
+    if (li.dataset.dragBound === '1') return; // idempotent
+    li.dataset.dragBound = '1';
+    if (!li.hasAttribute('draggable')) li.setAttribute('draggable', 'true');
+
     li.addEventListener('dragstart', function(e) {
       dragSrc = li;
-      e.dataTransfer.effectAllowed = 'move';
-      li.style.opacity = '0.4';
+      try { e.dataTransfer.effectAllowed = 'move'; } catch (_) {}
+      // Firefox requires dataTransfer.setData to actually start a drag.
+      try { e.dataTransfer.setData('text/plain', li.dataset.gameId || ''); } catch (_) {}
+      li.classList.add('dragging');
     });
     li.addEventListener('dragend', function() {
-      li.style.opacity = '';
+      li.classList.remove('dragging');
+      clearDragCues();
+      dragSrc = null;
     });
     li.addEventListener('dragover', function(e) {
       if (!dragSrc || dragSrc === li) return;
       e.preventDefault();
+      try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+      const rect = li.getBoundingClientRect();
+      const before = (e.clientY - rect.top) < rect.height / 2;
+      clearDragCues();
+      li.classList.add(before ? 'drag-over-top' : 'drag-over-bot');
+    });
+    li.addEventListener('dragleave', function() {
+      li.classList.remove('drag-over-top', 'drag-over-bot');
+    });
+    li.addEventListener('drop', function(e) {
+      if (!dragSrc || dragSrc === li) return;
+      e.preventDefault();
+      e.stopPropagation();
       const rect = li.getBoundingClientRect();
       const before = (e.clientY - rect.top) < rect.height / 2;
       sel.insertBefore(dragSrc, before ? li : li.nextSibling);
+      clearDragCues();
     });
   }
+
+  // Allow dropping onto the empty area of the <ul> (e.g. below the last item).
+  sel.addEventListener('dragover', function(e) {
+    if (!dragSrc) return;
+    e.preventDefault();
+    try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+  });
+  sel.addEventListener('drop', function(e) {
+    if (!dragSrc) return;
+    // Only handle drops directly on the list (not bubbled from an <li>, which handled its own drop).
+    if (e.target === sel) {
+      e.preventDefault();
+      sel.appendChild(dragSrc);
+      clearDragCues();
+    }
+  });
+
   sel.querySelectorAll('li[data-game-id]').forEach(bindDrag);
 
+  // formdata fires right before the form is serialized — guaranteed timing,
+  // and works for both classic submit and programmatic submission.
+  form.addEventListener('formdata', addInputs);
+  // Fallback for older browsers without FormData event support.
   form.addEventListener('submit', addInputs);
 })();
 </script>
