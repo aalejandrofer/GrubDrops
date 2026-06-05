@@ -861,16 +861,12 @@
     padding: 14px 16px;
     border-bottom: 1px solid var(--line);
     min-width: 0;
-    /* Pinned height so the live-events drawer-head (multi-row:
-       title + filter buttons + account select + streaming pill)
-       and the live-channels drawer-head (single row) align to the
-       same height. Their bodies start at the same y-coordinate. */
-    min-height: 102px;
     box-sizing: border-box;
   }
-  /* Live channels has a single-row header — pin its h3 + meta to
-     the same row alignment so the empty space below sits flush
-     with where live-events' second row lives. */
+  /* Both drawer-heads inside .live-pair sit on the same subgrid row,
+     so they grow to whichever side has more content. Pin the channels
+     side to top alignment so its single-row content doesn't centre
+     vertically inside the inherited row height. */
   .live-pair-channels .drawer-head {
     align-content: flex-start;
   }
@@ -1266,15 +1262,34 @@
   .live-pair {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    /* Two rows: heads share row 1, bodies share row 2. Nested
+       .live-pair-col + .drawer use chained subgrid so the two
+       drawer-heads grow together to the taller side's natural
+       height, keeping both bodies starting at the same y-coordinate
+       regardless of how the live-events filter row wraps. */
+    grid-template-rows: auto 1fr;
     gap: 16px;
-    align-items: start;
     margin-top: 8px;
   }
   @media (max-width: 1200px) {
-    .live-pair { grid-template-columns: 1fr; }
+    .live-pair {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto auto auto;
+    }
+    .live-pair-col, .live-pair .drawer { display: block; }
   }
-  .live-pair-col { min-width: 0; }
-  .live-pair-events .drawer { margin-top: 0; }
+  .live-pair-col {
+    min-width: 0;
+    display: grid;
+    grid-template-rows: subgrid;
+    grid-row: span 2;
+  }
+  .live-pair .drawer {
+    margin-top: 0;
+    display: grid;
+    grid-template-rows: subgrid;
+    grid-row: span 2;
+  }
   /* Cap the events drawer height to roughly match the live-channels
      column so the two columns visually align. Internal .events
      already scrolls past max-height: 320px. */
