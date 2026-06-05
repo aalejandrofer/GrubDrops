@@ -39,22 +39,54 @@ const stealthUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 
 // other tells; --disable-blink-features=AutomationControlled removes
 // the worst offender, and a per-tab JS override patches the rest.
 func New(ctx context.Context) *Browser {
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+	// Build allocator options from scratch (NOT chromedp.DefaultExecAllocatorOptions)
+	// because the default set includes --enable-automation which is the
+	// master switch PerimeterX/Kasada look at: it sets navigator.webdriver
+	// AND adds "AutomationControlled" to enabled blink features which
+	// fingerprinting JS detects independently of the JS-level shim we
+	// inject. Omit it entirely.
+	opts := []chromedp.ExecAllocatorOption{
+		chromedp.NoFirstRun,
+		chromedp.NoDefaultBrowserCheck,
+		// Use the new headless mode — closer to real Chrome's renderer.
 		chromedp.Flag("headless", "new"),
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("no-sandbox", true),
 		chromedp.Flag("disable-dev-shm-usage", true),
+
+		// Anti-detection
 		chromedp.Flag("disable-blink-features", "AutomationControlled"),
-		chromedp.Flag("disable-features", "IsolateOrigins,site-per-process"),
-		chromedp.Flag("disable-infobars", true),
-		chromedp.Flag("disable-extensions-except", ""),
+
+		// Puppeteer-style defaults minus enable-automation
+		chromedp.Flag("disable-background-networking", true),
+		chromedp.Flag("disable-background-timer-throttling", true),
+		chromedp.Flag("disable-backgrounding-occluded-windows", true),
+		chromedp.Flag("disable-breakpad", true),
+		chromedp.Flag("disable-client-side-phishing-detection", true),
 		chromedp.Flag("disable-default-apps", true),
+		chromedp.Flag("disable-extensions", true),
+		chromedp.Flag("disable-hang-monitor", true),
+		chromedp.Flag("disable-ipc-flooding-protection", true),
 		chromedp.Flag("disable-popup-blocking", true),
-		chromedp.Flag("no-first-run", true),
-		chromedp.Flag("no-default-browser-check", true),
+		chromedp.Flag("disable-prompt-on-repost", true),
+		chromedp.Flag("disable-renderer-backgrounding", true),
+		chromedp.Flag("disable-sync", true),
+		chromedp.Flag("force-color-profile", "srgb"),
+		chromedp.Flag("metrics-recording-only", true),
+		chromedp.Flag("safebrowsing-disable-auto-update", true),
+		chromedp.Flag("password-store", "basic"),
+		chromedp.Flag("use-mock-keychain", true),
+		chromedp.Flag("enable-features", "NetworkService,NetworkServiceInProcess"),
+
+		// Narrower than the default which disabled site-per-process unilaterally.
+		// Keep IsolateOrigins off so cross-origin frames don't get separate processes (cheaper),
+		// but allow Translate/BlinkGenPropertyTrees (default behaviour) since disabling
+		// those is detectable.
+		chromedp.Flag("disable-features", "IsolateOrigins,site-per-process"),
+
 		chromedp.Flag("lang", "en-US,en;q=0.9"),
 		chromedp.UserAgent(stealthUA),
-	)
+	}
 	allocCtx, cancel := chromedp.NewExecAllocator(ctx, opts...)
 	return &Browser{
 		allocCtx:    allocCtx,
