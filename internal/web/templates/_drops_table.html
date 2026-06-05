@@ -11,32 +11,30 @@
     {{end}}
   </div>
   {{else}}
-  <table class="tbl">
-    <thead>
-      <tr>
-        <th>{{if eq .Tab "past"}}When{{else if eq .Tab "current"}}Ends{{else}}Starts{{end}}</th>
-        <th>Platform</th>
-        <th>Kind</th>
-        <th>Game</th>
-        <th>Campaign</th>
-        <th>Drop</th>
-        <th>Account</th>
-      </tr>
-    </thead>
-    <tbody>
+  <div class="events drops-rows">
     {{range .Rows}}
-      <tr>
-        <td class="handle">{{.When}}</td>
-        <td class="plat"><span class="{{.Platform}}">{{.Platform}}</span></td>
-        <td>{{if eq .Kind "reward"}}<span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;padding:2px 7px;border:1px solid var(--accent);color:var(--accent);background:rgba(212,99,30,0.08);">reward</span>{{else}}<span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;padding:2px 7px;border:1px solid var(--line);color:var(--muted);">drop</span>{{end}}</td>
-        <td>{{.Game}}</td>
-        <td>{{.CampaignName}}</td>
-        <td class="name">{{if .BenefitName}}{{.BenefitName}}{{else}}—{{end}}</td>
-        <td class="handle">{{if .AccountName}}@{{.AccountName}}{{else}}—{{end}}</td>
-      </tr>
+    <details class="ev kind-{{if eq .Kind "reward"}}auth{{else}}claim{{end}}"
+             {{if .CampaignID}}hx-get="/drops/campaigns/{{.CampaignID}}/items"
+             hx-target="find .ev-detail-slot"
+             hx-trigger="toggle once from:closest details"
+             hx-swap="innerHTML"{{end}}>
+      <summary>
+        <span class="chev" aria-hidden="true">›</span>
+        <span class="t">{{.When}}</span>
+        <span class="lvl" style="color:var(--{{if eq .Kind "reward"}}accent{{else}}green{{end}})">●</span>
+        <span class="body"><em>{{.Platform}} · {{.Kind}}</em> · <span style="color:var(--muted);">{{.Game}}</span> · {{.CampaignName}}{{if .BenefitName}} · <strong>{{.BenefitName}}</strong>{{end}}</span>
+        <span class="ac">{{if .AccountName}}@{{.AccountName}}{{else}}—{{end}}</span>
+      </summary>
+      <div class="ev-detail-slot">
+        {{if not .CampaignID}}
+        <div class="ev-detail" style="color:var(--muted);font-size:11px;">No campaign id — claim-history row only.</div>
+        {{else}}
+        <div class="ev-detail" style="color:var(--muted);font-size:11px;">Loading items…</div>
+        {{end}}
+      </div>
+    </details>
     {{end}}
-    </tbody>
-  </table>
+  </div>
   {{end}}
 </div>
 {{end}}

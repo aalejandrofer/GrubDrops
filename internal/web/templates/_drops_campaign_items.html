@@ -1,0 +1,23 @@
+{{define "drops_campaign_items"}}
+<div class="ev-detail">
+  <span class="kv"><span class="k">id</span><span class="eq">=</span><span class="v">{{.ID}}</span></span>
+  {{if .Status}}<span class="kv"><span class="k">status</span><span class="eq">=</span><span class="v">{{.Status}}</span></span>{{end}}
+  {{if .Kind}}<span class="kv"><span class="k">kind</span><span class="eq">=</span><span class="v">{{.Kind}}</span></span>{{end}}
+  {{if .When}}<span class="kv"><span class="k">ends</span><span class="eq">=</span><span class="v">{{.When}}</span></span>{{end}}
+</div>
+{{if .Benefits}}
+<table class="tbl items" style="margin:6px 18px 10px;">
+  <thead><tr><th>Item</th><th>Required</th></tr></thead>
+  <tbody>
+    {{range .Benefits}}
+    <tr>
+      <td class="name">{{if .ImageURL}}<img src="{{.ImageURL}}" alt="" style="width:24px;height:24px;vertical-align:middle;margin-right:8px;object-fit:contain;">{{end}}{{.Name}}</td>
+      <td class="handle">{{.RequiredMinutes}}m</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{else}}
+<div class="ev-detail" style="color:var(--muted);font-size:11px;">No items recorded for this campaign yet.</div>
+{{end}}
+{{end}}

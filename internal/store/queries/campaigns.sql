@@ -25,6 +25,9 @@ ORDER BY discovered_at DESC;
 -- name: ListBenefitsForCampaign :many
 SELECT * FROM benefits WHERE campaign_id = ?;
 
+-- name: GetCampaign :one
+SELECT * FROM campaigns WHERE id = ?;
+
 -- name: ListPastCampaigns :many
 -- Campaigns that have ended. Whitelist filtering is applied in Go.
 SELECT * FROM campaigns

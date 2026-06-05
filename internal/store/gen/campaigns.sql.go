@@ -9,6 +9,28 @@ import (
 	"context"
 )
 
+const getCampaign = `-- name: GetCampaign :one
+SELECT id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at, kind FROM campaigns WHERE id = ?
+`
+
+func (q *Queries) GetCampaign(ctx context.Context, id string) (Campaign, error) {
+	row := q.db.QueryRowContext(ctx, getCampaign, id)
+	var i Campaign
+	err := row.Scan(
+		&i.ID,
+		&i.Platform,
+		&i.Game,
+		&i.Name,
+		&i.StartsAt,
+		&i.EndsAt,
+		&i.Status,
+		&i.RawJson,
+		&i.DiscoveredAt,
+		&i.Kind,
+	)
+	return i, err
+}
+
 const listActiveCampaignsForPlatform = `-- name: ListActiveCampaignsForPlatform :many
 SELECT id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at, kind FROM campaigns
 WHERE platform = ? AND status = 'active' AND starts_at <= ? AND ends_at >= ?

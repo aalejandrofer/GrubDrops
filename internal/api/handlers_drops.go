@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
@@ -35,6 +37,7 @@ const (
 // rows we show the campaign name in the Drop column and leave BenefitName
 // empty.
 type dropsRow struct {
+	CampaignID   string // empty for claim-source rows that lack a campaign
 	When         string
 	Platform     string
 	Game         string
@@ -163,6 +166,7 @@ func (d *dropsDeps) collectAll(
 	past = make([]dropsRow, 0, len(pastCamps))
 	for _, c := range pastCamps {
 		row := dropsRow{
+			CampaignID:   c.ID,
 			When:         time.Unix(c.EndsAt, 0).UTC().Format("2006-01-02 15:04"),
 			Platform:     c.Platform,
 			Game:         c.Game,
@@ -209,6 +213,7 @@ func (d *dropsDeps) collectAll(
 	current = make([]dropsRow, 0, len(currentCamps))
 	for _, c := range currentCamps {
 		row := dropsRow{
+			CampaignID:   c.ID,
 			When:         time.Unix(c.EndsAt, 0).UTC().Format("2006-01-02 15:04"),
 			Platform:     c.Platform,
 			Game:         c.Game,
@@ -232,6 +237,7 @@ func (d *dropsDeps) collectAll(
 	upcoming = make([]dropsRow, 0, len(upcomingCamps))
 	for _, c := range upcomingCamps {
 		row := dropsRow{
+			CampaignID:   c.ID,
 			When:         time.Unix(c.StartsAt, 0).UTC().Format("2006-01-02 15:04"),
 			Platform:     c.Platform,
 			Game:         c.Game,
@@ -261,4 +267,52 @@ func (d *dropsDeps) collectAll(
 	}
 
 	return past, current, upcoming, unlisted, nil
+}
+
+// items returns the benefits + summary for a single campaign, rendered
+// as the HTML partial that hx-get loads into a row's expanded section.
+type campaignDetailRow struct {
+	ID              string
+	Platform        string
+	Game            string
+	CampaignName    string
+	Kind            string
+	When            string
+	Status          string
+	Benefits        []campaignBenefitRow
+}
+
+type campaignBenefitRow struct {
+	Name            string
+	RequiredMinutes int64
+	ImageURL        string
+}
+
+func (d *dropsDeps) items(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	camp, err := d.q.GetCampaign(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	bens, _ := d.q.ListBenefitsForCampaign(r.Context(), id)
+	detail := campaignDetailRow{
+		ID:           camp.ID,
+		Platform:     camp.Platform,
+		Game:         camp.Game,
+		CampaignName: camp.Name,
+		Kind:         camp.Kind,
+		Status:       camp.Status,
+	}
+	if camp.EndsAt > 0 {
+		detail.When = time.Unix(camp.EndsAt, 0).UTC().Format("2006-01-02 15:04 UTC")
+	}
+	for _, b := range bens {
+		detail.Benefits = append(detail.Benefits, campaignBenefitRow{
+			Name:            b.Name,
+			RequiredMinutes: b.RequiredMinutes,
+			ImageURL:        b.ImageUrl,
+		})
+	}
+	renderPartial(w, d.t, "drops_campaign_items", detail)
 }
