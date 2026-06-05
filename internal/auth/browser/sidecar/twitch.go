@@ -197,14 +197,23 @@ func scrapeDropsCampaignsPage(tabCtx context.Context) ([]apolloCampaign, error) 
 		return JSON.stringify(out);
 	})()`
 
-	var raw string
+	var raw, debugInfo string
+	debugScript := `(() => {
+		const s = window.__APOLLO_STATE__;
+		if (!s) return JSON.stringify({apollo_state_present: false, keys: Object.keys(window).filter(k => k.startsWith('__')).slice(0, 20)});
+		const keys = Object.keys(s);
+		const sample = keys.filter(k => k.includes('Drop') || k.includes('Campaign')).slice(0, 10);
+		return JSON.stringify({apollo_state_present: true, total_keys: keys.length, drop_keys_sample: sample});
+	})()`
 	if err := chromedp.Run(tabCtx,
 		chromedp.Navigate("https://www.twitch.tv/drops/campaigns"),
-		chromedp.Sleep(6*time.Second),
+		chromedp.Sleep(7*time.Second),
+		chromedp.Evaluate(debugScript, &debugInfo),
 		chromedp.Evaluate(script, &raw),
 	); err != nil {
 		return nil, fmt.Errorf("scrape drops page: %w", err)
 	}
+	slog.Info("twitch drops page scrape", "apollo", debugInfo, "campaigns_raw", truncate(raw, 300))
 	var camps []apolloCampaign
 	if err := json.Unmarshal([]byte(raw), &camps); err != nil {
 		return nil, fmt.Errorf("parse apollo state: %w (raw=%s)", err, truncate(raw, 200))

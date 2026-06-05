@@ -262,10 +262,19 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 		slog.Error("watcher list campaigns failed", "kind", "error", "account", w.cfg.AccountID, "err", err)
 		return fmt.Errorf("list campaigns: %w", err)
 	}
-	progress, err := w.cfg.Backend.InventoryProgress(ctx, w.cfg.Session)
-	if err != nil {
-		slog.Error("watcher inventory failed", "kind", "error", "account", w.cfg.AccountID, "err", err)
-		return fmt.Errorf("inventory: %w", err)
+	// Inventory is only meaningful as a dedupe filter against discovered
+	// campaigns. Skip when discovery returned nothing so a transient
+	// inventory backend failure (PerimeterX, CSP) doesn't poison an
+	// otherwise-empty cycle. When inventory fails with campaigns
+	// present, log + continue with empty progress — we'd rather re-mine
+	// a benefit than stall the watcher.
+	var progress []platform.Progress
+	if len(campaigns) > 0 {
+		progress, err = w.cfg.Backend.InventoryProgress(ctx, w.cfg.Session)
+		if err != nil {
+			slog.Warn("watcher inventory failed; treating as no progress yet", "kind", "error", "account", w.cfg.AccountID, "err", err)
+			progress = nil
+		}
 	}
 	claimed := map[string]bool{}
 	for _, p := range progress {
