@@ -1090,12 +1090,19 @@ func (t *Twitch) gqlGoHTTP(ctx context.Context, tabCtx context.Context, body []b
 	if err != nil {
 		return nil, 0, fmt.Errorf("build request: %w", err)
 	}
+	// Use the Twitch Android-app client identity — same trick
+	// DevilXD/TwitchDropsMiner uses to bypass the gql integrity
+	// challenge that only fires for web client. Auth-token cookie is
+	// per-user not per-client, so the Android client honors a token
+	// originally issued for the web client.
+	const androidClientID = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"
+	const androidUA = "Dalvik/2.1.0 (Linux; U; Android 14; Pixel 7 Build/UQ1A.240205.004) tv.twitch.android.app/19.1.0/1901000"
 	req.Header.Set("Content-Type", "text/plain;charset=UTF-8")
 	req.Header.Set("Authorization", "OAuth "+authToken)
-	req.Header.Set("Client-Id", "kimne78kx3ncx6brgo4mv6wki5h1ko")
-	req.Header.Set("User-Agent", stealthUA)
-	req.Header.Set("Origin", "https://www.twitch.tv")
-	req.Header.Set("Referer", "https://www.twitch.tv/")
+	req.Header.Set("Client-Id", androidClientID)
+	req.Header.Set("User-Agent", androidUA)
+	req.Header.Set("Accept-Language", "en-US")
+	req.Header.Set("Accept", "*/*")
 	if deviceID != "" {
 		req.Header.Set("X-Device-Id", deviceID)
 	}
