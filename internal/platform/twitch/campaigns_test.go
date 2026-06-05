@@ -137,6 +137,31 @@ func TestCampaigns_ListActive_GameFilterAllowsMatch(t *testing.T) {
 	}
 }
 
+// dedupeSynthVsReal drops scrape-synthesised campaigns whose game is
+// already covered by a real (UUID) gql entry — picking the synth would
+// strand the watcher at 0/N because its fabricated drop IDs never appear
+// in dropCampaignsInProgress (B2).
+func TestCampaigns_DedupeSynthVsReal(t *testing.T) {
+	in := []platform.Campaign{
+		{ID: "real-uuid-1", Platform: "twitch", Game: "Minecraft", Name: "Marathon"},
+		{ID: "Minecraft|Tubbo's RealmSMP RPG|2026|_default", Platform: "twitch", Game: "Minecraft", Name: "Tubbo"},
+		{ID: "Apex|Heirloom|2026|_default", Platform: "twitch", Game: "Apex Legends", Name: "Apex synth"},
+		{ID: "kick-uuid-1", Platform: "kick", Game: "GTA V", Name: "Kick GTA"},
+	}
+	out := dedupeSynthVsReal(in)
+
+	// Minecraft synth dropped (real exists), Apex synth kept (no real),
+	// Kick entry untouched (different platform).
+	ids := map[string]bool{}
+	for _, c := range out {
+		ids[c.ID] = true
+	}
+	assert.True(t, ids["real-uuid-1"], "real Minecraft campaign retained")
+	assert.False(t, ids["Minecraft|Tubbo's RealmSMP RPG|2026|_default"], "synth Minecraft shadowed by real, must be dropped")
+	assert.True(t, ids["Apex|Heirloom|2026|_default"], "synth Apex retained — no real entry for game")
+	assert.True(t, ids["kick-uuid-1"], "Kick entry untouched")
+}
+
 func TestCampaigns_Inventory_ParsesProgress(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(loadFixture(t, "inventory.json"))

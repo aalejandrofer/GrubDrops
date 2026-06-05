@@ -1,0 +1,112 @@
+# dropsminer — open TODOs (2026-06-05 23:30)
+
+Session 2026-06-05 evening landed: B1, B2, B2.5, F1, F2, P1, P3, P5 + tests.
+Remaining: bigger features + parity items deferred below.
+
+## REGRESSIONS / ACTIVE BUGS
+
+[B3] Kick blocked by Cloudflare every cycle. acc_89de4e0863dbbb08548b4348.
+    Cookies stale. User action: paste fresh kick.com cookies via
+    https://drops.ryuzec.dev/accounts/acc_89de4e0863dbbb08548b4348/login
+    OR run: go run ./cmd/dropsminer-helper kick acc_89de4e0863dbbb08548b4348 \
+            --channel STREAMER --password=hdr@wtd@kvn_ZFD4xqe
+
+## DONE THIS SESSION
+
+[B1] auth.refresh() preserves AccountID + GameFilter; regenerates cookie
+    blob from new access_token. BrowserBackend.RefreshSession now calls
+    InvalidateAuth after successful refresh so sidecar picks up the
+    fresh auth-token cookie on next ensureAuthenticated.
+    Tests: internal/platform/twitch/auth_test.go +
+    TestAuth_Refresh_RegeneratesCookieBlobAndPreservesAccountID
+
+[B2] listActive dedupes scrape-synth entries when a real gql UUID
+    exists for the same game. Synth IDs (containing "|" or " ") never
+    appear in dropCampaignsInProgress so picking them stranded the
+    watcher at 0/N forever.
+    Tests: TestCampaigns_DedupeSynthVsReal
+
+[B2.5] Watcher tracks noProgressTicks. After vanishThreshold (3)
+    consecutive ticks where the current benefit is absent from
+    InventoryProgress AND we previously observed progress > 0, the
+    watcher StopWatches and re-enters PickCampaign. Handles code-style
+    drops (Minecraft) that disappear from dropCampaignsInProgress once
+    Twitch issues the redemption code.
+    Tests: TestWatcher_VanishDetect
+
+[F1] platform.PubSubAware + per-account PubSubHooks. Watcher registers
+    OnDropProgress / OnDropClaim / OnStreamDown / OnStreamUp in New().
+    BrowserBackend.SetAccountPubSubHooks stores per-account closures;
+    ensurePubSub picks them up over the global handlers when present.
+    Tests: TestWatcher_RegistersPubSubHooks,
+           TestWatcher_PubSubHooks_UpdateProgress
+
+[F2] platform.ChannelSubscriber. pickStream calls SubscribeChannel
+    after StartWatch; vanish/stream-down/claim paths call
+    UnsubscribeChannel via the unsubscribeCurrentChannel helper.
+
+[P1] PriorityMode "low_avbl_first" sorts by AllowedChannelCount asc
+    (0 = unrestricted = sorted last). Twitch listActive populates
+    Campaign.AllowedChannelCount from the allow.channels array.
+    Tests: TestWatcher_LowAvblFirst_PicksScarceFirst
+
+[P3] Watcher.Config.ExcludeGame closure applied after AllowGame in
+    pickCampaign. Same-game campaigns skipped without rewriting the
+    whitelist.
+    Tests: TestWatcher_ExcludeGame
+
+[P5] Remaining-minutes tiebreak. Within each PriorityMode comparator
+    (ordered/ending_soonest/low_avbl_first), ties fall back to
+    campaignMinRemaining (smallest RequiredMinutes - MinutesWatched
+    across the campaign's benefits).
+
+## PENDING FEATURES — defer to future sessions
+
+[F3] Helper GUI .exe / .app / AppImage prebuilds.
+    cmd/dropsminer-helper-gui already exists — needs build pipeline.
+
+[F4] Dashboard pass B — wire real data into stub panels.
+    Memory TODO: project_todo_dashboard_pass_b.md
+
+[F5] Drag-reorder priority panel — currently dead.
+    Memory TODO: project_todo_drag_reorder_priority.md +
+    project_todo_game_whitelist_per_account.md
+
+[F6] Kick channel autodiscovery — drop single-channel-per-account.
+    Memory TODO: project_todo_kick_channel_autodiscovery.md
+
+[F7] Kick sidecar headed login — replace manual cookie paste with
+    noVNC-driven flow through sidecar.
+    Memory TODO: project_todo_kick_sidecar_login.md
+
+[F8] FakeBackend / `fake` platform / acc_fake_dev seed removal.
+    Memory TODO: project_todo_remove_fake_backend.md
+
+[F9] Notifications-based code-drop detector. Poll OnsiteNotifications
+    gql, extract redemption codes, persist to claims history.
+
+## TDM PARITY P1 (from 2026-06-05 audit)
+
+[P2] Bulk channel liveness check (`bulk_check_online`, 20/batch).
+
+[P4] OpAvailableDrops call before committing watch time.
+
+[P6] DropCurrentSessionContext post-claim verify.
+
+## CLEANUP / OBSERVABILITY
+
+[C1] Dashboard alerts for integrity-wall regression banner.
+    When ViewerDropsDashboard returns dropCampaigns:null AND
+    /accounts/<id> session has refresh_token, surface a "needs
+    re-auth" banner.
+
+## USER ACTIONS
+
+[U1] After exiting this Claude session, rm -rf the husk:
+    /Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/RustDropsMiner
+
+[U2] Re-paste Kick cookies (see B3).
+
+[U3] Re-run Twitch device-code IF you want to refresh the
+    Android-issued token cleanly:
+    https://drops.ryuzec.dev/accounts/acc_17e1c6b57ee50795da2987e3/twitch/device

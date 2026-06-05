@@ -94,6 +94,34 @@ func TestAuth_Refresh_ReturnsNewSession(t *testing.T) {
 	assert.Equal(t, "new_ref", sess.RefreshToken)
 }
 
+// refresh() must regenerate the cookie blob to embed the freshly-issued
+// access_token so the sidecar tab gets the new auth-token cookie. If it
+// reuses the stale Cookies, ViewerDropsDashboard fails the integrity
+// check after container restart (B1).
+func TestAuth_Refresh_RegeneratesCookieBlobAndPreservesAccountID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{
+			"access_token":"FRESH_TOKEN",
+			"refresh_token":"new_ref",
+			"expires_in":14400
+		}`))
+	}))
+	defer srv.Close()
+
+	a := &authFlow{tokenURL: srv.URL, http: &http.Client{Timeout: 5 * time.Second}}
+	in := platform.Session{
+		AccountID:    "acc_42",
+		RefreshToken: "old_refresh",
+		Cookies:      map[string]string{"twitch": `{"cookies":[{"name":"auth-token","value":"STALE_TOKEN"}]}`},
+	}
+	out, err := a.refresh(context.Background(), in)
+	require.NoError(t, err)
+	assert.Equal(t, "acc_42", out.AccountID, "refresh must preserve AccountID")
+	assert.NotEqual(t, in.Cookies["twitch"], out.Cookies["twitch"], "cookie blob must regenerate from new access_token")
+	assert.Contains(t, out.Cookies["twitch"], "FRESH_TOKEN", "regenerated blob must carry the new access_token as auth-token cookie")
+	assert.NotContains(t, out.Cookies["twitch"], "STALE_TOKEN", "regenerated blob must drop the stale access_token")
+}
+
 func TestAuth_FormEncoding(t *testing.T) {
 	v := url.Values{"client_id": {clientID}, "scopes": {"user:read:email channel:read:redemptions"}}
 	enc := v.Encode()

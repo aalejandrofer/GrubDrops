@@ -214,6 +214,7 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 				}
 				d.captureAllowed(c.ID, allowedLogins)
 				camp.Benefits = benefits
+				camp.AllowedChannelCount = len(allowedLogins)
 			}
 		case "UPCOMING":
 			camp.Status = "upcoming"
@@ -225,7 +226,40 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 		}
 		out = append(out, camp)
 	}
-	return out, nil
+	return dedupeSynthVsReal(out), nil
+}
+
+// dedupeSynthVsReal drops scrape-synthesised campaign entries (IDs that
+// contain "|" or " " — fabricated by the sidecar's scrape-fallback merge)
+// when a real gql-sourced entry exists for the same game. Real UUID
+// campaigns are authoritative: they have valid drop UUIDs that the
+// inventory query can match, allowing the watcher to track progress and
+// claim. Synth entries have fabricated IDs that never appear in
+// dropCampaignsInProgress, so picking them strands the watcher at 0/N
+// minutes forever (B2).
+//
+// When NO real entry exists for a game (e.g. integrity-wall blocked gql
+// and only scrape data survived), synth entries are kept so the
+// dashboard can still surface them — but the watcher's pick loop will
+// still skip them via the AccountLinked=false / ID-shape heuristics.
+func dedupeSynthVsReal(camps []platform.Campaign) []platform.Campaign {
+	realGames := map[string]bool{}
+	for _, c := range camps {
+		if c.Platform != "twitch" {
+			continue
+		}
+		if !strings.ContainsAny(c.ID, "| ") {
+			realGames[c.Game] = true
+		}
+	}
+	out := make([]platform.Campaign, 0, len(camps))
+	for _, c := range camps {
+		if c.Platform == "twitch" && strings.ContainsAny(c.ID, "| ") && realGames[c.Game] {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 // fetchDetails calls OpDropCampaignDetails and converts the response into

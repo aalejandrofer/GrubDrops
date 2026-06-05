@@ -41,10 +41,12 @@ type BrowserBackend struct {
 	// PubSub: one WebSocket per account. Started lazily on first
 	// ListActiveCampaigns once the access token + user_id are
 	// available. Real-time progress/claim/stream-down events feed
-	// callbacks set via SetPubSubHandlers.
+	// callbacks set via SetPubSubHandlers (global default) or
+	// SetAccountPubSubHooks (per-account override, used by watchers).
 	pubsubMu       sync.Mutex
 	pubsubs        map[string]*PubSubClient // account_id → client
 	pubsubHandlers PubSubHandlers
+	pubsubHooks    map[string]platform.PubSubHooks // account_id → per-account hooks
 }
 
 // TwitchSidecarAuthenticator is the surface BrowserBackend needs to
@@ -87,6 +89,7 @@ func NewBrowserBackend(client interface {
 		authed:                  map[string]bool{},
 		allowedLoginsByCampaign: map[string][]string{},
 		pubsubs:                 map[string]*PubSubClient{},
+		pubsubHooks:             map[string]platform.PubSubHooks{},
 	}
 	if r, ok := client.(TwitchRewardClaimer); ok {
 		bb.rewards = r
@@ -192,7 +195,19 @@ func (b *BrowserBackend) RefreshSession(ctx context.Context, s platform.Session)
 		// Watcher will hit a 401 from /gql which surfaces re-auth.
 		return s, nil
 	}
-	return b.authFlow.refresh(ctx, s)
+	refreshed, err := b.authFlow.refresh(ctx, s)
+	if err != nil {
+		return platform.Session{}, err
+	}
+	// Drop cached "authed=true" + tear down PubSub for this account so
+	// the next ListActiveCampaigns re-installs the freshly-issued
+	// auth-token into the sidecar tab. Without this the sidecar keeps
+	// serving requests under the stale cookie blob — ViewerDropsDashboard
+	// fails integrity check + returns dropCampaigns:null (B1).
+	if s.AccountID != "" {
+		b.InvalidateAuth(s.AccountID)
+	}
+	return refreshed, nil
 }
 
 // accountFor returns the per-account subsystem bundle. Account-keyed
@@ -248,12 +263,28 @@ func (b *BrowserBackend) ListActiveCampaigns(ctx context.Context, s platform.Ses
 	return camps, nil
 }
 
-// SetPubSubHandlers wires real-time callbacks for newly-started
-// PubSub clients. Existing clients are not retrofitted — call this
+// SetPubSubHandlers wires global real-time callbacks for newly-started
+// PubSub clients. Per-account hooks installed via SetAccountPubSubHooks
+// take precedence. Existing clients are not retrofitted — call this
 // before any account's first ListActiveCampaigns.
 func (b *BrowserBackend) SetPubSubHandlers(h PubSubHandlers) {
 	b.pubsubMu.Lock()
 	b.pubsubHandlers = h
+	b.pubsubMu.Unlock()
+}
+
+// SetAccountPubSubHooks installs per-account PubSub callbacks. The
+// account's PubSub client uses these when it bootstraps via the next
+// ensurePubSub call. Existing clients are not retrofitted, so watchers
+// must call this BEFORE their first ListActiveCampaigns.
+//
+// Satisfies platform.PubSubAware.
+func (b *BrowserBackend) SetAccountPubSubHooks(accountID string, h platform.PubSubHooks) {
+	if accountID == "" {
+		return
+	}
+	b.pubsubMu.Lock()
+	b.pubsubHooks[accountID] = h
 	b.pubsubMu.Unlock()
 }
 
@@ -291,6 +322,16 @@ func (b *BrowserBackend) ensurePubSub(s platform.Session, a *twitchAccount) {
 		return
 	}
 	handlers := b.pubsubHandlers
+	// Per-account hooks override the global defaults when present. This
+	// is the path watchers use to receive their own drop/stream events.
+	if hooks, ok := b.pubsubHooks[s.AccountID]; ok {
+		handlers = PubSubHandlers{
+			OnDropProgress: hooks.OnDropProgress,
+			OnDropClaim:    hooks.OnDropClaim,
+			OnStreamDown:   hooks.OnStreamDown,
+			OnStreamUp:     hooks.OnStreamUp,
+		}
+	}
 	b.pubsubMu.Unlock()
 
 	userID, err := a.watch.resolveUserID(context.Background(), s)

@@ -42,6 +42,13 @@ type Config struct {
 	// table stores both. The check should be lenient.
 	AllowGame func(game string) bool
 
+	// ExcludeGame, when set and returning true for a game, prevents
+	// that game's campaigns from being mined even if AllowGame
+	// permits them. Useful for temporarily skipping a game without
+	// editing the whitelist (DevilXD parity — P3 exclude-game set).
+	// Applied AFTER AllowGame so the whitelist remains canonical.
+	ExcludeGame func(game string) bool
+
 	// GameRank returns the priority of `game` within the whitelist
 	// (lower = higher priority). Used to sort matching campaigns.
 	// Defaults to math.MaxInt when AllowGame is nil.
@@ -74,6 +81,16 @@ type Watcher struct {
 	watchStartedAt  time.Time
 	lastProgressMin int
 	tickCount       int // increments each tickWatch, used to throttle stream-live re-checks
+	// noProgressTicks counts consecutive tickWatch calls where
+	// InventoryProgress returned NO row matching the current benefit ID.
+	// Reset to 0 on any match; on pickStream when starting a fresh watch.
+	// When the count exceeds vanishThreshold AND we previously saw
+	// progress for this benefit, the watcher treats the benefit as
+	// externally completed (code-style Twitch drop claimed manually +
+	// dropped from dropCampaignsInProgress, or campaign expired
+	// mid-watch) and re-enters PickCampaign instead of mining forever
+	// against a ghost benefit (B2.5).
+	noProgressTicks int
 
 	// lastDiscovery is the most recent successful
 	// Backend.ListActiveCampaigns result. Cached so the dashboard's
@@ -94,7 +111,116 @@ func New(cfg Config) *Watcher {
 	if cfg.Session.GameFilter == nil {
 		cfg.Session.GameFilter = cfg.AllowGame
 	}
-	return &Watcher{cfg: cfg, state: StateIdle}
+	w := &Watcher{cfg: cfg, state: StateIdle}
+	// Register PubSub hooks BEFORE the first ListActiveCampaigns call so
+	// the backend's lazy PubSub bootstrap picks them up. Backends that
+	// don't implement PubSubAware (Kick, mock) silently skip this.
+	if pa, ok := cfg.Backend.(platform.PubSubAware); ok {
+		pa.SetAccountPubSubHooks(cfg.AccountID, platform.PubSubHooks{
+			OnDropProgress: w.handlePubSubDropProgress,
+			OnDropClaim:    w.handlePubSubDropClaim,
+			OnStreamDown:   w.handlePubSubStreamDown,
+			OnStreamUp:     w.handlePubSubStreamUp,
+		})
+	}
+	return w
+}
+
+// handlePubSubDropProgress is invoked from the PubSub read loop when a
+// drop-progress message arrives. Updates lastProgressMin so the
+// dashboard reflects real-time progress without waiting for the next
+// inventory poll, and resets the vanish-detect counter (B2.5).
+func (w *Watcher) handlePubSubDropProgress(dropID string, curMin, _ int64) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.currentBenefit == nil || w.currentBenefit.ID != dropID {
+		return
+	}
+	w.lastProgressMin = int(curMin)
+	w.noProgressTicks = 0
+}
+
+// handlePubSubDropClaim is invoked when Twitch emits a drop-claim
+// event. Captures the per-account drop_instance_id and fast-paths the
+// watcher into StateClaiming so the next step issues the claim
+// mutation without waiting for an inventory poll.
+func (w *Watcher) handlePubSubDropClaim(dropID, instanceID string) {
+	w.mu.Lock()
+	if w.currentBenefit == nil || w.currentBenefit.ID != dropID {
+		w.mu.Unlock()
+		return
+	}
+	if instanceID != "" {
+		w.currentBenefit.InstanceID = instanceID
+	}
+	w.mu.Unlock()
+	w.setState(context.Background(), StateClaiming)
+}
+
+// handlePubSubStreamDown fires when the channel we're watching emits a
+// video-playback stream-down. Stops the current watch and re-enters
+// PickStream so the watcher swaps to another live broadcaster without
+// waiting for the periodic liveness probe.
+func (w *Watcher) handlePubSubStreamDown(channelID string) {
+	w.mu.Lock()
+	if w.currentStream == nil || w.currentStream.ChannelID != channelID || w.handle == nil {
+		w.mu.Unlock()
+		return
+	}
+	handle := *w.handle
+	w.mu.Unlock()
+	_ = w.cfg.Backend.StopWatch(context.Background(), handle)
+	if cs, ok := w.cfg.Backend.(platform.ChannelSubscriber); ok && channelID != "" {
+		cs.UnsubscribeChannel(w.cfg.AccountID, channelID)
+	}
+	w.setState(context.Background(), StatePickStream)
+}
+
+// handlePubSubStreamUp is currently a noop — pickStream will discover
+// the channel naturally on the next tick. Reserved for future
+// back-off reset logic.
+func (w *Watcher) handlePubSubStreamUp(_ string) {}
+
+// campaignMinRemaining returns the smallest (RequiredMinutes -
+// MinutesWatched) across the campaign's benefits. Benefits with no
+// recorded progress are treated as if they need their full required
+// time. Returns MaxInt32 when the campaign has no benefits (so it
+// sorts last). Used by P5 — get_active_campaign remaining-minutes
+// tiebreak.
+func campaignMinRemaining(c platform.Campaign, progressByID map[string]int) int {
+	const maxInt = 1 << 30
+	best := maxInt
+	for _, b := range c.Benefits {
+		watched := progressByID[b.ID]
+		remain := b.RequiredMinutes - watched
+		if remain < 0 {
+			remain = 0
+		}
+		if remain < best {
+			best = remain
+		}
+	}
+	return best
+}
+
+// unsubscribeCurrentChannel drops the active video-playback PubSub
+// subscription if the backend supports it. Safe to call when no stream
+// is selected — silently noops.
+func (w *Watcher) unsubscribeCurrentChannel() {
+	cs, ok := w.cfg.Backend.(platform.ChannelSubscriber)
+	if !ok {
+		return
+	}
+	w.mu.Lock()
+	var channelID string
+	if w.currentStream != nil {
+		channelID = w.currentStream.ChannelID
+	}
+	w.mu.Unlock()
+	if channelID == "" {
+		return
+	}
+	cs.UnsubscribeChannel(w.cfg.AccountID, channelID)
 }
 
 func (w *Watcher) State() State {
@@ -243,6 +369,12 @@ func (w *Watcher) Run(ctx context.Context) error {
 
 var errComplete = errors.New("nothing left to mine")
 
+// vanishThreshold is how many consecutive tickWatch calls must report
+// "no progress row for current benefit" before the watcher concludes
+// the benefit has been externally claimed or expired. 3 ticks at the
+// default minute-cadence ≈ 3 minutes of grace.
+const vanishThreshold = 3
+
 func (w *Watcher) step(ctx context.Context) error {
 	switch w.State() {
 	case StateIdle, StatePickCampaign:
@@ -357,6 +489,12 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			skippedUnlinked++
 			continue
 		}
+		// P3: exclude-game set short-circuits the pick. Whitelist
+		// already passed; exclude is a finer-grained skip without
+		// rewriting the per-account games table.
+		if w.cfg.ExcludeGame != nil && w.cfg.ExcludeGame(c.Game) {
+			continue
+		}
 		matched = append(matched, c)
 	}
 	if skippedUnlinked > 0 {
@@ -417,23 +555,63 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			}
 		}
 	}
+	// progressByID feeds the remaining-minutes tiebreak (P5). Built
+	// once outside the sort comparator so the closures stay O(1).
+	progressByID := map[string]int{}
+	for _, p := range progress {
+		progressByID[p.BenefitID] = p.MinutesWatched
+	}
 	if w.cfg.PriorityMode == "ending_soonest" {
 		sort.SliceStable(matched, func(i, j int) bool {
 			// Treat 0/missing EndsAt as MaxInt so they sort last —
 			// don't pick a campaign whose end we don't know first.
 			ai := matched[i].EndsAt
 			aj := matched[j].EndsAt
+			if ai.IsZero() && aj.IsZero() {
+				return campaignMinRemaining(matched[i], progressByID) < campaignMinRemaining(matched[j], progressByID)
+			}
 			if ai.IsZero() {
 				return false
 			}
 			if aj.IsZero() {
 				return true
 			}
+			if ai.Equal(aj) {
+				return campaignMinRemaining(matched[i], progressByID) < campaignMinRemaining(matched[j], progressByID)
+			}
 			return ai.Before(aj)
+		})
+	} else if w.cfg.PriorityMode == "low_avbl_first" {
+		// DevilXD LOW_AVBL_FIRST: prefer campaigns whose allow-list is
+		// smaller (scarcer broadcasters). 0 means "any channel for the
+		// game" — treat as effectively infinite so unrestricted
+		// campaigns sort last. Ties fall back to fewest-remaining-min
+		// (P5) so we finish the closest-to-claim benefit first.
+		sort.SliceStable(matched, func(i, j int) bool {
+			ai := matched[i].AllowedChannelCount
+			aj := matched[j].AllowedChannelCount
+			if ai == 0 {
+				ai = 1 << 30
+			}
+			if aj == 0 {
+				aj = 1 << 30
+			}
+			if ai == aj {
+				return campaignMinRemaining(matched[i], progressByID) < campaignMinRemaining(matched[j], progressByID)
+			}
+			return ai < aj
 		})
 	} else if w.cfg.GameRank != nil {
 		sort.SliceStable(matched, func(i, j int) bool {
-			return w.cfg.GameRank(matched[i].Game) < w.cfg.GameRank(matched[j].Game)
+			ri := w.cfg.GameRank(matched[i].Game)
+			rj := w.cfg.GameRank(matched[j].Game)
+			if ri == rj {
+				// P5 tiebreak: same whitelist rank → prefer the
+				// campaign with the fewest minutes remaining to claim
+				// (already in progress > unstarted).
+				return campaignMinRemaining(matched[i], progressByID) < campaignMinRemaining(matched[j], progressByID)
+			}
+			return ri < rj
 		})
 	}
 	slog.Info("watcher discovery", "kind", "discovery", "account", w.cfg.AccountID, "campaigns_total", len(campaigns), "campaigns_eligible", len(matched), "claimed_count", len(claimed))
@@ -498,7 +676,14 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 	w.handle = &h
 	w.watchStartedAt = time.Now()
 	w.lastProgressMin = 0
+	w.noProgressTicks = 0
 	w.mu.Unlock()
+	// Subscribe to video-playback PubSub so stream-down events fire
+	// the moment Twitch flips the broadcast off, without waiting for
+	// the periodic liveness probe (F2).
+	if cs, ok := w.cfg.Backend.(platform.ChannelSubscriber); ok && s.ChannelID != "" {
+		cs.SubscribeChannel(w.cfg.AccountID, s.ChannelID)
+	}
 	w.setState(ctx, StateWatching)
 	return nil
 }
@@ -539,6 +724,7 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 					"channel", handle.Channel,
 					"alternatives", len(streams))
 				_ = w.cfg.Backend.StopWatch(ctx, handle)
+				w.unsubscribeCurrentChannel()
 				w.setState(ctx, StatePickStream)
 				return nil
 			}
@@ -550,11 +736,14 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 		slog.Error("watcher inventory failed", "kind", "error", "account", w.cfg.AccountID, "err", err)
 		return fmt.Errorf("inventory: %w", err)
 	}
+	matched := false
 	for _, p := range progress {
 		if p.BenefitID == benefit.ID {
+			matched = true
 			slog.Info("watcher progress", "kind", "progress", "account", w.cfg.AccountID, "benefit", benefit.ID, "min_watched", p.MinutesWatched, "required", benefit.RequiredMinutes, "claimed", p.Claimed)
 			w.mu.Lock()
 			w.lastProgressMin = p.MinutesWatched
+			w.noProgressTicks = 0
 			// Capture the per-account drop-instance ID at progress
 			// time so Backend.Claim can send it. Without this Twitch
 			// rejects claims with INVALID_DROP_INSTANCE.
@@ -567,6 +756,38 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 				w.setState(ctx, StateClaiming)
 				return nil
 			}
+		}
+	}
+
+	// Vanish-detect (B2.5): if the benefit had progress previously and
+	// has now been absent from dropCampaignsInProgress for N consecutive
+	// ticks, treat it as externally claimed (code-style drop that left
+	// the in-progress list once Twitch issued the redemption code) or
+	// campaign-expired. Stop the watch and let pickCampaign find the
+	// next eligible target.
+	if !matched {
+		w.mu.Lock()
+		w.noProgressTicks++
+		n := w.noProgressTicks
+		prevProgress := w.lastProgressMin
+		w.mu.Unlock()
+		if n >= vanishThreshold && prevProgress > 0 {
+			slog.Info("watcher benefit vanished from inventory; treating as externally claimed",
+				"kind", "state",
+				"account", w.cfg.AccountID,
+				"benefit", benefit.ID,
+				"benefit_name", benefit.Name,
+				"channel", handle.Channel,
+				"last_progress_min", prevProgress)
+			_ = w.cfg.Backend.StopWatch(ctx, handle)
+			w.unsubscribeCurrentChannel()
+			w.mu.Lock()
+			w.currentBenefit = nil
+			w.currentStream = nil
+			w.handle = nil
+			w.mu.Unlock()
+			w.setState(ctx, StatePickCampaign)
+			return nil
 		}
 	}
 
@@ -587,6 +808,7 @@ func (w *Watcher) claim(ctx context.Context) error {
 		return fmt.Errorf("claim: %w", err)
 	}
 	_ = w.cfg.Backend.StopWatch(ctx, handle)
+	w.unsubscribeCurrentChannel()
 
 	slog.Info("watcher claim recorded",
 		"kind", "claim",

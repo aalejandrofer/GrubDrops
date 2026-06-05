@@ -57,6 +57,11 @@ type Campaign struct {
 	// since there's no minutes to accrue; a separate reaper claims
 	// those out-of-band.
 	Kind string
+	// AllowedChannelCount is the number of channels the campaign's
+	// allow-list permits. 0 means unrestricted (any channel streaming
+	// the game qualifies). Used by the "low_avbl_first" priority mode
+	// to prefer scarcer campaigns first (DevilXD parity).
+	AllowedChannelCount int
 }
 
 type DropBenefit struct {

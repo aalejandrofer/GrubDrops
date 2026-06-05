@@ -162,11 +162,19 @@ func (a *authFlow) refresh(ctx context.Context, s platform.Session) (platform.Se
 	if body.RefreshToken == "" {
 		body.RefreshToken = s.RefreshToken
 	}
+	// Preserve identity fields that the refresh response does not
+	// carry: AccountID (caller wiring), GameFilter closure (whitelist
+	// plumbing). Drop the old AccessToken-derived Cookies in favour of
+	// a fresh blob built from the new AccessToken so the sidecar tab
+	// receives the just-issued auth-token on next ensureAuthenticated
+	// (B1: container-restart loses integrity if cookies stay stale).
 	return platform.Session{
+		AccountID:    s.AccountID,
 		AccessToken:  body.AccessToken,
 		RefreshToken: body.RefreshToken,
 		ExpiresAt:    computeExpiresAt(body.ExpiresIn),
 		Cookies:      synthCookieBlob(body.AccessToken),
+		GameFilter:   s.GameFilter,
 	}, nil
 }
 

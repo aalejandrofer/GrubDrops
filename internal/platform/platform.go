@@ -34,6 +34,43 @@ type ClaimedReward struct {
 	Title string
 }
 
+// PubSubHooks is the per-account real-time callback surface a Watcher
+// installs into a PubSubAware backend. All callbacks may fire from any
+// goroutine; implementations must not block.
+type PubSubHooks struct {
+	// OnDropProgress fires when Twitch's user-drop-events.<uid> emits a
+	// drop-progress message. curMin/reqMin come straight from the
+	// payload (in MINUTES, not seconds — Twitch's field name is
+	// current_progress_min).
+	OnDropProgress func(dropID string, curMin, reqMin int64)
+	// OnDropClaim fires when user-drop-events.<uid> emits a drop-claim.
+	// instanceID is the per-account drop_instance_id needed by the
+	// claim mutation.
+	OnDropClaim func(dropID, instanceID string)
+	// OnStreamDown fires when video-playback-by-id.<channelID> emits
+	// stream-down. Watcher should jump to pickStream rather than wait
+	// for the next tick.
+	OnStreamDown func(channelID string)
+	// OnStreamUp mirrors OnStreamDown — fires on stream-up.
+	OnStreamUp func(channelID string)
+}
+
+// PubSubAware is an optional backend capability. Backends that expose
+// real-time events accept per-account PubSubHooks before the account's
+// first ListActiveCampaigns triggers PubSub bootstrap. Watchers
+// register hooks in their constructor.
+type PubSubAware interface {
+	SetAccountPubSubHooks(accountID string, hooks PubSubHooks)
+}
+
+// ChannelSubscriber is an optional backend capability for adding /
+// removing per-channel real-time subscriptions during the watch
+// lifetime (Twitch video-playback-by-id topic).
+type ChannelSubscriber interface {
+	SubscribeChannel(accountID, channelID string)
+	UnsubscribeChannel(accountID, channelID string)
+}
+
 type Registry struct {
 	backends map[string]Backend
 }
