@@ -42,10 +42,15 @@ func (t *Twitch) Authenticate(ctx context.Context, accountID string, session *pb
 		return "", "", err
 	}
 	if fresh {
-		// Install the stealth shim BEFORE any navigation so it runs at
-		// the top of every document — including the first page load.
+		// Install the stealth shim AND disable CSP BEFORE any navigation.
+		// CSP disabled because Twitch's connect-src may not include
+		// gql.twitch.tv when scripts originate from chromedp's isolated
+		// world, causing XHR/fetch to fail with status=0 readyState=4.
 		if err := chromedp.Run(tabCtx,
 			chromedp.ActionFunc(func(ctx context.Context) error {
+				if err := page.SetBypassCSP(true).Do(ctx); err != nil {
+					return fmt.Errorf("bypass csp: %w", err)
+				}
 				_, err := page.AddScriptToEvaluateOnNewDocument(StealthScript).Do(ctx)
 				return err
 			}),
