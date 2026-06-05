@@ -118,3 +118,18 @@ func TestKickBackend_RegisterChannelExposesInList(t *testing.T) {
 	require.Len(t, out, 1)
 	assert.Equal(t, "fakestreamer", out[0].Channel)
 }
+
+// TestKickBackend_AllowedChannelCountDistinct mirrors the contract the
+// dashboard relies on: Kick doesn't surface a per-campaign allow-list
+// (each account picks a single channel), so the count is the number
+// of distinct channels across accounts. Two accounts pointing at the
+// same channel collapse to a single eligible stream.
+func TestKickBackend_AllowedChannelCountDistinct(t *testing.T) {
+	b := New(nil)
+	assert.Equal(t, 0, b.AllowedChannelCount("anything"), "no accounts -> zero")
+
+	b.RegisterChannel("acc1", "alice")
+	b.RegisterChannel("acc2", "bob")
+	b.RegisterChannel("acc3", "alice") // duplicate channel
+	assert.Equal(t, 2, b.AllowedChannelCount("kick-inventory"))
+}

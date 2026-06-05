@@ -10,6 +10,22 @@ import (
 	"database/sql"
 )
 
+const countClaimedForCampaign = `-- name: CountClaimedForCampaign :one
+SELECT COUNT(DISTINCT c.benefit_id) FROM claims c
+JOIN benefits b ON b.id = c.benefit_id
+WHERE b.campaign_id = ?
+`
+
+// Distinct benefits already claimed by any account in this campaign.
+// The dashboard divides this by len(Benefits) to render the
+// "Claimed X / Y" badge on each Active Campaigns row.
+func (q *Queries) CountClaimedForCampaign(ctx context.Context, campaignID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countClaimedForCampaign, campaignID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getProgress = `-- name: GetProgress :one
 SELECT account_id, benefit_id, minutes_watched, claimed_at, updated_at FROM progress WHERE account_id = ? AND benefit_id = ?
 `

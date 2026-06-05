@@ -59,6 +59,19 @@ func TestBackend_ListActiveThenEligibleChannels(t *testing.T) {
 	assert.Equal(t, "fakestreamer", out[0].Channel)
 }
 
+// TestBackend_AllowedChannelCount exposes the allow-list cache so the
+// dashboard's "channels" column has a number to render. Unknown
+// campaign ids return zero so the row falls back to "no eligible
+// channels yet" rather than panicking.
+func TestBackend_AllowedChannelCount(t *testing.T) {
+	b := New()
+	assert.Equal(t, 0, b.AllowedChannelCount("missing"))
+
+	b.setAllowedLogins("camp1", []string{"streamer1", "streamer2", "streamer3"})
+	assert.Equal(t, 3, b.AllowedChannelCount("camp1"))
+	assert.Equal(t, 0, b.AllowedChannelCount("camp2"), "unknown id stays at zero")
+}
+
 func TestBackend_ListActiveCampaignsPopulatesAllowList(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req gqlRequest

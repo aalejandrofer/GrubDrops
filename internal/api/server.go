@@ -94,7 +94,15 @@ func NewRouter(d Deps) http.Handler {
 	if startedAt.IsZero() {
 		startedAt = time.Now()
 	}
-	dash := dashboardDeps{q: d.Q, t: d.Templates, sm: d.Session, sch: d.Scheduler, ring: d.LogRing, start: startedAt}
+	dash := dashboardDeps{
+		q:               d.Q,
+		t:               d.Templates,
+		sm:              d.Session,
+		sch:             d.Scheduler,
+		ring:            d.LogRing,
+		start:           startedAt,
+		channelCounters: channelCountersFromRegistry(d.Registry),
+	}
 	accs := accountsDeps{q: d.Q, t: d.Templates, sm: d.Session, sch: d.Scheduler}
 	loginTwitch := newLoginTwitchDeps(d, d.RootCtx)
 	loginKick := &loginKickDeps{

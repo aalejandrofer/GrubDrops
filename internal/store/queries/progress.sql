@@ -22,3 +22,11 @@ WHERE p.account_id = ?
 -- name: InsertClaim :exec
 INSERT INTO claims (id, account_id, benefit_id, claimed_at, value_meta_json)
 VALUES (?, ?, ?, ?, ?);
+
+-- name: CountClaimedForCampaign :one
+-- Distinct benefits already claimed by any account in this campaign.
+-- The dashboard divides this by len(Benefits) to render the
+-- "Claimed X / Y" badge on each Active Campaigns row.
+SELECT COUNT(DISTINCT c.benefit_id) FROM claims c
+JOIN benefits b ON b.id = c.benefit_id
+WHERE b.campaign_id = ?;

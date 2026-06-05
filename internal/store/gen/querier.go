@@ -12,6 +12,10 @@ type Querier interface {
 	AddAccountGame(ctx context.Context, arg AddAccountGameParams) error
 	AdminExists(ctx context.Context) (bool, error)
 	ClearAccountGames(ctx context.Context, accountID string) error
+	// Distinct benefits already claimed by any account in this campaign.
+	// The dashboard divides this by len(Benefits) to render the
+	// "Claimed X / Y" badge on each Active Campaigns row.
+	CountClaimedForCampaign(ctx context.Context, campaignID string) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
 	DeleteAccount(ctx context.Context, id string) error
 	GetAccount(ctx context.Context, id string) (Account, error)

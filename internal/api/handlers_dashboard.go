@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,10 +13,41 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	mlog "github.com/aalejandrofer/dropsminer/internal/log"
+	"github.com/aalejandrofer/dropsminer/internal/platform"
 	"github.com/aalejandrofer/dropsminer/internal/scheduler"
 	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 	"github.com/aalejandrofer/dropsminer/internal/watcher"
 )
+
+// ChannelCounter is the backend-side surface the dashboard needs to
+// fill the "channels" column on each Active Campaigns row. Both
+// twitch.Backend and twitch.BrowserBackend implement it via their
+// cached allow-list; kick.Backend implements it by counting distinct
+// channels across registered accounts (campaignID is ignored there).
+type ChannelCounter interface {
+	AllowedChannelCount(campaignID string) int
+}
+
+// channelCountersFromRegistry projects the platform registry into the
+// map dashboardDeps consumes. Backends that don't implement
+// ChannelCounter are silently skipped — those platforms render as
+// zero in the Active Campaigns "channels" column.
+func channelCountersFromRegistry(reg *platform.Registry) map[string]ChannelCounter {
+	if reg == nil {
+		return nil
+	}
+	out := map[string]ChannelCounter{}
+	for _, name := range []string{"twitch", "kick"} {
+		b, ok := reg.Get(name)
+		if !ok {
+			continue
+		}
+		if cc, ok := b.(ChannelCounter); ok {
+			out[name] = cc
+		}
+	}
+	return out
+}
 
 type dashboardDeps struct {
 	q     *gen.Queries
@@ -24,6 +56,10 @@ type dashboardDeps struct {
 	sch   *scheduler.Scheduler
 	ring  *mlog.Ring
 	start time.Time
+	// channelCounters is keyed by platform name ("twitch", "kick"). Nil
+	// or missing entries make the dashboard fall back to zero for that
+	// platform — safer than panicking when a backend isn't wired up.
+	channelCounters map[string]ChannelCounter
 }
 
 type dashTelemetry struct {
@@ -198,7 +234,7 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 		Tele:          telemetryFrom(cards, snapshots),
 		Mining:        cards,
 		NextClaims:    nextClaimsFrom(cards),
-		ActiveCamps:   activeCampsFromDiscovery(d.sch),
+		ActiveCamps:   activeCampsFromDiscovery(r.Context(), d.sch, d.channelCounters, d.q),
 		Priority:      stubPriority(),
 		LiveChannels:  liveChannelsFor(accs, snapshots, allowed),
 		Events:        eventsFromRing(d.ring, "", ""),
@@ -210,11 +246,23 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 	return page
 }
 
+// claimedCounter is the subset of *gen.Queries the dashboard needs to
+// fill the "claimed" column. Declared here so tests can inject a stub
+// without spinning a real sqlite database.
+type claimedCounter interface {
+	CountClaimedForCampaign(ctx context.Context, campaignID string) (int64, error)
+}
+
 // activeCampsFromDiscovery projects the scheduler's discovery snapshot
 // into the row shape the Active Campaigns sidebar renders. The whitelist
 // filter is already applied inside DiscoverySnapshot — every row here
 // has at least one account that opted into its game.
-func activeCampsFromDiscovery(sch *scheduler.Scheduler) []dashCampaign {
+//
+// `chanCounters` (keyed by platform) supplies the eligible-channel count
+// per campaign; `q` supplies the cross-account claim count. Either may
+// be nil — the corresponding column then renders as zero, matching the
+// previous TODO behaviour.
+func activeCampsFromDiscovery(ctx context.Context, sch *scheduler.Scheduler, chanCounters map[string]ChannelCounter, q claimedCounter) []dashCampaign {
 	if sch == nil {
 		return nil
 	}
@@ -228,16 +276,26 @@ func activeCampsFromDiscovery(sch *scheduler.Scheduler) []dashCampaign {
 			ends = formatEndsIn(dc.EndsAt.Sub(now))
 			urgent = dc.EndsAt.Sub(now) < 24*time.Hour && dc.EndsAt.After(now)
 		}
+		channels := 0
+		if cc, ok := chanCounters[dc.Platform]; ok && cc != nil {
+			channels = cc.AllowedChannelCount(dc.ID)
+		}
+		claimed := 0
+		if q != nil {
+			if n, err := q.CountClaimedForCampaign(ctx, dc.ID); err == nil {
+				claimed = int(n)
+			}
+		}
 		out = append(out, dashCampaign{
 			ID:         dc.ID,
 			Name:       dc.Name,
 			Platform:   dc.Platform,
 			Game:       dc.Game,
 			Drops:      len(dc.Benefits),
-			Channels:   0, // TODO(discovery): plumb eligible-channel counts from twitch.allowedLoginsByCampaign
+			Channels:   channels,
 			EndsIn:     ends,
 			EndsUrgent: urgent,
-			Claimed:    0, // TODO(discovery): cross-reference InventoryProgress to count claimed benefits
+			Claimed:    claimed,
 			Total:      len(dc.Benefits),
 		})
 	}
