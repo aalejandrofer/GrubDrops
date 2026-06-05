@@ -23,3 +23,17 @@ DELETE FROM account_games WHERE account_id = ? AND game_id = ?;
 
 -- name: ClearAccountGames :exec
 DELETE FROM account_games WHERE account_id = ?;
+
+-- name: ListGlobalGames :many
+SELECT g.id, g.name, g.slug, gg.rank
+FROM global_games gg
+JOIN games g ON g.id = gg.game_id
+ORDER BY gg.rank ASC;
+
+-- name: AddGlobalGame :exec
+INSERT INTO global_games (game_id, rank)
+VALUES (?, ?)
+ON CONFLICT(game_id) DO UPDATE SET rank = excluded.rank;
+
+-- name: ClearGlobalGames :exec
+DELETE FROM global_games;

@@ -74,6 +74,47 @@
           <button class="btn primary" type="submit">Save →</button>
         </div>
       </form>
+
+      <h2 class="settings-h" style="margin:24px 0 10px;font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.18em;color:var(--muted);">Global priority list</h2>
+      <p style="color: var(--muted); font-size: 12px; margin: 0 0 12px;">
+        Default priority for accounts whose per-account whitelist is empty. Drag to reorder — top = mined first.
+      </p>
+      <form method="post" action="/settings/global-games" id="global-games-form">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px;">
+          <div>
+            <div class="kicker" style="margin-bottom: 8px;">Selected · drag to reorder</div>
+            <ul id="global-selected" style="list-style:none;margin:0;padding:0;border:1px dashed var(--line);min-height:160px;">
+              {{range .GlobalGames}}
+              <li draggable="true" data-game-id="{{.ID}}" style="padding:8px 12px;border-bottom:1px solid var(--line);cursor:grab;display:flex;align-items:center;justify-content:space-between;background:var(--bg-soft,#14151a);">
+                <span>{{.Name}}</span>
+                <button type="button" class="alt" onclick="gpRemove('{{.ID}}')" style="border:none;background:transparent;color:var(--muted);cursor:pointer;">remove ×</button>
+              </li>
+              {{end}}
+              {{if not .GlobalGames}}
+              <li style="padding:12px;color:var(--muted);font-size:12px;text-align:center;">No global priority set — pick from the right →</li>
+              {{end}}
+            </ul>
+          </div>
+          <div>
+            <div class="kicker" style="margin-bottom: 8px;">Available</div>
+            <ul id="global-available" style="list-style:none;margin:0;padding:0;border:1px dashed var(--line);max-height:260px;overflow-y:auto;">
+              {{range .AllGames}}
+              {{if not .Selected}}
+              <li data-game-id="{{.ID}}" style="padding:8px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;">
+                <span>{{.Name}}</span>
+                <button type="button" class="alt" onclick="gpAdd('{{.ID}}','{{.Name}}')" style="border:none;background:transparent;color:var(--accent);cursor:pointer;">add +</button>
+              </li>
+              {{end}}
+              {{end}}
+            </ul>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 14px;">
+          <span style="color:var(--muted);font-size:11px;">Order in the left column = mining priority for accounts without an override.</span>
+          <button class="btn primary" type="submit">Save priority →</button>
+        </div>
+      </form>
     </div>
 
     <div class="form-card">
@@ -97,4 +138,100 @@
   </div>
   {{end}}
 </div>
+
+<style>
+  #global-selected li.drag-over-top { box-shadow: inset 0 2px 0 0 var(--accent); }
+  #global-selected li.drag-over-bot { box-shadow: inset 0 -2px 0 0 var(--accent); }
+  #global-selected li.dragging { opacity: 0.4; }
+</style>
+<script>
+(function() {
+  var sel = document.getElementById('global-selected');
+  var avail = document.getElementById('global-available');
+  var form = document.getElementById('global-games-form');
+  if (!sel || !form) return;
+
+  function addInputs() {
+    form.querySelectorAll('input[name="game_ids[]"]').forEach(function(n) { n.remove(); });
+    sel.querySelectorAll('li[data-game-id]').forEach(function(li) {
+      var i = document.createElement('input');
+      i.type = 'hidden';
+      i.name = 'game_ids[]';
+      i.value = li.dataset.gameId;
+      form.appendChild(i);
+    });
+  }
+
+  function clearDragCues() {
+    sel.querySelectorAll('.drag-over-top, .drag-over-bot').forEach(function(n) {
+      n.classList.remove('drag-over-top', 'drag-over-bot');
+    });
+  }
+
+  window.gpAdd = function(id, name) {
+    if (sel.querySelector('li[data-game-id="'+id+'"]')) return;
+    var ph = sel.querySelector('li:not([data-game-id])');
+    if (ph) ph.remove();
+    var li = document.createElement('li');
+    li.dataset.gameId = id;
+    li.draggable = true;
+    li.style.cssText = 'padding:8px 12px;border-bottom:1px solid var(--line);cursor:grab;display:flex;align-items:center;justify-content:space-between;background:var(--bg-soft,#14151a);';
+    li.innerHTML = '<span>' + name + '</span><button type="button" class="alt" onclick="gpRemove(\''+id+'\')" style="border:none;background:transparent;color:var(--muted);cursor:pointer;">remove ×</button>';
+    bindDrag(li);
+    sel.appendChild(li);
+    var a = avail.querySelector('li[data-game-id="'+id+'"]');
+    if (a) a.remove();
+  };
+
+  window.gpRemove = function(id) {
+    var li = sel.querySelector('li[data-game-id="'+id+'"]');
+    if (!li) return;
+    var name = li.querySelector('span').textContent;
+    li.remove();
+    var a = document.createElement('li');
+    a.dataset.gameId = id;
+    a.style.cssText = 'padding:8px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;';
+    a.innerHTML = '<span>' + name + '</span><button type="button" class="alt" onclick="gpAdd(\''+id+'\',\''+name+'\')" style="border:none;background:transparent;color:var(--accent);cursor:pointer;">add +</button>';
+    avail.appendChild(a);
+  };
+
+  var dragSrc = null;
+  function bindDrag(li) {
+    if (li.dataset.dragBound === '1') return;
+    li.dataset.dragBound = '1';
+    if (!li.hasAttribute('draggable')) li.setAttribute('draggable', 'true');
+    li.addEventListener('dragstart', function(e) {
+      dragSrc = li;
+      try { e.dataTransfer.effectAllowed = 'move'; } catch (_) {}
+      try { e.dataTransfer.setData('text/plain', li.dataset.gameId || ''); } catch (_) {}
+      li.classList.add('dragging');
+    });
+    li.addEventListener('dragend', function() { li.classList.remove('dragging'); clearDragCues(); dragSrc = null; });
+    li.addEventListener('dragover', function(e) {
+      if (!dragSrc || dragSrc === li) return;
+      e.preventDefault();
+      var rect = li.getBoundingClientRect();
+      var before = (e.clientY - rect.top) < rect.height / 2;
+      clearDragCues();
+      li.classList.add(before ? 'drag-over-top' : 'drag-over-bot');
+    });
+    li.addEventListener('dragleave', function() { li.classList.remove('drag-over-top', 'drag-over-bot'); });
+    li.addEventListener('drop', function(e) {
+      if (!dragSrc || dragSrc === li) return;
+      e.preventDefault();
+      var rect = li.getBoundingClientRect();
+      var before = (e.clientY - rect.top) < rect.height / 2;
+      sel.insertBefore(dragSrc, before ? li : li.nextSibling);
+      clearDragCues();
+    });
+  }
+  sel.addEventListener('dragover', function(e) { if (dragSrc) e.preventDefault(); });
+  sel.addEventListener('drop', function(e) {
+    if (dragSrc && e.target === sel) { e.preventDefault(); sel.appendChild(dragSrc); clearDragCues(); }
+  });
+  sel.querySelectorAll('li[data-game-id]').forEach(bindDrag);
+  form.addEventListener('formdata', addInputs);
+  form.addEventListener('submit', addInputs);
+})();
+</script>
 {{end}}

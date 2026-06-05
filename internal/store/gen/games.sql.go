@@ -26,12 +26,37 @@ func (q *Queries) AddAccountGame(ctx context.Context, arg AddAccountGameParams) 
 	return err
 }
 
+const addGlobalGame = `-- name: AddGlobalGame :exec
+INSERT INTO global_games (game_id, rank)
+VALUES (?, ?)
+ON CONFLICT(game_id) DO UPDATE SET rank = excluded.rank
+`
+
+type AddGlobalGameParams struct {
+	GameID string `json:"game_id"`
+	Rank   int64  `json:"rank"`
+}
+
+func (q *Queries) AddGlobalGame(ctx context.Context, arg AddGlobalGameParams) error {
+	_, err := q.db.ExecContext(ctx, addGlobalGame, arg.GameID, arg.Rank)
+	return err
+}
+
 const clearAccountGames = `-- name: ClearAccountGames :exec
 DELETE FROM account_games WHERE account_id = ?
 `
 
 func (q *Queries) ClearAccountGames(ctx context.Context, accountID string) error {
 	_, err := q.db.ExecContext(ctx, clearAccountGames, accountID)
+	return err
+}
+
+const clearGlobalGames = `-- name: ClearGlobalGames :exec
+DELETE FROM global_games
+`
+
+func (q *Queries) ClearGlobalGames(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, clearGlobalGames)
 	return err
 }
 
@@ -96,6 +121,48 @@ func (q *Queries) ListAllGames(ctx context.Context) ([]Game, error) {
 			&i.Name,
 			&i.Slug,
 			&i.Priority,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGlobalGames = `-- name: ListGlobalGames :many
+SELECT g.id, g.name, g.slug, gg.rank
+FROM global_games gg
+JOIN games g ON g.id = gg.game_id
+ORDER BY gg.rank ASC
+`
+
+type ListGlobalGamesRow struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+	Rank int64  `json:"rank"`
+}
+
+func (q *Queries) ListGlobalGames(ctx context.Context) ([]ListGlobalGamesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listGlobalGames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListGlobalGamesRow
+	for rows.Next() {
+		var i ListGlobalGamesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.Rank,
 		); err != nil {
 			return nil, err
 		}

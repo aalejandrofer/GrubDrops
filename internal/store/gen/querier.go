@@ -10,8 +10,10 @@ import (
 
 type Querier interface {
 	AddAccountGame(ctx context.Context, arg AddAccountGameParams) error
+	AddGlobalGame(ctx context.Context, arg AddGlobalGameParams) error
 	AdminExists(ctx context.Context) (bool, error)
 	ClearAccountGames(ctx context.Context, accountID string) error
+	ClearGlobalGames(ctx context.Context) error
 	// Distinct benefits already claimed by any account in this campaign.
 	// The dashboard divides this by len(Benefits) to render the
 	// "Claimed X / Y" badge on each Active Campaigns row.
@@ -35,6 +37,7 @@ type Querier interface {
 	// Whitelist filtering is applied in Go.
 	ListCurrentCampaigns(ctx context.Context, arg ListCurrentCampaignsParams) ([]Campaign, error)
 	ListEnabledAccounts(ctx context.Context) ([]Account, error)
+	ListGlobalGames(ctx context.Context) ([]ListGlobalGamesRow, error)
 	// Campaigns that have ended. Whitelist filtering is applied in Go.
 	ListPastCampaigns(ctx context.Context, arg ListPastCampaignsParams) ([]Campaign, error)
 	ListRecentClaims(ctx context.Context, limit int64) ([]ListRecentClaimsRow, error)

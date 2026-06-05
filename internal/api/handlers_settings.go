@@ -37,6 +37,12 @@ type settingsAccountRow struct {
 	StatusClass string
 }
 
+type settingsGameRow struct {
+	ID       string
+	Name     string
+	Selected bool
+}
+
 type settingsPageData struct {
 	GlobalDiscordWebhook string
 	LogRetentionDays     int
@@ -49,6 +55,11 @@ type settingsPageData struct {
 	NotifyProgress       bool
 	NotifyAuth           bool
 	NotifyError          bool
+
+	// Global priority list — used as fallback when an account has no
+	// per-account whitelist rows.
+	GlobalGames []settingsGameRow
+	AllGames    []settingsGameRow // pool for the picker; .Selected marks ones in GlobalGames
 
 	// Read-only diagnostics
 	Uptime       string
@@ -75,6 +86,23 @@ func (d *settingsDeps) get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	flash := d.sm.PopString(ctx, "flash")
+	// Build global priority list + game pool. Failures are non-fatal:
+	// settings page still renders with empty lists.
+	var globalGames, allGames []settingsGameRow
+	selected := map[string]bool{}
+	if d.q != nil {
+		if rows, err := d.q.ListGlobalGames(ctx); err == nil {
+			for _, g := range rows {
+				globalGames = append(globalGames, settingsGameRow{ID: g.ID, Name: g.Name, Selected: true})
+				selected[g.ID] = true
+			}
+		}
+		if all, err := d.q.ListAllGames(ctx); err == nil {
+			for _, g := range all {
+				allGames = append(allGames, settingsGameRow{ID: g.ID, Name: g.Name, Selected: selected[g.ID]})
+			}
+		}
+	}
 	render(w, d.t, "settings.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "settings",
 		Page: settingsPageData{
@@ -85,6 +113,8 @@ func (d *settingsDeps) get(w http.ResponseWriter, r *http.Request) {
 			TickIntervalMs:       tick,
 			DiscoveryIntervalSec: discIv,
 			PriorityMode:         prio,
+			GlobalGames:          globalGames,
+			AllGames:             allGames,
 			NotifyClaim:          nc,
 			NotifyProgress:       np,
 			NotifyAuth:           na,
@@ -131,5 +161,38 @@ func (d *settingsDeps) post(w http.ResponseWriter, r *http.Request) {
 		d.onUpdate()
 	}
 	d.sm.Put(ctx, "flash", "settings saved — restart container to apply tick/discovery intervals")
+	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+}
+
+// globalGamesPost handles POST /settings/global-games — replaces the
+// global priority list with the form's `game_ids[]` slice. Order is
+// rank; idx 0 = highest priority.
+func (d *settingsDeps) globalGamesPost(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if d.q == nil {
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		return
+	}
+	ids := r.Form["game_ids[]"]
+	if err := d.q.ClearGlobalGames(ctx); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	for i, gid := range ids {
+		if err := d.q.AddGlobalGame(ctx, gen.AddGlobalGameParams{
+			GameID: gid, Rank: int64(i),
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	if d.onUpdate != nil {
+		d.onUpdate()
+	}
+	d.sm.Put(ctx, "flash", "global priority saved — click Apply changes to reload watchers")
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }

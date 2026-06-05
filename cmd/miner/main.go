@@ -325,16 +325,30 @@ func (i *indirectNotifier) Notify(ctx context.Context, event string, fields map[
 }
 
 // loadAccountWhitelist materialises the per-account game allow-list
-// into match + rank closures the watcher consumes. Returns nil
-// closures when account has no rows — caller treats that as "no
-// whitelist configured, do nothing".
+// into match + rank closures the watcher consumes. When the account
+// has NO rows of its own, falls back to the global priority list
+// (settings → Global priority). Returns nil closures only when BOTH
+// the account-specific and global lists are empty.
 func loadAccountWhitelist(ctx context.Context, q *gen.Queries, accountID string) (func(string) bool, func(string) int, error) {
 	rows, err := q.ListAccountGames(ctx, accountID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("list account games: %w", err)
 	}
 	if len(rows) == 0 {
-		return nil, nil, nil
+		// Fall back to global priority list when account has no
+		// override. The data shape matches ListAccountGames so we
+		// reuse the rest of the function.
+		gRows, gErr := q.ListGlobalGames(ctx)
+		if gErr != nil {
+			return nil, nil, fmt.Errorf("list global games: %w", gErr)
+		}
+		if len(gRows) == 0 {
+			return nil, nil, nil
+		}
+		rows = make([]gen.ListAccountGamesRow, len(gRows))
+		for i, r := range gRows {
+			rows[i] = gen.ListAccountGamesRow{ID: r.ID, Name: r.Name, Slug: r.Slug, Rank: r.Rank}
+		}
 	}
 	// game.name (lowercased) -> rank
 	rankByName := make(map[string]int, len(rows))

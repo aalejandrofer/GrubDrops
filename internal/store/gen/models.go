@@ -76,6 +76,11 @@ type Game struct {
 	Priority int64  `json:"priority"`
 }
 
+type GlobalGame struct {
+	GameID string `json:"game_id"`
+	Rank   int64  `json:"rank"`
+}
+
 type Kv struct {
 	Key   string `json:"key"`
 	Value []byte `json:"value"`
