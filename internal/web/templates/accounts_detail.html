@@ -94,6 +94,14 @@
         <button class="btn primary" type="submit">Save games →</button>
       </div>
     </form>
+
+    <form method="post" action="/accounts/{{.Account.ID}}/games/add" style="margin-top:18px;padding-top:14px;border-top:1px dashed var(--line);display:flex;gap:8px;align-items:center;">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <span class="kicker" style="margin:0;">Add by name:</span>
+      <input type="text" name="name" placeholder="e.g. Marvel Rivals" required style="flex:1;max-width:280px;padding:6px 10px;background:var(--surface);border:1px solid var(--line);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:13px;">
+      <button class="btn" type="submit">Add →</button>
+      <span style="color:var(--muted);font-size:11px;">Whitelist a game before discovery surfaces it.</span>
+    </form>
   </div>
 </div>
 

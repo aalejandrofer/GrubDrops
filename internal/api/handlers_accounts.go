@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -160,6 +161,82 @@ func (d accountsDeps) detail(w http.ResponseWriter, r *http.Request) {
 		Page:   accountDetailPage{Account: row, AllGames: allRows, SelectedGames: selected},
 		Active: "accounts",
 	})
+}
+
+// addGame handles POST /accounts/:id/games/add — upserts a game row
+// from a free-text name (so the user can whitelist a game BEFORE any
+// scrape has surfaced it) and appends it to the account's whitelist
+// at the end of the rank order. ID = "g_" + slug for determinism so
+// the same name in two browsers maps to the same row.
+func (d accountsDeps) addGame(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
+		return
+	}
+	slug := slugifyGame(name)
+	if slug == "" {
+		http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
+		return
+	}
+	gameID := "g_" + slug
+	if err := d.q.UpsertGame(r.Context(), gen.UpsertGameParams{
+		ID: gameID, Name: name, Slug: slug, Priority: 0,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// Append at end of rank — read current ranks first to pick the
+	// next slot. Idempotent: re-adding the same game just bumps it to
+	// the end.
+	existing, _ := d.q.ListAccountGames(r.Context(), id)
+	rank := int64(len(existing))
+	for _, e := range existing {
+		if e.ID == gameID {
+			rank = e.Rank // keep its current rank if already present
+			break
+		}
+	}
+	if err := d.q.AddAccountGame(r.Context(), gen.AddAccountGameParams{
+		AccountID: id, GameID: gameID, Rank: rank,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	d.sm.Put(r.Context(), "flash", "added "+name+" — click Apply changes to reload watchers")
+	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
+}
+
+// slugifyGame lowercases and replaces non-alphanumerics with dashes.
+// Matches the slug shape used by games.sql.
+func slugifyGame(s string) string {
+	out := make([]byte, 0, len(s))
+	prevDash := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'A' && c <= 'Z':
+			out = append(out, c+('a'-'A'))
+			prevDash = false
+		case (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'):
+			out = append(out, c)
+			prevDash = false
+		default:
+			if !prevDash && len(out) > 0 {
+				out = append(out, '-')
+				prevDash = true
+			}
+		}
+	}
+	for len(out) > 0 && out[len(out)-1] == '-' {
+		out = out[:len(out)-1]
+	}
+	return string(out)
 }
 
 // games handles POST /accounts/:id/games — rewrites the per-account
