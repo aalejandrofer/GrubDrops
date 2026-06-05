@@ -212,12 +212,18 @@ func (t *Twitch) evalFetch(tabCtx context.Context, body []byte) ([]byte, int, er
 // so JS string-escaping doesn't choke on embedded quotes or unicode.
 func evalFetchPOST(tabCtx context.Context, url, contentType string, body []byte) ([]byte, int, error) {
 	bodyB64 := base64.StdEncoding.EncodeToString(body)
+	// IMPORTANT: use window.__origFetch (captured by StealthScript before
+	// PerimeterX p.js loads) instead of plain fetch(). PerimeterX wraps
+	// fetch with a guard that throws "TypeError: Failed to fetch" when
+	// the caller's stack doesn't match an expected event trace —
+	// exactly what happens when chromedp.Evaluate invokes us.
 	script := fmt.Sprintf(`(async () => {
 		const b64 = %q;
 		const bin = atob(b64);
 		const bytes = new Uint8Array(bin.length);
 		for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-		const resp = await fetch(%q, {
+		const f = window.__origFetch || window.fetch;
+		const resp = await f(%q, {
 			method: "POST",
 			credentials: "include",
 			headers: {"Content-Type": %q},
@@ -232,9 +238,11 @@ func evalFetchPOST(tabCtx context.Context, url, contentType string, body []byte)
 
 // evalFetchGET runs a fetch() GET inside the tab's page context against
 // the supplied URL with credentials included. Returns body + HTTP status.
+// Uses the pristine fetch captured by StealthScript (see evalFetchPOST).
 func evalFetchGET(tabCtx context.Context, url string) ([]byte, int, error) {
 	script := fmt.Sprintf(`(async () => {
-		const resp = await fetch(%q, {
+		const f = window.__origFetch || window.fetch;
+		const resp = await f(%q, {
 			method: "GET",
 			credentials: "include",
 			headers: {"Accept": "application/json"},
