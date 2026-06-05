@@ -184,6 +184,19 @@ func (t *Twitch) GQL(ctx context.Context, accountID string, body []byte) ([]byte
 	}
 	unlock := t.lockTab(accountID)
 	defer unlock()
+	// Warm the tab on /drops/inventory before Inventory queries so
+	// Twitch's anti-bot sees the request originate from that page.
+	// Without this the fetch fires from whatever page the tab last
+	// landed on (often /drops/campaigns) and PerimeterX rejects with
+	// xhr status=0 readyState=4 — the same symptom we hit when the
+	// tab is unwarmed. Best-effort: errors are swallowed and the
+	// evalFetch below is allowed to try regardless.
+	if isInventoryQuery(body) {
+		_ = chromedp.Run(tabCtx,
+			chromedp.Navigate("https://www.twitch.tv/drops/inventory"),
+			chromedp.Sleep(3*time.Second),
+		)
+	}
 	resp, status, err := t.evalFetch(tabCtx, body)
 	// For campaign discovery: gql often returns 200 with an empty
 	// dropCampaigns array because the user is only "enrolled" in a
@@ -224,6 +237,12 @@ func (t *Twitch) GQL(ctx context.Context, accountID string, body []byte) ([]byte
 // ViewerDropsDashboard query (the one our discovery cares about).
 func isCampaignsQuery(body []byte) bool {
 	return bytesContains(body, []byte("ViewerDropsDashboard"))
+}
+
+// isInventoryQuery sniffs the gql body for the Inventory persisted
+// query. Routed to /drops/inventory warm-up before evalFetch.
+func isInventoryQuery(body []byte) bool {
+	return bytesContains(body, []byte(`"Inventory"`))
 }
 
 // gqlCampaignsEmpty returns true when the response body parses as a
