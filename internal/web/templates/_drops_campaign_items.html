@@ -1,13 +1,6 @@
 {{define "drops_campaign_items"}}
-<div class="ev-detail">
-  {{if .When}}<span class="kv"><span class="k">ends</span><span class="eq">=</span><span class="v">{{.When}}</span></span>{{end}}
-  {{if eq .Platform "twitch"}}
-  <span class="kv"><span class="k">open</span><span class="eq">=</span><span class="v"><a href="https://www.twitch.tv/drops/campaigns" target="_blank" rel="noopener">twitch.tv/drops →</a></span></span>
-  {{else if eq .Platform "kick"}}
-  <span class="kv"><span class="k">open</span><span class="eq">=</span><span class="v"><a href="https://kick.com/drops/all-campaigns" target="_blank" rel="noopener">kick.com/drops →</a></span></span>
-  {{end}}
-</div>
 {{if .Benefits}}
+{{/* Items table only — meta info (ends/open) goes inline in the summary row. */}}
 <table class="tbl items" style="margin:6px 18px 10px;">
   <thead><tr><th>Item</th><th>Required</th></tr></thead>
   <tbody>
