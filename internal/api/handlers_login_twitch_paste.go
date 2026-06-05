@@ -75,18 +75,25 @@ func (d *loginTwitchPasteDeps) post(w http.ResponseWriter, r *http.Request) {
 
 	sess := &pb.TwitchSession{Cookies: cookies}
 	slog.Info("twitch paste login attempt", "account", id, "cookie_count", len(cookies))
-	resp, err := d.browser.TwitchAuthenticate(r.Context(), id, sess)
-	if err != nil {
-		slog.Error("twitch sidecar Authenticate failed", "account", id, "err", err)
-		d.renderError(w, r, id, acc.DisplayName, "sidecar rejected session: "+err.Error())
-		return
+
+	// Try to verify via the sidecar, but DO NOT block persistence on
+	// failure — the most common cause of failure (PerimeterX shimming
+	// fetch in the headless tab) is transient and recoverable. The
+	// watcher will retry the auth flow on the next reload; until then
+	// the dashboard surfaces "needs_auth" so the operator sees it.
+	var username, userID string
+	resp, vErr := d.browser.TwitchAuthenticate(r.Context(), id, sess)
+	if vErr != nil {
+		slog.Warn("twitch sidecar verify failed; persisting cookies anyway", "account", id, "err", vErr)
+	} else {
+		username, userID = resp.Username, resp.UserId
+		slog.Info("twitch sidecar verified", "account", id, "username", username, "user_id", userID)
 	}
-	slog.Info("twitch sidecar authenticated", "account", id, "username", resp.Username, "user_id", resp.UserId)
 
 	stored := twitchPastedSession{
 		Cookies:  pbToStored(cookies),
-		Username: resp.Username,
-		UserID:   resp.UserId,
+		Username: username,
+		UserID:   userID,
 	}
 	raw, _ := json.Marshal(stored)
 	if err := d.sessions.Put(r.Context(), id, platform.Session{
@@ -107,7 +114,13 @@ func (d *loginTwitchPasteDeps) post(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	d.sm.Put(r.Context(), "flash", "Twitch session authorized for "+resp.Username)
+	flash := "Twitch cookies persisted"
+	if username != "" {
+		flash = "Twitch session authorized for " + username
+	} else {
+		flash += " — sidecar could not verify yet (likely PerimeterX); watcher will retry on next reload"
+	}
+	d.sm.Put(r.Context(), "flash", flash)
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
 

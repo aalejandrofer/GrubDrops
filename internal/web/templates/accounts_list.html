@@ -39,7 +39,9 @@
         <td class="name">{{.DisplayName}}</td>
         <td class="plat"><span class="{{.Platform}}">{{.Platform}}</span></td>
         <td class="handle">@{{.Login}}</td>
-        <td class="enabled {{if eq .Enabled 1}}yes{{else}}no{{end}}">{{if eq .Enabled 1}}● enabled{{else}}○ disabled{{end}}</td>
+        <td>
+          <span class="state-pill state-{{.StateTier}}" title="{{.State}}">{{if eq .StateTier "green"}}● {{.State}}{{else if eq .StateTier "orange"}}● {{if eq .State "needs_auth"}}needs login{{else if eq .State "sleeping"}}sleeping (no eligible drops){{else}}{{.State}}{{end}}{{else}}○ disabled{{end}}</span>
+        </td>
         <td class="act"><a href="/accounts/{{.ID}}">edit →</a></td>
       </tr>
     {{end}}

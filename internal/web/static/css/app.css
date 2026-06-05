@@ -997,6 +997,21 @@
   .tbl td.plat .twitch { color: var(--purple); border-color: #4a3970; background: rgba(122,75,176,.08); }
   .tbl td.plat .kick   { color: var(--kick);   border-color: #2d5c44; background: rgba(83,231,164,.06); }
   .tbl td.enabled.yes { color: var(--green); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .state-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 4px 9px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  .state-pill.state-green  { color: var(--green); border-color: rgba(90, 209, 154, 0.4); background: rgba(90, 209, 154, 0.06); }
+  .state-pill.state-orange { color: var(--accent); border-color: rgba(212, 99, 30, 0.4); background: rgba(212, 99, 30, 0.06); }
+  .state-pill.state-grey   { color: var(--muted); }
   .tbl td.enabled.no  { color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
   .tbl td.act a {
     font-family: 'JetBrains Mono', monospace;

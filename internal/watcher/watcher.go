@@ -128,7 +128,16 @@ func (w *Watcher) Run(ctx context.Context) error {
 			if errors.Is(err, errComplete) {
 				return nil
 			}
-			return err
+			// Transient errors (gql 5xx, sidecar fetch poisoned by
+			// PerimeterX, etc) shouldn't kill the watcher — just log
+			// and retry on the next tick. The previous behaviour was
+			// to bubble up which left the account stuck in whatever
+			// state preceded the failure.
+			slog.Warn("watcher step error; will retry", "account", w.cfg.AccountID, "state", w.State().String(), "err", err)
+			// Reset to PickCampaign so the next tick re-runs discovery
+			// instead of, say, retrying a heartbeat whose handle is
+			// already invalidated.
+			w.setState(ctx, StatePickCampaign)
 		}
 
 		select {

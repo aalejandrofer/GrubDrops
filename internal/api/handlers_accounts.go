@@ -11,13 +11,21 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/aalejandrofer/rust-drops-miner/internal/scheduler"
 	"github.com/aalejandrofer/rust-drops-miner/internal/store/gen"
 )
 
 type accountsDeps struct {
-	q  *gen.Queries
-	t  Renderer
-	sm *scs.SessionManager
+	q   *gen.Queries
+	t   Renderer
+	sm  *scs.SessionManager
+	sch *scheduler.Scheduler
+}
+
+type accountRow struct {
+	gen.Account
+	State     string // raw scheduler state: watching, claiming, …, needs_auth, stopped
+	StateTier string // ui colour bucket: "green" | "orange" | "grey"
 }
 
 func (d accountsDeps) list(w http.ResponseWriter, r *http.Request) {
@@ -26,11 +34,42 @@ func (d accountsDeps) list(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	stateByID := map[string]string{}
+	if d.sch != nil {
+		for _, s := range d.sch.Snapshot() {
+			stateByID[s.AccountID] = s.State
+		}
+	}
+	enriched := make([]accountRow, 0, len(rows))
+	for _, a := range rows {
+		st := stateByID[a.ID]
+		if st == "" {
+			st = "stopped"
+		}
+		enriched = append(enriched, accountRow{
+			Account:   a,
+			State:     st,
+			StateTier: tierForState(a.Enabled == 1, st),
+		})
+	}
 	flash := d.sm.PopString(r.Context(), "flash")
 	render(w, d.t, "accounts_list.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
-		Page: rows, Flash: flash, Active: "accounts",
+		Page: enriched, Flash: flash, Active: "accounts",
 	})
+}
+
+func tierForState(enabled bool, state string) string {
+	if !enabled {
+		return "grey"
+	}
+	switch state {
+	case "watching", "claiming", "pick_stream", "pick_campaign", "idle":
+		return "green"
+	case "needs_auth", "stopped", "sleeping":
+		return "orange"
+	}
+	return "orange"
 }
 
 func (d accountsDeps) newGet(w http.ResponseWriter, r *http.Request) {
