@@ -166,16 +166,20 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 		if kind == "" {
 			kind = "drop"
 		}
+		// Real gql calls return self.isAccountConnected; scrape-only
+		// entries (id contains "|" or " ") have it set optimistically.
+		linkChecked := !strings.ContainsAny(c.ID, "| ")
 		camp := platform.Campaign{
-			ID:             c.ID,
-			Platform:       "twitch",
-			Game:           c.Game.DisplayName,
-			Name:           c.Name,
-			StartsAt:       parseISO(c.StartAtRaw),
-			EndsAt:         parseISO(c.EndAtRaw),
-			AccountLinked:  c.Self.IsAccountConnected,
-			AccountLinkURL: c.AccountLinkURL,
-			Kind:           kind,
+			ID:                 c.ID,
+			Platform:           "twitch",
+			Game:               c.Game.DisplayName,
+			Name:               c.Name,
+			StartsAt:           parseISO(c.StartAtRaw),
+			EndsAt:             parseISO(c.EndAtRaw),
+			AccountLinked:      c.Self.IsAccountConnected,
+			AccountLinkChecked: linkChecked,
+			AccountLinkURL:     c.AccountLinkURL,
+			Kind:               kind,
 		}
 		switch c.Status {
 		case "ACTIVE":

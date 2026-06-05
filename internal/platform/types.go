@@ -42,6 +42,10 @@ type Campaign struct {
 	// watcher must skip these campaigns and the dashboard should
 	// surface a "Link account →" call to action.
 	AccountLinked bool
+	// AccountLinkChecked is true if AccountLinked was derived from a
+	// real gql probe (self.isAccountConnected). False if it was set
+	// optimistically by scrape — UI surfaces "?" for unverified.
+	AccountLinkChecked bool
 	// AccountLinkURL is the campaign-specific link-account page the
 	// operator should visit to make AccountLinked true. Empty if not
 	// provided by the platform.
