@@ -46,13 +46,16 @@ type dropsRow struct {
 
 // dropsPage is what the template sees: the active tab, the three counts
 // (so the tab strip can show totals), and the rows to render in the
-// table body.
+// table body. UnlistedRows are campaigns discovered (any tab) whose game
+// is NOT on any whitelist — rendered in a parallel "discoverable but
+// not whitelisted" table below the main one.
 type dropsPage struct {
 	Tab          dropTab
 	PastCount    int
 	CurrentCount int
 	UpcomingCount int
 	Rows         []dropsRow
+	UnlistedRows []dropsRow // campaigns whose Game is not on any account whitelist
 }
 
 // allowedGamesUnion returns the union of every enabled account's game
@@ -109,7 +112,7 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().Unix()
 	const limit = 200
 
-	pastRows, currentRows, upcomingRows, err := d.collectAll(r.Context(), allow, hasWhitelist, now, limit)
+	pastRows, currentRows, upcomingRows, unlistedRows, err := d.collectAll(r.Context(), allow, hasWhitelist, now, limit)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -120,6 +123,7 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		PastCount:     len(pastRows),
 		CurrentCount:  len(currentRows),
 		UpcomingCount: len(upcomingRows),
+		UnlistedRows:  unlistedRows,
 	}
 	switch tab {
 	case tabPast:
@@ -150,24 +154,26 @@ func (d *dropsDeps) collectAll(
 	ctx context.Context,
 	allow map[string]struct{}, hasWhitelist bool,
 	now int64, limit int64,
-) (past, current, upcoming []dropsRow, err error) {
+) (past, current, upcoming, unlisted []dropsRow, err error) {
 	// Past: campaigns ended before now.
 	pastCamps, err := d.q.ListPastCampaigns(ctx, gen.ListPastCampaignsParams{EndsAt: now, Limit: limit})
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	past = make([]dropsRow, 0, len(pastCamps))
 	for _, c := range pastCamps {
-		if !passesWhitelist(allow, hasWhitelist, c.Game) {
-			continue
-		}
-		past = append(past, dropsRow{
+		row := dropsRow{
 			When:         time.Unix(c.EndsAt, 0).UTC().Format("2006-01-02 15:04"),
 			Platform:     c.Platform,
 			Game:         c.Game,
 			CampaignName: c.Name,
 			Kind:         c.Kind,
-		})
+		}
+		if passesWhitelist(allow, hasWhitelist, c.Game) {
+			past = append(past, row)
+		} else if hasWhitelist {
+			unlisted = append(unlisted, row)
+		}
 	}
 
 	// Past — also union in claim history so claimed drops are visible
@@ -177,7 +183,7 @@ func (d *dropsDeps) collectAll(
 	// claim view supersedes the bare-campaign view.
 	claims, err := d.q.ListRecentClaims(ctx, limit)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	for _, row := range claims {
 		if !passesWhitelist(allow, hasWhitelist, row.Game) {
@@ -198,20 +204,22 @@ func (d *dropsDeps) collectAll(
 		StartsAt: now, EndsAt: now, Limit: limit,
 	})
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	current = make([]dropsRow, 0, len(currentCamps))
 	for _, c := range currentCamps {
-		if !passesWhitelist(allow, hasWhitelist, c.Game) {
-			continue
-		}
-		current = append(current, dropsRow{
+		row := dropsRow{
 			When:         time.Unix(c.EndsAt, 0).UTC().Format("2006-01-02 15:04"),
 			Platform:     c.Platform,
 			Game:         c.Game,
 			CampaignName: c.Name,
 			Kind:         c.Kind,
-		})
+		}
+		if passesWhitelist(allow, hasWhitelist, c.Game) {
+			current = append(current, row)
+		} else if hasWhitelist {
+			unlisted = append(unlisted, row)
+		}
 	}
 
 	// Upcoming: starts_at > now.
@@ -219,21 +227,38 @@ func (d *dropsDeps) collectAll(
 		StartsAt: now, Limit: limit,
 	})
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	upcoming = make([]dropsRow, 0, len(upcomingCamps))
 	for _, c := range upcomingCamps {
-		if !passesWhitelist(allow, hasWhitelist, c.Game) {
-			continue
-		}
-		upcoming = append(upcoming, dropsRow{
+		row := dropsRow{
 			When:         time.Unix(c.StartsAt, 0).UTC().Format("2006-01-02 15:04"),
 			Platform:     c.Platform,
 			Game:         c.Game,
 			CampaignName: c.Name,
 			Kind:         c.Kind,
-		})
+		}
+		if passesWhitelist(allow, hasWhitelist, c.Game) {
+			upcoming = append(upcoming, row)
+		} else if hasWhitelist {
+			unlisted = append(unlisted, row)
+		}
 	}
 
-	return past, current, upcoming, nil
+	// Dedupe unlisted by (Platform, Game, CampaignName).
+	if len(unlisted) > 1 {
+		seen := make(map[string]bool, len(unlisted))
+		out := unlisted[:0]
+		for _, r := range unlisted {
+			k := r.Platform + "|" + r.Game + "|" + r.CampaignName
+			if seen[k] {
+				continue
+			}
+			seen[k] = true
+			out = append(out, r)
+		}
+		unlisted = out
+	}
+
+	return past, current, upcoming, unlisted, nil
 }

@@ -45,7 +45,41 @@
     </a>
   </div>
 
-  {{template "drops_table" .}}
+  <div class="drops-grid">
+    <section class="drops-pane">
+      <header class="drops-pane-h">
+        <h3>Whitelisted</h3>
+        <span class="meta">{{len .Rows}} · {{.Tab}}</span>
+      </header>
+      {{template "drops_table" .}}
+    </section>
+
+    <section class="drops-pane">
+      <header class="drops-pane-h">
+        <h3>Discoverable — not whitelisted</h3>
+        <span class="meta">{{len .UnlistedRows}}</span>
+      </header>
+      {{if not .UnlistedRows}}
+      <div class="empty">All discovered campaigns are on at least one whitelist.</div>
+      {{else}}
+      <table class="tbl">
+        <thead>
+          <tr><th>Platform</th><th>Kind</th><th>Game</th><th>Campaign</th></tr>
+        </thead>
+        <tbody>
+          {{range .UnlistedRows}}
+          <tr>
+            <td class="plat"><span class="{{.Platform}}">{{.Platform}}</span></td>
+            <td>{{if eq .Kind "reward"}}<span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;padding:2px 7px;border:1px solid var(--accent);color:var(--accent);background:rgba(212,99,30,0.08);">reward</span>{{else}}<span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;padding:2px 7px;border:1px solid var(--line);color:var(--muted);">drop</span>{{end}}</td>
+            <td>{{.Game}}</td>
+            <td>{{.CampaignName}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{end}}
+    </section>
+  </div>
   {{end}}
 </div>
 
