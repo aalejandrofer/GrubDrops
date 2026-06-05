@@ -704,6 +704,31 @@
     border: 1px solid var(--line);
     background: var(--surface);
   }
+  .subnav {
+    display: flex;
+    gap: 6px;
+    margin: 0 0 18px;
+    padding: 0 0 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .subnav-link {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    text-decoration: none;
+    background: transparent;
+  }
+  .subnav-link:hover { color: var(--text); border-color: var(--text); }
+  .subnav-link.on {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(212, 99, 30, 0.08);
+  }
+
   .drawer-head {
     display: flex;
     flex-wrap: wrap;

@@ -13,6 +13,10 @@
       <a class="btn primary" href="/accounts/new">+ Add account</a>
     </div>
   </div>
+  <nav class="subnav">
+    <a href="/settings" class="subnav-link {{if eq .Active "settings"}}on{{end}}">General</a>
+    <a href="/accounts" class="subnav-link {{if eq .Active "accounts"}}on{{end}}">Accounts</a>
+  </nav>
 
   {{if .AccountsRows}}
   <section class="form-card" style="margin-bottom:20px;">

@@ -14,10 +14,13 @@
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <button class="btn" type="submit">Apply changes</button>
       </form>
-      <a class="btn" href="/settings">Settings →</a>
       <a class="btn primary" href="/accounts/new">+ Add account</a>
     </div>
   </div>
+  <nav class="subnav">
+    <a href="/settings" class="subnav-link">General</a>
+    <a href="/accounts" class="subnav-link on">Accounts</a>
+  </nav>
 
   {{if .Flash}}<div class="flash-ok">{{.Flash}}</div>{{end}}
 
