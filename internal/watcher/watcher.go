@@ -1066,19 +1066,23 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 			w.setState(ctx, StatePickCampaign)
 			return nil
 		}
-		// Synth benefits (no real Twitch UUID) that NEVER appeared in
-		// dropCampaignsInProgress: the account has probably already
-		// completed the drop (code-only Minecraft rewards vanish the
-		// moment Twitch issues the code) or never enrolled. Skip
-		// permanently after the synthSkipThreshold grace window so we
-		// don't burn the watcher on a ghost.
-		if n >= synthSkipThreshold && prevProgress == 0 && isSynthBenefitID(benefit.ID) {
-			slog.Warn("watcher: synth benefit never appeared in inventory; skipping",
+		// A benefit that NEVER appears in dropCampaignsInProgress after
+		// the grace window is unminable here: either a synth scrape ghost
+		// (no real UUID), or a REAL drop already fully claimed — claimed
+		// drops drop OUT of dropCampaignsInProgress entirely (they move to
+		// gameEventDrops), so claimed[] can't see them and the watcher
+		// would otherwise re-pick the same done drop forever and never
+		// advance to the next campaign. Skip either case after the grace
+		// window. (Real drops normally enroll within a poll or two, so a
+		// genuinely-mining drop resets noProgressTicks long before this.)
+		if n >= synthSkipThreshold && prevProgress == 0 {
+			slog.Warn("watcher: benefit never appeared in inventory (claimed or ghost); skipping",
 				"kind", "state",
 				"account", w.cfg.AccountID,
 				"benefit", benefit.ID,
 				"benefit_name", benefit.Name,
 				"channel", handle.Channel,
+				"synth", isSynthBenefitID(benefit.ID),
 				"ticks_without_progress", n)
 			_ = w.cfg.Backend.StopWatch(ctx, handle)
 			w.unsubscribeCurrentChannel()

@@ -616,14 +616,28 @@ func telemetryWithClaims(base dashTelemetry, ring *mlog.Ring, q *gen.Queries, ct
 	// watcher emits per minute-watched beacon. The ring (default 1000
 	// lines) comfortably covers an hour of beacons.
 	if ring != nil {
-		hourAgo := time.Now().Add(-time.Hour)
-		hb := 0
+		now := time.Now()
+		hourAgo := now.Add(-time.Hour)
+		midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		hbHour, hbToday := 0, 0
 		for _, l := range ring.Snapshot() {
-			if l.Kind == "heartbeat" && l.TS.After(hourAgo) {
-				hb++
+			if l.Kind != "heartbeat" {
+				continue
+			}
+			if l.TS.After(hourAgo) {
+				hbHour++
+			}
+			if l.TS.After(midnight) {
+				hbToday++
 			}
 		}
-		base.HeartbeatsHour = hb
+		base.HeartbeatsHour = hbHour
+		// Each beacon ≈ 1 minute watched. Ring-bounded (so it can
+		// under-count a very long day and resets on restart), but it no
+		// longer zeroes the instant drops are claimed.
+		if hbToday > 0 {
+			base.WatchTimeToday = formatHM(time.Duration(hbToday) * time.Minute)
+		}
 	}
 	return base
 }
@@ -631,13 +645,7 @@ func telemetryWithClaims(base dashTelemetry, ring *mlog.Ring, q *gen.Queries, ct
 func telemetryFrom(cards []dashMineCard, snaps []watcher.Snapshot) dashTelemetry {
 	var nextETA time.Duration = -1
 	var nextName string
-	watchMins := 0
 	for _, s := range snaps {
-		// Accumulated watch progress across every in-progress drop.
-		// Real minutes the miner has banked toward current benefits.
-		if s.MinutesWatched > 0 {
-			watchMins += s.MinutesWatched
-		}
 		if s.State != "watching" || s.RequiredMinutes <= 0 {
 			continue
 		}
@@ -657,11 +665,10 @@ func telemetryFrom(cards []dashMineCard, snaps []watcher.Snapshot) dashTelemetry
 	} else {
 		tele.NextClaimETA = "—"
 	}
-	if watchMins > 0 {
-		tele.WatchTimeToday = formatHM(time.Duration(watchMins) * time.Minute)
-	} else {
-		tele.WatchTimeToday = "—"
-	}
+	// WatchTimeToday is filled in telemetryWithClaims from the heartbeat
+	// log ring (each beacon = 1 min). Summing in-progress drop minutes
+	// here was wrong — it zeroed the card the moment all drops claimed.
+	tele.WatchTimeToday = "—"
 	return tele
 }
 
