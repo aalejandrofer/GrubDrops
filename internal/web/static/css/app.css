@@ -521,6 +521,29 @@
   .kicker-link { color: var(--accent); text-decoration: none; }
   .kicker-link:hover { text-decoration: underline; }
 
+  /* Per-campaign collection chips in the drops row's right column.
+     One chip per account that has claimed; green tick = all watch-time
+     drops collected, yellow = partial. Cross = action-only campaign. */
+  .ac.collect { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+  .ccol {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    line-height: 1;
+    padding: 4px 7px;
+    border-radius: 3px;
+    border: 1px solid var(--line);
+    white-space: nowrap;
+    color: var(--muted);
+  }
+  .ccol.tw { color: var(--purple); border-color: color-mix(in srgb, var(--purple) 35%, transparent); }
+  .ccol.kk { color: var(--kick); border-color: color-mix(in srgb, var(--kick) 35%, transparent); }
+  .ccol .tk { color: var(--green); }
+  .ccol .tk.partial { color: var(--amber); }
+  .ccross { color: var(--red); font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+
   /* Non-watch-time drops/items (reward / 0-min action) read as dimmed —
      they can't be auto-mined. Hover restores full opacity for legibility. */
   .drop-dim { opacity: 0.5; }

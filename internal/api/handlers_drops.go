@@ -57,6 +57,22 @@ type dropsRow struct {
 	// to sort the whitelisted Current list by priority. math.MaxInt
 	// for games with no explicit rank so they fall to the bottom.
 	rankKey int
+
+	// Collection status (filled per rendered row by attachCollection).
+	// ActionOnly = campaign has benefits but none are watch-time (nothing
+	// the miner can auto-collect → cross). Collectors = accounts that have
+	// claimed at least one benefit, with Full = claimed every watch-time one.
+	ActionOnly bool
+	Collectors []collectMark
+}
+
+// collectMark is one account's collection state for a campaign, shown as a
+// chip in the row's right column ("✓ @login"). Full = claimed every
+// watch-time benefit (green tick); otherwise partial (yellow tick).
+type collectMark struct {
+	Login    string
+	Platform string
+	Full     bool
 }
 
 // dropsPage is what the template sees: the active tab, the three counts
@@ -262,6 +278,12 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		page.Rows = currentRows
 	case tabUpcoming:
 		page.Rows = upcomingRows
+	}
+
+	// Collection status (cross / per-account ticks) for the rows actually
+	// rendered in this tab — keeps the per-row benefit+claim queries bounded.
+	for i := range page.Rows {
+		d.attachCollection(r.Context(), &page.Rows[i])
 	}
 
 	// HTMX partial — used when the user clicks a tab. We just swap the
@@ -567,6 +589,62 @@ func (d *dropsDeps) addWhitelist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/drops", http.StatusSeeOther)
+}
+
+// attachCollection fills a row's collection status from the campaign's
+// benefits + claims. ActionOnly when no benefit is watch-time (cross);
+// otherwise a chip per account that has claimed, Full=claimed every
+// watch-time benefit. Cheap (2 queries); only called for rendered rows.
+func (d *dropsDeps) attachCollection(ctx context.Context, row *dropsRow) {
+	if row.CampaignID == "" {
+		return
+	}
+	bens, err := d.q.ListBenefitsForCampaign(ctx, row.CampaignID)
+	if err != nil || len(bens) == 0 {
+		return
+	}
+	watch := make(map[string]bool)
+	for _, b := range bens {
+		if b.RequiredMinutes > 0 {
+			watch[b.ID] = true
+		}
+	}
+	if len(watch) == 0 {
+		row.ActionOnly = true // only action-required drops — nothing to auto-collect
+		return
+	}
+	claims, err := d.q.ListClaimsForCampaign(ctx, row.CampaignID)
+	if err != nil || len(claims) == 0 {
+		return
+	}
+	type acct struct {
+		platform string
+		got      map[string]bool
+	}
+	byLogin := make(map[string]*acct)
+	for _, c := range claims {
+		a := byLogin[c.Login]
+		if a == nil {
+			a = &acct{platform: c.Platform, got: make(map[string]bool)}
+			byLogin[c.Login] = a
+		}
+		if watch[c.BenefitID] {
+			a.got[c.BenefitID] = true
+		}
+	}
+	logins := make([]string, 0, len(byLogin))
+	for l := range byLogin {
+		logins = append(logins, l)
+	}
+	sort.Strings(logins)
+	for _, l := range logins {
+		a := byLogin[l]
+		row.Collectors = append(row.Collectors, collectMark{
+			Login:    l,
+			Platform: a.platform,
+			Full:     len(a.got) == len(watch),
+		})
+	}
 }
 
 func (d *dropsDeps) items(w http.ResponseWriter, r *http.Request) {
