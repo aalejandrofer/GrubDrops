@@ -117,20 +117,15 @@ func TestKickBackend_Claim_PostsRewardAndCampaign(t *testing.T) {
 	assert.Contains(t, f.calls[0].body, `"campaign_id":"camp1"`)
 }
 
-func TestKickBackend_WatchPingViaHeartbeat(t *testing.T) {
-	f := &fakeDoer{resp: map[string]fakeResp{
-		"https://kick.com/api/v1/video/views/12345": {200, `{}`},
-	}}
+func TestKickBackend_HeartbeatSoftNoop(t *testing.T) {
+	// Kick watch-time accrues via a viewer websocket (TODO), not an HTTP ping,
+	// so Heartbeat is a soft no-op for now: no HTTP call, no error.
+	f := &fakeDoer{resp: map[string]fakeResp{}}
 	b := withFake(f)
 	h, err := b.StartWatch(context.Background(), sess("acc1"), platform.Stream{Channel: "tippie", ChannelID: "12345"})
 	require.NoError(t, err)
 	require.NoError(t, b.Heartbeat(context.Background(), h))
-	require.Len(t, f.calls, 1)
-	assert.Equal(t, "POST", f.calls[0].method)
-	assert.Equal(t, "https://kick.com/api/v1/video/views/12345", f.calls[0].path)
-	// No livestream id -> heartbeat is a soft no-op (manual channel case).
-	h2, _ := b.StartWatch(context.Background(), sess("acc1"), platform.Stream{Channel: "x"})
-	require.NoError(t, b.Heartbeat(context.Background(), h2))
+	require.Len(t, f.calls, 0, "heartbeat must not hit the network yet")
 }
 
 func TestKickBackend_ListEligibleChannels_LiveCampaignChannel(t *testing.T) {

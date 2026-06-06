@@ -274,17 +274,17 @@ func (b *Backend) StartWatch(_ context.Context, s platform.Session, stream platf
 	}, nil
 }
 
-func (b *Backend) Heartbeat(ctx context.Context, h platform.WatchHandle) error {
-	w, ok := h.Internal.(kickWatch)
-	if !ok {
+func (b *Backend) Heartbeat(_ context.Context, h platform.WatchHandle) error {
+	// NOTE: Kick accrues drops watch-time via a VIEWER WEBSOCKET presence
+	// (wss://websockets.kick.com/viewer/v1/connect), NOT an HTTP ping — the
+	// /api/v1/video/views endpoint is VOD view-counting and 404s on live
+	// streams. Until that websocket viewer client is implemented, Heartbeat is
+	// a soft no-op so the watcher holds the channel without error-spamming.
+	// TODO(kick-watch): connect the viewer websocket to actually accrue time.
+	if _, ok := h.Internal.(kickWatch); !ok {
 		return fmt.Errorf("kick: invalid watch handle")
 	}
-	if w.livestreamID == "" {
-		// No livestream id (e.g. manual channel without discovery) — nothing
-		// to ping; treat as a soft no-op so the watcher keeps the session.
-		return nil
-	}
-	return b.api.WatchPing(ctx, w.session, w.livestreamID)
+	return nil
 }
 
 func (b *Backend) StopWatch(_ context.Context, _ platform.WatchHandle) error {
