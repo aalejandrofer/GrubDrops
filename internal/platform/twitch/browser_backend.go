@@ -241,15 +241,32 @@ func (b *BrowserBackend) ListActiveCampaigns(ctx context.Context, s platform.Ses
 	}
 	a := b.accountFor(s.AccountID)
 	camps, err := a.disc.listActive(ctx, s)
-	if isTabMissingErr(err) {
-		slog.Info("twitch sidecar tab missing on ListActiveCampaigns; re-authenticating", "account", s.AccountID)
+	// Both a missing sidecar tab AND an integrity-check failure are
+	// recoverable by reinstalling cookies + reopening the tab: on the
+	// browser path integrity is a per-request anti-bot challenge tied to
+	// the page context, NOT an expired credential, so re-auth (fresh
+	// tab) clears it far more often than a user re-login would.
+	if isTabMissingErr(err) || errors.Is(err, platform.ErrIntegrityBlocked) {
+		slog.Info("twitch sidecar listActive recoverable error; refreshing tab",
+			"account", s.AccountID, "tab_missing", isTabMissingErr(err),
+			"integrity", errors.Is(err, platform.ErrIntegrityBlocked))
 		b.invalidateAuth(s.AccountID)
-		if err := b.ensureAuthenticated(ctx, s); err != nil {
-			return nil, err
+		if rErr := b.ensureAuthenticated(ctx, s); rErr != nil {
+			return nil, rErr
 		}
 		camps, err = a.disc.listActive(ctx, s)
 	}
 	if err != nil {
+		// A still-integrity-blocked browser account must NOT be flagged
+		// needs_auth — the cookie session is valid; only the per-request
+		// integrity challenge is failing. Downgrade to a transient error
+		// (strip the ErrIntegrityBlocked sentinel) so the watcher just
+		// sleeps + retries next cycle instead of demanding a re-login.
+		if errors.Is(err, platform.ErrIntegrityBlocked) {
+			slog.Warn("twitch sidecar still integrity-blocked after tab refresh; will retry next cycle (not flagging needs_auth)",
+				"account", s.AccountID)
+			return nil, fmt.Errorf("twitch sidecar transient integrity challenge for %s; retrying", s.AccountID)
+		}
 		return nil, err
 	}
 	allowed := a.disc.drainAllowed()
