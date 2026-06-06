@@ -358,6 +358,68 @@ func TestWatcher_LowAvblFirst_PicksScarceFirst(t *testing.T) {
 		"low_avbl_first must prefer scarcest campaign (narrow), not wide or unrestricted")
 }
 
+// offlineFirstBackend returns two ACTIVE campaigns of the same game.
+// The higher-priority one ("dead", listed first) has NO live channels;
+// the lower-priority one ("live") does. The watcher must skip the dead
+// campaign and advance to the live one instead of sleeping forever on
+// the highest-priority pick (esports-channel trap).
+type offlineFirstBackend struct {
+	*platformtest.MockBackend
+	mu     sync.Mutex
+	picked string
+}
+
+func (o *offlineFirstBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	return []platform.Campaign{
+		{ID: "dead", Game: "Rust", Status: "active", AccountLinked: true,
+			Benefits: []platform.DropBenefit{{ID: "d_dead", CampaignID: "dead", RequiredMinutes: 2}}},
+		{ID: "live", Game: "Rust", Status: "active", AccountLinked: true,
+			Benefits: []platform.DropBenefit{{ID: "d_live", CampaignID: "live", RequiredMinutes: 2}}},
+	}, nil
+}
+
+func (o *offlineFirstBackend) ListEligibleChannels(_ context.Context, _ platform.Session, c platform.Campaign) ([]platform.Stream, error) {
+	if c.ID == "dead" {
+		return nil, nil // no live broadcaster
+	}
+	o.mu.Lock()
+	if o.picked == "" {
+		o.picked = c.ID
+	}
+	o.mu.Unlock()
+	return []platform.Stream{{Channel: "streamer"}}, nil
+}
+
+func (o *offlineFirstBackend) firstPicked() string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.picked
+}
+
+// TestWatcher_SkipsOfflineCampaignToNextLive: when the top-priority
+// campaign has no live channel, the watcher must advance to the next
+// eligible campaign that does — not get stuck re-picking the dead one.
+func TestWatcher_SkipsOfflineCampaignToNextLive(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	backend := &offlineFirstBackend{MockBackend: platformtest.New()}
+	w := New(Config{
+		AccountID:    "acc_offline",
+		Backend:      backend,
+		Session:      platform.Session{AccessToken: "tok"},
+		Notifier:     &recordingNotifier{},
+		TickInterval: 2 * time.Millisecond,
+		AllowGame:    func(g string) bool { return g == "Rust" },
+	})
+
+	go func() { _ = w.Run(ctx) }()
+	require.Eventually(t, func() bool { return backend.firstPicked() != "" },
+		time.Second, 5*time.Millisecond, "watcher never advanced to a live campaign")
+	assert.Equal(t, "live", backend.firstPicked(),
+		"watcher must skip the offline 'dead' campaign and mine the live one")
+}
+
 // pubsubAwareBackend captures hook registration calls so we can verify
 // the watcher registers per-account PubSub hooks at construction time.
 type pubsubAwareBackend struct {

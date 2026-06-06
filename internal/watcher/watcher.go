@@ -116,6 +116,17 @@ type Watcher struct {
 	// against this set so we don't loop forever mining a ghost.
 	skippedBenefits map[string]struct{}
 
+	// noStreamCampaigns collects campaign IDs whose eligible channels
+	// were all offline this round. pickStream populates it instead of
+	// sleeping, then re-enters pickCampaign so the watcher advances to
+	// the NEXT eligible campaign that DOES have a live broadcaster —
+	// without this, a high-priority esports campaign (riotgames, lck,
+	// etc., rarely live) traps the watcher in pick→sleep→repick forever
+	// while lower-priority campaigns with live streams never get mined.
+	// Cleared once every campaign is exhausted (true idle) so the next
+	// wake retries the full set fresh.
+	noStreamCampaigns map[string]struct{}
+
 	// lastDiscovery is the most recent successful
 	// Backend.ListActiveCampaigns result. Cached so the dashboard's
 	// Active Campaigns panel can union per-account discoveries without
@@ -732,6 +743,16 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 	slog.Info("watcher discovery", "kind", "discovery", "account", w.cfg.AccountID, "campaigns_total", len(campaigns), "campaigns_eligible", len(matched), "claimed_count", len(claimed))
 
 	for _, c := range matched {
+		// Skip campaigns whose channels were all offline earlier this
+		// round (set by pickStream). Lets the loop fall through to the
+		// next eligible campaign with a live broadcaster instead of
+		// re-picking the same dead one every cycle.
+		w.mu.Lock()
+		_, noStream := w.noStreamCampaigns[c.ID]
+		w.mu.Unlock()
+		if noStream {
+			continue
+		}
 		for _, b := range c.Benefits {
 			if claimed[b.ID] {
 				continue
@@ -754,10 +775,18 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			return nil
 		}
 	}
+	// Reaching here means every eligible benefit was claimed, skipped,
+	// or its campaign had no live stream this round. Clear the
+	// no-stream set so the next wake re-probes all campaigns (a dead
+	// esports channel may have come online by then).
+	w.mu.Lock()
+	exhaustedNoStream := len(w.noStreamCampaigns) > 0
+	w.noStreamCampaigns = nil
+	w.mu.Unlock()
 	if w.cfg.AllowGame != nil && len(matched) == 0 && len(campaigns) > 0 {
 		slog.Info("watcher: no whitelisted games match active campaigns, sleeping", "account", w.cfg.AccountID, "active_campaigns", len(campaigns))
 	} else {
-		slog.Info("watcher has no eligible benefit, sleeping", "account", w.cfg.AccountID, "scanned_campaigns", len(matched))
+		slog.Info("watcher has no eligible benefit, sleeping", "account", w.cfg.AccountID, "scanned_campaigns", len(matched), "all_streams_offline", exhaustedNoStream)
 	}
 	w.setState(ctx, StateSleeping)
 	return nil
@@ -778,8 +807,20 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 		return fmt.Errorf("list channels: %w", err)
 	}
 	if len(streams) == 0 {
-		slog.Info("watcher no eligible streams live, sleeping", "kind", "discovery", "account", w.cfg.AccountID, "campaign", camp.Name)
-		w.setState(ctx, StateSleeping)
+		// No live broadcaster for THIS campaign right now. Mark it so
+		// pickCampaign skips it and advances to the next eligible
+		// campaign with a live stream — instead of sleeping and
+		// re-picking this same dead campaign forever (esports channels
+		// are offline most of the time). pickCampaign clears the set
+		// once every campaign is exhausted, so we retry on the next wake.
+		slog.Info("watcher no eligible streams live, trying next campaign", "kind", "discovery", "account", w.cfg.AccountID, "campaign", camp.Name)
+		w.mu.Lock()
+		if w.noStreamCampaigns == nil {
+			w.noStreamCampaigns = map[string]struct{}{}
+		}
+		w.noStreamCampaigns[camp.ID] = struct{}{}
+		w.mu.Unlock()
+		w.setState(ctx, StatePickCampaign)
 		return nil
 	}
 	// Prefer highest-viewer-count streams: they stay live longer +
