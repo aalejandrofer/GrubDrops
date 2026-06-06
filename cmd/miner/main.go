@@ -105,7 +105,7 @@ func run() error {
 		logger.Info("twitch backend: BROWSER (via sidecar)")
 	} else {
 		registry.Register(twitch.New())
-		logger.Info("twitch backend: HTTP (subject to Twitch integrity wall)")
+		logger.Info("twitch backend: direct HTTP (Android device-code, no integrity header)")
 	}
 
 	resolver := func(accountID string) string {
