@@ -39,6 +39,13 @@ type Backend struct {
 
 var _ platform.Backend = (*Backend)(nil)
 
+// Backend must satisfy ChannelSubscriber so the watcher subscribes
+// video-playback PubSub topics for event-driven stream-up/down, and
+// PubSubAware so the watcher's real-time hooks actually receive events
+// (both signatures drifted once and broke this silently).
+var _ platform.ChannelSubscriber = (*Backend)(nil)
+var _ platform.PubSubAware = (*Backend)(nil)
+
 func New() *Backend {
 	c := newClient()
 	return &Backend{
@@ -120,6 +127,26 @@ func (b *Backend) SetPubSubHandlers(h PubSubHandlers) {
 	b.pubsubMu.Unlock()
 }
 
+// SetAccountPubSubHooks satisfies platform.PubSubAware — the method the
+// Watcher actually calls in its constructor. Without it the direct
+// backend received PubSub messages but had nil handlers, so every
+// real-time event (drop-progress, drop-claim, stream-down, reward-code)
+// was silently dropped and the watcher fell back to polling. The direct
+// backend runs a single shared PubSub client today, so accountID is
+// ignored; the hook fields map 1:1 onto the internal PubSubHandlers.
+// Must be called before the first ListActiveCampaigns (lazy bootstrap).
+func (b *Backend) SetAccountPubSubHooks(_ string, h platform.PubSubHooks) {
+	b.pubsubMu.Lock()
+	b.pubsubHandlers = PubSubHandlers{
+		OnDropProgress: h.OnDropProgress,
+		OnDropClaim:    h.OnDropClaim,
+		OnStreamDown:   h.OnStreamDown,
+		OnStreamUp:     h.OnStreamUp,
+		OnRewardCode:   h.OnRewardCode,
+	}
+	b.pubsubMu.Unlock()
+}
+
 // ensurePubSub lazily starts the PubSub WebSocket on first use. Resolves
 // the user_id from the session, subscribes to user-drop-events +
 // onsite-notifications, then runs the read/ping loop in a goroutine.
@@ -161,8 +188,12 @@ func (b *Backend) ensurePubSub(s platform.Session) {
 
 // SubscribeChannel adds (or refreshes) a video-playback-by-id.<id>
 // topic on the PubSub socket so stream-up/down events fire. Idempotent.
-// Caller passes the broadcaster's numeric channel id.
-func (b *Backend) SubscribeChannel(channelID string) {
+// Caller passes the broadcaster's numeric channel id. The accountID is
+// accepted to satisfy platform.ChannelSubscriber (the direct backend
+// runs a single shared PubSub client today, so it's unused) — without
+// this 2-arg signature the watcher's ChannelSubscriber type assertion
+// fails silently and stream-down events never reach the watcher.
+func (b *Backend) SubscribeChannel(_ string, channelID string) {
 	b.pubsubMu.Lock()
 	client := b.pubsub
 	b.pubsubMu.Unlock()
@@ -173,7 +204,7 @@ func (b *Backend) SubscribeChannel(channelID string) {
 }
 
 // UnsubscribeChannel drops a video-playback-by-id.<id> topic.
-func (b *Backend) UnsubscribeChannel(channelID string) {
+func (b *Backend) UnsubscribeChannel(_ string, channelID string) {
 	b.pubsubMu.Lock()
 	client := b.pubsub
 	b.pubsubMu.Unlock()
