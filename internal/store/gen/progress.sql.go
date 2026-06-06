@@ -26,6 +26,18 @@ func (q *Queries) CountClaimedForCampaign(ctx context.Context, campaignID string
 	return count, err
 }
 
+const countClaims = `-- name: CountClaims :one
+SELECT COUNT(*) FROM claims
+`
+
+// Lifetime total drops claimed (every row in the claims table).
+func (q *Queries) CountClaims(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countClaims)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getProgress = `-- name: GetProgress :one
 SELECT account_id, benefit_id, minutes_watched, claimed_at, updated_at FROM progress WHERE account_id = ? AND benefit_id = ?
 `
@@ -116,6 +128,19 @@ func (q *Queries) ListUnclaimedProgressForAccount(ctx context.Context, arg ListU
 		return nil, err
 	}
 	return items, nil
+}
+
+const sumWatchMinutes = `-- name: SumWatchMinutes :one
+SELECT CAST(COALESCE(SUM(minutes_watched), 0) AS INTEGER) FROM progress
+`
+
+// Lifetime watch minutes: sum of per-benefit progress. Persistent, so it
+// survives restarts (unlike the heartbeat log ring used for today's count).
+func (q *Queries) SumWatchMinutes(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, sumWatchMinutes)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const upsertProgress = `-- name: UpsertProgress :exec

@@ -30,3 +30,12 @@ VALUES (?, ?, ?, ?, ?);
 SELECT COUNT(DISTINCT c.benefit_id) FROM claims c
 JOIN benefits b ON b.id = c.benefit_id
 WHERE b.campaign_id = ?;
+
+-- name: CountClaims :one
+-- Lifetime total drops claimed (every row in the claims table).
+SELECT COUNT(*) FROM claims;
+
+-- name: SumWatchMinutes :one
+-- Lifetime watch minutes: sum of per-benefit progress. Persistent, so it
+-- survives restarts (unlike the heartbeat log ring used for today's count).
+SELECT CAST(COALESCE(SUM(minutes_watched), 0) AS INTEGER) FROM progress;

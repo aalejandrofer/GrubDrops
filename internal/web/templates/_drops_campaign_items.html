@@ -1,17 +1,24 @@
 {{define "drops_campaign_items"}}
 {{if .Benefits}}
-{{/* Items table only — meta info (ends/open) goes inline in the summary row. */}}
-<table class="tbl items" style="margin:6px 18px 10px;">
-  <thead><tr><th>Item</th><th>Required</th></tr></thead>
-  <tbody>
-    {{range .Benefits}}
-    <tr>
-      <td class="name">{{if .ImageURL}}<img src="{{.ImageURL}}" alt="" style="width:24px;height:24px;vertical-align:middle;margin-right:8px;object-fit:contain;">{{end}}{{.Name}}</td>
-      <td class="handle">{{.RequiredMinutes}}m</td>
-    </tr>
-    {{end}}
-  </tbody>
-</table>
+{{/* Item list — row style consistent with the app's other tables
+     (icon · name · required). Meta info (ends/open) stays inline in the
+     summary row. Leaves room for future per-account COLLECTED marks. */}}
+<div class="drop-items">
+  <div class="drop-items-head">
+    <span></span>
+    <span>item</span>
+    <span>required</span>
+  </div>
+  {{range .Benefits}}
+  <div class="drop-item">
+    <span class="drop-item-icon">
+      {{if .ImageURL}}<img src="{{.ImageURL}}" alt="" loading="lazy">{{else}}<span class="ph"></span>{{end}}
+    </span>
+    <span class="drop-item-name">{{.Name}}</span>
+    <span class="drop-item-req">{{.RequiredMinutes}}m</span>
+  </div>
+  {{end}}
+</div>
 {{else}}
 <div class="ev-detail" style="color:var(--muted);font-size:11px;">No items recorded for this campaign yet.</div>
 {{end}}

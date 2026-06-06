@@ -367,6 +367,7 @@ type Snapshot struct {
 	CampaignGame    string
 	BenefitID       string
 	BenefitName     string
+	BenefitImage    string
 	RequiredMinutes int
 	MinutesWatched  int
 	Channel         string
@@ -389,6 +390,7 @@ func (w *Watcher) Snapshot() Snapshot {
 	if w.currentBenefit != nil {
 		s.BenefitID = w.currentBenefit.ID
 		s.BenefitName = w.currentBenefit.Name
+		s.BenefitImage = w.currentBenefit.ImageURL
 		s.RequiredMinutes = w.currentBenefit.RequiredMinutes
 	}
 	if w.currentStream != nil {

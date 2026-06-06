@@ -63,8 +63,8 @@ type dashboardDeps struct {
 }
 
 type dashTelemetry struct {
-	WatchTimeToday string // "04:18 h:m"
-	ClaimsWeek     int
+	WatchTimeTotal string // lifetime watch time, "h:m" (sum of progress minutes)
+	ClaimsTotal    int    // lifetime drops claimed (claims table count)
 	ActiveCamps    int
 	InProgress     int
 	NextClaimETA   string // "00:13 h:m" or "—"
@@ -88,10 +88,12 @@ type dashMineCard struct {
 	ChannelInitial string
 	ChannelGame    string
 	ChannelViews   string // formatted, e.g. "62.4k" or "—"
+	ChannelURL     string // direct watch link (platform-aware) or ""
 
 	// Current drop
 	DropName     string
 	DropCampaign string
+	DropImage    string // benefit icon URL (shown in the expanded row)
 	DropMins     int
 	DropReq      int
 	DropPercent  int
@@ -511,8 +513,10 @@ func mineCardFromSnap(a gen.Account, s watcher.Snapshot) dashMineCard {
 		c.Channel = s.Channel
 		c.ChannelInitial = initial(s.Channel)
 		c.ChannelGame = s.CampaignGame
-		c.ChannelViews = "—"
+		c.ChannelViews = formatViews(s.ViewerCount)
+		c.ChannelURL = channelURL(a.Platform, s.Channel)
 		c.DropName = s.BenefitName
+		c.DropImage = s.BenefitImage
 		c.DropCampaign = s.CampaignName
 		c.DropMins, c.DropReq = s.MinutesWatched, max1(s.RequiredMinutes)
 		c.DropPercent = pct(s.MinutesWatched, s.RequiredMinutes)
@@ -520,6 +524,7 @@ func mineCardFromSnap(a gen.Account, s watcher.Snapshot) dashMineCard {
 	case "claiming":
 		c.StateSub = "claim in flight"
 		c.DropName = s.BenefitName
+		c.DropImage = s.BenefitImage
 		c.DropCampaign = s.CampaignName
 		c.DropMins, c.DropReq = s.RequiredMinutes, max1(s.RequiredMinutes)
 		c.DropPercent = 100
@@ -548,50 +553,14 @@ func mineCardFromSnap(a gen.Account, s watcher.Snapshot) dashMineCard {
 // deduped by (account_id, title) so the same reward isn't counted
 // twice if it appears in both sources.
 func telemetryWithClaims(base dashTelemetry, ring *mlog.Ring, q *gen.Queries, ctx context.Context) dashTelemetry {
-	since := time.Now().Add(-7 * 24 * time.Hour).Unix()
-	seen := map[string]bool{}
-	count := 0
-	// On-disk claims via ListRecentClaims (claims table is bounded — the
-	// claim rows are rare events, so 500 is generous).
+	// Lifetime drops claimed = every row in the persistent claims table.
+	// (Reward-reaper claims that never reach the claims table aren't counted —
+	// they only live in the ephemeral log ring.)
 	if q != nil {
-		if rows, err := q.ListRecentClaims(ctx, 500); err == nil {
-			for _, r := range rows {
-				if r.ClaimedAt < since {
-					continue
-				}
-				k := r.AccountID + "|" + r.BenefitName
-				if seen[k] {
-					continue
-				}
-				seen[k] = true
-				count++
-			}
+		if n, err := q.CountClaims(ctx); err == nil {
+			base.ClaimsTotal = int(n)
 		}
 	}
-	// Reward-reaper claims live in the log ring as kind=claim events.
-	// Field map carries account + title.
-	if ring != nil {
-		for _, l := range ring.Snapshot() {
-			if l.Kind != "claim" {
-				continue
-			}
-			if l.TS.Unix() < since {
-				continue
-			}
-			acc := fieldStr(l.Fields, "account")
-			title := fieldStr(l.Fields, "title")
-			if title == "" {
-				continue
-			}
-			k := acc + "|" + title
-			if seen[k] {
-				continue
-			}
-			seen[k] = true
-			count++
-		}
-	}
-	base.ClaimsWeek = count
 
 	// ACTIVE CAMPAIGNS = whitelisted campaigns currently live (same set
 	// /drops shows as "N · CURRENT"), not just the one the watcher is
@@ -616,27 +585,22 @@ func telemetryWithClaims(base dashTelemetry, ring *mlog.Ring, q *gen.Queries, ct
 	// watcher emits per minute-watched beacon. The ring (default 1000
 	// lines) comfortably covers an hour of beacons.
 	if ring != nil {
-		now := time.Now()
-		hourAgo := now.Add(-time.Hour)
-		midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		hbHour, hbToday := 0, 0
+		hourAgo := time.Now().Add(-time.Hour)
+		hbHour := 0
 		for _, l := range ring.Snapshot() {
-			if l.Kind != "heartbeat" {
-				continue
-			}
-			if l.TS.After(hourAgo) {
+			if l.Kind == "heartbeat" && l.TS.After(hourAgo) {
 				hbHour++
-			}
-			if l.TS.After(midnight) {
-				hbToday++
 			}
 		}
 		base.HeartbeatsHour = hbHour
-		// Each beacon ≈ 1 minute watched. Ring-bounded (so it can
-		// under-count a very long day and resets on restart), but it no
-		// longer zeroes the instant drops are claimed.
-		if hbToday > 0 {
-			base.WatchTimeToday = formatHM(time.Duration(hbToday) * time.Minute)
+	}
+
+	// Lifetime watch time = sum of persistent per-benefit progress minutes.
+	// Survives restarts (unlike the heartbeat ring) and doesn't zero out
+	// when drops are claimed.
+	if q != nil {
+		if mins, err := q.SumWatchMinutes(ctx); err == nil && mins > 0 {
+			base.WatchTimeTotal = formatHM(time.Duration(mins) * time.Minute)
 		}
 	}
 	return base
@@ -665,10 +629,9 @@ func telemetryFrom(cards []dashMineCard, snaps []watcher.Snapshot) dashTelemetry
 	} else {
 		tele.NextClaimETA = "—"
 	}
-	// WatchTimeToday is filled in telemetryWithClaims from the heartbeat
-	// log ring (each beacon = 1 min). Summing in-progress drop minutes
-	// here was wrong — it zeroed the card the moment all drops claimed.
-	tele.WatchTimeToday = "—"
+	// WatchTimeTotal is filled in telemetryWithClaims from the persistent
+	// progress table (lifetime sum). Default to "—" until that runs.
+	tele.WatchTimeTotal = "—"
 	return tele
 }
 
