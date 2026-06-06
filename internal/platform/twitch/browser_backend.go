@@ -441,7 +441,9 @@ func (b *BrowserBackend) Claim(ctx context.Context, s platform.Session, drop pla
 	if err := b.ensureAuthenticated(ctx, s); err != nil {
 		return err
 	}
-	return b.accountFor(s.AccountID).claim.claim(ctx, s, drop)
+	a := b.accountFor(s.AccountID)
+	userID, _ := a.watch.resolveUserID(ctx, s)
+	return a.claim.claim(ctx, s, drop, userID)
 }
 
 // ClaimRewards satisfies platform.RewardClaimer. Delegates to the

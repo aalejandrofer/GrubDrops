@@ -1,6 +1,7 @@
 package twitch
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -27,7 +28,7 @@ func TestClaim_SendsCorrectVariables(t *testing.T) {
 	c := newTestClient(srv.URL)
 	cl := &claimer{c: c}
 	err := cl.claim(context.Background(), platform.Session{AccessToken: "tok"},
-		platform.DropBenefit{ID: "drop1", CampaignID: "camp1"})
+		platform.DropBenefit{ID: "drop1", CampaignID: "camp1"}, 0)
 	require.NoError(t, err)
 
 	var req struct {
@@ -58,7 +59,7 @@ func TestClaim_AcceptsAlreadyClaimedStatus(t *testing.T) {
 	c := newTestClient(srv.URL)
 	cl := &claimer{c: c}
 	err := cl.claim(context.Background(), platform.Session{AccessToken: "tok"},
-		platform.DropBenefit{ID: "drop1"})
+		platform.DropBenefit{ID: "drop1"}, 0)
 	require.NoError(t, err)
 }
 
@@ -71,6 +72,27 @@ func TestClaim_RejectsBadStatus(t *testing.T) {
 	c := newTestClient(srv.URL)
 	cl := &claimer{c: c}
 	err := cl.claim(context.Background(), platform.Session{AccessToken: "tok"},
-		platform.DropBenefit{ID: "drop1"})
+		platform.DropBenefit{ID: "drop1"}, 0)
 	require.Error(t, err)
+}
+
+// When InstanceID is empty, the claimer builds DevilXD's synthetic
+// dropInstanceID `userID#campaignID#dropID` rather than the bare drop id.
+func TestClaim_SyntheticInstanceIDFallback(t *testing.T) {
+	var gotID string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if bytes.Contains(body, []byte("491#camp1#drop1")) {
+			gotID = "491#camp1#drop1"
+		}
+		_, _ = w.Write([]byte(`{"data":{"claimDropRewards":{"status":"ELIGIBLE_FOR_ALL"}}}`))
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv.URL)
+	cl := &claimer{c: c}
+	err := cl.claim(context.Background(), platform.Session{AccessToken: "tok"},
+		platform.DropBenefit{ID: "drop1", CampaignID: "camp1"}, 491)
+	require.NoError(t, err)
+	require.Equal(t, "491#camp1#drop1", gotID)
 }

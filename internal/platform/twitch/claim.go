@@ -17,13 +17,17 @@ type claimResult struct {
 	} `json:"claimDropRewards"`
 }
 
-func (cl *claimer) claim(ctx context.Context, sess platform.Session, b platform.DropBenefit) error {
-	// Prefer the per-account instance id captured at progress time;
-	// fall back to the drop template id for backends that don't yet
-	// surface InstanceID. Twitch typically rejects template-id claims
-	// with INVALID_DROP_INSTANCE so the InstanceID path is the
-	// load-bearing one.
+func (cl *claimer) claim(ctx context.Context, sess platform.Session, b platform.DropBenefit, userID int64) error {
+	// Prefer the per-account instance id captured at progress time.
+	// When it's missing, construct DevilXD's synthetic instance id
+	// `userID#campaignID#dropID` (inventory.py generate_claim) — Twitch
+	// accepts it and rejects the bare drop-template id with
+	// INVALID_DROP_INSTANCE. Only fall back to the template id as a last
+	// resort when we couldn't resolve the user id.
 	id := b.InstanceID
+	if id == "" && userID > 0 && b.CampaignID != "" && b.ID != "" {
+		id = fmt.Sprintf("%d#%s#%s", userID, b.CampaignID, b.ID)
+	}
 	if id == "" {
 		id = b.ID
 	}

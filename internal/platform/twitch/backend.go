@@ -278,7 +278,11 @@ func (b *Backend) StopWatch(ctx context.Context, h platform.WatchHandle) error {
 }
 
 func (b *Backend) Claim(ctx context.Context, s platform.Session, drop platform.DropBenefit) error {
-	return b.claim.claim(ctx, s, drop)
+	// userID feeds the synthetic-instance-id fallback in claimer.claim
+	// when the inventory dropInstanceID is missing. Cached after the
+	// first watch; resolve failure is non-fatal (claim degrades).
+	userID, _ := b.watch.resolveUserID(ctx, s)
+	return b.claim.claim(ctx, s, drop, userID)
 }
 
 // AvailableDropIDs satisfies platform.AvailableDropsChecker. Returns
