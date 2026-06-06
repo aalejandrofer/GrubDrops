@@ -21,3 +21,9 @@
 # coverage
 coverage.out
 dist/
+
+# stray local build binaries
+/kick-http
+/kick-login
+/kick-watch
+/kick-encrypt
