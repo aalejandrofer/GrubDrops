@@ -470,19 +470,29 @@ func (w *Watcher) Run(ctx context.Context) error {
 
 var errComplete = errors.New("nothing left to mine")
 
-// vanishThreshold is how many consecutive tickWatch calls must report
+// Watch-loop network cadences. The state machine ticks every 500ms for
+// responsiveness, but the expensive gql calls are throttled to roughly
+// match DevilXD/TwitchDropsMiner so we don't flood gql.twitch.tv (which
+// is both rate-limited and bot-detected). Counted in 500ms ticks.
+const (
+	beaconEveryTicks    = 120 // ~60s — minute-watched beacon (DevilXD WATCH_INTERVAL)
+	liveCheckEveryTicks = 60  // ~30s — re-probe the channel is still live
+	inventoryEveryTicks = 40  // ~20s — poll drop progress
+)
+
+// vanishThreshold is how many consecutive INVENTORY POLLS must report
 // "no progress row for current benefit" before the watcher concludes
-// the benefit has been externally claimed or expired. 3 ticks at the
-// default minute-cadence ≈ 3 minutes of grace.
+// the benefit was externally claimed or expired. 3 polls at the ~20s
+// inventory cadence ≈ 60 seconds of grace.
 const vanishThreshold = 3
 
-// synthSkipThreshold caps how long we'll babysit a synth-scrape
-// benefit (no real Twitch UUID) that NEVER shows up in
-// dropCampaignsInProgress. 120 ticks at 500ms ≈ 60 seconds — enough
-// time for the inventory poll to catch a real enrollment, short
-// enough that a code-only Minecraft drop the user already finished
-// doesn't keep the watcher pinned forever.
-const synthSkipThreshold = 120
+// synthSkipThreshold caps how many inventory polls we'll babysit a
+// synth-scrape benefit (no real Twitch UUID) that NEVER shows up in
+// dropCampaignsInProgress before skipping it permanently. 6 polls at
+// ~20s ≈ 2 minutes — enough for a real enrollment to register, short
+// enough that a code-only drop the user already finished doesn't pin
+// the watcher forever.
+const synthSkipThreshold = 6
 
 func (w *Watcher) step(ctx context.Context) error {
 	switch w.State() {
@@ -877,6 +887,9 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 	w.watchStartedAt = time.Now()
 	w.lastProgressMin = 0
 	w.noProgressTicks = 0
+	// Reset the tick counter so the beacon/inventory cadence (tickN==1
+	// fires immediately) aligns with the start of each watch session.
+	w.tickCount = 0
 	w.mu.Unlock()
 	// Subscribe to video-playback PubSub so stream-down events fire
 	// the moment Twitch flips the broadcast off, without waiting for
@@ -897,20 +910,28 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 	tickN := w.tickCount
 	w.mu.Unlock()
 
-	if err := w.cfg.Backend.Heartbeat(ctx, handle); err != nil {
-		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+	// Minute-watched beacon. Twitch credits watch time off this payload
+	// (minutes_logged:1). DevilXD sends it ~once per 60s; sending it
+	// every tick both wastes requests and looks like a bot. Fire on the
+	// first watch tick, then every beaconEveryTicks. The heartbeat error
+	// is also our cheapest stream-down signal, so we keep failing the
+	// tick when it errors.
+	if tickN == 1 || tickN%beaconEveryTicks == 0 {
+		if err := w.cfg.Backend.Heartbeat(ctx, handle); err != nil {
+			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+				return fmt.Errorf("heartbeat: %w", err)
+			}
+			slog.Error("watcher heartbeat failed", "kind", "error", "account", w.cfg.AccountID, "channel", handle.Channel, "err", err)
 			return fmt.Errorf("heartbeat: %w", err)
 		}
-		slog.Error("watcher heartbeat failed", "kind", "error", "account", w.cfg.AccountID, "channel", handle.Channel, "err", err)
-		return fmt.Errorf("heartbeat: %w", err)
 	}
 
-	// Every 5 ticks (~2.5s at 500ms cadence), check that the channel
-	// we're watching is still live + still eligible. Twitch's
-	// SendEvents heartbeat is fire-and-forget — minutes don't accrue
-	// after a stream ends but the mutation keeps returning 200, so we
-	// need this active probe to know when to swap.
-	if tickN%5 == 0 {
+	// Periodically re-check the channel we're watching is still live +
+	// eligible (~30s). SendEvents is fire-and-forget — minutes stop
+	// accruing after a stream ends but the mutation keeps returning 200,
+	// so this active probe (plus PubSub video-playback) tells us when to
+	// swap channels.
+	if tickN%liveCheckEveryTicks == 0 {
 		streams, err := w.cfg.Backend.ListEligibleChannels(ctx, w.cfg.Session, campaign)
 		if err == nil {
 			stillLive := false
@@ -932,6 +953,13 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 				return nil
 			}
 		}
+	}
+
+	// Drop-progress poll (~20s). Only the inventory ticks below touch
+	// gql; intermediate ticks just maintain the beacon/live-check above
+	// and return, keeping us off Twitch's rate limiter.
+	if tickN != 1 && tickN%inventoryEveryTicks != 0 {
+		return nil
 	}
 
 	progress, err := w.cfg.Backend.InventoryProgress(ctx, w.cfg.Session)
