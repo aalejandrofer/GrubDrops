@@ -56,6 +56,39 @@
       {{template "drops_table" .}}
     </section>
 
+    {{if .UnlinkedRows}}
+    <section class="drops-pane">
+      <header class="drops-pane-h">
+        <h3>Whitelisted — account not linked</h3>
+        <span class="meta">{{len .UnlinkedRows}} · not mined</span>
+      </header>
+      <div class="events drops-rows">
+        {{range .UnlinkedRows}}
+        <details class="ev kind-auth drop-dim"
+                 {{if .CampaignID}}hx-get="/drops/campaigns/{{.CampaignID}}/items"
+                 hx-target="find .ev-detail-slot"
+                 hx-trigger="toggle once from:closest details"
+                 hx-swap="innerHTML"{{end}}>
+          <summary>
+            <span class="chev" aria-hidden="true">›</span>
+            <span class="t">—</span>
+            <span class="lvl" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">●</span>
+            <span class="body"><em style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{.Platform}}</em> · <span style="color:var(--muted);">{{.Game}}</span> · {{.CampaignName}}</span>
+            <span class="ac">{{if .LinkURL}}<a href="{{.LinkURL}}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent);">connect account →</a>{{else}}account not linked{{end}}</span>
+          </summary>
+          <div class="ev-detail-slot">
+            {{if .CampaignID}}
+            <div class="ev-detail" style="color:var(--muted);font-size:11px;">Loading items…</div>
+            {{else}}
+            <div class="ev-detail" style="color:var(--muted);font-size:11px;">No item details available for this campaign.</div>
+            {{end}}
+          </div>
+        </details>
+        {{end}}
+      </div>
+    </section>
+    {{end}}
+
     <section class="drops-pane">
       <header class="drops-pane-h">
         <h3>Discoverable — not whitelisted</h3>

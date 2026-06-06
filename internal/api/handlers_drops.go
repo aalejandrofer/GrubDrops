@@ -64,6 +64,13 @@ type dropsRow struct {
 	// claimed at least one benefit, with Full = claimed every watch-time one.
 	ActionOnly bool
 	Collectors []collectMark
+
+	// Linked is true when the account can earn this campaign (external
+	// account connected, or none required). False = whitelisted but the
+	// required account isn't linked → shown in a separate "not linked"
+	// table and NOT mined. LinkURL is where to connect it (may be empty).
+	Linked  bool
+	LinkURL string
 }
 
 // collectMark is one account's collection state for a campaign, shown as a
@@ -86,6 +93,7 @@ type dropsPage struct {
 	CurrentCount int
 	UpcomingCount int
 	Rows         []dropsRow
+	UnlinkedRows []dropsRow      // whitelisted but the account isn't linked (Current tab only)
 	UnlistedRows []dropsRow      // campaigns whose Game is not on any account whitelist
 	Accounts     []dropsAccount  // for the "add to whitelist" dropdown on unlisted rows
 	CSRFToken    string          // mirrors templateData.CSRFToken for inline form
@@ -275,9 +283,24 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 	case tabPast:
 		page.Rows = pastRows
 	case tabCurrent:
-		page.Rows = currentRows
+		// Split the whitelisted Current list: linked → mineable (Rows),
+		// not-linked → a separate table so the operator sees what they'd
+		// mine once the account is connected. The watcher already skips
+		// the not-linked ones.
+		for _, row := range currentRows {
+			if row.Linked {
+				page.Rows = append(page.Rows, row)
+			} else {
+				page.UnlinkedRows = append(page.UnlinkedRows, row)
+			}
+		}
 	case tabUpcoming:
 		page.Rows = upcomingRows
+	}
+
+	// Collection chips for the not-linked rows too (so they show context).
+	for i := range page.UnlinkedRows {
+		d.attachCollection(r.Context(), &page.UnlinkedRows[i])
 	}
 
 	// Collection status (cross / per-account ticks) for the rows actually
@@ -359,6 +382,8 @@ func (d *dropsDeps) collectAll(
 			Kind:         c.Kind,
 			sortKey:      c.EndsAt,
 			rankKey:      rankFor(ranks, c.Game),
+			Linked:       c.AccountLinked != 0,
+			LinkURL:      c.AccountLinkUrl,
 		}
 		if passesWhitelist(allow, hasWhitelist, c.Game) {
 			current = append(current, row)
