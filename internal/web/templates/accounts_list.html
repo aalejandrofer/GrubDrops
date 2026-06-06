@@ -33,7 +33,7 @@
       {{range .Page}}
       <div class="ev kind-{{if eq .StateTier "green"}}claim{{else if eq .StateTier "orange"}}auth{{else}}info{{end}} static">
         <div class="ev-row">
-          <span class="t">{{.DisplayName}}</span>
+          <span class="t" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}text{{end}})">{{.DisplayName}}</span>
           <span class="lvl" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">●</span>
           <span class="body"><em>{{.Platform}}</em> · @{{.Login}}
             <a href="/accounts/{{.ID}}" class="row-link">edit →</a>
