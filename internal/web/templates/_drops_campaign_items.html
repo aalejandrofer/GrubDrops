@@ -1,12 +1,13 @@
 {{define "drops_campaign_items"}}
 {{if .Benefits}}
 {{/* Item list — row style consistent with the app's other tables
-     (icon · name · required). Meta info (ends/open) stays inline in the
-     summary row. Leaves room for future per-account COLLECTED marks. */}}
+     (icon · name · collected · required). COLLECTED shows which accounts
+     have already claimed each benefit (platform-colored). */}}
 <div class="drop-items">
   <div class="drop-items-head">
     <span></span>
     <span>item</span>
+    <span>collected</span>
     <span>required</span>
   </div>
   {{range .Benefits}}
@@ -15,6 +16,13 @@
       {{if .ImageURL}}<img src="{{.ImageURL}}" alt="" loading="lazy">{{else}}<span class="ph"></span>{{end}}
     </span>
     <span class="drop-item-name">{{.Name}}</span>
+    <span class="drop-item-collected">
+      {{if .Collected}}
+        {{range .Collected}}<span class="cmark cmark-{{.Platform}}" title="claimed by @{{.Login}}">@{{.Login}}</span>{{end}}
+      {{else}}
+        <span class="cmark-none">—</span>
+      {{end}}
+    </span>
     <span class="drop-item-req">{{.RequiredMinutes}}m</span>
   </div>
   {{end}}

@@ -446,7 +446,7 @@
   .drop-items-head,
   .drop-item {
     display: grid;
-    grid-template-columns: 32px 1fr auto;
+    grid-template-columns: 32px minmax(120px, 1.3fr) minmax(80px, 1.4fr) auto;
     align-items: center;
     gap: 12px;
     padding: 9px 14px;
@@ -481,6 +481,22 @@
     font-size: 12px;
     color: var(--muted);
   }
+  /* COLLECTED marks — one chip per account that claimed the benefit. */
+  .drop-item-collected { display: flex; flex-wrap: wrap; gap: 5px; }
+  .cmark {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    line-height: 1;
+    padding: 4px 7px;
+    border-radius: 3px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .cmark::before { content: "✓ "; color: var(--green); }
+  .cmark-twitch { color: var(--purple); border-color: color-mix(in srgb, var(--purple) 35%, transparent); }
+  .cmark-kick { color: var(--kick); border-color: color-mix(in srgb, var(--kick) 35%, transparent); }
+  .cmark-none { color: var(--dim); font-size: 12px; }
 
   /* Watching expand: detail rows on the left, the drop's item icon on the
      right, vertically centered in the free space beside the rows. */

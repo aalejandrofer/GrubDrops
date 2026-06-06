@@ -472,6 +472,16 @@ type campaignBenefitRow struct {
 	Name            string
 	RequiredMinutes int64
 	ImageURL        string
+	// Collected lists the accounts that have already claimed this benefit
+	// (from the claims table) — rendered as per-account marks on the item.
+	Collected []collectedMark
+}
+
+// collectedMark is one account that claimed a benefit, carrying the
+// platform so the mark can be colored (purple=Twitch, green=Kick).
+type collectedMark struct {
+	Login    string
+	Platform string
 }
 
 // addWhitelist takes (account_id, name) from the inline form on the
@@ -537,11 +547,22 @@ func (d *dropsDeps) items(w http.ResponseWriter, r *http.Request) {
 	if camp.EndsAt > 0 {
 		detail.When = time.Unix(camp.EndsAt, 0).UTC().Format("2006-01-02 15:04 UTC")
 	}
+	// Per-benefit COLLECTED marks: which accounts already claimed each benefit.
+	collectedByBenefit := map[string][]collectedMark{}
+	if claims, err := d.q.ListClaimsForCampaign(r.Context(), id); err == nil {
+		for _, c := range claims {
+			collectedByBenefit[c.BenefitID] = append(collectedByBenefit[c.BenefitID], collectedMark{
+				Login:    c.Login,
+				Platform: c.Platform,
+			})
+		}
+	}
 	for _, b := range bens {
 		detail.Benefits = append(detail.Benefits, campaignBenefitRow{
 			Name:            b.Name,
 			RequiredMinutes: b.RequiredMinutes,
 			ImageURL:        b.ImageUrl,
+			Collected:       collectedByBenefit[b.ID],
 		})
 	}
 	renderPartial(w, d.t, "drops_campaign_items", detail)

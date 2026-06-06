@@ -35,6 +35,9 @@ type Querier interface {
 	ListAllAccounts(ctx context.Context) ([]Account, error)
 	ListAllGames(ctx context.Context) ([]Game, error)
 	ListBenefitsForCampaign(ctx context.Context, campaignID string) ([]Benefit, error)
+	// Which accounts have claimed each benefit in a campaign. Powers the
+	// per-account COLLECTED marks on the /drops expanded item list.
+	ListClaimsForCampaign(ctx context.Context, campaignID string) ([]ListClaimsForCampaignRow, error)
 	// Campaigns currently in flight (starts_at <= now < ends_at).
 	// Whitelist filtering is applied in Go.
 	ListCurrentCampaigns(ctx context.Context, arg ListCurrentCampaignsParams) ([]Campaign, error)

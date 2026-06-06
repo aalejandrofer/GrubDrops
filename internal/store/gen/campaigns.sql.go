@@ -110,6 +110,53 @@ func (q *Queries) ListBenefitsForCampaign(ctx context.Context, campaignID string
 	return items, nil
 }
 
+const listClaimsForCampaign = `-- name: ListClaimsForCampaign :many
+SELECT c.benefit_id, a.id AS account_id, a.login, a.platform, a.display_name
+FROM claims c
+JOIN accounts a ON a.id = c.account_id
+JOIN benefits b ON b.id = c.benefit_id
+WHERE b.campaign_id = ?
+`
+
+type ListClaimsForCampaignRow struct {
+	BenefitID   string `json:"benefit_id"`
+	AccountID   string `json:"account_id"`
+	Login       string `json:"login"`
+	Platform    string `json:"platform"`
+	DisplayName string `json:"display_name"`
+}
+
+// Which accounts have claimed each benefit in a campaign. Powers the
+// per-account COLLECTED marks on the /drops expanded item list.
+func (q *Queries) ListClaimsForCampaign(ctx context.Context, campaignID string) ([]ListClaimsForCampaignRow, error) {
+	rows, err := q.db.QueryContext(ctx, listClaimsForCampaign, campaignID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListClaimsForCampaignRow
+	for rows.Next() {
+		var i ListClaimsForCampaignRow
+		if err := rows.Scan(
+			&i.BenefitID,
+			&i.AccountID,
+			&i.Login,
+			&i.Platform,
+			&i.DisplayName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCurrentCampaigns = `-- name: ListCurrentCampaigns :many
 SELECT id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at, kind FROM campaigns
 WHERE starts_at <= ? AND ends_at > ?

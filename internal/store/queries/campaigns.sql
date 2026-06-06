@@ -25,6 +25,15 @@ ORDER BY discovered_at DESC;
 -- name: ListBenefitsForCampaign :many
 SELECT * FROM benefits WHERE campaign_id = ?;
 
+-- name: ListClaimsForCampaign :many
+-- Which accounts have claimed each benefit in a campaign. Powers the
+-- per-account COLLECTED marks on the /drops expanded item list.
+SELECT c.benefit_id, a.id AS account_id, a.login, a.platform, a.display_name
+FROM claims c
+JOIN accounts a ON a.id = c.account_id
+JOIN benefits b ON b.id = c.benefit_id
+WHERE b.campaign_id = ?;
+
 -- name: GetCampaign :one
 SELECT * FROM campaigns WHERE id = ?;
 
