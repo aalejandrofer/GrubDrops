@@ -26,7 +26,7 @@
     <span class="alert-tag">{{if eq .Kind "needs_auth"}}needs auth{{else}}needs drops{{end}}</span>
     <span class="alert-body">
       <strong>{{.Account}}</strong>
-      {{if eq .Kind "needs_auth"}}— session expired or never authenticated{{else}}— sleeping with 0 enrolled drops (paste cookies fail integrity, use helper CLI instead){{end}}
+      {{if eq .Kind "needs_auth"}}— session expired or never authenticated{{else}}— sleeping with 0 enrolled drops. Re-authenticate with a device code so Twitch enrolls this account in drops.{{end}}
     </span>
     <a class="btn sm alert-cta" href="{{.URL}}">{{.Action}}</a>
   </div>
