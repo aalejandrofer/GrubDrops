@@ -11,7 +11,7 @@
     <span>type</span>
   </div>
   {{range .Benefits}}
-  <div class="drop-item">
+  <div class="drop-item{{if le .RequiredMinutes 0}} drop-dim{{end}}">
     <span class="drop-item-icon">
       {{if .ImageURL}}<img src="{{.ImageURL}}" alt="" loading="lazy">{{else}}<span class="ph"></span>{{end}}
     </span>

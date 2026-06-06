@@ -521,6 +521,11 @@
   .kicker-link { color: var(--accent); text-decoration: none; }
   .kicker-link:hover { text-decoration: underline; }
 
+  /* Non-watch-time drops/items (reward / 0-min action) read as dimmed —
+     they can't be auto-mined. Hover restores full opacity for legibility. */
+  .drop-dim { opacity: 0.5; }
+  .drop-dim:hover { opacity: 1; }
+
   /* Discoverable row: add-to-whitelist control, secondary under the contents. */
   .disc-add {
     border-top: 1px dashed var(--line);

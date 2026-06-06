@@ -68,7 +68,7 @@
         {{$accts := .Accounts}}
         {{$csrf := .CSRFToken}}
         {{range .UnlistedRows}}
-        <details class="ev kind-{{if eq .Kind "reward"}}auth{{else}}discovery{{end}}"
+        <details class="ev kind-{{if eq .Kind "reward"}}auth{{else}}discovery{{end}}{{if eq .Kind "reward"}} drop-dim{{end}}"
                  {{if .CampaignID}}hx-get="/drops/campaigns/{{.CampaignID}}/items"
                  hx-target="find .ev-detail-slot"
                  hx-trigger="toggle once from:closest details"
@@ -76,8 +76,8 @@
           <summary>
             <span class="chev" aria-hidden="true">›</span>
             <span class="t">—</span>
-            <span class="lvl" style="color:var(--muted)">●</span>
-            <span class="body"><em>{{.Platform}}{{if eq .Kind "reward"}} · reward{{end}}</em> · <span style="color:var(--muted);">{{.Game}}</span> · {{.CampaignName}}</span>
+            <span class="lvl" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">●</span>
+            <span class="body"><em style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{.Platform}}</em>{{if eq .Kind "reward"}} · reward{{end}} · <span style="color:var(--muted);">{{.Game}}</span> · {{.CampaignName}}</span>
             <span class="ac">not whitelisted</span>
           </summary>
           {{/* Contents first — the drop's items/benefits (lazy-loaded). */}}
