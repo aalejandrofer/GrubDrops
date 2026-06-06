@@ -244,10 +244,19 @@ func NewRouter(d Deps) http.Handler {
 	return r
 }
 
-// staticHandler serves the embedded static/ assets with a short cache TTL.
+// staticHandler serves the embedded static/ assets. CSS/JS use no-cache
+// (revalidate every load — cheap 304s) so a redeploy's style/script changes
+// show immediately rather than going stale for up to the cache TTL — which
+// caused new HTML to render against an old cached app.css. Other assets
+// (images/fonts) keep a short TTL.
 func staticHandler() http.Handler {
+	fs := http.FileServer(http.FS(web.Static()))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=300")
-		http.FileServer(http.FS(web.Static())).ServeHTTP(w, r)
+		if strings.HasSuffix(r.URL.Path, ".css") || strings.HasSuffix(r.URL.Path, ".js") {
+			w.Header().Set("Cache-Control", "no-cache")
+		} else {
+			w.Header().Set("Cache-Control", "public, max-age=300")
+		}
+		fs.ServeHTTP(w, r)
 	})
 }

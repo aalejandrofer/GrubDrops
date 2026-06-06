@@ -513,9 +513,14 @@ func (d *dropsDeps) addWhitelist(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/drops", http.StatusSeeOther)
 		return
 	}
-	if _, err := d.q.GetAccount(r.Context(), accID); err != nil {
-		http.NotFound(w, r)
-		return
+	// "__global__" adds to the global priority list (applies to every account
+	// that has no per-account override) rather than a single account.
+	global := accID == "__global__"
+	if !global {
+		if _, err := d.q.GetAccount(r.Context(), accID); err != nil {
+			http.NotFound(w, r)
+			return
+		}
 	}
 	slug := slugifyGame(name)
 	if slug == "" {
@@ -527,6 +532,24 @@ func (d *dropsDeps) addWhitelist(w http.ResponseWriter, r *http.Request) {
 		ID: gameID, Name: name, Slug: slug, Priority: 0,
 	}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if global {
+		existing, _ := d.q.ListGlobalGames(r.Context())
+		rank := int64(len(existing))
+		for _, e := range existing {
+			if e.ID == gameID {
+				rank = e.Rank
+				break
+			}
+		}
+		if err := d.q.AddGlobalGame(r.Context(), gen.AddGlobalGameParams{
+			GameID: gameID, Rank: rank,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, "/drops", http.StatusSeeOther)
 		return
 	}
 	existing, _ := d.q.ListAccountGames(r.Context(), accID)

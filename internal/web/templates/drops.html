@@ -96,6 +96,7 @@
               <input type="hidden" name="name" value="{{.Game}}">
               <span class="disc-add-label">add <strong>{{.Game}}</strong> to</span>
               <select name="account_id">
+                <option value="__global__">★ Global priority list (all accounts)</option>
                 {{range $accts}}<option value="{{.ID}}">{{.Label}}</option>{{end}}
               </select>
               <button class="btn sm" type="submit">add +</button>
