@@ -117,30 +117,22 @@ func TestKickBackend_Claim_PostsRewardAndCampaign(t *testing.T) {
 	assert.Contains(t, f.calls[0].body, `"campaign_id":"camp1"`)
 }
 
-func TestKickBackend_HeartbeatSoftNoop(t *testing.T) {
-	// Kick watch-time accrues via a viewer websocket (TODO), not an HTTP ping,
-	// so Heartbeat is a soft no-op for now: no HTTP call, no error.
-	f := &fakeDoer{resp: map[string]fakeResp{}}
-	b := withFake(f)
-	h, err := b.StartWatch(context.Background(), sess("acc1"), platform.Stream{Channel: "tippie", ChannelID: "12345"})
-	require.NoError(t, err)
-	require.NoError(t, b.Heartbeat(context.Background(), h))
-	require.Len(t, f.calls, 0, "heartbeat must not hit the network yet")
-}
-
 func TestKickBackend_ListEligibleChannels_LiveCampaignChannel(t *testing.T) {
 	f := &fakeDoer{resp: map[string]fakeResp{
 		// tippie is live (data present), bob is offline (data null).
-		"https://kick.com/api/v2/channels/tippie/livestream": {200, `{"data":{"id":111,"viewer_count":50}}`},
+		"https://kick.com/api/v2/channels/tippie/livestream": {200, `{"data":{"id":999,"viewer_count":50}}`},
 		"https://kick.com/api/v2/channels/bob/livestream":    {200, `{"data":null}`},
 	}}
 	b := withFake(f)
+	// Channels (slug+channelId) come from the campaigns payload, cached here.
+	b.campaignChannels["c1"] = []kickChannel{{Slug: "bob", ID: "5"}, {Slug: "tippie", ID: "27589"}}
 	out, err := b.ListEligibleChannels(context.Background(), sess("acc1"),
-		platform.Campaign{ID: "c1", Game: "Rust", AllowedChannels: []string{"bob", "tippie"}})
+		platform.Campaign{ID: "c1", Game: "Rust"})
 	require.NoError(t, err)
 	require.Len(t, out, 1)
 	assert.Equal(t, "tippie", out[0].Channel)
-	assert.Equal(t, "111", out[0].ChannelID)
+	// ChannelID is the CHANNEL id (for the viewer-WS handshake), not livestream id.
+	assert.Equal(t, "27589", out[0].ChannelID)
 	assert.Equal(t, 50, out[0].ViewerCount)
 }
 

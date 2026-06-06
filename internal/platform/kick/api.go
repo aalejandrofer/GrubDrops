@@ -84,7 +84,14 @@ type kickCampaign struct {
 	StartsAt string
 	EndsAt   string
 	Rewards  []kickReward
-	Channels []string // eligible channel slugs (campaign.channels[].slug)
+	Channels []kickChannel // eligible channels (campaign.channels[])
+}
+
+// kickChannel is an eligible channel for a campaign. ID is the numeric channel
+// id used by the viewer-WS channel_handshake (NOT the livestream id).
+type kickChannel struct {
+	Slug string
+	ID   string
 }
 
 type kickReward struct {
@@ -131,10 +138,11 @@ func (a *api) Campaigns(ctx context.Context, sess platform.Session) ([]kickCampa
 			})
 		}
 		// Eligible channels are embedded in the campaign payload (the
-		// separate /campaigns/{id}/livestreams endpoint returns 400).
+		// separate /campaigns/{id}/livestreams endpoint returns 400). id is
+		// the channel id the viewer-WS handshake needs.
 		for _, ch := range mlist(m, "channels") {
 			if slug := mstr(ch, "slug", "username", "name"); slug != "" {
-				c.Channels = append(c.Channels, slug)
+				c.Channels = append(c.Channels, kickChannel{Slug: slug, ID: mstr(ch, "id", "channel_id", "channelId")})
 			}
 		}
 		out = append(out, c)

@@ -23,9 +23,10 @@ type Backend struct {
 	c   *browser.Client
 	api *api
 
-	mu            sync.Mutex
-	handleByAcc   map[string]string // accountID -> watch handle
-	channelsByAcc map[string][]string
+	mu               sync.Mutex
+	handleByAcc      map[string]string // accountID -> watch handle
+	channelsByAcc    map[string][]string
+	campaignChannels map[string][]kickChannel // campaignID -> eligible channels (slug+id)
 }
 
 var _ platform.Backend = (*Backend)(nil)
@@ -34,18 +35,18 @@ var _ platform.Backend = (*Backend)(nil)
 // the utls HTTP client); it's kept for the interactive-login path only.
 func New(c *browser.Client) *Backend {
 	return &Backend{
-		c:             c,
-		api:           newAPI(),
-		handleByAcc:   map[string]string{},
-		channelsByAcc: map[string][]string{},
+		c:                c,
+		api:              newAPI(),
+		handleByAcc:      map[string]string{},
+		channelsByAcc:    map[string][]string{},
+		campaignChannels: map[string][]kickChannel{},
 	}
 }
 
-// kickWatch is stored in WatchHandle.Internal so Heartbeat can send the
-// periodic view ping (Kick accrues watch time from POST /video/views/{id}).
+// kickWatch is stored in WatchHandle.Internal; it owns the viewer-WS presence
+// that accrues drops watch-time for the channel.
 type kickWatch struct {
-	livestreamID string
-	session      platform.Session
+	conn *watchConn
 }
 
 func (b *Backend) Name() string { return "kick" }
@@ -175,13 +176,22 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 				ImageURL:        ben.ImageURL,
 			})
 		}
+		slugs := make([]string, 0, len(c.Channels))
+		for _, ch := range c.Channels {
+			slugs = append(slugs, ch.Slug)
+		}
+		if c.ID != "" {
+			b.mu.Lock()
+			b.campaignChannels[c.ID] = c.Channels // slug+id, for the watch handshake
+			b.mu.Unlock()
+		}
 		camp := platform.Campaign{
 			ID:              c.ID,
 			Platform:        "kick",
 			Game:            c.Game,
 			Name:            c.Name,
 			Benefits:        benefits,
-			AllowedChannels: c.Channels,
+			AllowedChannels: slugs,
 		}
 		// Parse RFC3339 start/end so the /drops past|current|upcoming tabs work.
 		if t, err := time.Parse(time.RFC3339, c.StartsAt); err == nil {
@@ -212,20 +222,25 @@ func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, 
 	// payload). Check each for liveness — only LIVE ones can accrue watch time,
 	// and we need the livestream id for the watch ping. Cap the probes.
 	const maxProbe = 12
+	b.mu.Lock()
+	chans := b.campaignChannels[c.ID]
+	b.mu.Unlock()
 	var live []platform.Stream
 	probed := 0
-	for _, slug := range c.AllowedChannels {
+	for _, ch := range chans {
 		if probed >= maxProbe {
 			break
 		}
 		probed++
-		ok, lsID, viewers, err := b.api.ChannelLivestream(ctx, s, slug)
+		ok, _, viewers, err := b.api.ChannelLivestream(ctx, s, ch.Slug)
 		if err != nil {
-			slog.Debug("kick channel liveness check failed", "channel", slug, "err", err)
+			slog.Debug("kick channel liveness check failed", "channel", ch.Slug, "err", err)
 			continue
 		}
 		if ok {
-			live = append(live, platform.Stream{Channel: slug, ChannelID: lsID, ViewerCount: viewers, DropsEnabled: true})
+			// ChannelID carries the CHANNEL id (for the viewer-WS handshake),
+			// not the livestream id.
+			live = append(live, platform.Stream{Channel: ch.Slug, ChannelID: ch.ID, ViewerCount: viewers, DropsEnabled: true})
 		}
 	}
 	if len(live) > 0 {
@@ -264,31 +279,38 @@ func (b *Backend) InventoryProgress(ctx context.Context, s platform.Session) ([]
 	return b.api.Progress(ctx, s)
 }
 
-func (b *Backend) StartWatch(_ context.Context, s platform.Session, stream platform.Stream) (platform.WatchHandle, error) {
-	// No browser tab. Watching = periodic POST /video/views/{livestreamID}
-	// (sent by Heartbeat). stream.ChannelID carries the livestream id from
-	// discovery. The first ping is sent on the next Heartbeat tick.
-	return platform.WatchHandle{
-		Channel:  stream.Channel,
-		Internal: kickWatch{livestreamID: stream.ChannelID, session: s},
-	}, nil
+func (b *Backend) StartWatch(ctx context.Context, s platform.Session, stream platform.Stream) (platform.WatchHandle, error) {
+	// Watching = a viewer-WS presence sending channel_handshake for the
+	// channel (accrues drops watch-time). stream.ChannelID is the CHANNEL id.
+	cookieHeader := cookieHeaderForSession(s)
+	if cookieHeader == "" {
+		return platform.WatchHandle{}, fmt.Errorf("kick: session has no cookies")
+	}
+	wc, err := openWatch(ctx, cookieHeader, stream.ChannelID)
+	if err != nil {
+		return platform.WatchHandle{}, fmt.Errorf("kick start watch %s: %w", stream.Channel, err)
+	}
+	return platform.WatchHandle{Channel: stream.Channel, Internal: kickWatch{conn: wc}}, nil
 }
 
 func (b *Backend) Heartbeat(_ context.Context, h platform.WatchHandle) error {
-	// NOTE: Kick accrues drops watch-time via a VIEWER WEBSOCKET presence
-	// (wss://websockets.kick.com/viewer/v1/connect), NOT an HTTP ping — the
-	// /api/v1/video/views endpoint is VOD view-counting and 404s on live
-	// streams. Until that websocket viewer client is implemented, Heartbeat is
-	// a soft no-op so the watcher holds the channel without error-spamming.
-	// TODO(kick-watch): connect the viewer websocket to actually accrue time.
-	if _, ok := h.Internal.(kickWatch); !ok {
+	w, ok := h.Internal.(kickWatch)
+	if !ok {
 		return fmt.Errorf("kick: invalid watch handle")
+	}
+	// The viewer-WS writer goroutine sends channel_handshake + ping on its own
+	// schedule; Heartbeat just confirms the presence is still alive so the
+	// watcher swaps channels if it dropped.
+	if !w.conn.Alive() {
+		return fmt.Errorf("kick: viewer websocket closed for %q", h.Channel)
 	}
 	return nil
 }
 
-func (b *Backend) StopWatch(_ context.Context, _ platform.WatchHandle) error {
-	// Nothing to tear down — no tab, no persistent connection.
+func (b *Backend) StopWatch(_ context.Context, h platform.WatchHandle) error {
+	if w, ok := h.Internal.(kickWatch); ok {
+		w.conn.Close()
+	}
 	return nil
 }
 

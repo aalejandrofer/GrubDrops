@@ -11,14 +11,15 @@ import (
 	"strings"
 	"time"
 
-	utls "github.com/refraction-networking/utls"
 	"github.com/aalejandrofer/dropsminer/internal/platform"
+	utls "github.com/refraction-networking/utls"
 	"golang.org/x/net/http2"
 )
 
 // Kick serves different features from different hosts (from the Next.js config):
 //   - web.kick.com  : the drops API (/api/v1/drops/*)
 //   - kick.com      : channel/category discovery (/api/v2/channels, /stream/livestreams) + watch ping
+//
 // do() dials whatever host the passed URL names.
 const (
 	dropsBase     = "https://web.kick.com"

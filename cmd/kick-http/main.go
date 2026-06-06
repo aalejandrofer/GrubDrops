@@ -126,6 +126,9 @@ func runOne(raw []byte, url string) error {
 	if sessionToken != "" {
 		req.Header.Set("Authorization", "Bearer "+sessionToken)
 	}
+	if ct := os.Getenv("KICK_CLIENT_TOKEN"); ct != "" {
+		req.Header.Set("X-CLIENT-TOKEN", ct)
+	}
 	req.Header.Set("Sec-Fetch-Site", "same-origin")
 	req.Header.Set("Sec-Fetch-Mode", "cors")
 	req.Header.Set("Sec-Fetch-Dest", "empty")
