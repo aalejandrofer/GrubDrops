@@ -303,24 +303,21 @@ func run() error {
 
 	// Avoid typed-nil-interface trap: only assign if the concrete pointer is non-nil.
 	var bc api.KickBrowserClient
-	var tbc api.TwitchBrowserClient
 	var reg api.KickChannelRegistrar
 	if browserClient != nil {
-		bc = browserClient  // *browser.Client satisfies KickBrowserClient
-		tbc = browserClient // *browser.Client satisfies TwitchBrowserClient
-		reg = kickBackend   // *kick.Backend satisfies KickChannelRegistrar
+		bc = browserClient // *browser.Client satisfies KickBrowserClient
+		reg = kickBackend  // *kick.Backend satisfies KickChannelRegistrar
 	}
 
 	deps := api.Deps{
 		DB: db, Q: q, Templates: tmplSet, Session: sm,
 		Scheduler: sched, Reload: loadAndStart,
 		Sessions: sessions, Registry: registry,
-		RootCtx:             ctx,
-		BrowserClient:       bc,
-		TwitchBrowserClient: tbc,
-		Registrar:           reg,
-		SettingsStore:       settingsStore,
-		OnSettingsUpdate:    onSettingsUpdate,
+		RootCtx:          ctx,
+		BrowserClient:    bc,
+		Registrar:        reg,
+		SettingsStore:    settingsStore,
+		OnSettingsUpdate: onSettingsUpdate,
 		TwitchBrowser:       twitchBrowserEnabled && browserClient != nil,
 		LogRing:             ring,
 		StartTime:           startTime,

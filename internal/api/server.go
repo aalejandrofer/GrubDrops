@@ -58,7 +58,6 @@ type Deps struct {
 	Registry        *platform.Registry
 	RootCtx         context.Context
 	BrowserClient   KickBrowserClient
-	TwitchBrowserClient TwitchBrowserClient
 	Registrar       KickChannelRegistrar
 	SettingsStore   *store.Settings
 	OnSettingsUpdate func()
