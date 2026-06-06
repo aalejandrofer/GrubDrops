@@ -1220,6 +1220,19 @@ func installTwitchCookies(ctx context.Context, session *pb.TwitchSession) error 
 	}
 	return chromedp.Run(ctx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
+			// Clear any twitch.tv cookies already in the jar before
+			// re-installing. Without this a stale web-issued auth-token
+			// from a prior session lingers alongside the new Android
+			// auth-token, and the http path picks whichever wins the
+			// iteration order — usually the wrong one, which then
+			// keeps the integrity wall firing for privileged gql
+			// fields even after device-code re-auth.
+			existing, _ := network.GetCookies().WithURLs([]string{"https://gql.twitch.tv/", "https://www.twitch.tv/"}).Do(ctx)
+			for _, ec := range existing {
+				if err := network.DeleteCookies(ec.Name).WithDomain(ec.Domain).WithPath(ec.Path).Do(ctx); err != nil {
+					return fmt.Errorf("delete stale cookie %s: %w", ec.Name, err)
+				}
+			}
 			for _, c := range session.Cookies {
 				domain := c.Domain
 				if domain == "" {
