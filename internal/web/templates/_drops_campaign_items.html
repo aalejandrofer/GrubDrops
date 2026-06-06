@@ -8,7 +8,7 @@
     <span></span>
     <span>item</span>
     <span>collected</span>
-    <span>required</span>
+    <span>type</span>
   </div>
   {{range .Benefits}}
   <div class="drop-item">
@@ -23,7 +23,9 @@
         <span class="cmark-none">—</span>
       {{end}}
     </span>
-    <span class="drop-item-req">{{.RequiredMinutes}}m</span>
+    <span class="drop-item-type">
+      {{if gt .RequiredMinutes 0}}<span class="dtype dtype-watch" title="watch-time drop — auto-mined">⏱ {{.RequiredMinutes}}m watch</span>{{else}}<span class="dtype dtype-action" title="not a watch-time drop — can't auto-mine">action required</span>{{end}}
+    </span>
   </div>
   {{end}}
 </div>

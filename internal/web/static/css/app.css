@@ -490,12 +490,19 @@
     display: inline-block;
   }
   .drop-item-name { color: var(--text); font-size: 13px; word-break: break-word; }
-  .drop-item-req {
-    text-align: right;
-    font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
-    font-size: 12px;
-    color: var(--muted);
+  .drop-item-type { text-align: right; }
+  .dtype {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    border-radius: 3px;
+    border: 1px solid var(--line);
+    white-space: nowrap;
   }
+  .dtype-watch { color: var(--green); border-color: color-mix(in srgb, var(--green) 35%, transparent); }
+  .dtype-action { color: var(--muted); }
   /* COLLECTED marks — one chip per account that claimed the benefit. */
   .drop-item-collected { display: flex; flex-wrap: wrap; gap: 5px; }
   .cmark {
