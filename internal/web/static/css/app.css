@@ -19,6 +19,21 @@
     --kick:      #53e7a4;
   }
   * { box-sizing: border-box; }
+
+  /* Thin, themed scrollbars — replace the heavy default OS bars (especially
+     ugly on Windows) with a subtle dark handle that matches the UI. */
+  * { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border-radius: 5px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); background-clip: padding-box; }
+  ::-webkit-scrollbar-corner { background: transparent; }
+
   html, body {
     margin: 0; padding: 0;
     background: var(--bg);
