@@ -314,28 +314,10 @@ func (d *dropsDeps) collectAll(
 		}
 	}
 
-	// Past — also union in claim history so claimed drops are visible
-	// even if (for any reason) the campaign row was missing or evicted.
-	// Each claim row becomes its own dropsRow with the BenefitName +
-	// account populated; we de-dupe by (campaign_id, benefit_id) so the
-	// claim view supersedes the bare-campaign view.
-	claims, err := d.q.ListRecentClaims(ctx, limit)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-	for _, row := range claims {
-		if !passesWhitelist(allow, hasWhitelist, row.Game) {
-			continue
-		}
-		past = append(past, dropsRow{
-			When:         time.Unix(row.ClaimedAt, 0).UTC().Format("2006-01-02 15:04"),
-			Platform:     row.Platform,
-			Game:         row.Game,
-			CampaignName: row.CampaignName,
-			BenefitName:  row.BenefitName,
-			AccountName:  row.AccountName,
-		})
-	}
+	// (Claim-history is unioned into PAST below, AFTER current+upcoming are
+	// known — a claim on a still-running campaign must NOT appear in Past
+	// too, since that campaign already shows in Current. See the relocated
+	// block after the upcoming loop.)
 
 	// Current: starts_at <= now < ends_at.
 	currentCamps, err := d.q.ListCurrentCampaigns(ctx, gen.ListCurrentCampaignsParams{
@@ -386,6 +368,42 @@ func (d *dropsDeps) collectAll(
 		} else {
 			unlistedUpcoming = append(unlistedUpcoming, row)
 		}
+	}
+
+	// Past — union in claim history so claimed drops stay visible even after
+	// their campaign row is evicted. BUT skip claims whose campaign is still
+	// current or upcoming: that campaign already appears in the Current/Upcoming
+	// tab, and listing the claim under Past too made the same drop show in two
+	// tabs at once. Mutually-exclusive tabs: a claim only lands in Past once its
+	// campaign is no longer live.
+	liveCampIDs := make(map[string]bool, len(currentCamps)+len(upcomingCamps))
+	for _, c := range currentCamps {
+		liveCampIDs[c.ID] = true
+	}
+	for _, c := range upcomingCamps {
+		liveCampIDs[c.ID] = true
+	}
+	claims, err := d.q.ListRecentClaims(ctx, limit)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	for _, row := range claims {
+		if !passesWhitelist(allow, hasWhitelist, row.Game) {
+			continue
+		}
+		if liveCampIDs[row.CampaignID] {
+			continue // still current/upcoming — shown there, not in Past
+		}
+		past = append(past, dropsRow{
+			CampaignID:   row.CampaignID,
+			When:         time.Unix(row.ClaimedAt, 0).UTC().Format("2006-01-02 15:04"),
+			Platform:     row.Platform,
+			Game:         row.Game,
+			CampaignName: row.CampaignName,
+			BenefitName:  row.BenefitName,
+			AccountName:  row.AccountName,
+			sortKey:      row.ClaimedAt,
+		})
 	}
 
 	// Pick the per-tab unlisted bucket so Discoverable always matches
