@@ -68,7 +68,11 @@
         {{$accts := .Accounts}}
         {{$csrf := .CSRFToken}}
         {{range .UnlistedRows}}
-        <details class="ev kind-{{if eq .Kind "reward"}}auth{{else}}discovery{{end}}">
+        <details class="ev kind-{{if eq .Kind "reward"}}auth{{else}}discovery{{end}}"
+                 {{if .CampaignID}}hx-get="/drops/campaigns/{{.CampaignID}}/items"
+                 hx-target="find .ev-detail-slot"
+                 hx-trigger="toggle once from:closest details"
+                 hx-swap="innerHTML"{{end}}>
           <summary>
             <span class="chev" aria-hidden="true">›</span>
             <span class="t">—</span>
@@ -76,20 +80,28 @@
             <span class="body"><em>{{.Platform}} · {{.Kind}}</em> · <span style="color:var(--muted);">{{.Game}}</span> · {{.CampaignName}}</span>
             <span class="ac">not whitelisted</span>
           </summary>
-          <div class="ev-detail">
+          {{/* Contents first — the drop's items/benefits (lazy-loaded). */}}
+          <div class="ev-detail-slot">
+            {{if .CampaignID}}
+            <div class="ev-detail" style="color:var(--muted);font-size:11px;">Loading items…</div>
+            {{else}}
+            <div class="ev-detail" style="color:var(--muted);font-size:11px;">No item details available for this campaign.</div>
+            {{end}}
+          </div>
+          {{/* Add control — secondary, below the contents. Per-account only. */}}
+          <div class="disc-add">
             {{if $accts}}
-            <form method="post" action="/drops/whitelist/add" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <form method="post" action="/drops/whitelist/add" class="disc-add-form">
               <input type="hidden" name="csrf_token" value="{{$csrf}}">
               <input type="hidden" name="name" value="{{.Game}}">
-              <span class="kv"><span class="k">add {{.Game}} to</span><span class="eq">=</span><span class="v">
-                <select name="account_id" style="background:var(--surface);color:var(--text);border:1px solid var(--line);font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:3px 6px;max-width:200px;">
-                  {{range $accts}}<option value="{{.ID}}">{{.Label}}</option>{{end}}
-                </select>
-              </span></span>
+              <span class="disc-add-label">add <strong>{{.Game}}</strong> to</span>
+              <select name="account_id">
+                {{range $accts}}<option value="{{.ID}}">{{.Label}}</option>{{end}}
+              </select>
               <button class="btn sm" type="submit">add +</button>
             </form>
             {{else}}
-            <span class="kv"><span class="v" style="color:var(--muted);">no accounts configured — add one first</span></span>
+            <span class="disc-add-label" style="color:var(--muted);">no accounts configured — add one first</span>
             {{end}}
           </div>
         </details>
