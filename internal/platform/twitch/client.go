@@ -256,6 +256,14 @@ func (c *client) do(ctx context.Context, token, opName string, body []byte, out 
 	// Always log the raw body prefix so we can tell whether the issue
 	// is empty data, application errors, or shape drift.
 	slog.Info("twitch gql response", "op", opName, "status", status, "body", truncate(string(rawBody), 800))
+	if status == http.StatusTooManyRequests {
+		// Twitch rate limit. Return an error so the watcher's exponential
+		// backoff kicks in instead of mis-parsing the body as a decode
+		// failure. (gqlPost doesn't surface Retry-After; the watcher's
+		// backoff is the throttle.)
+		slog.Warn("twitch gql rate-limited (429); backing off", "op", opName, "body", truncate(string(rawBody), 200))
+		return fmt.Errorf("twitch gql %s: rate limited (429)", opName)
+	}
 	if status >= 500 {
 		slog.Error("twitch gql 5xx", "op", opName, "status", status, "body", truncate(string(rawBody), 500))
 		return fmt.Errorf("twitch gql %s: status %d", opName, status)

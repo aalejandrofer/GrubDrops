@@ -118,6 +118,16 @@ func (p *PubSubClient) Run(ctx context.Context, initialTopics []string) error {
 func (p *PubSubClient) AddTopic(topic string) {
 	p.mu.Lock()
 	_, dup := p.topics[topic]
+	// Twitch silently drops LISTENs past ~50 topics/connection, which
+	// would make real-time events vanish with no error. Refuse past the
+	// cap and log instead of pretending it was subscribed. (Per-account
+	// PubSub clients keep counts low, so this is a safety net.)
+	if !dup && len(p.topics) >= PubSubMaxTopics {
+		p.mu.Unlock()
+		slog.Warn("pubsub topic cap reached; refusing new topic",
+			"topic", topic, "cap", PubSubMaxTopics)
+		return
+	}
 	p.topics[topic] = struct{}{}
 	conn := p.conn
 	p.mu.Unlock()
