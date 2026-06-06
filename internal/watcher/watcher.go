@@ -490,7 +490,7 @@ var errComplete = errors.New("nothing left to mine")
 // is both rate-limited and bot-detected). Counted in 500ms ticks.
 const (
 	beaconEveryTicks    = 120 // ~60s — minute-watched beacon (DevilXD WATCH_INTERVAL)
-	liveCheckEveryTicks = 60  // ~30s — re-probe the channel is still live
+	liveCheckEveryTicks = 600 // ~5m — backstop re-probe; PubSub stream-down is the primary signal
 	inventoryEveryTicks = 40  // ~20s — poll drop progress
 )
 
@@ -877,10 +877,21 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 	w.mu.Unlock()
 	s := streams[0]
 	if checker, ok := w.cfg.Backend.(platform.AvailableDropsChecker); ok && target != "" {
+		// Cap the per-candidate AvailableDropIDs probe: each is a gql
+		// call, and a directory of 30 streams all serving *other* drops
+		// would otherwise fan out 30 sequential requests on every pick
+		// (and pick re-fires on every stream-down). The head candidates
+		// are highest-viewer/most-likely, so a small cap is plenty.
+		const maxProbe = 5
+		probed := 0
 		for _, cand := range streams {
 			if cand.ChannelID == "" {
 				continue
 			}
+			if probed >= maxProbe {
+				break
+			}
+			probed++
 			drops, err := checker.AvailableDropIDs(ctx, w.cfg.Session, cand.ChannelID)
 			if err != nil {
 				slog.Debug("watcher AvailableDropIDs failed; falling back", "account", w.cfg.AccountID, "channel", cand.Channel, "err", err)
