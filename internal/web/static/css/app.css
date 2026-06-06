@@ -482,11 +482,12 @@
     color: var(--muted);
   }
 
-  /* Watching expand: detail rows on the left, the drop's item icon on the right. */
+  /* Watching expand: detail rows on the left, the drop's item icon on the
+     right, vertically centered in the free space beside the rows. */
   .acc-exp-grid {
     display: flex;
-    gap: 16px;
-    align-items: flex-start;
+    gap: 20px;
+    align-items: center;
   }
   .acc-exp-main {
     flex: 1 1 auto;
@@ -498,15 +499,19 @@
   .acc-exp-img {
     margin: 0;
     flex: 0 0 auto;
+    align-self: center;
   }
   .acc-exp-img img {
-    width: 64px;
-    height: 64px;
+    display: block;
+    width: auto;
+    height: auto;
+    max-height: 112px;
+    max-width: 160px;
     object-fit: contain;
     background: var(--bg);
     border: 1px solid var(--line);
-    border-radius: 4px;
-    padding: 5px;
+    border-radius: 6px;
+    padding: 6px;
   }
   .acc-exp-views {
     color: var(--muted);
