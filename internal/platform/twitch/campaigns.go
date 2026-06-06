@@ -17,6 +17,13 @@ type discovery struct {
 	// pendingAllowed accumulates per-campaign allow-lists as fetchDetails
 	// runs. Backend drains this via drainAllowed() after listActive returns.
 	pendingAllowed map[string][]string
+	// userLogin caches the authenticated user's twitch login. The
+	// DropCampaignDetails persisted query needs a non-empty
+	// channelLogin variable — passing "" makes the resolver return
+	// data.user:null, which silently kills Benefits population and
+	// makes the watcher fall back to synth-only campaigns. Cached
+	// once per session lifetime.
+	userLogin string
 }
 
 // campaignsData decodes the ViewerDropsDashboard (OpCampaigns) response.
@@ -151,6 +158,17 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 	if err := d.c.gql(ctx, sess.AccessToken, OpCampaigns, vars, &page); err != nil {
 		return nil, fmt.Errorf("list campaigns: %w", err)
 	}
+	// Resolve + cache the authenticated user's login. fetchDetails
+	// passes this as channelLogin — empty value makes Twitch's
+	// resolver return data.user:null, which strips TimeBasedDrops and
+	// leaves real campaigns with Benefits=[] (so the watcher falls
+	// back to scrape-synth entries). One CurrentUser call per
+	// session lifetime.
+	if d.userLogin == "" {
+		if login, err := d.resolveCurrentLogin(ctx, sess); err == nil {
+			d.userLogin = login
+		}
+	}
 	out := make([]platform.Campaign, 0, len(page.CurrentUser.DropCampaigns))
 	for _, c := range page.CurrentUser.DropCampaigns {
 		// GameFilter is now a "should-fetch-details" gate, not a
@@ -282,8 +300,16 @@ func dedupeSynthVsReal(camps []platform.Campaign) []platform.Campaign {
 // return nil, which causes ListEligibleChannels to return no streams.
 func (d *discovery) fetchDetails(ctx context.Context, sess platform.Session, campaignID string) (benefits []platform.DropBenefit, allowedLogins []string, err error) {
 	var det campaignDetailsData
+	// channelLogin must be non-empty for the resolver to return the
+	// user object. Use the authenticated user's login (cached from
+	// CurrentUser); fall back to a generic value if resolution
+	// hasn't happened yet — anything is better than "".
+	channelLogin := d.userLogin
+	if channelLogin == "" {
+		channelLogin = "twitch"
+	}
 	if err := d.c.gql(ctx, sess.AccessToken, OpDropCampaignDetails,
-		map[string]any{"dropID": campaignID, "channelLogin": ""}, &det); err != nil {
+		map[string]any{"dropID": campaignID, "channelLogin": channelLogin}, &det); err != nil {
 		return nil, nil, fmt.Errorf("campaign details %s: %w", campaignID, err)
 	}
 	benefits = make([]platform.DropBenefit, 0, len(det.User.DropCampaign.TimeBasedDrops))
@@ -304,6 +330,27 @@ func (d *discovery) fetchDetails(ctx context.Context, sess platform.Session, cam
 		}
 	}
 	return benefits, allowedLogins, nil
+}
+
+// resolveCurrentLogin fetches the authenticated user's twitch login
+// via a single CurrentUser ad-hoc gql query. Only used to populate
+// the channelLogin arg of DropCampaignDetails — passing "" makes
+// Twitch's resolver return data.user:null which silently strips
+// benefits from real campaigns.
+func (d *discovery) resolveCurrentLogin(ctx context.Context, sess platform.Session) (string, error) {
+	const q = `query CurrentUser { currentUser { login } }`
+	var resp struct {
+		CurrentUser struct {
+			Login string `json:"login"`
+		} `json:"currentUser"`
+	}
+	if err := d.c.gqlQuery(ctx, sess.AccessToken, "CurrentUser", q, nil, &resp); err != nil {
+		return "", err
+	}
+	if resp.CurrentUser.Login == "" {
+		return "", fmt.Errorf("currentUser.login empty")
+	}
+	return resp.CurrentUser.Login, nil
 }
 
 // captureAllowed stores per-campaign allow-lists as a side-effect of

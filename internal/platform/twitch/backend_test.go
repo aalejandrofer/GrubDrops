@@ -29,6 +29,8 @@ func TestBackend_ListActiveThenEligibleChannels(t *testing.T) {
 		switch req.OperationName {
 		case OpCampaigns.Name:
 			_, _ = w.Write(loadFixture(t, "campaigns.json"))
+		case "CurrentUser":
+			_, _ = w.Write([]byte(`{"data":{"currentUser":{"login":"testuser"}}}`))
 		case OpDropCampaignDetails.Name:
 			_, _ = w.Write(loadFixture(t, "campaign_details.json"))
 		case OpGetStreamInfo.Name:
@@ -79,6 +81,8 @@ func TestBackend_ListActiveCampaignsPopulatesAllowList(t *testing.T) {
 		switch req.OperationName {
 		case OpCampaigns.Name:
 			_, _ = w.Write(loadFixture(t, "campaigns.json"))
+		case "CurrentUser":
+			_, _ = w.Write([]byte(`{"data":{"currentUser":{"login":"testuser"}}}`))
 		case OpDropCampaignDetails.Name:
 			_, _ = w.Write(loadFixture(t, "campaign_details.json"))
 		case OpGetStreamInfo.Name:

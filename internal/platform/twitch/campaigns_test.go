@@ -34,6 +34,8 @@ func TestCampaigns_ListActive_ReturnsAllStatuses(t *testing.T) {
 		switch req.OperationName {
 		case OpCampaigns.Name:
 			_, _ = w.Write(loadFixture(t, "campaigns.json"))
+		case "CurrentUser":
+			_, _ = w.Write([]byte(`{"data":{"currentUser":{"login":"testuser"}}}`))
 		case OpDropCampaignDetails.Name:
 			detailCalls++
 			_, _ = w.Write(loadFixture(t, "campaign_details.json"))
@@ -82,6 +84,8 @@ func TestCampaigns_ListActive_GameFilterShortCircuits(t *testing.T) {
 		switch req.OperationName {
 		case OpCampaigns.Name:
 			_, _ = w.Write(loadFixture(t, "campaigns.json"))
+		case "CurrentUser":
+			_, _ = w.Write([]byte(`{"data":{"currentUser":{"login":"testuser"}}}`))
 		case OpDropCampaignDetails.Name:
 			detailCalls++
 			_, _ = w.Write(loadFixture(t, "campaign_details.json"))
@@ -116,6 +120,8 @@ func TestCampaigns_ListActive_GameFilterAllowsMatch(t *testing.T) {
 		switch req.OperationName {
 		case OpCampaigns.Name:
 			_, _ = w.Write(loadFixture(t, "campaigns.json"))
+		case "CurrentUser":
+			_, _ = w.Write([]byte(`{"data":{"currentUser":{"login":"testuser"}}}`))
 		case OpDropCampaignDetails.Name:
 			_, _ = w.Write(loadFixture(t, "campaign_details.json"))
 		default:
@@ -151,6 +157,8 @@ func TestCampaigns_ListActive_PartialWhitelistEmitsAll(t *testing.T) {
 		switch req.OperationName {
 		case OpCampaigns.Name:
 			_, _ = w.Write(loadFixture(t, "campaigns.json"))
+		case "CurrentUser":
+			_, _ = w.Write([]byte(`{"data":{"currentUser":{"login":"testuser"}}}`))
 		case OpDropCampaignDetails.Name:
 			detailCalls++
 			_, _ = w.Write(loadFixture(t, "campaign_details.json"))

@@ -1,0 +1,22 @@
+# dropsminer — open TODOs
+
+[F7] Kick sidecar headed login (noVNC).
+    Replace cookie paste / helper CLI with a headed browser session
+    the operator drives through noVNC. Sidecar stack: Xvfb + x11vnc +
+    websockify + noVNC client served from the dropsminer-browser
+    container. New gRPC method: KickOpenLoginSession(accountID) →
+    (vnc_url, ttl); KickFinishLoginSession(accountID) harvests
+    cookies + persists. UI: /accounts/<id>/login Kick branch gets
+    "Open headed browser" CTA. Memory pointer:
+    project_todo_kick_sidecar_login.md.
+
+[#23] Redesign /accounts/new — single-platform wizard.
+    1. First step asks Twitch or Kick.
+    2. Twitch branch: existing display-name form → helper download
+       (primary) / CLI / cookie paste (secondary).
+    3. Kick branch: depends on F7. If noVNC lives, primary CTA is
+       "Open headed VNC login"; else helper download stays primary.
+    4. After account row exists, surface real account ID + matching
+       helper binary download for operator's OS
+       (/static/helpers/<os-arch>, served from the miner).
+    DEPENDS ON F7 for Kick branch direction.
