@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"sort"
 	"strings"
@@ -51,6 +52,11 @@ type dropsRow struct {
 	// current uses ends_at, upcoming uses starts_at — i.e. always
 	// "next thing to happen for this row".
 	sortKey int64
+	// rankKey is the whitelist priority of this row's game (lower =
+	// higher priority), matching the order the watcher mines in. Used
+	// to sort the whitelisted Current list by priority. math.MaxInt
+	// for games with no explicit rank so they fall to the bottom.
+	rankKey int
 }
 
 // dropsPage is what the template sees: the active tab, the three counts
@@ -134,6 +140,67 @@ func allowedGamesUnion(ctx context.Context, q *gen.Queries) (map[string]struct{}
 		return nil, false
 	}
 	return out, true
+}
+
+// gameRankUnion returns the whitelist priority rank for each game,
+// keyed by lowercased name AND slug, mirroring allowedGamesUnion's
+// resolution (per-account rows, else the global priority list). When a
+// game appears for multiple accounts the MIN rank wins (highest
+// priority). Lower rank = higher priority. Games absent from the map
+// have no explicit priority. Used to order the /drops whitelisted list
+// the same way the watcher mines.
+func gameRankUnion(ctx context.Context, q *gen.Queries) map[string]int {
+	out := map[string]int{}
+	put := func(key string, rank int) {
+		key = strings.ToLower(key)
+		if cur, ok := out[key]; !ok || rank < cur {
+			out[key] = rank
+		}
+	}
+	accs, _ := q.ListAllAccounts(ctx)
+	var globalLoaded bool
+	var globalRows []gen.ListGlobalGamesRow
+	loadGlobal := func() {
+		if globalLoaded {
+			return
+		}
+		globalLoaded = true
+		globalRows, _ = q.ListGlobalGames(ctx)
+	}
+	applyGlobal := func() {
+		loadGlobal()
+		for _, r := range globalRows {
+			put(r.Name, int(r.Rank))
+			put(r.Slug, int(r.Rank))
+		}
+	}
+	for _, a := range accs {
+		rows, err := q.ListAccountGames(ctx, a.ID)
+		if err != nil {
+			continue
+		}
+		if len(rows) == 0 {
+			applyGlobal()
+			continue
+		}
+		for _, r := range rows {
+			put(r.Name, int(r.Rank))
+			put(r.Slug, int(r.Rank))
+		}
+	}
+	if len(accs) == 0 {
+		applyGlobal()
+	}
+	return out
+}
+
+// rankFor returns the priority rank for a game, or math.MaxInt when the
+// game has no explicit whitelist rank (sorts last).
+func rankFor(ranks map[string]int, game string) int {
+	if r, ok := ranks[strings.ToLower(game)]; ok {
+		return r
+	}
+	return math.MaxInt
 }
 
 // passesWhitelist returns true if game is on the whitelist union.
@@ -220,6 +287,9 @@ func (d *dropsDeps) collectAll(
 	allow map[string]struct{}, hasWhitelist bool,
 	now int64, limit int64, tab dropTab,
 ) (past, current, upcoming, unlisted []dropsRow, err error) {
+	// Priority ranks so the whitelisted Current list mirrors the
+	// watcher's mining order rather than ending-soonest.
+	ranks := gameRankUnion(ctx, d.q)
 	// Past: campaigns ended before now.
 	pastCamps, err := d.q.ListPastCampaigns(ctx, gen.ListPastCampaignsParams{EndsAt: now, Limit: limit})
 	if err != nil {
@@ -284,6 +354,7 @@ func (d *dropsDeps) collectAll(
 			CampaignName: c.Name,
 			Kind:         c.Kind,
 			sortKey:      c.EndsAt,
+			rankKey:      rankFor(ranks, c.Game),
 		}
 		if passesWhitelist(allow, hasWhitelist, c.Game) {
 			current = append(current, row)
@@ -360,8 +431,24 @@ func (d *dropsDeps) collectAll(
 			return ai < aj
 		})
 	}
+	// The whitelisted Current list is ordered by whitelist PRIORITY
+	// (the order the watcher mines), ending-soonest as the tiebreak.
+	// Past/upcoming/unlisted stay ending-soonest.
+	sort.SliceStable(current, func(i, j int) bool {
+		ri, rj := current[i].rankKey, current[j].rankKey
+		if ri != rj {
+			return ri < rj
+		}
+		ai, aj := current[i].sortKey, current[j].sortKey
+		if ai == 0 {
+			return false
+		}
+		if aj == 0 {
+			return true
+		}
+		return ai < aj
+	})
 	sortBySoonest(past)
-	sortBySoonest(current)
 	sortBySoonest(upcoming)
 	sortBySoonest(unlisted)
 
