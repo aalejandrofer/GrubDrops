@@ -239,6 +239,26 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 		snapByID[s.AccountID] = s
 	}
 
+	// Persist watch progress so the lifetime "Watch time" tile
+	// (SumWatchMinutes over the progress table) has a durable source.
+	// The scheduler holds no store handle, so the dashboard poll is the
+	// seam that has both live snapshots and the queries. Minutes only
+	// grow, so overwriting with the current value is correct. Best-effort:
+	// benefits that were never persisted (synth/scrape drops) fail the FK
+	// and are skipped silently.
+	persistedAt := time.Now().Unix()
+	for _, s := range snapshots {
+		if s.BenefitID == "" || s.MinutesWatched <= 0 {
+			continue
+		}
+		_ = d.q.UpsertProgress(r.Context(), gen.UpsertProgressParams{
+			AccountID:      s.AccountID,
+			BenefitID:      s.BenefitID,
+			MinutesWatched: int64(s.MinutesWatched),
+			UpdatedAt:      persistedAt,
+		})
+	}
+
 	cards := make([]dashMineCard, 0, len(accs))
 	for _, a := range accs {
 		snap, ok := snapByID[a.ID]
