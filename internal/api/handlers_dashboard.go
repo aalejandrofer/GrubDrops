@@ -593,6 +593,25 @@ func telemetryWithClaims(base dashTelemetry, ring *mlog.Ring, q *gen.Queries, ct
 	}
 	base.ClaimsWeek = count
 
+	// ACTIVE CAMPAIGNS = whitelisted campaigns currently live (same set
+	// /drops shows as "N · CURRENT"), not just the one the watcher is
+	// actively mining. telemetryFrom only saw watcher snapshots (=1).
+	if q != nil {
+		now := time.Now().Unix()
+		if rows, err := q.ListCurrentCampaigns(ctx, gen.ListCurrentCampaignsParams{
+			StartsAt: now, EndsAt: now, Limit: 500,
+		}); err == nil {
+			allow, hasWhitelist := allowedGamesUnion(ctx, q)
+			active := 0
+			for _, c := range rows {
+				if passesWhitelist(allow, hasWhitelist, c.Game) {
+					active++
+				}
+			}
+			base.ActiveCamps = active
+		}
+	}
+
 	// Heartbeats in the last hour, from kind=heartbeat log events the
 	// watcher emits per minute-watched beacon. The ring (default 1000
 	// lines) comfortably covers an hour of beacons.
