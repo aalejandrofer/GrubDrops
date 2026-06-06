@@ -592,13 +592,33 @@ func telemetryWithClaims(base dashTelemetry, ring *mlog.Ring, q *gen.Queries, ct
 		}
 	}
 	base.ClaimsWeek = count
+
+	// Heartbeats in the last hour, from kind=heartbeat log events the
+	// watcher emits per minute-watched beacon. The ring (default 1000
+	// lines) comfortably covers an hour of beacons.
+	if ring != nil {
+		hourAgo := time.Now().Add(-time.Hour)
+		hb := 0
+		for _, l := range ring.Snapshot() {
+			if l.Kind == "heartbeat" && l.TS.After(hourAgo) {
+				hb++
+			}
+		}
+		base.HeartbeatsHour = hb
+	}
 	return base
 }
 
 func telemetryFrom(cards []dashMineCard, snaps []watcher.Snapshot) dashTelemetry {
 	var nextETA time.Duration = -1
 	var nextName string
+	watchMins := 0
 	for _, s := range snaps {
+		// Accumulated watch progress across every in-progress drop.
+		// Real minutes the miner has banked toward current benefits.
+		if s.MinutesWatched > 0 {
+			watchMins += s.MinutesWatched
+		}
 		if s.State != "watching" || s.RequiredMinutes <= 0 {
 			continue
 		}
@@ -618,7 +638,11 @@ func telemetryFrom(cards []dashMineCard, snaps []watcher.Snapshot) dashTelemetry
 	} else {
 		tele.NextClaimETA = "—"
 	}
-	tele.WatchTimeToday = "—"
+	if watchMins > 0 {
+		tele.WatchTimeToday = formatHM(time.Duration(watchMins) * time.Minute)
+	} else {
+		tele.WatchTimeToday = "—"
+	}
 	return tele
 }
 

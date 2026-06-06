@@ -960,6 +960,9 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 			slog.Error("watcher heartbeat failed", "kind", "error", "account", w.cfg.AccountID, "channel", handle.Channel, "err", err)
 			return fmt.Errorf("heartbeat: %w", err)
 		}
+		// kind=heartbeat feeds the dashboard HEARTBEATS/HR card via the
+		// log ring (counted over the last hour).
+		slog.Info("watcher heartbeat sent", "kind", "heartbeat", "account", w.cfg.AccountID, "channel", handle.Channel)
 	}
 
 	// Periodically re-check the channel we're watching is still live +

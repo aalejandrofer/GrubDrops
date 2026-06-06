@@ -42,29 +42,9 @@
   <div class="stat"><div class="label">Heartbeats / hr</div><div class="value">{{.Tele.HeartbeatsHour}}<sup>last hr</sup></div><div class="delta flat">—</div></div>
 </section>
 
-{{/* Next-claim ETAs spans full width — sidebar removed; Active
-     Campaigns lives on /drops now. */}}
-{{if .NextClaims}}
-<section class="section section-wide">
-  <div class="sec-head">
-    <h2>Next claim ETAs</h2>
-    <div class="rule"></div>
-    <div class="meta">auto-claim on completion · sorted by time</div>
-  </div>
-  <div class="pending">
-    {{range .NextClaims}}
-    <article class="pcard">
-      <div class="sprite muted">▲</div>
-      <div class="meta">
-        <div class="nm">{{.DropName}} <span class="ac">{{.Login}}</span></div>
-        <div class="sub">{{.Platform}} · {{if .DropCampaign}}{{.DropCampaign}} · {{end}}{{.DropMins}} / {{.DropReq}}m</div>
-      </div>
-      <span class="claim future">{{.DropETA}}</span>
-    </article>
-    {{end}}
-  </div>
-</section>
-{{end}}
+{{/* Next-claim ETAs section removed — the Currently Mining band below
+     shows the same per-account drop, progress (X/Ym) and ETA, so a
+     separate ETA list was redundant. */}}
 
 {{/* Currently mining — full-width band, split by platform into two
      compact account-row columns. HTMX polls /dashboard/cards every 2s
