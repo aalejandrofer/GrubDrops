@@ -82,7 +82,9 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 			acc := fieldStr(l.Fields, "account")
 			title := fieldStr(l.Fields, "title")
 			game := fieldStr(l.Fields, "game")
-			if title == "" {
+			// Skip malformed reward entries (would render "reward · — · —").
+			// A real reward claim carries both a game and a title.
+			if title == "" || game == "" {
 				continue
 			}
 			label := labelByID[acc]
@@ -90,13 +92,30 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 				label = acc
 			}
 			page.Claims = append(page.Claims, historyClaim{
-				When:    l.TS.UTC().Format("2006-01-02 15:04"),
-				Game:    game,
-				Title:   title,
-				Account: label,
-				Source:  "reward",
+				When:     l.TS.UTC().Format("2006-01-02 15:04"),
+				Platform: "twitch", // reward reaper is Twitch-only
+				Game:     game,
+				Title:    title,
+				Account:  label,
+				Source:   "reward",
 			})
 		}
+	}
+
+	// Dedupe — the ring can carry the same reward claim more than once
+	// (reaper re-fires) and we don't want duplicate rows.
+	{
+		seen := make(map[string]bool, len(page.Claims))
+		deduped := page.Claims[:0]
+		for _, c := range page.Claims {
+			k := c.Account + "|" + c.Platform + "|" + c.Game + "|" + c.Title + "|" + c.When
+			if seen[k] {
+				continue
+			}
+			seen[k] = true
+			deduped = append(deduped, c)
+		}
+		page.Claims = deduped
 	}
 
 	// Sort claims newest-first by When (string sort works because of
