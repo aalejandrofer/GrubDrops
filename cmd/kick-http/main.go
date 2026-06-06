@@ -15,6 +15,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"strings"
 	"time"
@@ -71,13 +72,23 @@ func runOne(raw []byte, url string) error {
 	var cks []cookie
 	json.Unmarshal(raw, &cks)
 	var pairs []string
-	var xsrf string
+	var xsrf, sessionToken string
 	for _, c := range cks {
+		if c.Value == "" {
+			continue
+		}
+		pairs = append(pairs, c.Name+"="+c.Value) // forward ALL cookies (browser-faithful)
 		switch c.Name {
-		case "kick_session", "XSRF-TOKEN", "cf_clearance", "__cf_bm":
-			pairs = append(pairs, c.Name+"="+c.Value)
-			if c.Name == "XSRF-TOKEN" {
-				xsrf = c.Value
+		case "XSRF-TOKEN":
+			xsrf = c.Value
+		case "session_token":
+			// Laravel Sanctum "id|token" (URL-encoded). Bearer wants the raw
+			// token (after the | / %7C).
+			st := strings.ReplaceAll(c.Value, "%7C", "|")
+			if i := strings.IndexByte(st, '|'); i >= 0 {
+				sessionToken = st[i+1:]
+			} else {
+				sessionToken = st
 			}
 		}
 	}
@@ -85,6 +96,9 @@ func runOne(raw []byte, url string) error {
 	fmt.Printf("GET %s\ncookies: %s\n\n", url, redact(pairs))
 
 	host := "kick.com"
+	if u, e := neturl.Parse(url); e == nil && u.Host != "" {
+		host = u.Host
+	}
 	tcp, err := net.DialTimeout("tcp", host+":443", 15*time.Second)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "dial:", err)
@@ -108,6 +122,9 @@ func runOne(raw []byte, url string) error {
 	req.Header.Set("Origin", "https://kick.com")
 	if xsrf != "" {
 		req.Header.Set("X-XSRF-TOKEN", xsrf)
+	}
+	if sessionToken != "" {
+		req.Header.Set("Authorization", "Bearer "+sessionToken)
 	}
 	req.Header.Set("Sec-Fetch-Site", "same-origin")
 	req.Header.Set("Sec-Fetch-Mode", "cors")

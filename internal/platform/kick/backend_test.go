@@ -47,7 +47,7 @@ func sess(id string) platform.Session { return platform.Session{AccountID: id} }
 
 func TestKickBackend_ListActiveCampaigns_MapsAndFilters(t *testing.T) {
 	f := &fakeDoer{resp: map[string]fakeResp{
-		"/api/v1/drops/campaigns": {200, `{"data":[
+		"https://web.kick.com/api/v1/drops/campaigns": {200, `{"data":[
 			{"id":"c-rust","game":"Rust","name":"Rust Drops","status":"active",
 			 "rewards":[{"id":"ben1","name":"Crate","required_minutes":60}]},
 			{"id":"c-cs","game":"Counter-Strike","name":"CS Drops","status":"active",
@@ -76,7 +76,7 @@ func TestKickBackend_ListActiveCampaigns_MapsAndFilters(t *testing.T) {
 
 func TestKickBackend_ListActiveCampaigns_DefaultRequiredMinutes(t *testing.T) {
 	f := &fakeDoer{resp: map[string]fakeResp{
-		"/api/v1/drops/campaigns": {200, `{"data":[
+		"https://web.kick.com/api/v1/drops/campaigns": {200, `{"data":[
 			{"id":"c1","game":"Rust","name":"Drops","status":"active",
 			 "rewards":[{"id":"b1","name":"Reward"}]}
 		]}`},
@@ -91,7 +91,7 @@ func TestKickBackend_ListActiveCampaigns_DefaultRequiredMinutes(t *testing.T) {
 
 func TestKickBackend_InventoryProgress(t *testing.T) {
 	f := &fakeDoer{resp: map[string]fakeResp{
-		"/api/v1/drops/progress": {200, `{"data":[
+		"https://web.kick.com/api/v1/drops/progress": {200, `{"data":[
 			{"reward_id":"d1","campaign_id":"c1","minutes_watched":45,"claimed":false}
 		]}`},
 	}}
@@ -105,21 +105,21 @@ func TestKickBackend_InventoryProgress(t *testing.T) {
 
 func TestKickBackend_Claim_PostsRewardAndCampaign(t *testing.T) {
 	f := &fakeDoer{resp: map[string]fakeResp{
-		"/api/v1/drops/claim": {200, `{}`},
+		"https://web.kick.com/api/v1/drops/claim": {200, `{}`},
 	}}
 	b := withFake(f)
 	err := b.Claim(context.Background(), sess("acc1"), platform.DropBenefit{ID: "rew1", CampaignID: "camp1"})
 	require.NoError(t, err)
 	require.Len(t, f.calls, 1)
 	assert.Equal(t, "POST", f.calls[0].method)
-	assert.Equal(t, "/api/v1/drops/claim", f.calls[0].path)
+	assert.Equal(t, "https://web.kick.com/api/v1/drops/claim", f.calls[0].path)
 	assert.Contains(t, f.calls[0].body, `"reward_id":"rew1"`)
 	assert.Contains(t, f.calls[0].body, `"campaign_id":"camp1"`)
 }
 
 func TestKickBackend_WatchPingViaHeartbeat(t *testing.T) {
 	f := &fakeDoer{resp: map[string]fakeResp{
-		"/api/v1/video/views/12345": {200, `{}`},
+		"https://kick.com/api/v1/video/views/12345": {200, `{}`},
 	}}
 	b := withFake(f)
 	h, err := b.StartWatch(context.Background(), sess("acc1"), platform.Stream{Channel: "tippie", ChannelID: "12345"})
@@ -127,7 +127,7 @@ func TestKickBackend_WatchPingViaHeartbeat(t *testing.T) {
 	require.NoError(t, b.Heartbeat(context.Background(), h))
 	require.Len(t, f.calls, 1)
 	assert.Equal(t, "POST", f.calls[0].method)
-	assert.Equal(t, "/api/v1/video/views/12345", f.calls[0].path)
+	assert.Equal(t, "https://kick.com/api/v1/video/views/12345", f.calls[0].path)
 	// No livestream id -> heartbeat is a soft no-op (manual channel case).
 	h2, _ := b.StartWatch(context.Background(), sess("acc1"), platform.Stream{Channel: "x"})
 	require.NoError(t, b.Heartbeat(context.Background(), h2))
@@ -135,7 +135,7 @@ func TestKickBackend_WatchPingViaHeartbeat(t *testing.T) {
 
 func TestKickBackend_ListEligibleChannels_CampaignLivestreams(t *testing.T) {
 	f := &fakeDoer{resp: map[string]fakeResp{
-		"/api/v1/drops/campaigns/c1/livestreams": {200, `{"data":[
+		"https://web.kick.com/api/v1/drops/campaigns/c1/livestreams": {200, `{"data":[
 			{"id":111,"is_live":true,"viewer_count":50,"channel":{"slug":"tippie"}}
 		]}`},
 	}}

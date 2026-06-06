@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	neturl "net/url"
 	"strings"
 	"time"
 
@@ -15,8 +16,14 @@ import (
 	"golang.org/x/net/http2"
 )
 
-// kickHost is the API origin. All drops/channel endpoints live here.
-const kickHost = "kick.com"
+// Kick serves different features from different hosts (from the Next.js config):
+//   - web.kick.com  : the drops API (/api/v1/drops/*)
+//   - kick.com      : channel/category discovery (/api/v2/channels, /stream/livestreams) + watch ping
+// do() dials whatever host the passed URL names.
+const (
+	dropsBase     = "https://web.kick.com"
+	discoveryBase = "https://kick.com"
+)
 
 // chromeUA matches the TLS fingerprint we present (utls HelloChrome). Kick's
 // Cloudflare bot-management 403s Go's default TLS fingerprint and any
@@ -33,26 +40,32 @@ type httpDoer struct {
 
 func newHTTPDoer() *httpDoer { return &httpDoer{timeout: 20 * time.Second} }
 
-// do sends method+path to kick.com with the session's cookies and returns the
-// body + status. path is an absolute path like "/api/v1/drops/campaigns".
-func (d *httpDoer) do(ctx context.Context, sess platform.Session, method, path string, body []byte) ([]byte, int, error) {
+// do sends method+url with the session's cookies and returns the body + status.
+// url is a full URL (e.g. https://web.kick.com/api/v1/drops/campaigns); the host
+// is dialed from it so drops (web.kick.com) and discovery (kick.com) both work.
+func (d *httpDoer) do(ctx context.Context, sess platform.Session, method, rawURL string, body []byte) ([]byte, int, error) {
 	ks, err := decodeSession(sess)
 	if err != nil {
 		return nil, 0, fmt.Errorf("decode kick session: %w", err)
 	}
-	cookieHeader, xsrf := cookieHeaderFor(ks)
+	cookieHeader, xsrf, bearer := cookieHeaderFor(ks)
 	if cookieHeader == "" {
 		return nil, 0, fmt.Errorf("kick session has no cookies")
 	}
+	u, err := neturl.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return nil, 0, fmt.Errorf("bad url %q", rawURL)
+	}
+	host := u.Host
 
 	dialCtx, cancel := context.WithTimeout(ctx, d.timeout)
 	defer cancel()
 	var dialer net.Dialer
-	tcp, err := dialer.DialContext(dialCtx, "tcp", kickHost+":443")
+	tcp, err := dialer.DialContext(dialCtx, "tcp", host+":443")
 	if err != nil {
 		return nil, 0, fmt.Errorf("dial: %w", err)
 	}
-	uconn := utls.UClient(tcp, &utls.Config{ServerName: kickHost, NextProtos: []string{"h2", "http/1.1"}}, utls.HelloChrome_Auto)
+	uconn := utls.UClient(tcp, &utls.Config{ServerName: host, NextProtos: []string{"h2", "http/1.1"}}, utls.HelloChrome_Auto)
 	if err := uconn.HandshakeContext(dialCtx); err != nil {
 		uconn.Close()
 		return nil, 0, fmt.Errorf("tls handshake: %w", err)
@@ -66,7 +79,7 @@ func (d *httpDoer) do(ctx context.Context, sess platform.Session, method, path s
 	if body != nil {
 		bodyRdr = bytes.NewReader(body)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, "https://"+kickHost+path, bodyRdr)
+	req, err := http.NewRequestWithContext(ctx, method, rawURL, bodyRdr)
 	if err != nil {
 		uconn.Close()
 		return nil, 0, err
@@ -86,6 +99,9 @@ func (d *httpDoer) do(ctx context.Context, sess platform.Session, method, path s
 	req.Header.Set("Sec-Fetch-Dest", "empty")
 	if xsrf != "" {
 		req.Header.Set("X-XSRF-TOKEN", xsrf)
+	}
+	if bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+bearer)
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -110,22 +126,30 @@ func (d *httpDoer) do(ctx context.Context, sess platform.Session, method, path s
 	return out, resp.StatusCode, nil
 }
 
-// cookieHeaderFor builds the Cookie header (kick_session + XSRF-TOKEN, plus any
-// others present) and returns the XSRF token value for the X-XSRF-TOKEN header.
-func cookieHeaderFor(ks kickSession) (string, string) {
+// cookieHeaderFor builds the Cookie header (all session cookies) and returns the
+// XSRF token (for X-XSRF-TOKEN) and the Sanctum bearer token (from the
+// session_token cookie "id|token" → token, for Authorization: Bearer).
+func cookieHeaderFor(ks kickSession) (cookieHeader, xsrf, bearer string) {
 	var pairs []string
-	var xsrf string
 	for _, c := range ks.Cookies {
 		if c.Value == "" {
 			continue
 		}
 		pairs = append(pairs, c.Name+"="+c.Value)
-		if c.Name == "XSRF-TOKEN" {
+		switch c.Name {
+		case "XSRF-TOKEN":
 			xsrf = c.Value
+		case "session_token":
+			st := strings.ReplaceAll(c.Value, "%7C", "|")
+			if i := strings.IndexByte(st, '|'); i >= 0 {
+				bearer = st[i+1:]
+			} else {
+				bearer = st
+			}
 		}
 	}
 	if xsrf == "" {
 		xsrf = ks.XSRFToken
 	}
-	return strings.Join(pairs, "; "), xsrf
+	return strings.Join(pairs, "; "), xsrf, bearer
 }

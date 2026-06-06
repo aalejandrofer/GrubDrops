@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/aalejandrofer/dropsminer/internal/auth/browser"
 	"github.com/aalejandrofer/dropsminer/internal/platform"
@@ -179,10 +180,25 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 			Platform: "kick",
 			Game:     c.Game,
 			Name:     c.Name,
-			Status:   c.Status,
 			Benefits: benefits,
 		}
-		if camp.Status == "" {
+		// Parse RFC3339 start/end so the /drops past|current|upcoming tabs work.
+		if t, err := time.Parse(time.RFC3339, c.StartsAt); err == nil {
+			camp.StartsAt = t.UTC()
+		}
+		if t, err := time.Parse(time.RFC3339, c.EndsAt); err == nil {
+			camp.EndsAt = t.UTC()
+		}
+		// Normalise status to active|upcoming|expired (Kick also supports
+		// upcoming campaigns). Trust explicit "expired"; derive the rest from
+		// the window so the watcher only mines truly-active ones.
+		now := time.Now()
+		switch {
+		case strings.EqualFold(c.Status, "expired"), !camp.EndsAt.IsZero() && camp.EndsAt.Before(now):
+			camp.Status = "expired"
+		case !camp.StartsAt.IsZero() && camp.StartsAt.After(now):
+			camp.Status = "upcoming"
+		default:
 			camp.Status = "active"
 		}
 		out = append(out, camp)

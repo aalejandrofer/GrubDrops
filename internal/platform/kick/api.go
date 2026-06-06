@@ -44,7 +44,7 @@ type livestreamsResp struct {
 // (game). Public endpoint — works without a logged-in session. This is the
 // auto-discovery that removes manual one-channel-at-a-time entry.
 func (a *api) DiscoverChannelsForCategory(ctx context.Context, sess platform.Session, categorySlug string) ([]platform.Stream, error) {
-	body, status, err := a.d.do(ctx, sess, http.MethodGet, "/stream/livestreams/"+categorySlug, nil)
+	body, status, err := a.d.do(ctx, sess, http.MethodGet, discoveryBase+"/stream/livestreams/"+categorySlug, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ type kickReward struct {
 // and try several field-name variants per object. This maximises the chance the
 // real response parses on first contact with a fresh session.
 func (a *api) Campaigns(ctx context.Context, sess platform.Session) ([]kickCampaign, error) {
-	body, status, err := a.d.do(ctx, sess, http.MethodGet, "/api/v1/drops/campaigns", nil)
+	body, status, err := a.d.do(ctx, sess, http.MethodGet, dropsBase+"/api/v1/drops/campaigns", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func (a *api) Campaigns(ctx context.Context, sess platform.Session) ([]kickCampa
 			c.Rewards = append(c.Rewards, kickReward{
 				ID:              mstr(rm, "id", "reward_id", "rewardId", "uuid"),
 				Name:            mstr(rm, "name", "title"),
-				RequiredMinutes: mnum(rm, "required_minutes", "requiredMinutes", "required_time", "minutes", "required_watch_time"),
+				RequiredMinutes: mnum(rm, "required_units", "required_minutes", "requiredMinutes", "required_time", "minutes", "required_watch_time"),
 				ImageURL:        mstr(rm, "image_url", "imageUrl", "image", "icon"),
 			})
 		}
@@ -137,7 +137,7 @@ func (a *api) Campaigns(ctx context.Context, sess platform.Session) ([]kickCampa
 // CampaignLivestreams returns channels currently serving a specific campaign —
 // the per-campaign allow-list equivalent. AUTHED.
 func (a *api) CampaignLivestreams(ctx context.Context, sess platform.Session, campaignID string) ([]platform.Stream, error) {
-	body, status, err := a.d.do(ctx, sess, http.MethodGet, "/api/v1/drops/campaigns/"+campaignID+"/livestreams", nil)
+	body, status, err := a.d.do(ctx, sess, http.MethodGet, dropsBase+"/api/v1/drops/campaigns/"+campaignID+"/livestreams", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +164,7 @@ func (a *api) CampaignLivestreams(ctx context.Context, sess platform.Session, ca
 // Progress returns drop progress/inventory. AUTHED. Tolerant parsing (see
 // Campaigns) — the benefit/reward id keys the watcher's claimed[] set.
 func (a *api) Progress(ctx context.Context, sess platform.Session) ([]platform.Progress, error) {
-	body, status, err := a.d.do(ctx, sess, http.MethodGet, "/api/v1/drops/progress", nil)
+	body, status, err := a.d.do(ctx, sess, http.MethodGet, dropsBase+"/api/v1/drops/progress", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +304,7 @@ func gameName(m map[string]any) string {
 // Claim claims a drop reward. AUTHED. POST {reward_id, campaign_id}.
 func (a *api) Claim(ctx context.Context, sess platform.Session, rewardID, campaignID string) error {
 	payload, _ := json.Marshal(map[string]string{"reward_id": rewardID, "campaign_id": campaignID})
-	body, status, err := a.d.do(ctx, sess, http.MethodPost, "/api/v1/drops/claim", payload)
+	body, status, err := a.d.do(ctx, sess, http.MethodPost, dropsBase+"/api/v1/drops/claim", payload)
 	if err != nil {
 		return err
 	}
@@ -317,7 +317,7 @@ func (a *api) Claim(ctx context.Context, sess platform.Session, rewardID, campai
 // WatchPing registers a view on a livestream — Kick accrues watch time from
 // these. Call periodically (~60s) while watching. AUTHED.
 func (a *api) WatchPing(ctx context.Context, sess platform.Session, livestreamID string) error {
-	_, status, err := a.d.do(ctx, sess, http.MethodPost, "/api/v1/video/views/"+livestreamID, nil)
+	_, status, err := a.d.do(ctx, sess, http.MethodPost, discoveryBase+"/api/v1/video/views/"+livestreamID, nil)
 	if err != nil {
 		return err
 	}
