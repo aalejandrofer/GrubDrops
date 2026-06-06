@@ -7,16 +7,20 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/aalejandrofer/dropsminer/internal/auth/browser"
 	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
 
-// Backend implements platform.Backend for Kick by delegating page
-// interactions to the browser sidecar over gRPC.
+// Backend implements platform.Backend for Kick over a pure-HTTP utls client
+// that mimics a real Chrome TLS/HTTP2 fingerprint. Kick's API 403s any
+// CDP-driven browser (chromedp included) but accepts this fingerprint, so the
+// chromedp sidecar is no longer used for Kick data (see
+// project_kick_breakthrough_utls memory / kick_issues.md). The browser.Client
+// is retained only for the legacy interactive-login path.
 type Backend struct {
-	c *browser.Client
+	c   *browser.Client
+	api *api
 
 	mu            sync.Mutex
 	handleByAcc   map[string]string // accountID -> watch handle
@@ -25,13 +29,22 @@ type Backend struct {
 
 var _ platform.Backend = (*Backend)(nil)
 
-// New requires a connected browser.Client. Caller manages its lifecycle.
+// New builds the Kick backend. The browser.Client may be nil (data flows over
+// the utls HTTP client); it's kept for the interactive-login path only.
 func New(c *browser.Client) *Backend {
 	return &Backend{
 		c:             c,
+		api:           newAPI(),
 		handleByAcc:   map[string]string{},
 		channelsByAcc: map[string][]string{},
 	}
+}
+
+// kickWatch is stored in WatchHandle.Internal so Heartbeat can send the
+// periodic view ping (Kick accrues watch time from POST /video/views/{id}).
+type kickWatch struct {
+	livestreamID string
+	session      platform.Session
 }
 
 func (b *Backend) Name() string { return "kick" }
@@ -136,62 +149,38 @@ func (b *Backend) RefreshSession(_ context.Context, s platform.Session) (platfor
 }
 
 func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) ([]platform.Campaign, error) {
-	// Game-agnostic discovery: scrape https://kick.com/drops via the
-	// sidecar and surface every active campaign Kick advertises. The
-	// per-account whitelist filters the result — the backend never
-	// hardcodes a game name.
-	if b == nil || b.c == nil {
-		return nil, nil
-	}
-	ks, err := decodeSession(s)
+	// Drops campaigns over the utls HTTP client (GET /api/v1/drops/campaigns).
+	// The per-account whitelist filters the result — never hardcode a game.
+	camps, err := b.api.Campaigns(ctx, s)
 	if err != nil {
-		return nil, err
-	}
-	camps, err := b.c.KickScrapeActiveDrops(ctx, s.AccountID, toProto(ks))
-	if err != nil {
-		// Cloudflare hard-blocks demote to soft-failure: return empty
-		// list so the watcher sees "no campaigns this cycle" and sleeps
-		// instead of looping into pick_campaign retries every 5 min.
-		// The error stays in logs at scrape time so we can still observe
-		// the block; here we just don't propagate it up.
-		if strings.Contains(err.Error(), "cloudflare blocked") {
-			slog.Warn("kick scrape blocked by cloudflare; treating as no campaigns this cycle", "account", s.AccountID)
-			return nil, nil
-		}
-		return nil, fmt.Errorf("kick scrape drops: %w", err)
+		return nil, fmt.Errorf("kick campaigns: %w", err)
 	}
 	out := make([]platform.Campaign, 0, len(camps))
 	for _, c := range camps {
-		if s.GameFilter != nil && !s.GameFilter(c.Game) {
+		if s.GameFilter != nil && c.Game != "" && !s.GameFilter(c.Game) {
 			continue
 		}
-		benefits := make([]platform.DropBenefit, 0, len(c.Benefits))
-		for _, ben := range c.Benefits {
-			required := int(ben.RequiredMinutes)
+		benefits := make([]platform.DropBenefit, 0, len(c.Rewards))
+		for _, ben := range c.Rewards {
+			required := ben.RequiredMinutes
 			if required <= 0 {
 				required = 120 // Kick drops typically require ~2h
 			}
 			benefits = append(benefits, platform.DropBenefit{
-				ID:              ben.Id,
-				CampaignID:      c.Id,
+				ID:              ben.ID,
+				CampaignID:      c.ID,
 				Name:            ben.Name,
 				RequiredMinutes: required,
-				ImageURL:        ben.ImageUrl,
+				ImageURL:        ben.ImageURL,
 			})
 		}
 		camp := platform.Campaign{
-			ID:       c.Id,
+			ID:       c.ID,
 			Platform: "kick",
 			Game:     c.Game,
 			Name:     c.Name,
 			Status:   c.Status,
 			Benefits: benefits,
-		}
-		if c.StartsAt > 0 {
-			camp.StartsAt = time.Unix(c.StartsAt, 0).UTC()
-		}
-		if c.EndsAt > 0 {
-			camp.EndsAt = time.Unix(c.EndsAt, 0).UTC()
 		}
 		if camp.Status == "" {
 			camp.Status = "active"
@@ -201,14 +190,27 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 	return out, nil
 }
 
-func (b *Backend) ListEligibleChannels(_ context.Context, s platform.Session, _ platform.Campaign) ([]platform.Stream, error) {
+func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, c platform.Campaign) ([]platform.Stream, error) {
+	// 1) Best: the channels Kick lists as serving THIS campaign.
+	if c.ID != "" {
+		if streams, err := b.api.CampaignLivestreams(ctx, s, c.ID); err == nil && len(streams) > 0 {
+			return streams, nil
+		} else if err != nil {
+			slog.Debug("kick campaign livestreams failed; falling back", "campaign", c.ID, "err", err)
+		}
+	}
+	// 2) Auto-discover live channels in the campaign's category (public).
+	if slug := categorySlug(c.Game); slug != "" {
+		if streams, err := b.api.DiscoverChannelsForCategory(ctx, s, slug); err == nil && len(streams) > 0 {
+			return streams, nil
+		} else if err != nil {
+			slog.Debug("kick category discovery failed; falling back", "game", c.Game, "err", err)
+		}
+	}
+	// 3) Fallback: any channels the operator registered manually.
 	b.mu.Lock()
-	defer b.mu.Unlock()
-	// Scope channels to the calling session's account. Returning every
-	// account's channels would let watcher A pick a stream that only
-	// account B has been authenticated for — Kick rejects watches on
-	// such mismatched sessions, and the heartbeat dies silently.
 	chs := b.channelsByAcc[s.AccountID]
+	b.mu.Unlock()
 	out := make([]platform.Stream, 0, len(chs))
 	for _, ch := range chs {
 		out = append(out, platform.Stream{Channel: ch, DropsEnabled: true})
@@ -216,60 +218,50 @@ func (b *Backend) ListEligibleChannels(_ context.Context, s platform.Session, _ 
 	return out, nil
 }
 
-func (b *Backend) InventoryProgress(ctx context.Context, s platform.Session) ([]platform.Progress, error) {
-	ks, err := decodeSession(s)
-	if err != nil {
-		return nil, err
+// categorySlug maps a campaign's game name to Kick's category slug for the
+// public livestreams endpoint (e.g. "Rust" -> "rust").
+func categorySlug(game string) string {
+	g := strings.TrimSpace(strings.ToLower(game))
+	if g == "" {
+		return ""
 	}
-	drops, err := b.c.Inventory(ctx, toProto(ks))
-	if err != nil {
-		return nil, err
-	}
-	out := make([]platform.Progress, 0, len(drops))
-	for _, d := range drops {
-		out = append(out, platform.Progress{
-			BenefitID:      d.BenefitId,
-			MinutesWatched: int(d.MinutesWatched),
-			Claimed:        d.Claimed,
-		})
-	}
-	return out, nil
+	return strings.ReplaceAll(g, " ", "-")
 }
 
-func (b *Backend) StartWatch(ctx context.Context, s platform.Session, stream platform.Stream) (platform.WatchHandle, error) {
-	ks, err := decodeSession(s)
-	if err != nil {
-		return platform.WatchHandle{}, err
-	}
-	handle, err := b.c.StartWatch(ctx, toProto(ks), stream.Channel)
-	if err != nil {
-		return platform.WatchHandle{}, err
-	}
-	return platform.WatchHandle{Channel: stream.Channel, Internal: handle}, nil
+func (b *Backend) InventoryProgress(ctx context.Context, s platform.Session) ([]platform.Progress, error) {
+	return b.api.Progress(ctx, s)
+}
+
+func (b *Backend) StartWatch(_ context.Context, s platform.Session, stream platform.Stream) (platform.WatchHandle, error) {
+	// No browser tab. Watching = periodic POST /video/views/{livestreamID}
+	// (sent by Heartbeat). stream.ChannelID carries the livestream id from
+	// discovery. The first ping is sent on the next Heartbeat tick.
+	return platform.WatchHandle{
+		Channel:  stream.Channel,
+		Internal: kickWatch{livestreamID: stream.ChannelID, session: s},
+	}, nil
 }
 
 func (b *Backend) Heartbeat(ctx context.Context, h platform.WatchHandle) error {
-	handle, _ := h.Internal.(string)
-	alive, err := b.c.Heartbeat(ctx, handle)
-	if err != nil {
-		return err
+	w, ok := h.Internal.(kickWatch)
+	if !ok {
+		return fmt.Errorf("kick: invalid watch handle")
 	}
-	if !alive {
-		return fmt.Errorf("kick: watch tab %q died", handle)
+	if w.livestreamID == "" {
+		// No livestream id (e.g. manual channel without discovery) — nothing
+		// to ping; treat as a soft no-op so the watcher keeps the session.
+		return nil
 	}
+	return b.api.WatchPing(ctx, w.session, w.livestreamID)
+}
+
+func (b *Backend) StopWatch(_ context.Context, _ platform.WatchHandle) error {
+	// Nothing to tear down — no tab, no persistent connection.
 	return nil
 }
 
-func (b *Backend) StopWatch(ctx context.Context, h platform.WatchHandle) error {
-	handle, _ := h.Internal.(string)
-	return b.c.StopWatch(ctx, handle)
-}
-
 func (b *Backend) Claim(ctx context.Context, s platform.Session, drop platform.DropBenefit) error {
-	ks, err := decodeSession(s)
-	if err != nil {
-		return err
-	}
-	_, err = b.c.Claim(ctx, toProto(ks), drop.ID)
-	return err
+	// Kick claim needs reward_id + campaign_id. drop.ID is the reward id;
+	// drop.CampaignID is the campaign.
+	return b.api.Claim(ctx, s, drop.ID, drop.CampaignID)
 }

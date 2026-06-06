@@ -93,12 +93,14 @@ func run() error {
 		}
 		defer bc.Close()
 		browserClient = bc
-		kickBackend = kick.New(bc)
-		registry.Register(kickBackend)
-		logger.Info("kick backend enabled via sidecar", "url", cfg.BrowserURL)
-	} else {
-		logger.Info("MINER_BROWSER_URL empty, Kick backend disabled")
 	}
+	// Kick runs over the pure-HTTP utls transport (Chrome TLS fingerprint) and
+	// no longer needs the chromedp sidecar for data — Kick's API 403s any
+	// CDP browser but accepts utls. Register it regardless of MINER_BROWSER_URL;
+	// the browser client (may be nil) is kept only for the legacy login path.
+	kickBackend = kick.New(browserClient)
+	registry.Register(kickBackend)
+	logger.Info("kick backend enabled (utls HTTP transport)", "sidecar", browserClient != nil)
 
 	if twitchBrowserEnabled && browserClient != nil {
 		registry.Register(twitch.NewBrowserBackend(browserClient))
