@@ -11,71 +11,40 @@
       <h1>History</h1>
     </div>
     <div class="actions">
-      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.14em;">claims + activity</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.14em;">claims</span>
     </div>
   </div>
 
-  <div class="drops-grid">
-    <section class="drops-pane">
-      <header class="drops-pane-h">
-        <h3>Recent claims</h3>
-        <span class="meta">{{len .Claims}}</span>
-      </header>
-      {{if not .Claims}}
-      <div class="empty">No claims yet.</div>
-      {{else}}
-      <div class="events">
-        {{range .Claims}}
-        <details class="ev kind-{{if eq .Source "reward"}}auth{{else}}claim{{end}}">
-          <summary>
-            <span class="chev" aria-hidden="true">›</span>
-            <span class="t">{{.When}}</span>
-            <span class="lvl" style="color:var(--{{if eq .Source "reward"}}accent{{else}}green{{end}})">●</span>
-            <span class="body"><em>{{.Source}}</em> · {{if .Game}}{{.Game}} · {{end}}{{.Title}}</span>
-            <span class="ac" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{if .Account}}{{.Account}}{{else}}—{{end}}</span>
-          </summary>
-          <div class="ev-detail">
-            {{if .Game}}<span class="kv"><span class="k">game</span><span class="eq">=</span><span class="v">{{.Game}}</span></span>{{end}}
-            {{if .Platform}}<span class="kv"><span class="k">platform</span><span class="eq">=</span><span class="v">{{.Platform}}</span></span>{{end}}
-            {{if .CampaignName}}<span class="kv"><span class="k">campaign</span><span class="eq">=</span><span class="v">{{.CampaignName}}</span></span>{{end}}
-            <span class="kv"><span class="k">title</span><span class="eq">=</span><span class="v">{{.Title}}</span></span>
-            <span class="kv"><span class="k">source</span><span class="eq">=</span><span class="v">{{.Source}}</span></span>
-          </div>
-        </details>
-        {{end}}
-      </div>
+  <section class="drops-pane">
+    <header class="drops-pane-h">
+      <h3>Recent claims</h3>
+      <span class="meta">{{len .Claims}}</span>
+    </header>
+    {{if not .Claims}}
+    <div class="empty">No claims yet.</div>
+    {{else}}
+    <div class="events">
+      {{range .Claims}}
+      <details class="ev kind-{{if eq .Source "reward"}}auth{{else}}claim{{end}}">
+        <summary>
+          <span class="chev" aria-hidden="true">›</span>
+          <span class="t">{{.When}}</span>
+          <span class="lvl" style="color:var(--{{if eq .Source "reward"}}accent{{else}}green{{end}})">●</span>
+          <span class="body"><em>{{.Source}}</em> · {{if .Game}}{{.Game}} · {{end}}{{.Title}}</span>
+          <span class="ac" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{if .Account}}{{.Account}}{{else}}—{{end}}</span>
+        </summary>
+        <div class="ev-detail">
+          {{if .Game}}<span class="kv"><span class="k">game</span><span class="eq">=</span><span class="v">{{.Game}}</span></span>{{end}}
+          {{if .Platform}}<span class="kv"><span class="k">platform</span><span class="eq">=</span><span class="v">{{.Platform}}</span></span>{{end}}
+          {{if .CampaignName}}<span class="kv"><span class="k">campaign</span><span class="eq">=</span><span class="v">{{.CampaignName}}</span></span>{{end}}
+          <span class="kv"><span class="k">title</span><span class="eq">=</span><span class="v">{{.Title}}</span></span>
+          <span class="kv"><span class="k">source</span><span class="eq">=</span><span class="v">{{.Source}}</span></span>
+        </div>
+      </details>
       {{end}}
-    </section>
-
-    <section class="drops-pane">
-      <header class="drops-pane-h">
-        <h3>Recent activity</h3>
-        <span class="meta">{{len .Events}}</span>
-      </header>
-      {{if not .Events}}
-      <div class="empty">No activity yet.</div>
-      {{else}}
-      <div class="events">
-        {{range .Events}}
-        <details class="ev kind-{{.Kind}}">
-          <summary>
-            <span class="chev" aria-hidden="true">›</span>
-            <span class="t">{{.Time}}</span>
-            <span class="lvl" style="color:var(--{{.Color}})">●</span>
-            <span class="body"><em>{{.Kind}}</em> · {{.Message}}</span>
-            <span class="ac">{{if .Account}}{{.Account}}{{else}}—{{end}}</span>
-          </summary>
-          <div class="ev-detail">
-            <span class="kv"><span class="k">kind</span><span class="eq">=</span><span class="v">{{.Kind}}</span></span>
-            <span class="kv"><span class="k">time</span><span class="eq">=</span><span class="v">{{.Time}}</span></span>
-            {{if .Account}}<span class="kv"><span class="k">account</span><span class="eq">=</span><span class="v">{{.Account}}</span></span>{{end}}
-          </div>
-        </details>
-        {{end}}
-      </div>
-      {{end}}
-    </section>
-  </div>
+    </div>
+    {{end}}
+  </section>
   {{end}}
 </div>
 {{end}}
