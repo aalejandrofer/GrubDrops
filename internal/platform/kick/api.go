@@ -184,6 +184,13 @@ func (a *api) Progress(ctx context.Context, sess platform.Session) ([]platform.P
 	if err != nil {
 		return nil, err
 	}
+	if status == 403 {
+		// Kick returns 403 on /drops/progress until the account is enrolled /
+		// participating in an active drop. Treat as "no progress yet" rather
+		// than erroring the watch loop — the viewer-WS presence keeps accruing
+		// time server-side; progress should open up once enrolled.
+		return nil, nil
+	}
 	if status != 200 {
 		return nil, fmt.Errorf("drops progress: status %d", status)
 	}
