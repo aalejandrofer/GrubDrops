@@ -75,6 +75,12 @@ type DropBenefit struct {
 	// from ID — the latter is the drop template, this is the per-
 	// account instance. Empty until progress is observed.
 	InstanceID string
+	// RewardID is the underlying benefit/reward id (DropCampaignDetails
+	// benefitEdges[].benefit.id), distinct from ID (the drop id used for
+	// claiming). Twitch's inventory.gameEventDrops[].id reports OWNED
+	// benefits by this id, so it's how we detect a drop already
+	// earned/claimed (incl. in a prior season) and skip re-mining it.
+	RewardID string
 	// Preconditions lists the drop IDs that must be claimed before this
 	// drop can accrue watch-time (Twitch DropCampaign.timeBasedDrops[]
 	// .preconditionDrops; DevilXD TimedDrop preconditions). Empty means

@@ -153,6 +153,14 @@ type inventoryData struct {
 					} `json:"self"`
 				} `json:"timeBasedDrops"`
 			} `json:"dropCampaignsInProgress"`
+			// gameEventDrops lists benefits the account already OWNS
+			// (earned/claimed, possibly in a prior season). id is the
+			// benefit id (= benefitEdges[].benefit.id), per DevilXD
+			// inventory.py — NOT the drop id. Used to skip drops whose
+			// reward we already hold.
+			GameEventDrops []struct {
+				ID string `json:"id"`
+			} `json:"gameEventDrops"`
 		} `json:"inventory"`
 	} `json:"currentUser"`
 }
@@ -369,6 +377,7 @@ func (d *discovery) fetchDetails(ctx context.Context, sess platform.Session, cam
 				Name:            be.Benefit.Name,
 				RequiredMinutes: td.RequiredMinutesWatched,
 				ImageURL:        be.Benefit.ImageAssetURL,
+				RewardID:        be.Benefit.ID, // benefit id — matches gameEventDrops
 				Preconditions:   preconds,
 			})
 		}
@@ -445,6 +454,17 @@ func (d *discovery) inventory(ctx context.Context, sess platform.Session) ([]pla
 				InstanceID:     td.Self.DropInstanceID,
 			})
 		}
+	}
+	// Owned benefits (gameEventDrops): emit a claimed marker keyed by the
+	// BENEFIT id. The watcher matches these against DropBenefit.RewardID
+	// so a drop whose reward the account already holds is treated as
+	// claimed and skipped — even though claimed drops drop out of
+	// dropCampaignsInProgress entirely.
+	for _, ged := range inv.CurrentUser.Inventory.GameEventDrops {
+		if ged.ID == "" {
+			continue
+		}
+		out = append(out, platform.Progress{BenefitID: ged.ID, Claimed: true})
 	}
 	return out, nil
 }

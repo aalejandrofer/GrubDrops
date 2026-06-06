@@ -778,7 +778,12 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			continue
 		}
 		for _, b := range c.Benefits {
-			if claimed[b.ID] {
+			// claimed[] is keyed by drop id (in-progress isClaimed) AND by
+			// benefit id (gameEventDrops owned). Check both so a drop whose
+			// reward the account already holds is skipped immediately,
+			// instead of being re-picked and watched until the slow
+			// no-progress fallback gives up.
+			if claimed[b.ID] || (b.RewardID != "" && claimed[b.RewardID]) {
 				continue
 			}
 			// Per-watcher skip set: synth benefits we already burnt
