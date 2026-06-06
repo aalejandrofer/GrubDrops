@@ -435,6 +435,37 @@
     font-size: 10.5px;
     margin-left: 6px;
   }
+  /* Watching expand: detail rows on the left, the drop's item icon on the right. */
+  .acc-exp-grid {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .acc-exp-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .acc-exp-img {
+    margin: 0;
+    flex: 0 0 auto;
+  }
+  .acc-exp-img img {
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 5px;
+  }
+  .acc-exp-views {
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
   .mining-col .account-row:first-of-type { border-top: none; }
   .account-row:hover { background: var(--surface-2); }
   .account-row.disabled { opacity: 0.45; }

@@ -80,21 +80,30 @@
 
   <div class="account-row-expand">
     {{if eq .State "watching"}}
-    <div class="acc-exp-row">
-      <span class="acc-exp-k">drop</span>
-      <span class="acc-exp-v">{{if .DropName}}{{.DropName}}{{else}}—{{end}}</span>
-    </div>
-    <div class="acc-exp-row">
-      <span class="acc-exp-k">campaign</span>
-      <span class="acc-exp-v">{{if .DropCampaign}}{{.DropCampaign}}{{else}}—{{end}}</span>
-    </div>
-    <div class="acc-exp-row">
-      <span class="acc-exp-k">channel</span>
-      <span class="acc-exp-v">{{if .Channel}}<a href="https://www.twitch.tv/{{.Channel}}" target="_blank" rel="noopener">{{.Channel}}</a>{{else}}—{{end}}</span>
-    </div>
-    <div class="acc-exp-row">
-      <span class="acc-exp-k">progress</span>
-      <span class="acc-exp-v">{{.DropMins}}/{{.DropReq}}m · {{.DropPercent}}% · ETA {{.DropETA}}{{if .Uptime}} · {{.Uptime}} on stream{{end}}</span>
+    <div class="acc-exp-grid">
+      <div class="acc-exp-main">
+        <div class="acc-exp-row">
+          <span class="acc-exp-k">drop</span>
+          <span class="acc-exp-v">{{if .DropName}}{{.DropName}}{{else}}—{{end}}</span>
+        </div>
+        <div class="acc-exp-row">
+          <span class="acc-exp-k">game</span>
+          <span class="acc-exp-v">{{if .ChannelGame}}{{.ChannelGame}}{{else}}—{{end}}</span>
+        </div>
+        <div class="acc-exp-row">
+          <span class="acc-exp-k">channel</span>
+          <span class="acc-exp-v">{{if .Channel}}<a href="{{.ChannelURL}}" target="_blank" rel="noopener">{{.Channel}} ↗</a>{{if ne .ChannelViews "—"}} <span class="acc-exp-views">· {{.ChannelViews}} viewers</span>{{end}}{{else}}—{{end}}</span>
+        </div>
+        <div class="acc-exp-row">
+          <span class="acc-exp-k">progress</span>
+          <span class="acc-exp-v">{{.DropMins}}/{{.DropReq}}m · {{.DropPercent}}% · ETA {{.DropETA}}{{if .Uptime}} · {{.Uptime}} on stream{{end}}</span>
+        </div>
+      </div>
+      {{if .DropImage}}
+      <figure class="acc-exp-img">
+        <img src="{{.DropImage}}" alt="{{.DropName}}" loading="lazy">
+      </figure>
+      {{end}}
     </div>
     {{else}}
     <div class="acc-exp-row">

@@ -35,8 +35,8 @@
 {{end}}
 
 <section class="telemetry">
-  <div class="stat"><div class="label">Watch time · today</div><div class="value">{{.Tele.WatchTimeToday}}<sup>h:m</sup></div><div class="delta flat">—</div></div>
-  <div class="stat"><div class="label">Drops claimed · 7d</div><div class="value">{{.Tele.ClaimsWeek}}<sup>items</sup></div><div class="delta flat">—</div></div>
+  <div class="stat"><div class="label">Watch time</div><div class="value">{{.Tele.WatchTimeTotal}}<sup>h:m</sup></div><div class="delta flat">lifetime</div></div>
+  <div class="stat"><div class="label">Drops claimed</div><div class="value">{{.Tele.ClaimsTotal}}<sup>items</sup></div><div class="delta flat">lifetime</div></div>
   <div class="stat"><div class="label">Active campaigns</div><div class="value">{{.Tele.ActiveCamps}}<sup>discovered</sup></div><div class="delta flat">—</div></div>
   <div class="stat"><div class="label">In progress</div><div class="value">{{.Tele.InProgress}}<sup>drops</sup></div><div class="delta flat">—</div></div>
   <div class="stat"><div class="label">Next claim</div><div class="value" style="color:var(--accent)">{{.Tele.NextClaimETA}}<sup>h:m</sup></div><div class="delta">{{.Tele.NextClaimName}}</div></div>
@@ -98,68 +98,41 @@
 })();
 </script>
 
-{{/* Live pair — Events drawer + Live channels grid sit side by side,
-     full width. Stacks under 1200px (see .live-pair media query). */}}
-<section class="section section-wide live-pair">
-
-  <div class="live-pair-col live-pair-events">
-    <section class="drawer">
-      <form class="drawer-head" id="events-form" autocomplete="off"
-            hx-get="/dashboard/events"
-            hx-target="#events-list"
-            hx-swap="innerHTML"
-            hx-trigger="change, click from:.filter a">
-        <h3>Live events</h3>
-        <div class="filter" role="group" aria-label="event kind filter">
-          <input type="hidden" name="filter" id="ev-filter" value="all">
-          <a class="on" data-kind="all" href="#">all</a>
-          <a data-kind="claim" href="#">claims</a>
-          <a data-kind="progress" href="#">progress</a>
-          <a data-kind="state" href="#">state</a>
-          <a data-kind="discovery" href="#">discovery</a>
-          <a data-kind="auth" href="#">auth</a>
-          <a data-kind="error" href="#">errors</a>
-        </div>
-        <select name="account" id="ev-account" class="ev-account">
-          <option value="all">all accounts</option>
-          {{range .EventAccounts}}<option value="{{.ID}}">{{.Label}}</option>{{end}}
-        </select>
-        <div class="live">streaming</div>
-      </form>
-      <div class="events" id="events-list"
-           hx-get="/dashboard/events"
-           hx-include="#events-form"
-           hx-trigger="every 10s"
-           hx-swap="innerHTML">
-        {{template "dashboard_events" .Events}}
+{{/* Live events — full-width drawer. (Live channels panel removed; the live
+     channel + viewers + watch link now surface inside each Currently Mining
+     account row's expand.) */}}
+<section class="section section-wide">
+  <section class="drawer">
+    <form class="drawer-head" id="events-form" autocomplete="off"
+          hx-get="/dashboard/events"
+          hx-target="#events-list"
+          hx-swap="innerHTML"
+          hx-trigger="change, click from:.filter a">
+      <h3>Live events</h3>
+      <div class="filter" role="group" aria-label="event kind filter">
+        <input type="hidden" name="filter" id="ev-filter" value="all">
+        <a class="on" data-kind="all" href="#">all</a>
+        <a data-kind="claim" href="#">claims</a>
+        <a data-kind="progress" href="#">progress</a>
+        <a data-kind="state" href="#">state</a>
+        <a data-kind="discovery" href="#">discovery</a>
+        <a data-kind="auth" href="#">auth</a>
+        <a data-kind="error" href="#">errors</a>
       </div>
-    </section>
-  </div>
-
-  <div class="live-pair-col live-pair-channels">
-    <section class="drawer">
-      <div class="drawer-head">
-        <h3>Live channels — eligible for whitelisted drops</h3>
-        <div class="live live-meta">{{len .LiveChannels}} live · sorted by viewers</div>
-      </div>
-    {{if .LiveChannels}}
-    <div class="events drops-rows">
-      {{range .LiveChannels}}
-      <a class="ev kind-claim live-row" href="{{.URL}}" target="_blank" rel="noopener">
-        <span class="chev" aria-hidden="true">↗</span>
-        <span class="t">{{.Views}} 👁</span>
-        <span class="lvl" style="color:var(--green)">●</span>
-        <span class="body"><em>{{.Platform}} · LIVE</em> · {{.Login}}{{if .Game}} · <span style="color:var(--muted);">{{.Game}}</span>{{end}}{{if .Campaign}} · {{.Campaign}}{{end}}</span>
-        <span class="ac">{{.URL}} →</span>
-      </a>
-      {{end}}
+      <select name="account" id="ev-account" class="ev-account">
+        <option value="all">all accounts</option>
+        {{range .EventAccounts}}<option value="{{.ID}}">{{.Label}}</option>{{end}}
+      </select>
+      <div class="live">streaming</div>
+    </form>
+    <div class="events" id="events-list"
+         hx-get="/dashboard/events"
+         hx-include="#events-form"
+         hx-trigger="every 10s"
+         hx-swap="innerHTML">
+      {{template "dashboard_events" .Events}}
     </div>
-    {{else}}
-    <div class="live-channels-empty">no eligible channels live right now</div>
-    {{end}}
-    </section>
-  </div>
-
+  </section>
 </section>
 
 <script>
