@@ -318,11 +318,14 @@ func (c *client) directPost(ctx context.Context, token, opName string, body []by
 	}
 	c.setCommonHeaders(req, token)
 	req.Header.Set("Content-Type", "text/plain;charset=UTF-8")
-	if intToken, err := c.integrity(ctx, token); err == nil && intToken != "" {
-		req.Header.Set("Client-Integrity", intToken)
-	} else if err != nil {
-		slog.Warn("twitch integrity fetch failed, sending without", "op", opName, "err", err)
-	}
+	// NO Client-Integrity header. The Android client_id
+	// (kd1unb4b3q4t58fwlpcbzcbnm76a8fp) does not require an integrity
+	// token for dropCampaigns/inventory when the auth-token is also
+	// Android-issued (device-code flow). DevilXD/TwitchDropsMiner
+	// removed all integrity handling for exactly this reason (commit
+	// 0baed05) — minting a server-side integrity token here gets the
+	// request flagged is_bad_bot / "failed integrity check", which is
+	// what made device-code auth appear broken.
 
 	resp, err := c.http.Do(req)
 	if err != nil {

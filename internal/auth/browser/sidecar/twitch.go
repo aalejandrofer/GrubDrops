@@ -1400,11 +1400,9 @@ func (t *Twitch) gqlGoHTTP(ctx context.Context, tabCtx context.Context, body []b
 	if deviceID != "" {
 		req.Header.Set("X-Device-Id", deviceID)
 	}
-	// Attach integrity token if we have one cached (issued via the
-	// browser tab's same-origin JS — see fetchIntegrityToken).
-	if tok := t.cachedIntegrityToken(); tok != "" {
-		req.Header.Set("Client-Integrity", tok)
-	}
+	// NO Client-Integrity header. Matching the direct backend and
+	// DevilXD: the Android client_id does not need integrity for
+	// dropCampaigns, and a server-minted token gets flagged is_bad_bot.
 	if len(cookieHeader) > 0 {
 		req.Header.Set("Cookie", strings.Join(cookieHeader, "; "))
 	}
