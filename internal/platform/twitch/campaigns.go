@@ -25,7 +25,24 @@ type discovery struct {
 	// makes the watcher fall back to synth-only campaigns. Cached
 	// once per session lifetime.
 	userLogin string
+	// detailsCache memoises DropCampaignDetails results per campaignID.
+	// A campaign's drops/benefits/allow-list are effectively immutable
+	// for its lifetime, so re-fetching them every discovery + pickCampaign
+	// cycle is the audit's N+1. TTL-bounded so a rare mid-flight change
+	// still gets picked up.
+	detailsCache map[string]cachedDetails
 }
+
+type cachedDetails struct {
+	benefits []platform.DropBenefit
+	allowed  []string
+	at       time.Time
+}
+
+// detailsTTL bounds how long a cached DropCampaignDetails result is
+// reused before a re-fetch. Campaign details rarely change within this
+// window.
+const detailsTTL = 30 * time.Minute
 
 // campaignsData decodes the ViewerDropsDashboard (OpCampaigns) response.
 // DevilXD path: response["data"]["currentUser"]["dropCampaigns"]
@@ -305,6 +322,15 @@ func dedupeSynthVsReal(camps []platform.Campaign) []platform.Campaign {
 // "top channels for game" query in that case. For now we conservatively
 // return nil, which causes ListEligibleChannels to return no streams.
 func (d *discovery) fetchDetails(ctx context.Context, sess platform.Session, campaignID string) (benefits []platform.DropBenefit, allowedLogins []string, err error) {
+	// Serve from the per-campaign TTL cache when fresh — avoids the N+1
+	// DropCampaignDetails fan-out on every discovery/pickCampaign cycle.
+	d.mu.Lock()
+	if cd, ok := d.detailsCache[campaignID]; ok && time.Since(cd.at) < detailsTTL {
+		d.mu.Unlock()
+		return cd.benefits, cd.allowed, nil
+	}
+	d.mu.Unlock()
+
 	var det campaignDetailsData
 	// channelLogin must be non-empty for the resolver to return the
 	// user object. Use the authenticated user's login (cached from
@@ -352,6 +378,12 @@ func (d *discovery) fetchDetails(ctx context.Context, sess platform.Session, cam
 			allowedLogins = append(allowedLogins, ch.Name)
 		}
 	}
+	d.mu.Lock()
+	if d.detailsCache == nil {
+		d.detailsCache = map[string]cachedDetails{}
+	}
+	d.detailsCache[campaignID] = cachedDetails{benefits: benefits, allowed: allowedLogins, at: time.Now()}
+	d.mu.Unlock()
 	return benefits, allowedLogins, nil
 }
 
