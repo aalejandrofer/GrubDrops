@@ -9,6 +9,7 @@
           <span class="plat">{{.Platform}}</span>
           {{if .Game}} · <span class="game">{{.Game}}</span>{{end}}
           {{if .Status}} · <span class="status">{{.Status}}</span>{{end}}
+          {{if eq .Platform "twitch"}} · {{if .AccountLinked}}<span class="link-chip link-ok" title="external account linked — drop can be issued">● connected</span>{{else}}<span class="link-chip link-warn" title="external account NOT linked — drop blocked">⚠ not connected</span>{{end}}{{end}}
           {{if eq .Kind "reward"}} · <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;padding:1px 6px;border:1px solid var(--accent);color:var(--accent);background:rgba(212,99,30,0.08);">reward</span>{{end}}
         </div>
       </div>

@@ -504,6 +504,19 @@
   .dtype-watch { color: var(--green); border-color: color-mix(in srgb, var(--green) 35%, transparent); }
   .dtype-action { color: var(--muted); }
 
+  /* Campaign connected (account-linked) status chip. */
+  .link-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid transparent;
+  }
+  .link-ok { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, transparent); }
+  .link-warn { color: var(--accent); border-color: var(--accent); background: rgba(212, 99, 30, 0.08); }
+
   /* Discoverable row: add-to-whitelist control, secondary under the contents. */
   .disc-add {
     border-top: 1px dashed var(--line);
