@@ -77,14 +77,15 @@ func (a *api) DiscoverChannelsForCategory(ctx context.Context, sess platform.Ses
 // fresh session, then finalize). Field tags are the best-effort mapping.
 
 type kickCampaign struct {
-	ID       string
-	Name     string
-	Game     string
-	Status   string
-	StartsAt string
-	EndsAt   string
-	Rewards  []kickReward
-	Channels []kickChannel // eligible channels (campaign.channels[])
+	ID         string
+	Name       string
+	Game       string
+	Status     string
+	StartsAt   string
+	EndsAt     string
+	Rewards    []kickReward
+	Channels   []kickChannel // eligible channels (campaign.channels[])
+	ConnectURL string        // external account-link URL; non-empty = needs linking
 }
 
 // kickChannel is an eligible channel for a campaign. ID is the numeric channel
@@ -122,12 +123,13 @@ func (a *api) Campaigns(ctx context.Context, sess platform.Session) ([]kickCampa
 	out := make([]kickCampaign, 0, len(items))
 	for _, m := range items {
 		c := kickCampaign{
-			ID:       mstr(m, "id", "campaign_id", "campaignId", "uuid"),
-			Name:     mstr(m, "name", "title"),
-			Game:     gameName(m),
-			Status:   mstr(m, "status", "state"),
-			StartsAt: mstr(m, "starts_at", "startsAt", "start_at", "start_time"),
-			EndsAt:   mstr(m, "ends_at", "endsAt", "end_at", "end_time"),
+			ID:         mstr(m, "id", "campaign_id", "campaignId", "uuid"),
+			Name:       mstr(m, "name", "title"),
+			Game:       gameName(m),
+			Status:     mstr(m, "status", "state"),
+			StartsAt:   mstr(m, "starts_at", "startsAt", "start_at", "start_time"),
+			EndsAt:     mstr(m, "ends_at", "endsAt", "end_at", "end_time"),
+			ConnectURL: mstr(m, "connect_url", "connectUrl"),
 		}
 		for _, rm := range mlist(m, "rewards", "benefits", "drops", "tiers") {
 			c.Rewards = append(c.Rewards, kickReward{
@@ -205,6 +207,30 @@ func (a *api) Progress(ctx context.Context, sess platform.Session) ([]platform.P
 			MinutesWatched: mnum(m, "minutes_watched", "minutesWatched", "current_minutes", "progress", "watched_minutes"),
 			Claimed:        mbool(m, "claimed", "is_claimed", "isClaimed"),
 		})
+	}
+	return out, nil
+}
+
+// ParticipatingCampaignIDs returns the set of campaign ids the account is
+// enrolled in (from /drops/progress). 403 (not enrolled in any) → empty set.
+// Used to decide which connect_url campaigns the account is actually linked to.
+func (a *api) ParticipatingCampaignIDs(ctx context.Context, sess platform.Session) (map[string]bool, error) {
+	body, status, err := a.d.do(ctx, sess, http.MethodGet, dropsBase+"/api/v1/drops/progress", nil)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	if status == 403 {
+		return out, nil // not enrolled in anything
+	}
+	if status != 200 {
+		return out, fmt.Errorf("drops progress: status %d", status)
+	}
+	items, _ := asList(body, "data", "progress", "drops")
+	for _, m := range items {
+		if id := mstr(m, "campaign_id", "campaignId", "campaign"); id != "" {
+			out[id] = true
+		}
 	}
 	return out, nil
 }

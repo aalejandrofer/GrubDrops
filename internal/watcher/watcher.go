@@ -632,12 +632,15 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			skippedReward++
 			continue
 		}
-		// AccountLinked defaults false for platforms that don't
-		// surface the flag yet (e.g. Kick), AND for backends that
-		// haven't populated it. Twitch DOES populate it. To avoid
-		// regressing Kick mining, only skip when the field is
-		// explicitly present and false — gated by Platform.
-		if c.Platform == "twitch" && !c.AccountLinked {
+		// Skip campaigns the account can't earn because the required
+		// external account isn't linked. Twitch always populates
+		// AccountLinked (isAccountConnected). Kick now sets
+		// AccountLinkChecked for connect_url campaigns (linked = the
+		// account is participating). Only skip when the link status was
+		// actually checked and came back false — never skip on an
+		// unverified default (avoids regressing platforms/paths that
+		// don't surface the flag).
+		if (c.Platform == "twitch" || c.AccountLinkChecked) && !c.AccountLinked {
 			skippedUnlinked++
 			continue
 		}

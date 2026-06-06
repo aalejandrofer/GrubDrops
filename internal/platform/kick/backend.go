@@ -157,6 +157,14 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 	if err != nil {
 		return nil, fmt.Errorf("kick campaigns: %w", err)
 	}
+	// Which campaigns the account is actually enrolled in (linked external
+	// account). connect_url campaigns the account isn't participating in can't
+	// earn — the watcher skips them so it doesn't burn time on PUBG/etc the
+	// user never linked.
+	participating, perr := b.api.ParticipatingCampaignIDs(ctx, s)
+	if perr != nil {
+		slog.Debug("kick participating fetch failed; treating none as linked", "err", perr)
+	}
 	out := make([]platform.Campaign, 0, len(camps))
 	for _, c := range camps {
 		if s.GameFilter != nil && c.Game != "" && !s.GameFilter(c.Game) {
@@ -192,6 +200,17 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 			Name:            c.Name,
 			Benefits:        benefits,
 			AllowedChannels: slugs,
+		}
+		// Connection gate: a campaign with a connect_url requires an external
+		// account link; it's earnable only if the account is participating.
+		// No connect_url = no link needed.
+		if c.ConnectURL == "" {
+			camp.AccountLinked = true
+			camp.AccountLinkChecked = true
+		} else {
+			camp.AccountLinked = participating[c.ID]
+			camp.AccountLinkChecked = true
+			camp.AccountLinkURL = c.ConnectURL
 		}
 		// Parse RFC3339 start/end so the /drops past|current|upcoming tabs work.
 		if t, err := time.Parse(time.RFC3339, c.StartsAt); err == nil {
