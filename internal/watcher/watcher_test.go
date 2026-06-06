@@ -528,3 +528,19 @@ func TestWatcher_RewardReaperFires(t *testing.T) {
 	assert.GreaterOrEqual(t, backend.calls, 1, "ClaimRewards must be invoked at least once")
 	assert.Contains(t, backend.games, "Minecraft", "reaper must scope claim to whitelisted game")
 }
+
+func TestFirstUnmetPrecondition(t *testing.T) {
+	claimed := map[string]bool{"dropA": true}
+	// No preconditions -> always met.
+	if got := firstUnmetPrecondition(nil, claimed); got != "" {
+		t.Fatalf("empty preconditions should be met, got %q", got)
+	}
+	// All preconditions claimed -> met.
+	if got := firstUnmetPrecondition([]string{"dropA"}, claimed); got != "" {
+		t.Fatalf("claimed precondition should be met, got %q", got)
+	}
+	// Unmet precondition -> returns its id.
+	if got := firstUnmetPrecondition([]string{"dropA", "dropB"}, claimed); got != "dropB" {
+		t.Fatalf("want dropB unmet, got %q", got)
+	}
+}

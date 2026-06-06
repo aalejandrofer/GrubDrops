@@ -295,6 +295,20 @@ func campaignMinRemaining(c platform.Campaign, progressByID map[string]int) int 
 	return best
 }
 
+// firstUnmetPrecondition returns the id of the first precondition drop
+// that has not yet been claimed, or "" when all preconditions are met
+// (including the empty case). Mirrors DevilXD's TimedDrop precondition
+// check: a drop only becomes minable once every drop it depends on is
+// claimed.
+func firstUnmetPrecondition(preconditions []string, claimed map[string]bool) string {
+	for _, id := range preconditions {
+		if !claimed[id] {
+			return id
+		}
+	}
+	return ""
+}
+
 // unsubscribeCurrentChannel drops the active video-playback PubSub
 // subscription if the backend supports it. Safe to call when no stream
 // is selected — silently noops.
@@ -773,6 +787,17 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			_, skip := w.skippedBenefits[b.ID]
 			w.mu.Unlock()
 			if skip {
+				continue
+			}
+			// Precondition gate (DevilXD parity): a drop in a chain can't
+			// accrue watch-time until its precondition drops are claimed.
+			// Skip it so the earlier drop gets mined first; once that's
+			// claimed this one becomes pickable on a later cycle. Empty
+			// preconditions (the common case) never blocks.
+			if unmet := firstUnmetPrecondition(b.Preconditions, claimed); unmet != "" {
+				slog.Info("watcher skipping drop with unmet precondition",
+					"kind", "discovery", "account", w.cfg.AccountID,
+					"benefit", b.ID, "needs_claimed", unmet)
 				continue
 			}
 			campaignCopy, benefitCopy := c, b

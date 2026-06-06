@@ -75,6 +75,13 @@ type DropBenefit struct {
 	// from ID — the latter is the drop template, this is the per-
 	// account instance. Empty until progress is observed.
 	InstanceID string
+	// Preconditions lists the drop IDs that must be claimed before this
+	// drop can accrue watch-time (Twitch DropCampaign.timeBasedDrops[]
+	// .preconditionDrops; DevilXD TimedDrop preconditions). Empty means
+	// no gating — the common case. The watcher skips a benefit whose
+	// preconditions aren't all claimed yet, so the earlier drop in the
+	// chain gets mined first.
+	Preconditions []string
 }
 
 type Stream struct {

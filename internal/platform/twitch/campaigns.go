@@ -108,6 +108,11 @@ type campaignDetailsData struct {
 						ImageAssetURL string `json:"imageAssetURL"` // flat URL, not nested image.url1x
 					} `json:"benefit"`
 				} `json:"benefitEdges"`
+				// preconditionDrops gate this drop behind earlier drops in
+				// a chain (DevilXD TimedDrop preconditions). Usually empty.
+				PreconditionDrops []struct {
+					ID string `json:"id"`
+				} `json:"preconditionDrops"`
 			} `json:"timeBasedDrops"`
 		} `json:"dropCampaign"`
 	} `json:"user"`
@@ -325,6 +330,12 @@ func (d *discovery) fetchDetails(ctx context.Context, sess platform.Session, cam
 				"campaign", campaignID, "drop", td.ID)
 			continue
 		}
+		var preconds []string
+		for _, pc := range td.PreconditionDrops {
+			if pc.ID != "" {
+				preconds = append(preconds, pc.ID)
+			}
+		}
 		for _, be := range td.BenefitEdges {
 			benefits = append(benefits, platform.DropBenefit{
 				ID:              td.ID, // drop id used for claiming, not benefit reward id
@@ -332,6 +343,7 @@ func (d *discovery) fetchDetails(ctx context.Context, sess platform.Session, cam
 				Name:            be.Benefit.Name,
 				RequiredMinutes: td.RequiredMinutesWatched,
 				ImageURL:        be.Benefit.ImageAssetURL,
+				Preconditions:   preconds,
 			})
 		}
 	}
