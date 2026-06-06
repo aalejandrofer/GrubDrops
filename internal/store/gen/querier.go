@@ -18,6 +18,8 @@ type Querier interface {
 	// The dashboard divides this by len(Benefits) to render the
 	// "Claimed X / Y" badge on each Active Campaigns row.
 	CountClaimedForCampaign(ctx context.Context, campaignID string) (int64, error)
+	// Lifetime total drops claimed (every row in the claims table).
+	CountClaims(ctx context.Context) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
 	DeleteAccount(ctx context.Context, id string) error
 	GetAccount(ctx context.Context, id string) (Account, error)
@@ -47,6 +49,9 @@ type Querier interface {
 	ListUpcomingCampaigns(ctx context.Context, arg ListUpcomingCampaignsParams) ([]Campaign, error)
 	RemoveAccountGame(ctx context.Context, arg RemoveAccountGameParams) error
 	SetAccountEnabled(ctx context.Context, arg SetAccountEnabledParams) error
+	// Lifetime watch minutes: sum of per-benefit progress. Persistent, so it
+	// survives restarts (unlike the heartbeat log ring used for today's count).
+	SumWatchMinutes(ctx context.Context) (int64, error)
 	UpdateAccountDisplayName(ctx context.Context, arg UpdateAccountDisplayNameParams) error
 	UpdateAccountStatus(ctx context.Context, arg UpdateAccountStatusParams) error
 	UpdateAccountWebhook(ctx context.Context, arg UpdateAccountWebhookParams) error
