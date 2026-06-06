@@ -1,4 +1,4 @@
-{{define "title"}}Console · dropsminer{{end}}
+{{define "title"}}Console · GrubDrops{{end}}
 
 {{define "content"}}
 {{if .Flash}}<div class="flash-ok">{{.Flash}}</div>{{end}}
@@ -10,7 +10,8 @@
     <div class="sub">uptime {{.Uptime}}</div>
   </div>
   <div class="actions">
-    <form method="post" action="/accounts/apply" class="apply-form">
+    <form method="post" action="/accounts/apply" class="apply-form"
+          onsubmit="return confirm('Reload all accounts?\n\nThis stops every account’s current watch/claim activity and restarts all watchers from scratch (re-discover campaigns, re-pick streams). Server-side drop minutes are kept.');">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
       <button type="submit" class="btn">Reload</button>
     </form>

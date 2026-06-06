@@ -2044,6 +2044,21 @@
     letter-spacing: 0.15em;
     color: var(--muted);
   }
+  /* Inline "optional" marker + multi-line helper text under a field label.
+     Reset the label's uppercase/mono/tracking so hints read as normal prose. */
+  .form-card .opt {
+    color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: 0;
+  }
+  .form-card .field-hint {
+    display: block;
+    margin-top: 7px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 11.5px;
+    line-height: 1.45;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--muted);
+  }
   .form-card label.cb,
   .settings-card label.cb {
     display: flex; align-items: center; gap: 10px;
