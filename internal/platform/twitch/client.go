@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -306,11 +305,14 @@ func (c *client) do(ctx context.Context, token, opName string, body []byte, out 
 func (c *client) directPost(ctx context.Context, token, opName string, body []byte) ([]byte, int, error) {
 	c.bootstrapIdentity(ctx)
 
-	if token != "" && c.http.Jar != nil && c.homeURL != "" {
-		if u, err := url.Parse(c.homeURL); err == nil && u != nil {
-			c.http.Jar.SetCookies(u, []*http.Cookie{{Name: "auth-token", Value: token, Domain: "twitch.tv", Path: "/"}})
-		}
-	}
+	// Auth travels ONLY in the Authorization header (set per-request in
+	// setCommonHeaders from the caller's token), matching DevilXD's
+	// header-only Android-client auth. We deliberately do NOT write the
+	// auth-token into a cookie jar: the jar is shared mutable state, so
+	// with multiple accounts one goroutine's token could overwrite
+	// another's between SetCookies and Do, sending a request whose
+	// Authorization header and auth-token cookie disagree (Twitch then
+	// flags the mismatch). Header-only is both correct and concurrency-safe.
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {

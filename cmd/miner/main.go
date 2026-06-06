@@ -160,8 +160,34 @@ func run() error {
 	// and the /drops Past + /history views stay empty.
 	claimRecorder := store.NewClaimRecorder(q)
 
+	// Per-account direct-Twitch backends. The direct twitch.Backend holds
+	// per-account state (auth, userID/userLogin caches, its own PubSub
+	// socket), so sharing ONE instance across accounts races their tokens
+	// and caches together (audit P0). Give each Twitch account its own
+	// instance, cached across Reloads so we don't leak a PubSub goroutine
+	// per reload. Kick + the browser BrowserBackend are already
+	// multi-account-aware (per-account maps), so they keep using the
+	// shared registry instance. The registry's twitch instance stays in
+	// use by the discovery scraper + dashboard channel counters only.
+	browserActive := twitchBrowserEnabled && browserClient != nil
+	twitchBackends := map[string]*twitch.Backend{}
+	var twitchBackendsMu sync.Mutex
+	backendFor := func(a gen.Account) (platform.Backend, bool) {
+		if a.Platform == "twitch" && !browserActive {
+			twitchBackendsMu.Lock()
+			defer twitchBackendsMu.Unlock()
+			if bk, ok := twitchBackends[a.ID]; ok {
+				return bk, true
+			}
+			bk := twitch.New()
+			twitchBackends[a.ID] = bk
+			return bk, true
+		}
+		return registry.Get(a.Platform)
+	}
+
 	build := func(a gen.Account) (scheduler.Entry, error) {
-		b, ok := registry.Get(a.Platform)
+		b, ok := backendFor(a)
 		if !ok {
 			return scheduler.Entry{}, fmt.Errorf("no backend for platform %q", a.Platform)
 		}
