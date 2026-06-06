@@ -84,6 +84,7 @@ type kickCampaign struct {
 	StartsAt string
 	EndsAt   string
 	Rewards  []kickReward
+	Channels []string // eligible channel slugs (campaign.channels[].slug)
 }
 
 type kickReward struct {
@@ -129,36 +130,43 @@ func (a *api) Campaigns(ctx context.Context, sess platform.Session) ([]kickCampa
 				ImageURL:        mstr(rm, "image_url", "imageUrl", "image", "icon"),
 			})
 		}
+		// Eligible channels are embedded in the campaign payload (the
+		// separate /campaigns/{id}/livestreams endpoint returns 400).
+		for _, ch := range mlist(m, "channels") {
+			if slug := mstr(ch, "slug", "username", "name"); slug != "" {
+				c.Channels = append(c.Channels, slug)
+			}
+		}
 		out = append(out, c)
 	}
 	return out, nil
 }
 
-// CampaignLivestreams returns channels currently serving a specific campaign —
-// the per-campaign allow-list equivalent. AUTHED.
-func (a *api) CampaignLivestreams(ctx context.Context, sess platform.Session, campaignID string) ([]platform.Stream, error) {
-	body, status, err := a.d.do(ctx, sess, http.MethodGet, dropsBase+"/api/v1/drops/campaigns/"+campaignID+"/livestreams", nil)
+// ChannelLivestream reports whether a channel is live and, if so, its livestream
+// id (needed for the watch ping) + viewer count. Public endpoint on kick.com.
+// {data:null} = offline. Used to filter a campaign's eligible channels down to
+// the ones currently broadcasting.
+func (a *api) ChannelLivestream(ctx context.Context, sess platform.Session, slug string) (live bool, livestreamID string, viewers int, err error) {
+	body, status, err := a.d.do(ctx, sess, http.MethodGet, discoveryBase+"/api/v2/channels/"+slug+"/livestream", nil)
 	if err != nil {
-		return nil, err
+		return false, "", 0, err
 	}
 	if status != 200 {
-		return nil, fmt.Errorf("campaign livestreams %s: status %d", campaignID, status)
+		return false, "", 0, fmt.Errorf("channel livestream %s: status %d", slug, status)
 	}
-	var resp livestreamsResp
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("decode campaign livestreams: %w", err)
+	var r struct {
+		Data *struct {
+			ID          int64 `json:"id"`
+			ViewerCount int   `json:"viewer_count"`
+		} `json:"data"`
 	}
-	out := make([]platform.Stream, 0, len(resp.Data))
-	for _, s := range resp.Data {
-		if s.Channel.Slug == "" {
-			continue
-		}
-		out = append(out, platform.Stream{
-			Channel: s.Channel.Slug, ViewerCount: s.ViewerCount,
-			DropsEnabled: true, ChannelID: fmt.Sprintf("%d", s.ID),
-		})
+	if err := json.Unmarshal(body, &r); err != nil {
+		return false, "", 0, fmt.Errorf("decode channel livestream %s: %w", slug, err)
 	}
-	return out, nil
+	if r.Data == nil {
+		return false, "", 0, nil // offline
+	}
+	return true, fmt.Sprintf("%d", r.Data.ID), r.Data.ViewerCount, nil
 }
 
 // Progress returns drop progress/inventory. AUTHED. Tolerant parsing (see

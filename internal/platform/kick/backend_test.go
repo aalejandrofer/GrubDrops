@@ -133,18 +133,20 @@ func TestKickBackend_WatchPingViaHeartbeat(t *testing.T) {
 	require.NoError(t, b.Heartbeat(context.Background(), h2))
 }
 
-func TestKickBackend_ListEligibleChannels_CampaignLivestreams(t *testing.T) {
+func TestKickBackend_ListEligibleChannels_LiveCampaignChannel(t *testing.T) {
 	f := &fakeDoer{resp: map[string]fakeResp{
-		"https://web.kick.com/api/v1/drops/campaigns/c1/livestreams": {200, `{"data":[
-			{"id":111,"is_live":true,"viewer_count":50,"channel":{"slug":"tippie"}}
-		]}`},
+		// tippie is live (data present), bob is offline (data null).
+		"https://kick.com/api/v2/channels/tippie/livestream": {200, `{"data":{"id":111,"viewer_count":50}}`},
+		"https://kick.com/api/v2/channels/bob/livestream":    {200, `{"data":null}`},
 	}}
 	b := withFake(f)
-	out, err := b.ListEligibleChannels(context.Background(), sess("acc1"), platform.Campaign{ID: "c1", Game: "Rust"})
+	out, err := b.ListEligibleChannels(context.Background(), sess("acc1"),
+		platform.Campaign{ID: "c1", Game: "Rust", AllowedChannels: []string{"bob", "tippie"}})
 	require.NoError(t, err)
 	require.Len(t, out, 1)
 	assert.Equal(t, "tippie", out[0].Channel)
 	assert.Equal(t, "111", out[0].ChannelID)
+	assert.Equal(t, 50, out[0].ViewerCount)
 }
 
 func TestKickBackend_DeviceLoginRejected(t *testing.T) {

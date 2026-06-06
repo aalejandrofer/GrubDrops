@@ -176,11 +176,12 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 			})
 		}
 		camp := platform.Campaign{
-			ID:       c.ID,
-			Platform: "kick",
-			Game:     c.Game,
-			Name:     c.Name,
-			Benefits: benefits,
+			ID:              c.ID,
+			Platform:        "kick",
+			Game:            c.Game,
+			Name:            c.Name,
+			Benefits:        benefits,
+			AllowedChannels: c.Channels,
 		}
 		// Parse RFC3339 start/end so the /drops past|current|upcoming tabs work.
 		if t, err := time.Parse(time.RFC3339, c.StartsAt); err == nil {
@@ -207,13 +208,28 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 }
 
 func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, c platform.Campaign) ([]platform.Stream, error) {
-	// 1) Best: the channels Kick lists as serving THIS campaign.
-	if c.ID != "" {
-		if streams, err := b.api.CampaignLivestreams(ctx, s, c.ID); err == nil && len(streams) > 0 {
-			return streams, nil
-		} else if err != nil {
-			slog.Debug("kick campaign livestreams failed; falling back", "campaign", c.ID, "err", err)
+	// 1) Best: the campaign's own eligible channels (embedded in the campaigns
+	// payload). Check each for liveness — only LIVE ones can accrue watch time,
+	// and we need the livestream id for the watch ping. Cap the probes.
+	const maxProbe = 12
+	var live []platform.Stream
+	probed := 0
+	for _, slug := range c.AllowedChannels {
+		if probed >= maxProbe {
+			break
 		}
+		probed++
+		ok, lsID, viewers, err := b.api.ChannelLivestream(ctx, s, slug)
+		if err != nil {
+			slog.Debug("kick channel liveness check failed", "channel", slug, "err", err)
+			continue
+		}
+		if ok {
+			live = append(live, platform.Stream{Channel: slug, ChannelID: lsID, ViewerCount: viewers, DropsEnabled: true})
+		}
+	}
+	if len(live) > 0 {
+		return live, nil
 	}
 	// 2) Auto-discover live channels in the campaign's category (public).
 	if slug := categorySlug(c.Game); slug != "" {

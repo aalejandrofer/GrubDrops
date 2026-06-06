@@ -62,6 +62,11 @@ type Campaign struct {
 	// the game qualifies). Used by the "low_avbl_first" priority mode
 	// to prefer scarcer campaigns first (DevilXD parity).
 	AllowedChannelCount int
+	// AllowedChannels lists the eligible channel logins/slugs for this
+	// campaign when the platform embeds them in the campaign payload
+	// (Kick: dropCampaign.channels[].slug). Empty when not provided;
+	// the backend then discovers live channels another way.
+	AllowedChannels []string
 }
 
 type DropBenefit struct {
