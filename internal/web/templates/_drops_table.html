@@ -22,9 +22,7 @@
         <span class="chev" aria-hidden="true">›</span>
         <span class="t">{{.When}}</span>
         <span class="lvl" style="color:var(--{{if eq .Kind "reward"}}accent{{else}}green{{end}})">●</span>
-        <span class="body"><em>{{.Platform}} · {{.Kind}}</em> · <span style="color:var(--muted);">{{.Game}}</span> · {{.CampaignName}}{{if .BenefitName}} · <strong>{{.BenefitName}}</strong>{{end}}
-          {{if eq .Platform "twitch"}}<a href="https://www.twitch.tv/drops/campaigns" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="margin-left:10px;color:var(--accent);text-decoration:none;font-size:11px;">twitch.tv/drops →</a>{{else if eq .Platform "kick"}}<a href="https://kick.com/drops/all-campaigns" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="margin-left:10px;color:var(--accent);text-decoration:none;font-size:11px;">kick.com/drops →</a>{{end}}
-        </span>
+        <span class="body"><em>{{.Platform}}{{if eq .Kind "reward"}} · reward{{end}}</em> · <span style="color:var(--muted);">{{.Game}}</span> · {{.CampaignName}}{{if .BenefitName}} · <strong>{{.BenefitName}}</strong>{{end}}</span>
         <span class="ac" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{if .AccountName}}@{{.AccountName}}{{else}}—{{end}}</span>
       </summary>
       <div class="ev-detail-slot">

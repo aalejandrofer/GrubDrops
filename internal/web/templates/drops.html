@@ -7,7 +7,7 @@
   {{with .Page}}
   <div class="ph">
     <div>
-      <div class="kicker">// drops</div>
+      <div class="kicker">// <a href="https://www.twitch.tv/drops/campaigns" target="_blank" rel="noopener" class="kicker-link">Twitch Drops</a> · <a href="https://kick.com/drops/all-campaigns" target="_blank" rel="noopener" class="kicker-link">Kick Drops</a></div>
       <h1>Drops</h1>
     </div>
     <div class="actions">
@@ -77,7 +77,7 @@
             <span class="chev" aria-hidden="true">›</span>
             <span class="t">—</span>
             <span class="lvl" style="color:var(--muted)">●</span>
-            <span class="body"><em>{{.Platform}} · {{.Kind}}</em> · <span style="color:var(--muted);">{{.Game}}</span> · {{.CampaignName}}</span>
+            <span class="body"><em>{{.Platform}}{{if eq .Kind "reward"}} · reward{{end}}</em> · <span style="color:var(--muted);">{{.Game}}</span> · {{.CampaignName}}</span>
             <span class="ac">not whitelisted</span>
           </summary>
           {{/* Contents first — the drop's items/benefits (lazy-loaded). */}}
