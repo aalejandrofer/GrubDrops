@@ -251,16 +251,26 @@ func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, 
 			break
 		}
 		probed++
-		ok, _, viewers, err := b.api.ChannelLivestream(ctx, s, ch.Slug)
+		ok, _, viewers, category, err := b.api.ChannelLivestream(ctx, s, ch.Slug)
 		if err != nil {
 			slog.Debug("kick channel liveness check failed", "channel", ch.Slug, "err", err)
 			continue
 		}
-		if ok {
-			// ChannelID carries the CHANNEL id (for the viewer-WS handshake),
-			// not the livestream id.
-			live = append(live, platform.Stream{Channel: ch.Slug, ChannelID: ch.ID, ViewerCount: viewers, DropsEnabled: true})
+		if !ok {
+			continue
 		}
+		// Category gate: a campaign channel that's live but streaming a
+		// DIFFERENT game accrues no drop progress. Skip it so the watcher
+		// moves to a channel actually playing the campaign's game. Only
+		// filter when both sides are known (unknown category falls
+		// through — rare metadata gap).
+		if c.Game != "" && category != "" && !strings.EqualFold(strings.TrimSpace(category), strings.TrimSpace(c.Game)) {
+			slog.Debug("kick skip campaign channel on wrong category", "channel", ch.Slug, "streaming", category, "want", c.Game)
+			continue
+		}
+		// ChannelID carries the CHANNEL id (for the viewer-WS handshake),
+		// not the livestream id.
+		live = append(live, platform.Stream{Channel: ch.Slug, ChannelID: ch.ID, ViewerCount: viewers, DropsEnabled: true})
 	}
 	if len(live) > 0 {
 		return live, nil

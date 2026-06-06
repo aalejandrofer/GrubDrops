@@ -33,6 +33,11 @@ type twitchLoginState struct {
 	challenge platform.DeviceChallenge
 	status    string // "pending" | "done" | "expired" | "error"
 	startedAt time.Time
+	// cancel stops this state's poll goroutine. Calling get() again for
+	// the same account supersedes the prior attempt — without this the
+	// old poll keeps hammering a stale device_code (which Twitch answers
+	// with authorization_pending until expiry) and spams the auth log.
+	cancel context.CancelFunc
 }
 
 type loginPageData struct {
@@ -67,15 +72,26 @@ func (d *loginTwitchDeps) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Supersede any in-flight poll for this account: cancel it so we
+	// don't leave an orphaned goroutine polling a stale device_code
+	// (the source of the endless "device-code still pending" auth-log
+	// loop when the page is opened more than once).
+	if v, ok := d.pending.Load(id); ok {
+		if prev, ok := v.(*twitchLoginState); ok && prev.cancel != nil {
+			prev.cancel()
+		}
+	}
+
 	ch, err := backend.StartDeviceLogin(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 
-	st := &twitchLoginState{challenge: ch, status: "pending", startedAt: time.Now()}
+	pollCtx, cancel := context.WithCancel(d.rootCtx)
+	st := &twitchLoginState{challenge: ch, status: "pending", startedAt: time.Now(), cancel: cancel}
 	d.pending.Store(id, st)
-	go d.poll(id, backend, st)
+	go d.poll(pollCtx, id, backend, st)
 
 	render(w, d.t, "login_twitch.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
@@ -88,7 +104,7 @@ func (d *loginTwitchDeps) get(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (d *loginTwitchDeps) poll(accountID string, backend platform.Backend, st *twitchLoginState) {
+func (d *loginTwitchDeps) poll(ctx context.Context, accountID string, backend platform.Backend, st *twitchLoginState) {
 	interval := st.challenge.Interval
 	if interval <= 0 {
 		interval = 5 * time.Second
@@ -97,15 +113,16 @@ func (d *loginTwitchDeps) poll(accountID string, backend platform.Backend, st *t
 	slog.Info("twitch device-code poll started", "account", accountID, "interval", interval, "deadline", deadline)
 	for time.Now().Before(deadline) {
 		select {
-		case <-d.rootCtx.Done():
+		case <-ctx.Done():
 			slog.Info("twitch device-code poll cancelled", "account", accountID)
 			return
 		case <-time.After(interval):
 		}
-		sess, err := backend.PollDeviceLogin(d.rootCtx, st.challenge)
+		sess, err := backend.PollDeviceLogin(ctx, st.challenge)
 		if err != nil {
 			if strings.Contains(err.Error(), "authorization_pending") {
-				slog.Debug("twitch device-code still pending", "account", accountID)
+				// Expected between user-approval polls — don't log per
+				// tick (it floods the auth event stream).
 				continue
 			}
 			slog.Error("twitch device-code poll failed", "kind", "auth", "account", accountID, "platform", "twitch", "err", err)

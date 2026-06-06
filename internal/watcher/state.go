@@ -11,6 +11,11 @@ const (
 	StateSleeping
 	StateAuthRequired
 	StatePaused
+	// StateAwaitingConnect: the account has a whitelisted, active campaign
+	// it would mine, but every such campaign is gated behind an unlinked
+	// external account (e.g. Krafton/PUBG). Distinct from Sleeping so the
+	// dashboard can prompt the user to connect instead of implying idle.
+	StateAwaitingConnect
 )
 
 func (s State) String() string {
@@ -31,6 +36,8 @@ func (s State) String() string {
 		return "auth_required"
 	case StatePaused:
 		return "paused"
+	case StateAwaitingConnect:
+		return "awaiting_connect"
 	default:
 		return "unknown"
 	}

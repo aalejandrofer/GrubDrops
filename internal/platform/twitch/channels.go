@@ -3,10 +3,20 @@ package twitch
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
+
+// sameGame compares two Twitch game/category display names. Both sides
+// originate from Twitch (campaign.game.displayName vs the live stream's
+// category), so a normalized case/space-insensitive compare is enough to
+// catch "PUBG: BATTLEGROUNDS" vs "PUBG: Battlegrounds" etc.
+func sameGame(a, b string) bool {
+	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
+}
 
 // liveCheckConcurrency caps the in-flight OpGetStreamInfo requests
 // listEligible issues in parallel. Twitch's gql edge tolerates ~20
@@ -122,7 +132,7 @@ func (ch *channels) listForGameDirectory(ctx context.Context, sess platform.Sess
 	return out, nil
 }
 
-func (ch *channels) listEligible(ctx context.Context, sess platform.Session, _ platform.Campaign, allowedLogins []string) ([]platform.Stream, error) {
+func (ch *channels) listEligible(ctx context.Context, sess platform.Session, c platform.Campaign, allowedLogins []string) ([]platform.Stream, error) {
 	if len(allowedLogins) == 0 {
 		return nil, nil
 	}
@@ -167,6 +177,21 @@ func (ch *channels) listEligible(ctx context.Context, sess platform.Session, _ p
 				gameID, gameName = sd.User.Stream.Game.ID, sd.User.Stream.Game.DisplayName
 			} else if sd.User.BroadcastSettings.Game != nil {
 				gameID, gameName = sd.User.BroadcastSettings.Game.ID, sd.User.BroadcastSettings.Game.DisplayName
+			}
+			// Category gate: an allow-listed channel that's live but
+			// streaming a DIFFERENT game earns ZERO drop progress — Twitch
+			// only credits watch-time when the stream's category matches
+			// the campaign's game. Esports allow-list channels are the
+			// usual offender (live, but on "Just Chatting" or another
+			// title between matches). Skip those so pickStream advances to
+			// a channel that actually serves the drop. Only filter when
+			// both sides are known; an empty/unknown stream game falls
+			// through (rare metadata gap — the AvailableDropIDs probe in
+			// pickStream is the secondary gate).
+			if c.Game != "" && gameName != "" && !sameGame(gameName, c.Game) {
+				slog.Debug("watcher skip allow-list channel on wrong game",
+					"channel", sd.User.Login, "streaming", gameName, "want", c.Game)
+				return
 			}
 			results[i] = platform.Stream{
 				Channel:      sd.User.Login,

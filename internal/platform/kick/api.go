@@ -5,9 +5,26 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
+
+// kickFilesBase is the CDN host for Kick reward/drop images. The drops
+// API returns image_url as a host-relative path (e.g.
+// "drops/reward-image/01k….png"); the UI needs an absolute URL or the
+// <img> renders broken.
+const kickFilesBase = "https://files.kick.com/"
+
+// absImageURL turns a Kick image_url into an absolute URL. Already-absolute
+// URLs (http/https) and empty strings pass through unchanged.
+func absImageURL(u string) string {
+	u = strings.TrimSpace(u)
+	if u == "" || strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+		return u
+	}
+	return kickFilesBase + strings.TrimPrefix(u, "/")
+}
 
 // doer performs a single Kick HTTP call. Implemented by httpDoer (utls Chrome
 // fingerprint); an interface so tests can inject canned responses.
@@ -136,7 +153,7 @@ func (a *api) Campaigns(ctx context.Context, sess platform.Session) ([]kickCampa
 				ID:              mstr(rm, "id", "reward_id", "rewardId", "uuid"),
 				Name:            mstr(rm, "name", "title"),
 				RequiredMinutes: mnum(rm, "required_units", "required_minutes", "requiredMinutes", "required_time", "minutes", "required_watch_time"),
-				ImageURL:        mstr(rm, "image_url", "imageUrl", "image", "icon"),
+				ImageURL:        absImageURL(mstr(rm, "image_url", "imageUrl", "image", "icon")),
 			})
 		}
 		// Eligible channels are embedded in the campaign payload (the
@@ -156,27 +173,45 @@ func (a *api) Campaigns(ctx context.Context, sess platform.Session) ([]kickCampa
 // id (needed for the watch ping) + viewer count. Public endpoint on kick.com.
 // {data:null} = offline. Used to filter a campaign's eligible channels down to
 // the ones currently broadcasting.
-func (a *api) ChannelLivestream(ctx context.Context, sess platform.Session, slug string) (live bool, livestreamID string, viewers int, err error) {
+func (a *api) ChannelLivestream(ctx context.Context, sess platform.Session, slug string) (live bool, livestreamID string, viewers int, category string, err error) {
 	body, status, err := a.d.do(ctx, sess, http.MethodGet, discoveryBase+"/api/v2/channels/"+slug+"/livestream", nil)
 	if err != nil {
-		return false, "", 0, err
+		return false, "", 0, "", err
 	}
 	if status != 200 {
-		return false, "", 0, fmt.Errorf("channel livestream %s: status %d", slug, status)
+		return false, "", 0, "", fmt.Errorf("channel livestream %s: status %d", slug, status)
 	}
 	var r struct {
 		Data *struct {
 			ID          int64 `json:"id"`
 			ViewerCount int   `json:"viewer_count"`
+			// The live category. Kick nests the game under
+			// categories[].name (and a parent category.name); take the
+			// first non-empty so we can gate watch-time on the right game.
+			Categories []struct {
+				Name string `json:"name"`
+				Slug string `json:"slug"`
+			} `json:"categories"`
+			Category *struct {
+				Name string `json:"name"`
+				Slug string `json:"slug"`
+			} `json:"category"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &r); err != nil {
-		return false, "", 0, fmt.Errorf("decode channel livestream %s: %w", slug, err)
+		return false, "", 0, "", fmt.Errorf("decode channel livestream %s: %w", slug, err)
 	}
 	if r.Data == nil {
-		return false, "", 0, nil // offline
+		return false, "", 0, "", nil // offline
 	}
-	return true, fmt.Sprintf("%d", r.Data.ID), r.Data.ViewerCount, nil
+	cat := ""
+	if len(r.Data.Categories) > 0 {
+		cat = r.Data.Categories[0].Name
+	}
+	if cat == "" && r.Data.Category != nil {
+		cat = r.Data.Category.Name
+	}
+	return true, fmt.Sprintf("%d", r.Data.ID), r.Data.ViewerCount, cat, nil
 }
 
 // Progress returns drop progress/inventory. AUTHED. Tolerant parsing (see

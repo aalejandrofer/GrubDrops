@@ -286,6 +286,11 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 					URL: "/accounts/" + c.ID + "/login", Action: "Switch to device-code login →",
 				})
 			}
+		case "awaiting_connect":
+			alerts = append(alerts, dashAlert{
+				Kind: "awaiting_connect", Account: "@" + c.Login,
+				URL: "/drops", Action: "Connect account →",
+			})
 		}
 	}
 
@@ -557,6 +562,8 @@ func mineCardFromSnap(a gen.Account, s watcher.Snapshot) dashMineCard {
 		c.StateSub = "looking for work"
 	case "sleeping":
 		c.StateSub = "no eligible campaign"
+	case "awaiting_connect":
+		c.StateSub = "connect account to mine"
 	case "needs_auth":
 		c.StateSub = "login required"
 	}
@@ -1170,6 +1177,8 @@ func stateLabel(s string) string {
 		return "looking for work"
 	case "sleeping":
 		return "no eligible campaign"
+	case "awaiting_connect":
+		return "awaiting connect"
 	case "needs_auth":
 		return "needs login"
 	case "stopped":

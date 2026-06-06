@@ -430,6 +430,18 @@ func (w *Watcher) Run(ctx context.Context) error {
 		err := w.step(ctx)
 		if err == nil {
 			backoff = 0
+		} else if errors.Is(err, errIdle) {
+			// Idle (sleeping / awaiting connect): wait the recheck
+			// cooldown, then re-discover. Cancellable so Reload/shutdown
+			// still tears the watcher down promptly.
+			backoff = 0
+			w.setState(ctx, StatePickCampaign)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(recheckInterval):
+			}
+			continue
 		} else {
 			if errors.Is(err, errComplete) {
 				return nil
@@ -486,6 +498,17 @@ func (w *Watcher) Run(ctx context.Context) error {
 
 var errComplete = errors.New("nothing left to mine")
 
+// errIdle marks a transient "nothing to do right now" — the watcher
+// sleeps recheckInterval and re-discovers, rather than exiting. Lets a
+// sleeping/awaiting-connect account pick up a newly-active campaign or a
+// freshly-linked account without a manual scheduler Reload.
+var errIdle = errors.New("idle; recheck later")
+
+// recheckInterval is how long a sleeping/awaiting-connect watcher waits
+// before re-discovering. Matches the discovery scraper cadence (~5m) so
+// the watcher's view and the persisted /drops view converge.
+const recheckInterval = 5 * time.Minute
+
 // Watch-loop network cadences. The state machine ticks every 500ms for
 // responsiveness, but the expensive gql calls are throttled to roughly
 // match DevilXD/TwitchDropsMiner so we don't flood gql.twitch.tv (which
@@ -520,8 +543,13 @@ func (w *Watcher) step(ctx context.Context) error {
 		return w.tickWatch(ctx)
 	case StateClaiming:
 		return w.claim(ctx)
-	case StateSleeping:
-		return errComplete
+	case StateSleeping, StateAwaitingConnect:
+		// Not terminal: re-discover after a cool-down. A sleeping account
+		// must keep checking — an upcoming campaign may go active, or the
+		// user may connect a previously-unlinked account (awaiting_connect)
+		// — without needing a manual scheduler Reload. errIdle tells Run to
+		// wait recheckInterval, then drop back to pickCampaign.
+		return errIdle
 	case StateAuthRequired, StatePaused:
 		return errComplete
 	default:
@@ -828,6 +856,16 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 	exhaustedNoStream := len(w.noStreamCampaigns) > 0
 	w.noStreamCampaigns = nil
 	w.mu.Unlock()
+	// Awaiting-connect takes priority over plain sleeping: if the only
+	// reason we have nothing to mine is that every whitelisted+active
+	// campaign is gated behind an unlinked external account, surface that
+	// distinctly so the dashboard can prompt the user to connect rather
+	// than implying the account is simply idle with no work.
+	if len(matched) == 0 && skippedUnlinked > 0 {
+		slog.Info("watcher awaiting account connect", "kind", "discovery", "account", w.cfg.AccountID, "unlinked_campaigns", skippedUnlinked)
+		w.setState(ctx, StateAwaitingConnect)
+		return nil
+	}
 	if w.cfg.AllowGame != nil && len(matched) == 0 && len(campaigns) > 0 {
 		slog.Info("watcher: no whitelisted games match active campaigns, sleeping", "account", w.cfg.AccountID, "active_campaigns", len(campaigns))
 	} else {

@@ -687,6 +687,7 @@
   .pill-pick_stream,
   .pill-pick_campaign { color: var(--blue); border-color: rgba(111, 141, 181, 0.45); background: rgba(111, 141, 181, 0.06); }
   .pill-sleeping   { color: var(--muted);  border-color: var(--line); }
+  .pill-awaiting_connect { color: #e8d44d; border-color: rgba(232, 212, 77, 0.5); background: rgba(232, 212, 77, 0.08); }
   .pill-needs_auth { color: var(--accent); border-color: rgba(212, 99, 30, 0.5);    background: rgba(212, 99, 30, 0.08); }
   .pill-idle,
   .pill-stopped    { color: var(--dim);    border-color: var(--line); }

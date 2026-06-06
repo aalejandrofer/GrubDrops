@@ -13,11 +13,29 @@ import (
 	"github.com/aalejandrofer/dropsminer/internal/platform/platformtest"
 )
 
-type recordingNotifier struct{ events []string }
+type recordingNotifier struct {
+	mu     sync.Mutex
+	events []string
+}
 
 func (r *recordingNotifier) Notify(_ context.Context, ev string, _ map[string]any) error {
+	r.mu.Lock()
 	r.events = append(r.events, ev)
+	r.mu.Unlock()
 	return nil
+}
+
+// has reports whether the given event was recorded. Safe to call while
+// the watcher goroutine is still emitting events.
+func (r *recordingNotifier) has(ev string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, e := range r.events {
+		if e == ev {
+			return true
+		}
+	}
+	return false
 }
 
 func TestWatcher_MinesUntilClaim(t *testing.T) {
@@ -38,13 +56,28 @@ func TestWatcher_MinesUntilClaim(t *testing.T) {
 		TickInterval: 5 * time.Millisecond,
 	})
 
-	err = w.Run(ctx)
-	require.NoError(t, err)
+	// Sleeping is no longer terminal — after claiming the only benefit the
+	// watcher enters StateSleeping then re-arms (recheckInterval) so it can
+	// pick up newly-active campaigns / freshly-linked accounts without a
+	// manual Reload. So Run no longer returns on its own; drive it in a
+	// goroutine, wait until it has claimed and reached sleeping, then cancel
+	// and assert a clean context-cancelled exit.
+	done := make(chan error, 1)
+	go func() { done <- w.Run(ctx) }()
 
-	assert.Contains(t, notif.events, "claim")
-	// After claiming the only benefit, pickCampaign finds nothing unclaimed
-	// and transitions to StateSleeping before Run returns.
-	assert.Equal(t, StateSleeping, w.State())
+	require.Eventually(t, func() bool {
+		return notif.has("claim")
+	}, 4*time.Second, 5*time.Millisecond, "watcher should claim the only benefit")
+
+	// Having claimed everything, the watcher parks in the sleeping/recheck
+	// cycle rather than exiting. Cancel and confirm a clean shutdown.
+	cancel()
+	select {
+	case err := <-done:
+		require.ErrorIs(t, err, context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("Run did not return after cancel")
+	}
 }
 
 // New() must plumb AllowGame into Session.GameFilter so backends can
