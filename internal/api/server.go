@@ -120,14 +120,9 @@ func NewRouter(d Deps) http.Handler {
 		registrar: d.Registrar,
 		reload:    d.Reload,
 	}
-	loginTwitchPaste := &loginTwitchPasteDeps{
-		q:        d.Q,
-		t:        d.Templates,
-		sm:       d.Session,
-		sessions: d.Sessions,
-		browser:  d.TwitchBrowserClient,
-		reload:   d.Reload,
-	}
+	// loginTwitchPaste retired: Twitch cookie-paste no longer authenticates
+	// (web-issued token vs Android client_id). Twitch login is device-code
+	// only; the /twitch/paste routes redirect to /twitch/device.
 
 	withSession := func(h http.Handler) http.Handler { return d.Session.LoadAndSave(h) }
 
@@ -158,10 +153,10 @@ func NewRouter(d Deps) http.Handler {
 		}
 		switch acc.Platform {
 		case "twitch":
-			if d.TwitchBrowser {
-				http.Redirect(w, r, "/accounts/"+id+"/twitch/paste", http.StatusSeeOther)
-				return
-			}
+			// Twitch is device-code only. Cookie-paste gives a web-issued
+			// auth-token, which fails against the Android client_id our
+			// direct backend uses (currentUser:null / integrity wall).
+			// Device-code mints the Android-issued token DevilXD relies on.
 			loginTwitch.get(w, r)
 		case "kick":
 			loginKick.get(w, r)
@@ -169,13 +164,14 @@ func NewRouter(d Deps) http.Handler {
 			http.Error(w, "platform does not need login", http.StatusBadRequest)
 		}
 	})
-	authed.Get("/accounts/{id}/twitch/paste", loginTwitchPaste.get)
-	authed.Post("/accounts/{id}/twitch/paste", loginTwitchPaste.post)
-	// Device-code path even when TwitchBrowser=true. The default
-	// /accounts/{id}/login redirects to paste, but Twitch's integrity
-	// gate rejects web-issued auth-tokens — device-code mints an
-	// Android-issued token that synthCookieBlob injects as the
-	// auth-token cookie in the sidecar tab, unblocking the gate.
+	// Twitch cookie-paste is retired (doesn't authenticate on the direct
+	// backend). Redirect any old paste links to the device-code flow.
+	authed.Get("/accounts/{id}/twitch/paste", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/accounts/"+chi.URLParam(r, "id")+"/twitch/device", http.StatusSeeOther)
+	})
+	authed.Post("/accounts/{id}/twitch/paste", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/accounts/"+chi.URLParam(r, "id")+"/twitch/device", http.StatusSeeOther)
+	})
 	authed.Get("/accounts/{id}/twitch/device", loginTwitch.get)
 	authed.Get("/accounts/{id}/login/poll", loginTwitch.status)
 	authed.Post("/accounts/{id}/login", func(w http.ResponseWriter, r *http.Request) {
