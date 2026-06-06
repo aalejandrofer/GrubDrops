@@ -43,16 +43,18 @@ type Benefit struct {
 }
 
 type Campaign struct {
-	ID           string `json:"id"`
-	Platform     string `json:"platform"`
-	Game         string `json:"game"`
-	Name         string `json:"name"`
-	StartsAt     int64  `json:"starts_at"`
-	EndsAt       int64  `json:"ends_at"`
-	Status       string `json:"status"`
-	RawJson      string `json:"raw_json"`
-	DiscoveredAt int64  `json:"discovered_at"`
-	Kind         string `json:"kind"`
+	ID             string `json:"id"`
+	Platform       string `json:"platform"`
+	Game           string `json:"game"`
+	Name           string `json:"name"`
+	StartsAt       int64  `json:"starts_at"`
+	EndsAt         int64  `json:"ends_at"`
+	Status         string `json:"status"`
+	RawJson        string `json:"raw_json"`
+	DiscoveredAt   int64  `json:"discovered_at"`
+	Kind           string `json:"kind"`
+	AccountLinked  int64  `json:"account_linked"`
+	AccountLinkUrl string `json:"account_link_url"`
 }
 
 type CampaignPriority struct {

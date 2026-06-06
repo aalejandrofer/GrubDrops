@@ -112,17 +112,25 @@ func (p *CampaignPersister) PersistCampaigns(ctx context.Context, camps []platfo
 		if kind == "" {
 			kind = "drop"
 		}
+		// account_linked: 1 unless the link status was checked and came back
+		// false (whitelisted but the required external account isn't linked).
+		linked := int64(1)
+		if c.AccountLinkChecked && !c.AccountLinked {
+			linked = 0
+		}
 		if err := p.Q.UpsertCampaign(ctx, gen.UpsertCampaignParams{
-			ID:           c.ID,
-			Platform:     c.Platform,
-			Game:         c.Game,
-			Name:         c.Name,
-			StartsAt:     startsAt,
-			EndsAt:       endsAt,
-			Status:       status,
-			RawJson:      "{}",
-			DiscoveredAt: now,
-			Kind:         kind,
+			ID:             c.ID,
+			Platform:       c.Platform,
+			Game:           c.Game,
+			Name:           c.Name,
+			StartsAt:       startsAt,
+			EndsAt:         endsAt,
+			Status:         status,
+			RawJson:        "{}",
+			DiscoveredAt:   now,
+			Kind:           kind,
+			AccountLinked:  linked,
+			AccountLinkUrl: c.AccountLinkURL,
 		}); err != nil {
 			return err
 		}
