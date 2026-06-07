@@ -22,13 +22,9 @@
           <option value="kick">Kick (drops)</option>
         </select>
       </label>
-      <label>Account username
-        <input type="text" name="login" required placeholder="e.g. ttik3r">
-        <span class="field-hint">The exact Twitch/Kick username this account logs in as. Used to authenticate and to match drops to the account — must be the real handle.</span>
-      </label>
-      <label>Display name <span class="opt">optional</span>
-        <input type="text" name="display_name" placeholder="defaults to the username">
-        <span class="field-hint">Friendly label shown across the GrubDrops UI. Handy when you run several accounts. Leave blank to just use the username.</span>
+      <label>Display name
+        <input type="text" name="display_name" required placeholder="e.g. TTik3r">
+        <span class="field-hint">A friendly label shown across the GrubDrops UI. For Twitch the real account is whoever approves the device code on the next screen — no username needed here.</span>
       </label>
       <div class="row">
         <a class="back-link" href="/accounts">← back</a>

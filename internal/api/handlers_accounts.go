@@ -124,17 +124,23 @@ func (d accountsDeps) newGet(w http.ResponseWriter, r *http.Request) {
 
 func (d accountsDeps) newPost(w http.ResponseWriter, r *http.Request) {
 	platform := r.FormValue("platform")
-	login := r.FormValue("login")
-	display := r.FormValue("display_name")
-	if platform == "" || login == "" {
+	display := strings.TrimSpace(r.FormValue("display_name"))
+	login := strings.TrimSpace(r.FormValue("login")) // optional now; form no longer collects it
+	if platform == "" || display == "" {
 		render(w, d.t, "accounts_new.html", templateData{
 			AuthedAdmin: true, CSRFToken: csrfToken(r),
-			Flash: "platform and login required", Active: "accounts",
+			Flash: "platform and display name required", Active: "accounts",
 		})
 		return
 	}
-	if display == "" {
-		display = login
+	if login == "" {
+		// No username collected — derive a placeholder handle from the
+		// display name. Twitch's real login is resolved from the device-code
+		// token; the UI shows the display Label, so this stays internal.
+		login = slugifyGame(display)
+		if login == "" {
+			login = "acct"
+		}
 	}
 	id := genID()
 	now := time.Now().Unix()

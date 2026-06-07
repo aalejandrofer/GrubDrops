@@ -2084,11 +2084,10 @@
   .tbl td.act a:hover { color: var(--accent-2); }
 
   /* detail form layout */
+  /* Flat forms — no card border/fill; fields carry the only surface. */
   .form-card {
-    border: 1px solid var(--line);
-    background: var(--surface);
-    padding: 28px 32px;
-    max-width: 640px;
+    padding: 4px 0 0;
+    max-width: 560px;
   }
   .form-card.wide { max-width: none; }
 
@@ -2181,10 +2180,10 @@
     flex-direction: column;
     gap: 18px;
   }
+  /* Flat settings sections — no card box; the section-h dashed rule + fields
+     carry structure (matches the console/drops/forms redesign). */
   .settings-card {
-    border: 1px solid var(--line);
-    background: var(--surface);
-    padding: 22px 26px 24px;
+    padding: 4px 0 8px;
   }
   .settings-card form { margin: 0; }
   .settings-card .section-h { margin-bottom: 18px; }
@@ -2363,18 +2362,19 @@
     display: block;
     width: 100%;
     margin-top: 8px;
-    background: var(--bg);
-    border: 1px solid var(--line);
+    background: var(--surface);
+    border: 0;
+    border-bottom: 1px solid var(--line);
     color: var(--text);
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 14px;
-    padding: 11px 13px;
-    border-radius: 2px;
+    padding: 10px 12px;
+    border-radius: 4px 4px 0 0;
     outline: none;
-    transition: border-color .15s;
+    transition: border-color .15s, background .15s;
   }
   .form-card input:focus, .form-card select:focus,
-  .settings-card input:focus, .settings-card select:focus { border-color: var(--accent); }
+  .settings-card input:focus, .settings-card select:focus { border-bottom-color: var(--accent); background: var(--surface-2); }
   .form-card .row,
   .settings-card .row {
     display: flex; justify-content: space-between; align-items: center;
