@@ -30,6 +30,13 @@ func absImageURL(u string) string {
 // fingerprint); an interface so tests can inject canned responses.
 type doer interface {
 	do(ctx context.Context, sess platform.Session, method, path string, body []byte) ([]byte, int, error)
+	getRaw(ctx context.Context, rawURL string) ([]byte, string, int, error)
+}
+
+// FetchImage pulls a Kick CDN asset (reward image) over the utls transport,
+// bypassing Cloudflare's hotlink 403. Returns bytes + Content-Type.
+func (a *api) FetchImage(ctx context.Context, rawURL string) ([]byte, string, int, error) {
+	return a.d.getRaw(ctx, rawURL)
 }
 
 // api wraps the utls transport with typed Kick endpoint calls. All paths are

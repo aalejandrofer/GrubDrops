@@ -238,6 +238,8 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/drops/campaigns/{id}/items", dropsH.items)
 	authed.Post("/drops/whitelist/add", dropsH.addWhitelist)
 	authed.Post("/drops/link", dropsH.markLinked)
+	imgH := &imageProxyDeps{registry: d.Registry}
+	authed.Get("/img/kick", imgH.kick)
 	authed.Get("/history", historyH.get)
 
 	r.Mount("/", withSession(CSRF(authed)))

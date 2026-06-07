@@ -41,6 +41,66 @@ type httpDoer struct {
 
 func newHTTPDoer() *httpDoer { return &httpDoer{timeout: 20 * time.Second} }
 
+// getRaw fetches a URL with the Chrome utls fingerprint but NO session
+// cookies — used to pull Kick CDN assets (reward images on files.kick.com),
+// which are public but 403 Go's default TLS fingerprint / plain hotlinks.
+// Returns the body, Content-Type, and status. Sends image-request headers.
+func (d *httpDoer) getRaw(ctx context.Context, rawURL string) ([]byte, string, int, error) {
+	u, err := neturl.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return nil, "", 0, fmt.Errorf("bad url %q", rawURL)
+	}
+	host := u.Host
+
+	dialCtx, cancel := context.WithTimeout(ctx, d.timeout)
+	defer cancel()
+	var dialer net.Dialer
+	tcp, err := dialer.DialContext(dialCtx, "tcp", host+":443")
+	if err != nil {
+		return nil, "", 0, fmt.Errorf("dial: %w", err)
+	}
+	uconn := utls.UClient(tcp, &utls.Config{ServerName: host, NextProtos: []string{"h2", "http/1.1"}}, utls.HelloChrome_Auto)
+	if err := uconn.HandshakeContext(dialCtx); err != nil {
+		uconn.Close()
+		return nil, "", 0, fmt.Errorf("tls handshake: %w", err)
+	}
+	if uconn.ConnectionState().NegotiatedProtocol != "h2" {
+		uconn.Close()
+		return nil, "", 0, fmt.Errorf("kick cdn did not negotiate h2")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		uconn.Close()
+		return nil, "", 0, err
+	}
+	req.Header.Set("User-Agent", chromeUA)
+	req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Referer", "https://kick.com/")
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	req.Header.Set("Sec-Fetch-Mode", "no-cors")
+	req.Header.Set("Sec-Fetch-Dest", "image")
+
+	tr := &http2.Transport{}
+	cc, err := tr.NewClientConn(uconn)
+	if err != nil {
+		uconn.Close()
+		return nil, "", 0, fmt.Errorf("h2 clientconn: %w", err)
+	}
+	resp, err := cc.RoundTrip(req)
+	if err != nil {
+		uconn.Close()
+		return nil, "", 0, fmt.Errorf("roundtrip: %w", err)
+	}
+	defer resp.Body.Close()
+	out, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", resp.StatusCode, fmt.Errorf("read body: %w", err)
+	}
+	return out, resp.Header.Get("Content-Type"), resp.StatusCode, nil
+}
+
 // do sends method+url with the session's cookies and returns the body + status.
 // url is a full URL (e.g. https://web.kick.com/api/v1/drops/campaigns); the host
 // is dialed from it so drops (web.kick.com) and discovery (kick.com) both work.

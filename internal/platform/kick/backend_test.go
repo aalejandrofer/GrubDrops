@@ -37,6 +37,13 @@ func (f *fakeDoer) do(_ context.Context, _ platform.Session, method, path string
 	return []byte("{}"), 404, nil
 }
 
+func (f *fakeDoer) getRaw(_ context.Context, rawURL string) ([]byte, string, int, error) {
+	if r, ok := f.resp[rawURL]; ok {
+		return []byte(r.body), "image/png", r.status, nil
+	}
+	return nil, "", 404, nil
+}
+
 func withFake(f *fakeDoer) *Backend {
 	b := New(nil)
 	b.api = &api{d: f}

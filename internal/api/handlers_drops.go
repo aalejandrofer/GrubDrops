@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -757,10 +758,16 @@ func (d *dropsDeps) items(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	for _, b := range bens {
+		img := b.ImageUrl
+		// Kick CDN images 403 direct hotlinks (Cloudflare); route them
+		// through our utls-backed proxy so the browser can render them.
+		if img != "" && detail.Platform == "kick" {
+			img = "/img/kick?u=" + url.QueryEscape(img)
+		}
 		detail.Benefits = append(detail.Benefits, campaignBenefitRow{
 			Name:            b.Name,
 			RequiredMinutes: b.RequiredMinutes,
-			ImageURL:        b.ImageUrl,
+			ImageURL:        img,
 			Collected:       collectedByBenefit[b.ID],
 		})
 	}

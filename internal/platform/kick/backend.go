@@ -348,3 +348,10 @@ func (b *Backend) Claim(ctx context.Context, s platform.Session, drop platform.D
 	// drop.CampaignID is the campaign.
 	return b.api.Claim(ctx, s, drop.ID, drop.CampaignID)
 }
+
+// FetchImage proxies a Kick CDN asset over the utls transport so the
+// browser can render it (files.kick.com 403s direct hotlinks). Returns
+// the bytes + Content-Type + upstream status.
+func (b *Backend) FetchImage(ctx context.Context, rawURL string) ([]byte, string, int, error) {
+	return b.api.FetchImage(ctx, rawURL)
+}
