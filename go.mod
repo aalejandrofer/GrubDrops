@@ -8,7 +8,7 @@ require (
 	github.com/browserutils/kooky v0.2.9
 	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc
 	github.com/chromedp/chromedp v0.15.1
-	github.com/go-chi/chi/v5 v5.0.12
+	github.com/go-chi/chi/v5 v5.3.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/justinas/nosurf v1.1.1
 	github.com/pressly/goose/v3 v3.20.0
