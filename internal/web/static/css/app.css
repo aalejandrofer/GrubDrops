@@ -453,11 +453,11 @@
   }
   /* Drops page: expanded campaign item list — row style consistent with the
      app's other tables (icon · name · required). */
+  /* Borderless item list — matches the app's row aesthetic (no table
+     chrome). Columns align via grid; rows separate by spacing + a hover
+     tint, not borders. */
   .drop-items {
-    margin: 6px 18px 12px;
-    border: 1px solid var(--line);
-    border-radius: 4px;
-    overflow: hidden;
+    margin: 4px 18px 12px;
   }
   .drop-items-head,
   .drop-item {
@@ -465,7 +465,7 @@
     grid-template-columns: 32px minmax(120px, 1.3fr) minmax(80px, 1.4fr) auto;
     align-items: center;
     gap: 12px;
-    padding: 9px 14px;
+    padding: 7px 10px;
   }
   .drop-items-head {
     font-family: 'JetBrains Mono', monospace;
@@ -473,12 +473,9 @@
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--muted);
-    background: var(--surface-2);
-    border-bottom: 1px solid var(--line);
   }
   .drop-items-head span:last-child { text-align: right; }
-  .drop-item { border-bottom: 1px solid var(--line); }
-  .drop-item:last-child { border-bottom: none; }
+  .drop-item { border-radius: 4px; }
   .drop-item:hover { background: var(--surface-2); }
   .drop-item-icon { display: inline-flex; }
   .drop-item-icon img,
