@@ -231,7 +231,7 @@ func NewRouter(d Deps) http.Handler {
 		gitCommit:   d.GitCommit,
 		version:     d.Version,
 	}
-	dropsH := &dropsDeps{q: d.Q, t: d.Templates, reload: d.Reload}
+	dropsH := &dropsDeps{q: d.Q, t: d.Templates, reload: d.Reload, sessions: d.Sessions, registry: d.Registry}
 	historyH := &historyDeps{q: d.Q, ring: d.LogRing, t: d.Templates}
 
 	authed.Get("/settings", settingsH.get)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/aalejandrofer/dropsminer/internal/platform"
@@ -30,6 +31,25 @@ func (b *Backend) VerifyAuth(ctx context.Context, s platform.Session) error {
 }
 
 var _ platform.AuthChecker = (*Backend)(nil)
+
+// CampaignDetails fetches a campaign's watch-time benefits on demand (used
+// by the /drops items panel to backfill non-whitelisted campaigns that
+// discovery skipped). Synth scrape IDs (containing "|" or " ") aren't real
+// Twitch UUIDs, so DropCampaignDetails can't resolve them — return empty.
+// Satisfies platform.CampaignDetailer.
+func (b *Backend) CampaignDetails(ctx context.Context, s platform.Session, campaignID string) ([]platform.DropBenefit, error) {
+	if strings.ContainsAny(campaignID, "| ") {
+		return nil, nil
+	}
+	benefits, allowed, err := b.disc.fetchDetails(ctx, s, campaignID)
+	if err != nil {
+		return nil, err
+	}
+	b.disc.captureAllowed(campaignID, allowed)
+	return benefits, nil
+}
+
+var _ platform.CampaignDetailer = (*Backend)(nil)
 
 // Backend implements platform.Backend for Twitch using GraphQL persisted
 // queries (mirrored from DevilXD/TwitchDropsMiner).

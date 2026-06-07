@@ -13,14 +13,83 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/aalejandrofer/dropsminer/internal/platform"
 	"github.com/aalejandrofer/dropsminer/internal/store"
 	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
 type dropsDeps struct {
-	q      *gen.Queries
-	t      Renderer
-	reload func(context.Context) error
+	q        *gen.Queries
+	t        Renderer
+	reload   func(context.Context) error
+	sessions *store.SessionStore
+	registry *platform.Registry
+}
+
+// lazyFetchBenefits backfills a campaign's benefits the first time its
+// items panel is opened. Discovery only fetches details for whitelisted
+// campaigns, so non-whitelisted ones have no benefits persisted ("No items
+// recorded"). Fetch on demand via the backend's CampaignDetailer, persist,
+// and report whether anything was stored. Best-effort: any failure (no
+// session, no detailer, network) returns false and the panel shows empty.
+func (d *dropsDeps) lazyFetchBenefits(ctx context.Context, campaignID, plat string) bool {
+	if d.registry == nil || d.sessions == nil {
+		return false
+	}
+	b, ok := d.registry.Get(plat)
+	if !ok {
+		return false
+	}
+	detailer, ok := b.(platform.CampaignDetailer)
+	if !ok {
+		return false
+	}
+	sess, ok := d.sessionForPlatform(ctx, plat)
+	if !ok {
+		return false
+	}
+	benefits, err := detailer.CampaignDetails(ctx, sess, campaignID)
+	if err != nil || len(benefits) == 0 {
+		if err != nil {
+			slog.Debug("drops: lazy benefit fetch failed", "campaign", campaignID, "err", err)
+		}
+		return false
+	}
+	for _, ben := range benefits {
+		if ben.ID == "" {
+			continue
+		}
+		if err := d.q.UpsertBenefit(ctx, gen.UpsertBenefitParams{
+			ID:              ben.ID,
+			CampaignID:      campaignID,
+			Name:            ben.Name,
+			RequiredMinutes: int64(ben.RequiredMinutes),
+			ImageUrl:        ben.ImageURL,
+		}); err != nil {
+			slog.Warn("drops: persist lazy benefit failed", "campaign", campaignID, "err", err)
+		}
+	}
+	return true
+}
+
+// sessionForPlatform returns the session of the first enabled account on
+// the given platform (any account's token can read public campaign
+// details).
+func (d *dropsDeps) sessionForPlatform(ctx context.Context, plat string) (platform.Session, bool) {
+	accs, err := d.q.ListEnabledAccounts(ctx)
+	if err != nil {
+		return platform.Session{}, false
+	}
+	for _, a := range accs {
+		if a.Platform != plat {
+			continue
+		}
+		if sess, ok, err := d.sessions.Get(ctx, a.ID); err == nil && ok {
+			sess.AccountID = a.ID
+			return sess, true
+		}
+	}
+	return platform.Session{}, false
 }
 
 // linkOverrides returns the set of campaign ids the user manually marked
@@ -736,6 +805,14 @@ func (d *dropsDeps) items(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bens, _ := d.q.ListBenefitsForCampaign(r.Context(), id)
+	// Backfill: non-whitelisted campaigns have no benefits persisted
+	// (discovery skips their detail fetch). Fetch on demand the first time
+	// the panel opens, then re-query.
+	if len(bens) == 0 {
+		if d.lazyFetchBenefits(r.Context(), id, camp.Platform) {
+			bens, _ = d.q.ListBenefitsForCampaign(r.Context(), id)
+		}
+	}
 	detail := campaignDetailRow{
 		ID:           camp.ID,
 		Platform:     camp.Platform,

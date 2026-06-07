@@ -102,6 +102,15 @@ type AvailableDropsChecker interface {
 	AvailableDropIDs(ctx context.Context, s Session, channelID string) (map[string]struct{}, error)
 }
 
+// CampaignDetailer is an optional backend capability: fetch a single
+// campaign's benefits on demand. Discovery only fetches details for
+// whitelisted campaigns (to bound bandwidth), so non-whitelisted ones have
+// no benefits persisted — the /drops items panel uses this to lazily
+// backfill them the first time a user expands the row.
+type CampaignDetailer interface {
+	CampaignDetails(ctx context.Context, s Session, campaignID string) ([]DropBenefit, error)
+}
+
 // AuthChecker is an optional backend capability: a cheap liveness probe
 // of the account's auth (Twitch token / Kick cookies) without starting a
 // watch. Returns nil when auth is healthy, a non-nil error describing the
