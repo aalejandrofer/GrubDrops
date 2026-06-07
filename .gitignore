@@ -27,3 +27,5 @@ dist/
 /kick-login
 /kick-watch
 /kick-encrypt
+
+.playwright-mcp/

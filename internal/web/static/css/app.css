@@ -115,6 +115,11 @@
     animation: pulse 1.8s ease-in-out infinite;
   }
   @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .4 } }
+  .user .gh-link {
+    display: inline-flex; align-items: center;
+    color: var(--muted); transition: color .15s;
+  }
+  .user .gh-link:hover { color: var(--text); }
 
   /* LAYOUT */
   main {
