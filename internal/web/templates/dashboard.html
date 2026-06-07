@@ -51,11 +51,9 @@
      compact account-row columns. HTMX polls /dashboard/cards every 2s
      and swaps the inner .mining-columns wrapper. */}}
 <section class="section section-wide" id="mining">
-  <div class="sec-head">
-    <h2>Currently mining</h2>
-    <div class="rule"></div>
-    <div class="meta">{{len .Mining.Twitch}} twitch · {{len .Mining.Kick}} kick</div>
-  </div>
+  {{/* "Currently mining" title + counter dropped — the ● TWITCH / ● KICK
+       column heads carry it, and the telemetry's dashed rule already
+       separates this band. */}}
   <div id="mining-swap" hx-get="/dashboard/cards" hx-trigger="every 10s" hx-swap="innerHTML">
     {{template "dashboard_mining_columns" .Mining}}
   </div>
