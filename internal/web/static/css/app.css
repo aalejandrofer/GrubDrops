@@ -615,6 +615,7 @@
   .conn-chip.ok   { color: var(--green); }
   .conn-chip.need { color: var(--accent); border-color: rgba(212, 99, 30, 0.5); }
   .conn-chip.need:hover { background: rgba(212, 99, 30, 0.1); }
+  .dl-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
   .link-actions { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; flex-wrap: wrap; white-space: nowrap; }
   .link-actions > a { white-space: nowrap; }
   .link-actions form { display: inline; margin: 0; }

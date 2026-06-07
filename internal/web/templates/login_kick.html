@@ -22,7 +22,14 @@
       <pre class="cli-code">go run ./cmd/dropsminer-helper kick {{.AccountID}} --channel STREAMER[,STREAMER2,...]</pre>
       <div class="cli-hint">Pass one or more Kick channel logins (comma-separated, or repeat <code>--channel</code>). Add <code>--miner URL</code> for a remote deployment, <code>--password PW</code> to skip the prompt.</div>
     </div>
-    <p class="hint">No Go installed? Prebuilt binaries (<code>.exe</code> / <code>.app</code> / <code>AppImage</code>) ship from the same <code>cmd/dropsminer-helper</code> entry.</p>
+    <p class="hint">No Go installed? Download the pre-built helper:</p>
+    <div class="dl-row">
+      <a class="btn sm" href="/download/helper?os=macos">⬇ macOS (Apple Silicon)</a>
+      <a class="btn sm" href="/download/helper?os=macos-intel">⬇ macOS (Intel)</a>
+      <a class="btn sm" href="/download/helper?os=windows">⬇ Windows</a>
+      <a class="btn sm" href="/download/helper?os=linux">⬇ Linux</a>
+    </div>
+    <p class="hint">Then run it from a terminal: <code>grubdrops-helper-… kick {{.AccountID}} --channel STREAMER --miner &lt;your GrubDrops URL&gt;</code> (macOS/Linux: <code>chmod +x</code> the file first).</p>
   </div>
 
   <div class="auth-card method">

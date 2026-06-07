@@ -67,6 +67,9 @@ type Deps struct {
 	// ReloadAccount restarts a single account's watcher (targeted account
 	// edit) without reloading the whole roster.
 	ReloadAccount func(context.Context, string)
+	// HelperDir is where the baked cookie-helper binaries live (default
+	// /helpers). Served at /download/helper.
+	HelperDir string
 	// TwitchBrowser indicates the Twitch backend is the browser-routed
 	// variant; the login handler redirects to the cookie-paste page
 	// instead of the device-code flow when true.
@@ -248,6 +251,8 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/drops/link", dropsH.markLinked)
 	imgH := &imageProxyDeps{registry: d.Registry}
 	authed.Get("/img/kick", imgH.kick)
+	dlH := &downloadDeps{dir: d.HelperDir}
+	authed.Get("/download/helper", dlH.helper)
 	authed.Get("/history", historyH.get)
 
 	r.Mount("/", withSession(CSRF(authed)))

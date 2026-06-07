@@ -367,6 +367,7 @@ func run() error {
 		OnSettingsUpdate: onSettingsUpdate,
 		AuthCheck:        authChecker.CheckAll,
 		ReloadAccount:    reloadAccount,
+		HelperDir:        os.Getenv("MINER_HELPER_DIR"),
 		TwitchBrowser:       twitchBrowserEnabled && browserClient != nil,
 		LogRing:             ring,
 		StartTime:           startTime,
