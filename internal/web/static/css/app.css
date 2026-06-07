@@ -561,10 +561,8 @@
   .collect-box .tk.partial { color: var(--amber); }
   .collect-box .tk.cross { color: var(--accent); }
 
-  /* Non-watch-time drops/items (reward / 0-min action) read as dimmed —
-     they can't be auto-mined. Hover restores full opacity for legibility. */
-  .drop-dim { opacity: 0.5; }
-  .drop-dim:hover { opacity: 1; }
+  /* Non-watch-time drops/items (reward / 0-min action) render at default
+     opacity — the ✗ action mark already signals they can't be auto-mined. */
 
   /* Discoverable row: add-to-whitelist control, secondary under the contents. */
   .disc-add {
