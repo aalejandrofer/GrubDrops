@@ -30,7 +30,7 @@ func runInteractive() error {
 		return fmt.Errorf("account ID is required")
 	}
 
-	minerURL := prompt(in, "Miner URL", "https://drops.ryuzec.dev")
+	minerURL := prompt(in, "Miner URL", "http://localhost:8080")
 	password := prompt(in, "Admin password", os.Getenv("MINER_PASSWORD"))
 	if strings.TrimSpace(password) == "" {
 		return fmt.Errorf("admin password is required")

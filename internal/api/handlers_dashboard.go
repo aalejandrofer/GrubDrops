@@ -220,7 +220,7 @@ type dashPage struct {
 	EventAccount  string             // currently selected account ID (or "")
 	EventFilter   string             // currently selected kind filter (or "all")
 	UpdatedAt     string             // "1.2s ago"
-	NodeAddr      string             // "10.10.2.40"
+	NodeAddr      string             // e.g. "10.0.0.5"
 	Uptime        string             // "17h 42m"
 	Alerts        []dashAlert        // top-of-page CTA banner items
 }
