@@ -610,19 +610,21 @@
   .link-actions { display: inline-flex; align-items: center; gap: 10px; justify-content: flex-end; flex-wrap: nowrap; white-space: nowrap; }
   .link-actions > a { white-space: nowrap; }
   .link-actions form { display: inline; margin: 0; }
+  /* Matches the .collect-box tick style: neutral border, green ✓, no fill. */
   .linked-btn {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.04em;
-    padding: 3px 8px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 4px 9px;
     white-space: nowrap;
     color: var(--green);
-    border: 1px solid rgba(111, 181, 107, 0.45);
-    background: rgba(111, 181, 107, 0.06);
-    border-radius: 3px;
+    border: 1px solid var(--line);
+    background: transparent;
+    border-radius: 4px;
     cursor: pointer;
   }
-  .linked-btn:hover { background: rgba(111, 181, 107, 0.14); }
+  .linked-btn:hover { border-color: color-mix(in srgb, var(--green) 45%, transparent); }
   .linked-btn:disabled { opacity: 0.5; cursor: default; }
   /* COLLECTED marks — one chip per account that claimed the benefit. */
   .drop-item-collected { display: flex; flex-wrap: wrap; gap: 5px; }
