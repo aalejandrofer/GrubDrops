@@ -218,9 +218,8 @@ func runKick(args []string) error {
 	if len(rest) != 1 {
 		return fmt.Errorf("kick requires exactly one account-id argument")
 	}
-	if len(channels) == 0 {
-		return fmt.Errorf("--channel is required (one or more, e.g. --channel a,b or --channel a --channel b)")
-	}
+	// --channel is optional: channels auto-discover from each campaign's game.
+	// Pass it only to pin specific channels.
 	res, err := helper.PushKick(context.Background(), helper.KickRequest{Config: cf.Config, AccountID: rest[0], Channels: channels})
 	if err != nil {
 		return err

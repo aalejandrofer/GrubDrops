@@ -36,11 +36,8 @@ func runInteractive() error {
 		return fmt.Errorf("admin password is required")
 	}
 
-	raw := prompt(in, "Kick channel(s) to mine (comma-separated)", "")
-	channels := splitChannels(raw)
-	if len(channels) == 0 {
-		return fmt.Errorf("at least one channel is required")
-	}
+	// Channels auto-discover from each campaign's game; optional pin.
+	channels := splitChannels(prompt(in, "Pin specific channels? (optional, comma-separated — Enter to skip)", ""))
 
 	res, err := helper.PushKick(context.Background(), helper.KickRequest{
 		Config:    helper.Config{MinerURL: strings.TrimSpace(minerURL), Password: password},

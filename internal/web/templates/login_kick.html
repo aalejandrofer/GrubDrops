@@ -31,12 +31,12 @@
       <ol class="steps">
         <li>Make sure you're signed in to <code>kick.com</code> in your everyday browser.</li>
         <li><b>Double-click</b> the downloaded helper. It opens a console and walks you through it.<br><span class="step-hint">macOS / Linux: first <code>chmod +x</code> the file; macOS may need right-click → Open the first time.</span></li>
-        <li>When prompted, paste this <b>Account ID</b> and the Kick channel(s) you want to mine:</li>
+        <li>When prompted, paste this <b>Account ID</b>:</li>
       </ol>
       <div class="cli-box">
         <div class="cli-label">account id</div>
         <pre class="cli-code">{{.AccountID}}</pre>
-        <div class="cli-hint">Miner URL defaults to this deployment. You'll also be asked for your admin password.</div>
+        <div class="cli-hint">Miner URL defaults to this deployment. You'll also be asked for your admin password. Channels are discovered automatically from each campaign's game.</div>
       </div>
     </section>
 
@@ -53,7 +53,6 @@
         <label>XSRF-TOKEN <span class="req">required</span><input type="text" name="xsrf_token" required autocomplete="off"></label>
         <label>session_token <span class="opt">needed for claims</span><input type="text" name="session_token" autocomplete="off"></label>
         <label>cf_clearance <span class="opt">optional</span><input type="text" name="cf_clearance" autocomplete="off"></label>
-        <label>Channels to mine <span class="req">required</span><input type="text" name="channel" required placeholder="streamer1, streamer2, streamer3"></label>
         <div class="row">
           <a class="back-link" href="/accounts">← cancel</a>
           <button class="btn primary" type="submit">Authorize →</button>
@@ -66,8 +65,8 @@
       <p class="lede sm">Have Go installed? Skip the download and run the helper straight from the repo:</p>
       <div class="cli-box">
         <div class="cli-label">one-liner</div>
-        <pre class="cli-code">go run ./cmd/grubdrops-helper kick {{.AccountID}} --channel STREAMER[,STREAMER2,...]</pre>
-        <div class="cli-hint">Pass one or more Kick channel logins (comma-separated, or repeat <code>--channel</code>). Add <code>--miner URL</code> for a remote deployment, <code>--password PW</code> to skip the prompt.</div>
+        <pre class="cli-code">go run ./cmd/grubdrops-helper kick {{.AccountID}}</pre>
+        <div class="cli-hint">Channels auto-discover from each campaign's game. Add <code>--miner URL</code> for a remote deployment, <code>--password PW</code> to skip the prompt. (Optional: <code>--channel STREAMER</code> to pin specific channels.)</div>
       </div>
     </section>
 
