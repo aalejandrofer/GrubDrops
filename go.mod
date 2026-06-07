@@ -3,7 +3,7 @@ module github.com/aalejandrofer/grubdrops
 go 1.26.2
 
 require (
-	filippo.io/age v1.2.0
+	filippo.io/age v1.3.1
 	github.com/alexedwards/scs/v2 v2.8.0
 	github.com/browserutils/kooky v0.2.9
 	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc
@@ -22,6 +22,7 @@ require (
 )
 
 require (
+	filippo.io/hpke v0.4.0 // indirect
 	github.com/andybalholm/brotli v1.0.6 // indirect
 	github.com/browserutils/ese v0.0.0-20260314233042-37b6a03a93ce // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
