@@ -551,13 +551,13 @@
   .collect-box {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 9px;
+    gap: 5px;
+    padding: 2px 7px;
     border-radius: 4px;
     border: 1px solid var(--line);
     line-height: 1;
   }
-  .collect-box .tk { color: var(--green); font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; }
+  .collect-box .tk { color: var(--green); font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; }
   .collect-box .tk.partial { color: var(--amber); }
   .collect-box .tk.cross { color: var(--accent); }
 
@@ -611,10 +611,10 @@
   /* Matches the .collect-box tick style: neutral border, green ✓, no fill. */
   .linked-btn {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 700;
     line-height: 1;
-    padding: 4px 9px;
+    padding: 2px 7px;
     white-space: nowrap;
     color: var(--green);
     border: 1px solid var(--line);

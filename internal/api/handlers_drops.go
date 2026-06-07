@@ -528,6 +528,11 @@ func (d *dropsDeps) collectAll(
 		return nil, nil, nil, nil, err
 	}
 	for _, row := range claims {
+		// Skip stale/empty claim rows (no game AND no campaign name) that
+		// would otherwise render as "REWARD · — · —".
+		if row.Game == "" && row.CampaignName == "" {
+			continue
+		}
 		if !passesWhitelist(allow, hasWhitelist, row.Game) {
 			continue
 		}
