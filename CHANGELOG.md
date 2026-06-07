@@ -1,0 +1,51 @@
+# Changelog
+
+All notable changes to GrubDrops.
+
+## [Unreleased] — v1.0.0 prep
+
+### Added
+- **Auth-health agent** — periodic (12h) per-account auth probe (Twitch token /
+  Kick cookies) plus a manual "Check auth" button on /accounts; ✓/✗ pill per account.
+- **Manual "I've linked it" override** — break the Kick connect-deadlock (the
+  drops/progress endpoint 403s until you've already earned). Mark a campaign
+  linked and the watcher attempts it; the live progress check confirms.
+- **Per-account connect chips** on /drops with **mineable-if-any** grouping: a
+  campaign stays in the mineable list if ≥1 whitelisting account is linked;
+  "account not linked" shows only campaigns no account can mine. Chips show
+  only for accounts that whitelist the game.
+- **Lazy item fetch** — non-whitelisted campaigns now load their benefits +
+  end dates on demand (no more "No items recorded").
+- **Inventory reconcile** — drops claimed manually (outside the bot) now show
+  as collected.
+- **Per-account targeted reload** — editing one account restarts only that
+  account's watcher; whitelist/priority saves no longer reload everything.
+  Confirm dialog on every reload.
+- **AWAITING CONNECT** watcher state (distinct from idle/sleeping).
+- **Kick image proxy** — reward images served via the utls transport
+  (`ext.cdn.kick.com`), bypassing Cloudflare hotlink blocks.
+- **GrubDrops logo** + SVG favicon + README.
+- Discord notifications: rich embeds (drop image, game, channel, account handle).
+
+### Changed
+- Channel selection now requires the stream to actually be playing the
+  campaign's game (Twitch ACL + Kick) — no more wasted watch-time on wrong-game
+  streams.
+- Sleeping / awaiting-connect watchers self-rearm (re-discover every 5m) instead
+  of dying until a manual reload.
+- Inventory/progress poll relaxed 20s → 60s (PubSub is the real-time signal).
+- /drops: tab filter now re-renders all panes; whitelist control moved inline;
+  borderless item panel; boxed ✓ collection marks (orange ✗ for action-only).
+- Discord verbosity toggles (claims/progress/auth/errors) are now honored.
+
+### Fixed
+- **Discovery stall** — the discovery whitelist ignored the global games list,
+  so every tick no-opped and campaigns went stale (looked like "Kick campaigns
+  vanished after reload"). Now unions the global list.
+- Twitch device-code: superseded orphan pollers that flooded the auth log.
+- Stale empty "REWARD · — · —" history row filtered out.
+
+### Notes
+- Stack: Go + html/template/HTMX, SQLite (sqlc + goose), age-encrypted sessions.
+- Twitch via Android device-code + GraphQL; Kick via utls Chrome-fingerprint
+  (no browser, no cf_clearance).
