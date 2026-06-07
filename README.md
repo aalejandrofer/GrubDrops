@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="internal/web/static/img/logo.svg" width="88" alt="GrubDrops logo">
+  <img src="internal/web/static/img/logo.png" width="240" alt="GrubDrops">
 </p>
-
-<h1 align="center">GrubDrops</h1>
 
 <p align="center"><b>Self-hosted Twitch &amp; Kick drops miner.</b><br>
 Pick your games, it watches the right streams, mines the drops, and claims them — hands-free.</p>
