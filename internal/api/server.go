@@ -61,6 +61,9 @@ type Deps struct {
 	Registrar       KickChannelRegistrar
 	SettingsStore   *store.Settings
 	OnSettingsUpdate func()
+	// AuthCheck runs the auth-health sweep across all accounts (manual
+	// "check auth now" button on /accounts). Nil disables the button.
+	AuthCheck func(context.Context)
 	// TwitchBrowser indicates the Twitch backend is the browser-routed
 	// variant; the login handler redirects to the cookie-paste page
 	// instead of the device-code flow when true.
@@ -108,7 +111,7 @@ func NewRouter(d Deps) http.Handler {
 		start:           startedAt,
 		channelCounters: channelCountersFromRegistry(d.Registry),
 	}
-	accs := accountsDeps{q: d.Q, t: d.Templates, sm: d.Session, sch: d.Scheduler, reload: d.Reload}
+	accs := accountsDeps{q: d.Q, t: d.Templates, sm: d.Session, sch: d.Scheduler, reload: d.Reload, authCheck: d.AuthCheck}
 	loginTwitch := newLoginTwitchDeps(d, d.RootCtx)
 	loginKick := &loginKickDeps{
 		q:         d.Q,
@@ -140,6 +143,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/dashboard/campaign/{id}", dash.campaignDetail)
 	authed.Get("/dashboard/account/{id}", dash.accountDetail)
 	authed.Get("/accounts", accs.list)
+	authed.Post("/accounts/check-auth", accs.checkAuth)
 	authed.Get("/accounts/new", accs.newGet)
 	authed.Post("/accounts/new", accs.newPost)
 	authed.Get("/accounts/{id}", accs.detail)

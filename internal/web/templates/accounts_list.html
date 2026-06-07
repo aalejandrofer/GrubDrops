@@ -10,6 +10,10 @@
       <h1>Accounts</h1>
     </div>
     <div class="actions">
+      <form method="post" action="/accounts/check-auth" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <button class="btn" type="submit" title="Probe every account's auth (Twitch token / Kick cookies) now.">Check auth</button>
+      </form>
       <form method="post" action="/accounts/apply" class="inline-form">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <button class="btn" type="submit">Apply changes</button>
@@ -38,6 +42,10 @@
           <span class="body"><em>{{.Platform}}</em> · @{{.Login}}
             <a href="/accounts/{{.ID}}" class="row-link">edit →</a>
             <a href="/accounts/{{.ID}}/login" class="row-link">re-auth →</a>
+            {{if .AuthChecked}}
+              {{if .AuthOK}}<span class="auth-pill ok" title="auth healthy · checked {{.AuthWhen}} UTC">✓ auth</span>
+              {{else}}<span class="auth-pill bad" title="{{.AuthMsg}} · checked {{.AuthWhen}} UTC">✗ auth — re-auth needed</span>{{end}}
+            {{else}}<span class="auth-pill unknown" title="not checked yet">auth ?</span>{{end}}
           </span>
           <span class="ac"><span class="state-pill state-{{.StateTier}}">{{if eq .StateTier "green"}}● {{.State}}{{else if eq .StateTier "orange"}}● {{if eq .State "needs_auth"}}needs login{{else if eq .State "sleeping"}}sleeping{{else}}{{.State}}{{end}}{{else}}○ disabled{{end}}</span></span>
         </div>

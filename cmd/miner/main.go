@@ -18,6 +18,7 @@ import (
 
 	"github.com/aalejandrofer/dropsminer/internal/api"
 	"github.com/aalejandrofer/dropsminer/internal/auth/browser"
+	"github.com/aalejandrofer/dropsminer/internal/authcheck"
 	"github.com/aalejandrofer/dropsminer/internal/config"
 	"github.com/aalejandrofer/dropsminer/internal/discovery"
 	mlog "github.com/aalejandrofer/dropsminer/internal/log"
@@ -308,6 +309,14 @@ func run() error {
 	discoveryInterval := parseDuration(os.Getenv("MINER_DISCOVERY_INTERVAL"), 5*time.Minute)
 	startDiscovery(ctx, logger, q, sessions, registry, campaignPersister, discoveryInterval)
 
+	// Auth-health sweep: probe each account's auth (Twitch token / Kick
+	// cookies) on a long cadence so the operator sees a "needs re-auth"
+	// flag before an account silently stops mining. CheckAll is also wired
+	// to a manual button on /accounts.
+	authChecker := authcheck.New(q, sessions, registry)
+	authInterval := parseDuration(os.Getenv("MINER_AUTHCHECK_INTERVAL"), 12*time.Hour)
+	go authChecker.Run(ctx, authInterval)
+
 	// Avoid typed-nil-interface trap: only assign if the concrete pointer is non-nil.
 	var bc api.KickBrowserClient
 	var reg api.KickChannelRegistrar
@@ -325,6 +334,7 @@ func run() error {
 		Registrar:        reg,
 		SettingsStore:    settingsStore,
 		OnSettingsUpdate: onSettingsUpdate,
+		AuthCheck:        authChecker.CheckAll,
 		TwitchBrowser:       twitchBrowserEnabled && browserClient != nil,
 		LogRing:             ring,
 		StartTime:           startTime,

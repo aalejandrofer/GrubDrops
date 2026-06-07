@@ -575,9 +575,23 @@
     padding: 4px 7px;
     max-width: 220px;
   }
+  /* auth-health pill on the accounts list */
+  .auth-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-left: 8px;
+    white-space: nowrap;
+  }
+  .auth-pill.ok      { color: var(--green);  border: 1px solid rgba(111, 181, 107, 0.4); }
+  .auth-pill.bad     { color: var(--accent); border: 1px solid rgba(212, 99, 30, 0.5); background: rgba(212, 99, 30, 0.08); }
+  .auth-pill.unknown { color: var(--dim);    border: 1px solid var(--line); }
   /* not-linked row actions: "connect account →" link + "I've linked it"
      override button, kept on one line, right-aligned in the .ac cell. */
-  .link-actions { display: inline-flex; align-items: center; gap: 10px; justify-content: flex-end; }
+  .link-actions { display: inline-flex; align-items: center; gap: 10px; justify-content: flex-end; flex-wrap: nowrap; white-space: nowrap; }
+  .link-actions > a { white-space: nowrap; }
   .link-actions form { display: inline; margin: 0; }
   .linked-btn {
     font-family: 'JetBrains Mono', monospace;
@@ -1169,6 +1183,11 @@
   .drops-rows .ev > summary,
   .events .ev > summary {
     grid-template-columns: 14px 130px 10px 1fr 160px;
+  }
+  /* not-linked rows pack "connect account →" + "✓ I've linked it" into the
+     last cell — give it room so they stay on one line. */
+  .drops-rows .ev-linkrow > summary {
+    grid-template-columns: 14px 130px 10px 1fr 300px;
   }
   .ev > summary::-webkit-details-marker,
   .ev > summary::marker { display: none; content: ""; }

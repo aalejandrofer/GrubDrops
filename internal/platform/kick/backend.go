@@ -355,3 +355,15 @@ func (b *Backend) Claim(ctx context.Context, s platform.Session, drop platform.D
 func (b *Backend) FetchImage(ctx context.Context, rawURL string) ([]byte, string, int, error) {
 	return b.api.FetchImage(ctx, rawURL)
 }
+
+// VerifyAuth probes the Kick session by fetching the drops campaigns over
+// the authed utls transport. A hard failure (dead cookies / CF block /
+// expired session) surfaces as an error. Satisfies platform.AuthChecker.
+func (b *Backend) VerifyAuth(ctx context.Context, s platform.Session) error {
+	if _, err := b.api.Campaigns(ctx, s); err != nil {
+		return fmt.Errorf("kick campaigns probe: %w", err)
+	}
+	return nil
+}
+
+var _ platform.AuthChecker = (*Backend)(nil)

@@ -13,16 +13,18 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/aalejandrofer/dropsminer/internal/authcheck"
 	"github.com/aalejandrofer/dropsminer/internal/scheduler"
 	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
 type accountsDeps struct {
-	q      *gen.Queries
-	t      Renderer
-	sm     *scs.SessionManager
-	sch    *scheduler.Scheduler
-	reload func(context.Context) error
+	q         *gen.Queries
+	t         Renderer
+	sm        *scs.SessionManager
+	sch       *scheduler.Scheduler
+	reload    func(context.Context) error
+	authCheck func(context.Context) // auth-health sweep (manual trigger)
 }
 
 // applyReload calls the scheduler reload hook if wired, swallowing
@@ -41,6 +43,25 @@ type accountRow struct {
 	gen.Account
 	State     string // raw scheduler state: watching, claiming, …, needs_auth, stopped
 	StateTier string // ui colour bucket: "green" | "orange" | "grey"
+	// Auth-health (from the periodic sweep / manual check). AuthChecked
+	// is false when no probe has run yet.
+	AuthChecked bool
+	AuthOK      bool
+	AuthMsg     string
+	AuthWhen    string // human "x ago" / timestamp
+}
+
+// checkAuth runs the auth-health sweep on demand, then bounces back to
+// the accounts list with a flash. Runs inline (few accounts); the sweep
+// has a per-account timeout.
+func (d accountsDeps) checkAuth(w http.ResponseWriter, r *http.Request) {
+	if d.authCheck != nil {
+		d.authCheck(r.Context())
+		d.sm.Put(r.Context(), "flash", "auth check complete")
+	} else {
+		d.sm.Put(r.Context(), "flash", "auth check unavailable")
+	}
+	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
 
 func (d accountsDeps) list(w http.ResponseWriter, r *http.Request) {
@@ -61,11 +82,18 @@ func (d accountsDeps) list(w http.ResponseWriter, r *http.Request) {
 		if st == "" {
 			st = "stopped"
 		}
-		enriched = append(enriched, accountRow{
+		row := accountRow{
 			Account:   a,
 			State:     st,
 			StateTier: tierForState(a.Enabled == 1, st),
-		})
+		}
+		if res, ok := authcheck.Load(r.Context(), d.q, a.ID); ok {
+			row.AuthChecked = true
+			row.AuthOK = res.OK
+			row.AuthMsg = res.Msg
+			row.AuthWhen = time.Unix(res.CheckedAt, 0).UTC().Format("2006-01-02 15:04")
+		}
+		enriched = append(enriched, row)
 	}
 	flash := d.sm.PopString(r.Context(), "flash")
 	render(w, d.t, "accounts_list.html", templateData{

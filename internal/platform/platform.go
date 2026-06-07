@@ -102,6 +102,15 @@ type AvailableDropsChecker interface {
 	AvailableDropIDs(ctx context.Context, s Session, channelID string) (map[string]struct{}, error)
 }
 
+// AuthChecker is an optional backend capability: a cheap liveness probe
+// of the account's auth (Twitch token / Kick cookies) without starting a
+// watch. Returns nil when auth is healthy, a non-nil error describing the
+// problem otherwise. Used by the periodic auth-health sweep + the manual
+// "check auth now" button.
+type AuthChecker interface {
+	VerifyAuth(ctx context.Context, s Session) error
+}
+
 // CurrentSessionChecker is an optional backend capability for the
 // DropCurrentSessionContext gql query (P6). Watcher uses it post-claim
 // as a soft consistency check.

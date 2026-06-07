@@ -3,11 +3,33 @@ package twitch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 
 	"github.com/aalejandrofer/dropsminer/internal/platform"
 )
+
+// VerifyAuth probes the Twitch token with a cheap CurrentUser query. A
+// null currentUser means the token is invalid or integrity-blocked —
+// i.e. the account needs re-authentication. Satisfies platform.AuthChecker.
+func (b *Backend) VerifyAuth(ctx context.Context, s platform.Session) error {
+	const q = `query CurrentUser { currentUser { id } }`
+	var resp struct {
+		CurrentUser *struct {
+			ID string `json:"id"`
+		} `json:"currentUser"`
+	}
+	if err := b.c.gqlQuery(ctx, s.AccessToken, "CurrentUser", q, nil, &resp); err != nil {
+		return fmt.Errorf("currentUser query: %w", err)
+	}
+	if resp.CurrentUser == nil || resp.CurrentUser.ID == "" {
+		return fmt.Errorf("currentUser null — token invalid or expired")
+	}
+	return nil
+}
+
+var _ platform.AuthChecker = (*Backend)(nil)
 
 // Backend implements platform.Backend for Twitch using GraphQL persisted
 // queries (mirrored from DevilXD/TwitchDropsMiner).
