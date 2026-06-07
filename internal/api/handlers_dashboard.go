@@ -81,6 +81,7 @@ type dashMineCard struct {
 	State          string // "watching" | "claiming" | "pick_stream" | "sleeping" | "idle" | "stopped"
 	StateSub       string // free-text aside
 	Uptime         string // "17m on stream" or "—"
+	LastPoll       string // "12s ago" — time since last inventory/progress poll
 	Enabled        bool
 
 	// Now-playing strip
@@ -535,6 +536,9 @@ func mineCardFromSnap(a gen.Account, s watcher.Snapshot) dashMineCard {
 	case "watching":
 		c.StateSub = "live"
 		c.Uptime = formatShort(time.Since(s.StartedAt))
+		if !s.LastPollAt.IsZero() {
+			c.LastPoll = formatShort(time.Since(s.LastPollAt)) + " ago"
+		}
 		c.Channel = s.Channel
 		c.ChannelInitial = initial(s.Channel)
 		c.ChannelGame = s.CampaignGame

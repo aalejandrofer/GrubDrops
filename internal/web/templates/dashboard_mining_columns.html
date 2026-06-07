@@ -99,7 +99,7 @@
         </div>
         <div class="acc-exp-row">
           <span class="acc-exp-k">progress</span>
-          <span class="acc-exp-v">{{.DropMins}}/{{.DropReq}}m · {{.DropPercent}}% · ETA {{.DropETA}}{{if .Uptime}} · {{.Uptime}} on stream{{end}}</span>
+          <span class="acc-exp-v">{{.DropMins}}/{{.DropReq}}m · {{.DropPercent}}% · ETA {{.DropETA}}{{if .Uptime}} · {{.Uptime}} on stream{{end}}{{if .LastPoll}} · last poll {{.LastPoll}}{{end}}</span>
         </div>
       </div>
       {{if .DropImage}}

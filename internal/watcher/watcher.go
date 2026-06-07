@@ -105,6 +105,7 @@ type Watcher struct {
 	currentStream   *platform.Stream
 	handle          *platform.WatchHandle
 	watchStartedAt  time.Time
+	lastPollAt      time.Time // last inventory/progress poll (for the "last poll" UI)
 	lastProgressMin int
 	tickCount       int // increments each tickWatch, used to throttle stream-live re-checks
 	// noProgressTicks counts consecutive tickWatch calls where
@@ -385,6 +386,7 @@ type Snapshot struct {
 	Channel         string
 	ViewerCount     int
 	StartedAt       time.Time
+	LastPollAt      time.Time
 }
 
 func (w *Watcher) Snapshot() Snapshot {
@@ -411,6 +413,7 @@ func (w *Watcher) Snapshot() Snapshot {
 	}
 	s.MinutesWatched = w.lastProgressMin
 	s.StartedAt = w.watchStartedAt
+	s.LastPollAt = w.lastPollAt
 	return s
 }
 
@@ -1108,6 +1111,9 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 		return nil
 	}
 
+	w.mu.Lock()
+	w.lastPollAt = time.Now()
+	w.mu.Unlock()
 	progress, err := w.cfg.Backend.InventoryProgress(ctx, w.cfg.Session)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
