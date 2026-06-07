@@ -634,10 +634,10 @@
     border-radius: 3px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 10px;
-    padding: 3px 5px;
-    max-width: 130px;
+    padding: 3px 4px;
+    max-width: 96px;
   }
-  .whitelist-add .btn.sm { white-space: nowrap; font-size: 10px; padding: 3px 8px; }
+  .whitelist-add .btn.sm { white-space: nowrap; font-size: 10px; padding: 3px 6px; }
   /* COLLECTED marks — one chip per account that claimed the benefit. */
   .drop-item-collected { display: flex; flex-wrap: wrap; gap: 5px; }
   .cmark {
@@ -1218,7 +1218,7 @@
   /* not-linked rows pack "connect account →" + "✓ I've linked it" into the
      last cell — give it room so they stay on one line. */
   .drops-rows .ev-linkrow > summary {
-    grid-template-columns: 14px 130px 10px 1fr 300px;
+    grid-template-columns: 14px 130px 10px 1fr 240px;
   }
   .ev > summary::-webkit-details-marker,
   .ev > summary::marker { display: none; content: ""; }
