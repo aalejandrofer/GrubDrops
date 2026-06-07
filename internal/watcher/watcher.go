@@ -568,7 +568,7 @@ const recheckInterval = 5 * time.Minute
 const (
 	beaconEveryTicks    = 120 // ~60s — minute-watched beacon (DevilXD WATCH_INTERVAL)
 	liveCheckEveryTicks = 600 // ~5m — backstop re-probe; PubSub stream-down is the primary signal
-	inventoryEveryTicks = 40  // ~20s — poll drop progress
+	inventoryEveryTicks = 120 // ~60s — poll drop progress (backstop; PubSub user-drop-events pushes progress in real time)
 )
 
 // vanishThreshold is how many consecutive INVENTORY POLLS must report
