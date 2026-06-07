@@ -14,23 +14,29 @@
   <div class="auth-card method preferred">
     <div class="method-head">
       <span class="method-tag">recommended</span>
-      <h2>Helper CLI / pre-built app</h2>
+      <h2>Download the helper</h2>
     </div>
-    <p>The helper reads your local browser's kick.com cookies (<code>kick_session</code>, <code>XSRF-TOKEN</code>, <code>cf_clearance</code>, <code>session_token</code>) and pushes them. No DevTools, no copy-paste.</p>
-    <div class="cli-box">
-      <div class="cli-label">one-liner</div>
-      <pre class="cli-code">go run ./cmd/dropsminer-helper kick {{.AccountID}} --channel STREAMER[,STREAMER2,...]</pre>
-      <div class="cli-hint">Pass one or more Kick channel logins (comma-separated, or repeat <code>--channel</code>). Add <code>--miner URL</code> for a remote deployment, <code>--password PW</code> to skip the prompt.</div>
-    </div>
-    <p class="hint">No Go installed? Download the pre-built helper:</p>
+    <p>A tiny app that reads your local browser's kick.com cookies and pushes them here — no DevTools, no copy-paste. Grab the build for your OS:</p>
     <div class="dl-row">
       <a class="btn sm" href="/download/helper?os=macos">⬇ macOS (Apple Silicon)</a>
       <a class="btn sm" href="/download/helper?os=macos-intel">⬇ macOS (Intel)</a>
       <a class="btn sm" href="/download/helper?os=windows">⬇ Windows</a>
       <a class="btn sm" href="/download/helper?os=linux">⬇ Linux</a>
     </div>
-    <p class="hint">Then run it from a terminal: <code>grubdrops-helper-… kick {{.AccountID}} --channel STREAMER --miner &lt;your GrubDrops URL&gt;</code> (macOS/Linux: <code>chmod +x</code> the file first).</p>
+    <ol class="steps">
+      <li>Make sure you're signed in to <code>kick.com</code> in your everyday browser.</li>
+      <li><b>Double-click</b> the downloaded helper. It opens a console and walks you through it.<br><span class="hint">macOS / Linux: first run <code>chmod +x</code> the file; macOS may need right-click → Open the first time.</span></li>
+      <li>When prompted, paste this <b>Account ID</b> and the Kick channel(s) you want to mine:</li>
+    </ol>
+    <div class="cli-box">
+      <div class="cli-label">account id</div>
+      <pre class="cli-code">{{.AccountID}}</pre>
+      <div class="cli-hint">Miner URL defaults to this deployment. You'll also be asked for your admin password.</div>
+    </div>
   </div>
+  {{end}}
+  {{if .Flash}}<div class="auth-flash"><div class="err">{{.Flash}}</div></div>{{end}}
+  {{with .Page}}
 
   <div class="auth-card method">
     <div class="method-head">
@@ -43,11 +49,6 @@
       <li>Copy <code>kick_session</code> + <code>XSRF-TOKEN</code> (required), and <code>session_token</code> (needed to claim drops). <code>cf_clearance</code> optional.</li>
       <li>Paste below + one or more channels (comma/space-separated).</li>
     </ol>
-  </div>
-  {{end}}
-  {{if .Flash}}<div class="auth-flash"><div class="err">{{.Flash}}</div></div>{{end}}
-  {{with .Page}}
-  <div class="auth-card">
     <form method="post" action="/accounts/{{.AccountID}}/login">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
       <label>kick_session <span class="req">(required)</span><input type="text" name="kick_session" required autocomplete="off"></label>
@@ -61,6 +62,20 @@
       </div>
     </form>
   </div>
+
+  <div class="auth-card method">
+    <div class="method-head">
+      <span class="method-tag muted">developers</span>
+      <h2>Run from source</h2>
+    </div>
+    <p>Have Go installed? Skip the download and run the helper straight from the repo:</p>
+    <div class="cli-box">
+      <div class="cli-label">one-liner</div>
+      <pre class="cli-code">go run ./cmd/dropsminer-helper kick {{.AccountID}} --channel STREAMER[,STREAMER2,...]</pre>
+      <div class="cli-hint">Pass one or more Kick channel logins (comma-separated, or repeat <code>--channel</code>). Add <code>--miner URL</code> for a remote deployment, <code>--password PW</code> to skip the prompt.</div>
+    </div>
+  </div>
 </div>
+{{end}}
 {{end}}
 {{end}}

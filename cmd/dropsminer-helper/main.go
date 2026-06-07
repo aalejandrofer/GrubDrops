@@ -27,9 +27,18 @@ import (
 )
 
 func main() {
+	// No args = launched by double-click (no terminal). Go interactive and
+	// keep the window open, instead of flashing usage and vanishing.
 	if len(os.Args) < 2 {
-		usage(os.Stderr)
-		os.Exit(2)
+		err := runInteractive()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+		}
+		pause()
+		if err != nil {
+			os.Exit(1)
+		}
+		return
 	}
 	cmd := os.Args[1]
 	args := os.Args[2:]
