@@ -226,10 +226,10 @@ type dashPage struct {
 }
 
 type dashAlert struct {
-	Kind     string // "needs_auth" | "no_drops"
-	Account  string // display @login
-	URL      string // direct CTA link
-	Action   string // button label
+	Kind    string // "needs_auth" | "no_drops"
+	Account string // display @login
+	URL     string // direct CTA link
+	Action  string // button label
 }
 
 func (d dashboardDeps) collectPage(r *http.Request) dashPage {
@@ -1045,10 +1045,10 @@ type dashAccountDetail struct {
 	StateLabel  string // human label
 
 	// Current activity (watching/claiming)
-	CurrentCampaign  string
-	CurrentGame      string
-	CurrentBenefit   string
-	CurrentChannel   string
+	CurrentCampaign string
+	CurrentGame     string
+	CurrentBenefit  string
+	CurrentChannel  string
 	MinutesWatched  int
 	RequiredMinutes int
 	ProgressPct     int

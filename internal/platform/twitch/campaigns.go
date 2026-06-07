@@ -96,9 +96,11 @@ func parseISO(s string) time.Time {
 // Source: inventory.py TimedDrop.__init__ + Benefit.__init__
 //
 // Allow-list path (verified from DevilXD channel.py Channel.from_acl):
-//   response["data"]["user"]["dropCampaign"]["allow"]["isEnabled"] bool
-//   response["data"]["user"]["dropCampaign"]["allow"]["channels"][]["id"]   string
-//   response["data"]["user"]["dropCampaign"]["allow"]["channels"][]["name"] string  ← used as login
+//
+//	response["data"]["user"]["dropCampaign"]["allow"]["isEnabled"] bool
+//	response["data"]["user"]["dropCampaign"]["allow"]["channels"][]["id"]   string
+//	response["data"]["user"]["dropCampaign"]["allow"]["channels"][]["name"] string  ← used as login
+//
 // If isEnabled==false (or allow.channels is empty), all channels streaming the
 // game qualify (no restriction). We conservatively return an empty allow-list
 // in that case — a future revision can fan out to "top channels for game".

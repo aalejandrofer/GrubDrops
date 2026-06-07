@@ -293,9 +293,9 @@ func (p *PubSubClient) dispatchDropEvent(payload []byte) {
 	switch env.Type {
 	case "drop-progress":
 		var d struct {
-			DropID                string `json:"drop_id"`
-			CurrentProgressMin    int64  `json:"current_progress_min"`
-			RequiredProgressMin   int64  `json:"required_progress_min"`
+			DropID              string `json:"drop_id"`
+			CurrentProgressMin  int64  `json:"current_progress_min"`
+			RequiredProgressMin int64  `json:"required_progress_min"`
 		}
 		if err := json.Unmarshal(env.Data, &d); err != nil {
 			return

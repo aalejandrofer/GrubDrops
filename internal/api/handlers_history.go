@@ -19,13 +19,13 @@ type historyDeps struct {
 }
 
 type historyClaim struct {
-	When        string
-	Platform    string
-	Game        string
-	Title       string
+	When         string
+	Platform     string
+	Game         string
+	Title        string
 	CampaignName string
-	Account     string
-	Source      string // "drop" (claims table) or "reward" (ring)
+	Account      string
+	Source       string // "drop" (claims table) or "reward" (ring)
 }
 
 type historyEvent struct {

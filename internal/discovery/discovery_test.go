@@ -45,13 +45,13 @@ func (r *recordingPersister) all() [][]platform.Campaign {
 // fakeProvider returns a fixed slice; useful when we want to check
 // whitelist plumbing and persister wiring without spinning up a backend.
 type fakeProvider struct {
-	name      string
-	camps     []platform.Campaign
-	err       error
-	calls     atomic.Int32
-	lastList  []string
-	listMu    sync.Mutex
-	scrapeFn  func(ctx context.Context, whitelist []string) ([]platform.Campaign, error)
+	name     string
+	camps    []platform.Campaign
+	err      error
+	calls    atomic.Int32
+	lastList []string
+	listMu   sync.Mutex
+	scrapeFn func(ctx context.Context, whitelist []string) ([]platform.Campaign, error)
 }
 
 func (p *fakeProvider) Name() string { return p.name }

@@ -110,4 +110,3 @@ func (s *KickScraper) Scrape(ctx context.Context, whitelist []string) ([]platfor
 	}
 	return out, nil
 }
-

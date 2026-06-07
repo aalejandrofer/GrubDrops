@@ -30,7 +30,7 @@ type Twitch struct {
 	b *Browser
 
 	mu       sync.Mutex
-	authTabs map[string]string     // account_id -> tab handle
+	authTabs map[string]string      // account_id -> tab handle
 	tabMu    map[string]*sync.Mutex // account_id -> per-tab mutex (serialises navigations)
 
 	// Integrity token cache. Twitch's gql endpoint requires a
@@ -1124,8 +1124,8 @@ func (t *Twitch) ClaimRewards(ctx context.Context, accountID string, allowedGame
 		return nil, nil, fmt.Errorf("claim rewards: %w", err)
 	}
 	var resp struct {
-		Claimed []ClaimedReward      `json:"claimed"`
-		Errors  []string             `json:"errors"`
+		Claimed []ClaimedReward         `json:"claimed"`
+		Errors  []string                `json:"errors"`
 		History []InventoryHistoryEntry `json:"history"`
 	}
 	if err := json.Unmarshal([]byte(raw), &resp); err != nil {

@@ -29,6 +29,7 @@ import (
 //   - otherwise, return the referer path so they stay put (e.g.
 //     dashboard "/");
 //   - fall back to "/" when the header is missing or unparseable.
+//
 // Only the path+query of the referer is honored — never the host — to
 // avoid open-redirect vectors.
 func applyRedirectTarget(r *http.Request) string {
@@ -48,18 +49,18 @@ func applyRedirectTarget(r *http.Request) string {
 }
 
 type Deps struct {
-	DB              *sql.DB
-	Q               *gen.Queries
-	Templates       Renderer
-	Session         *scs.SessionManager
-	Scheduler       *scheduler.Scheduler
-	Reload          func(context.Context) error
-	Sessions        *store.SessionStore
-	Registry        *platform.Registry
-	RootCtx         context.Context
-	BrowserClient   KickBrowserClient
-	Registrar       KickChannelRegistrar
-	SettingsStore   *store.Settings
+	DB               *sql.DB
+	Q                *gen.Queries
+	Templates        Renderer
+	Session          *scs.SessionManager
+	Scheduler        *scheduler.Scheduler
+	Reload           func(context.Context) error
+	Sessions         *store.SessionStore
+	Registry         *platform.Registry
+	RootCtx          context.Context
+	BrowserClient    KickBrowserClient
+	Registrar        KickChannelRegistrar
+	SettingsStore    *store.Settings
 	OnSettingsUpdate func()
 	// AuthCheck runs the auth-health sweep across all accounts (manual
 	// "check auth now" button on /accounts). Nil disables the button.

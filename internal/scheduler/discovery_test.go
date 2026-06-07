@@ -21,7 +21,8 @@ func (silentNotifier) Notify(_ context.Context, _ string, _ map[string]any) erro
 // (a) walks every watcher's cached ListActiveCampaigns result,
 // (b) deduplicates by campaign.ID across accounts, and
 // (c) applies the whitelist union — a campaign is included iff at
-//     least one account has its game whitelisted.
+//
+//	least one account has its game whitelisted.
 //
 // Note: the watcher only caches whitelisted campaigns (it filters out
 // non-whitelisted entries before storing them, so the persister never

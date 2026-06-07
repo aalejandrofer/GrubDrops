@@ -104,16 +104,16 @@ func New(ctx context.Context) *Browser {
 
 // StealthScript is the JS payload evaluated on every new document
 // before page scripts run. Three goals:
-//   1. Remove the standard "I'm a bot" tells PerimeterX / Kasada look
-//      for: navigator.webdriver, missing window.chrome.runtime,
-//      suspicious plugin/language counts.
-//   2. Capture pristine references to fetch / XMLHttpRequest BEFORE
-//      PerimeterX's p.js loads and wraps them. The wrapped versions
-//      poison call sites that don't match an expected event trace
-//      (returning "TypeError: Failed to fetch"). Using __origFetch
-//      from our evalFetch bypasses the wrapper entirely.
-//   3. Stash original Function / Promise prototypes so the page can
-//      detect that *if* we later mess with them — currently we don't.
+//  1. Remove the standard "I'm a bot" tells PerimeterX / Kasada look
+//     for: navigator.webdriver, missing window.chrome.runtime,
+//     suspicious plugin/language counts.
+//  2. Capture pristine references to fetch / XMLHttpRequest BEFORE
+//     PerimeterX's p.js loads and wraps them. The wrapped versions
+//     poison call sites that don't match an expected event trace
+//     (returning "TypeError: Failed to fetch"). Using __origFetch
+//     from our evalFetch bypasses the wrapper entirely.
+//  3. Stash original Function / Promise prototypes so the page can
+//     detect that *if* we later mess with them — currently we don't.
 const StealthScript = `
 (() => {
   // 1. Capture pristine network primitives before any page script can

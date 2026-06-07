@@ -10,16 +10,16 @@ import (
 )
 
 const (
-	keyGlobalDiscord     = "settings:discord_webhook"
-	keyLogRetention      = "settings:log_retention_days"
-	keyLogLevel          = "settings:log_level"
-	keyTickIntervalMs    = "settings:tick_interval_ms"
-	keyDiscoveryIntvSec  = "settings:discovery_interval_sec"
-	keyNotifyClaim       = "settings:notify_claim"
-	keyNotifyProgress    = "settings:notify_progress"
-	keyNotifyAuth        = "settings:notify_auth"
-	keyNotifyError       = "settings:notify_error"
-	keyPriorityMode      = "settings:priority_mode"
+	keyGlobalDiscord    = "settings:discord_webhook"
+	keyLogRetention     = "settings:log_retention_days"
+	keyLogLevel         = "settings:log_level"
+	keyTickIntervalMs   = "settings:tick_interval_ms"
+	keyDiscoveryIntvSec = "settings:discovery_interval_sec"
+	keyNotifyClaim      = "settings:notify_claim"
+	keyNotifyProgress   = "settings:notify_progress"
+	keyNotifyAuth       = "settings:notify_auth"
+	keyNotifyError      = "settings:notify_error"
+	keyPriorityMode     = "settings:priority_mode"
 )
 
 // PriorityMode controls campaign pick ordering when multiple
@@ -27,6 +27,7 @@ const (
 //   - "ordered" (default): sort by whitelist rank, top = first.
 //   - "ending_soonest": sort by ends_at ascending so campaigns near
 //     expiry get mined first.
+//
 // Mirrors DevilXD/TwitchDropsMiner's PRIORITY_ORDER toggle.
 const (
 	PriorityModeOrdered       = "ordered"

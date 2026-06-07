@@ -457,10 +457,10 @@ func TestWatcher_SkipsOfflineCampaignToNextLive(t *testing.T) {
 // the watcher registers per-account PubSub hooks at construction time.
 type pubsubAwareBackend struct {
 	*platformtest.MockBackend
-	hooks    map[string]platform.PubSubHooks
-	subs     []string
-	unsubs   []string
-	hooksMu  sync.Mutex
+	hooks   map[string]platform.PubSubHooks
+	subs    []string
+	unsubs  []string
+	hooksMu sync.Mutex
 }
 
 func (p *pubsubAwareBackend) SetAccountPubSubHooks(accountID string, h platform.PubSubHooks) {

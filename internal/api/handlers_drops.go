@@ -192,15 +192,15 @@ type collectMark struct {
 // is NOT on any whitelist — rendered in a parallel "discoverable but
 // not whitelisted" table below the main one.
 type dropsPage struct {
-	Tab          dropTab
-	PastCount    int
-	CurrentCount int
+	Tab           dropTab
+	PastCount     int
+	CurrentCount  int
 	UpcomingCount int
-	Rows         []dropsRow
-	UnlinkedRows []dropsRow      // whitelisted but the account isn't linked (Current tab only)
-	UnlistedRows []dropsRow      // campaigns whose Game is not on any account whitelist
-	Accounts     []dropsAccount  // for the "add to whitelist" dropdown on unlisted rows
-	CSRFToken    string          // mirrors templateData.CSRFToken for inline form
+	Rows          []dropsRow
+	UnlinkedRows  []dropsRow     // whitelisted but the account isn't linked (Current tab only)
+	UnlistedRows  []dropsRow     // campaigns whose Game is not on any account whitelist
+	Accounts      []dropsAccount // for the "add to whitelist" dropdown on unlisted rows
+	CSRFToken     string         // mirrors templateData.CSRFToken for inline form
 }
 
 type dropsAccount struct {
@@ -639,14 +639,14 @@ func (d *dropsDeps) collectAll(
 // items returns the benefits + summary for a single campaign, rendered
 // as the HTML partial that hx-get loads into a row's expanded section.
 type campaignDetailRow struct {
-	ID              string
-	Platform        string
-	Game            string
-	CampaignName    string
-	Kind            string
-	When            string
-	Status          string
-	Benefits        []campaignBenefitRow
+	ID           string
+	Platform     string
+	Game         string
+	CampaignName string
+	Kind         string
+	When         string
+	Status       string
+	Benefits     []campaignBenefitRow
 }
 
 type campaignBenefitRow struct {

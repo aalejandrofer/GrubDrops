@@ -33,7 +33,7 @@ func TestClaim_SendsCorrectVariables(t *testing.T) {
 
 	var req struct {
 		OperationName string `json:"operationName"`
-		Variables struct {
+		Variables     struct {
 			Input struct {
 				DropInstanceID string `json:"dropInstanceID"`
 			} `json:"input"`

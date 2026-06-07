@@ -69,12 +69,12 @@ type settingsPageData struct {
 	AllGames    []settingsGameRow // pool for the picker; .Selected marks ones in GlobalGames
 
 	// Read-only diagnostics
-	Uptime       string
-	GoVersion    string
-	Goroutines   int
-	BrowserURL   string
-	GitCommit    string
-	Version      string
+	Uptime     string
+	GoVersion  string
+	Goroutines int
+	BrowserURL string
+	GitCommit  string
+	Version    string
 }
 
 func (d *settingsDeps) get(w http.ResponseWriter, r *http.Request) {

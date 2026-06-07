@@ -19,10 +19,10 @@ import (
 )
 
 type accountsDeps struct {
-	q         *gen.Queries
-	t         Renderer
-	sm        *scs.SessionManager
-	sch       *scheduler.Scheduler
+	q             *gen.Queries
+	t             Renderer
+	sm            *scs.SessionManager
+	sch           *scheduler.Scheduler
 	reload        func(context.Context) error
 	authCheck     func(context.Context)         // auth-health sweep (manual trigger)
 	reloadAccount func(context.Context, string) // targeted single-account reload
