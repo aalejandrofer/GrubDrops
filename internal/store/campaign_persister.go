@@ -157,3 +157,32 @@ func (p *CampaignPersister) PersistCampaigns(ctx context.Context, camps []platfo
 	}
 	return nil
 }
+
+// PersistAccountLinks records this account's per-campaign link state so the
+// not-linked table can show WHICH accounts must connect (the shared
+// campaigns.account_linked is last-writer-wins across accounts). Only writes
+// rows whose link status was actually checked. Best-effort per row.
+func (p *CampaignPersister) PersistAccountLinks(ctx context.Context, accountID string, camps []platform.Campaign) error {
+	if p == nil || p.Q == nil || accountID == "" {
+		return nil
+	}
+	now := time.Now().Unix()
+	for _, c := range camps {
+		if c.ID == "" || !c.AccountLinkChecked {
+			continue
+		}
+		linked := int64(1)
+		if !c.AccountLinked {
+			linked = 0
+		}
+		_ = p.Q.UpsertAccountCampaignLink(ctx, gen.UpsertAccountCampaignLinkParams{
+			AccountID:  accountID,
+			CampaignID: c.ID,
+			Linked:     linked,
+			Checked:    1,
+			LinkUrl:    c.AccountLinkURL,
+			UpdatedAt:  now,
+		})
+	}
+	return nil
+}

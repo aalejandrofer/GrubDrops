@@ -69,7 +69,11 @@
             <span class="lvl" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">●</span>
             <span class="body"><em style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{.Platform}}</em> · <span style="color:var(--muted);">{{.Game}}</span> · {{.CampaignName}}</span>
             <span class="ac link-actions">
-              {{if .LinkURL}}<a href="{{.LinkURL}}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent);">connect account →</a>{{else}}account not linked{{end}}
+              {{range .ConnectChips}}
+                {{if .Linked}}<span class="conn-chip ok" title="{{.Login}} connected">✓ {{.Login}}</span>{{else}}<a class="conn-chip need" href="{{.LinkURL}}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="connect {{.Login}}">{{.Login}} →</a>{{end}}
+              {{else}}
+                {{if .LinkURL}}<a href="{{.LinkURL}}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent);">connect account →</a>{{else}}account not linked{{end}}
+              {{end}}
               {{if .CampaignID}}
               <form method="post" action="/drops/link" onclick="event.stopPropagation()" onsubmit="if(!confirm('Mark this campaign linked and reload watchers so the bot starts mining it?')){return false;} this.querySelector('button').disabled=true;">
                 <input type="hidden" name="csrf_token" value="{{$csrf}}">

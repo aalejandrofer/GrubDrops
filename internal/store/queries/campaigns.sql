@@ -61,3 +61,21 @@ SELECT * FROM campaigns
 WHERE starts_at > ?
 ORDER BY starts_at ASC
 LIMIT ?;
+
+-- name: UpsertAccountCampaignLink :exec
+INSERT INTO account_campaign_links (account_id, campaign_id, linked, checked, link_url, updated_at)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT(account_id, campaign_id) DO UPDATE SET
+    linked = excluded.linked,
+    checked = excluded.checked,
+    link_url = excluded.link_url,
+    updated_at = excluded.updated_at;
+
+-- name: ListAccountLinksForCampaign :many
+-- Per-account link state for a campaign, joined with the account handle.
+-- Drives the per-account connect chips on the not-linked table.
+SELECT a.id AS account_id, a.login, a.platform, l.linked, l.checked, l.link_url
+FROM account_campaign_links l
+JOIN accounts a ON a.id = l.account_id
+WHERE l.campaign_id = ?
+ORDER BY a.login ASC;

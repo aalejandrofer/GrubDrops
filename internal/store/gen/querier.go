@@ -36,6 +36,9 @@ type Querier interface {
 	GetSettingString(ctx context.Context, key string) ([]byte, error)
 	InsertClaim(ctx context.Context, arg InsertClaimParams) error
 	ListAccountGames(ctx context.Context, accountID string) ([]ListAccountGamesRow, error)
+	// Per-account link state for a campaign, joined with the account handle.
+	// Drives the per-account connect chips on the not-linked table.
+	ListAccountLinksForCampaign(ctx context.Context, campaignID string) ([]ListAccountLinksForCampaignRow, error)
 	ListActiveCampaignsForPlatform(ctx context.Context, arg ListActiveCampaignsForPlatformParams) ([]Campaign, error)
 	ListAllAccounts(ctx context.Context) ([]Account, error)
 	ListAllGames(ctx context.Context) ([]Game, error)
@@ -64,6 +67,7 @@ type Querier interface {
 	UpdateAccountDisplayName(ctx context.Context, arg UpdateAccountDisplayNameParams) error
 	UpdateAccountStatus(ctx context.Context, arg UpdateAccountStatusParams) error
 	UpdateAccountWebhook(ctx context.Context, arg UpdateAccountWebhookParams) error
+	UpsertAccountCampaignLink(ctx context.Context, arg UpsertAccountCampaignLinkParams) error
 	UpsertAdmin(ctx context.Context, arg UpsertAdminParams) error
 	UpsertBenefit(ctx context.Context, arg UpsertBenefitParams) error
 	UpsertCampaign(ctx context.Context, arg UpsertCampaignParams) error

@@ -663,6 +663,13 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 		if err := w.cfg.Persister.PersistCampaigns(ctx, campaigns); err != nil {
 			slog.Warn("watcher persist campaigns failed", "kind", "error", "account", w.cfg.AccountID, "err", err)
 		}
+		// Per-account link state (which accounts must connect) for the
+		// not-linked table's connect chips.
+		if alp, ok := w.cfg.Persister.(interface {
+			PersistAccountLinks(context.Context, string, []platform.Campaign) error
+		}); ok {
+			_ = alp.PersistAccountLinks(ctx, w.cfg.AccountID, campaigns)
+		}
 	}
 
 	// Reconcile inventory ownership into the claims table: a drop the

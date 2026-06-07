@@ -22,6 +22,15 @@ type Account struct {
 	UpdatedAt       int64          `json:"updated_at"`
 }
 
+type AccountCampaignLink struct {
+	AccountID  string `json:"account_id"`
+	CampaignID string `json:"campaign_id"`
+	Linked     int64  `json:"linked"`
+	Checked    int64  `json:"checked"`
+	LinkUrl    string `json:"link_url"`
+	UpdatedAt  int64  `json:"updated_at"`
+}
+
 type AccountGame struct {
 	AccountID string `json:"account_id"`
 	GameID    string `json:"game_id"`

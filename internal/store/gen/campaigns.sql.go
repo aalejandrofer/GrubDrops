@@ -33,6 +33,55 @@ func (q *Queries) GetCampaign(ctx context.Context, id string) (Campaign, error) 
 	return i, err
 }
 
+const listAccountLinksForCampaign = `-- name: ListAccountLinksForCampaign :many
+SELECT a.id AS account_id, a.login, a.platform, l.linked, l.checked, l.link_url
+FROM account_campaign_links l
+JOIN accounts a ON a.id = l.account_id
+WHERE l.campaign_id = ?
+ORDER BY a.login ASC
+`
+
+type ListAccountLinksForCampaignRow struct {
+	AccountID string `json:"account_id"`
+	Login     string `json:"login"`
+	Platform  string `json:"platform"`
+	Linked    int64  `json:"linked"`
+	Checked   int64  `json:"checked"`
+	LinkUrl   string `json:"link_url"`
+}
+
+// Per-account link state for a campaign, joined with the account handle.
+// Drives the per-account connect chips on the not-linked table.
+func (q *Queries) ListAccountLinksForCampaign(ctx context.Context, campaignID string) ([]ListAccountLinksForCampaignRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAccountLinksForCampaign, campaignID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAccountLinksForCampaignRow
+	for rows.Next() {
+		var i ListAccountLinksForCampaignRow
+		if err := rows.Scan(
+			&i.AccountID,
+			&i.Login,
+			&i.Platform,
+			&i.Linked,
+			&i.Checked,
+			&i.LinkUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listActiveCampaignsForPlatform = `-- name: ListActiveCampaignsForPlatform :many
 SELECT id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at, kind, account_linked, account_link_url FROM campaigns
 WHERE platform = ? AND status = 'active' AND starts_at <= ? AND ends_at >= ?
@@ -309,6 +358,37 @@ func (q *Queries) ListUpcomingCampaigns(ctx context.Context, arg ListUpcomingCam
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertAccountCampaignLink = `-- name: UpsertAccountCampaignLink :exec
+INSERT INTO account_campaign_links (account_id, campaign_id, linked, checked, link_url, updated_at)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT(account_id, campaign_id) DO UPDATE SET
+    linked = excluded.linked,
+    checked = excluded.checked,
+    link_url = excluded.link_url,
+    updated_at = excluded.updated_at
+`
+
+type UpsertAccountCampaignLinkParams struct {
+	AccountID  string `json:"account_id"`
+	CampaignID string `json:"campaign_id"`
+	Linked     int64  `json:"linked"`
+	Checked    int64  `json:"checked"`
+	LinkUrl    string `json:"link_url"`
+	UpdatedAt  int64  `json:"updated_at"`
+}
+
+func (q *Queries) UpsertAccountCampaignLink(ctx context.Context, arg UpsertAccountCampaignLinkParams) error {
+	_, err := q.db.ExecContext(ctx, upsertAccountCampaignLink,
+		arg.AccountID,
+		arg.CampaignID,
+		arg.Linked,
+		arg.Checked,
+		arg.LinkUrl,
+		arg.UpdatedAt,
+	)
+	return err
 }
 
 const upsertBenefit = `-- name: UpsertBenefit :exec

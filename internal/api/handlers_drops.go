@@ -162,6 +162,17 @@ type dropsRow struct {
 	// table and NOT mined. LinkURL is where to connect it (may be empty).
 	Linked  bool
 	LinkURL string
+	// ConnectChips lists the per-account link state for a not-linked row:
+	// one chip per account on this platform, ✓ for connected, "connect →"
+	// for those that still need it. Populated only for UnlinkedRows.
+	ConnectChips []connectChip
+}
+
+// connectChip is one account's link state on a not-linked campaign row.
+type connectChip struct {
+	Login   string
+	Linked  bool
+	LinkURL string
 }
 
 // collectMark is one account's collection state for a campaign, shown as a
@@ -391,9 +402,10 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		page.Rows = upcomingRows
 	}
 
-	// Collection chips for the not-linked rows too (so they show context).
+	// Collection chips + per-account connect chips for the not-linked rows.
 	for i := range page.UnlinkedRows {
 		d.attachCollection(r.Context(), &page.UnlinkedRows[i])
+		d.attachConnectChips(r.Context(), &page.UnlinkedRows[i])
 	}
 
 	// Collection status (cross / per-account ticks) for the rows actually
@@ -744,6 +756,34 @@ func (d *dropsDeps) markLinked(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.Redirect(w, r, "/drops", http.StatusSeeOther)
+}
+
+// attachConnectChips fills a not-linked row's per-account connect chips
+// from account_campaign_links. Each enabled account on the row's platform
+// gets a chip: ✓ when connected, "connect →" when it still needs linking.
+// Falls back to the campaign-level LinkURL when no per-account URL stored.
+func (d *dropsDeps) attachConnectChips(ctx context.Context, row *dropsRow) {
+	if row.CampaignID == "" {
+		return
+	}
+	links, err := d.q.ListAccountLinksForCampaign(ctx, row.CampaignID)
+	if err != nil {
+		return
+	}
+	for _, l := range links {
+		if l.Platform != row.Platform {
+			continue
+		}
+		url := l.LinkUrl
+		if url == "" {
+			url = row.LinkURL
+		}
+		row.ConnectChips = append(row.ConnectChips, connectChip{
+			Login:   l.Login,
+			Linked:  l.Linked != 0,
+			LinkURL: url,
+		})
+	}
 }
 
 // attachCollection fills a row's collection status from the campaign's

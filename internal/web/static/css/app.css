@@ -605,7 +605,20 @@
   .auth-pill.unknown { color: var(--dim);    border: 1px solid var(--line); }
   /* not-linked row actions: "connect account →" link + "I've linked it"
      override button, kept on one line, right-aligned in the .ac cell. */
-  .link-actions { display: inline-flex; align-items: center; gap: 10px; justify-content: flex-end; flex-wrap: nowrap; white-space: nowrap; }
+  /* per-account connect chips on a not-linked row */
+  .conn-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--line);
+    white-space: nowrap;
+    text-decoration: none;
+  }
+  .conn-chip.ok   { color: var(--green); }
+  .conn-chip.need { color: var(--accent); border-color: rgba(212, 99, 30, 0.5); }
+  .conn-chip.need:hover { background: rgba(212, 99, 30, 0.1); }
+  .link-actions { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; flex-wrap: wrap; white-space: nowrap; }
   .link-actions > a { white-space: nowrap; }
   .link-actions form { display: inline; margin: 0; }
   /* Matches the .collect-box tick style: neutral border, green ✓, no fill. */
