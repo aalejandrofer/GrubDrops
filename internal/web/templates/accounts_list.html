@@ -14,7 +14,8 @@
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <button class="btn" type="submit" title="Probe every account's auth (Twitch token / Kick cookies) now.">Check auth</button>
       </form>
-      <form method="post" action="/accounts/apply" class="inline-form">
+      <form method="post" action="/accounts/apply" class="inline-form"
+            onsubmit="return confirm('Reload all watchers? This restarts every account’s current watch/claim activity (re-discover, re-pick). Server-side drop minutes are kept.');">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <button class="btn" type="submit">Apply changes</button>
       </form>

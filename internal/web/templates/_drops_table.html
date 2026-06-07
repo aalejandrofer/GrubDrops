@@ -71,7 +71,7 @@
             <span class="ac link-actions">
               {{if .LinkURL}}<a href="{{.LinkURL}}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent);">connect account →</a>{{else}}account not linked{{end}}
               {{if .CampaignID}}
-              <form method="post" action="/drops/link" onclick="event.stopPropagation()" onsubmit="this.querySelector('button').disabled=true">
+              <form method="post" action="/drops/link" onclick="event.stopPropagation()" onsubmit="if(!confirm('Mark this campaign linked and reload watchers so the bot starts mining it?')){return false;} this.querySelector('button').disabled=true;">
                 <input type="hidden" name="csrf_token" value="{{$csrf}}">
                 <input type="hidden" name="campaign_id" value="{{.CampaignID}}">
                 <button class="btn sm linked-btn" type="submit" title="I've linked this account — mark it linked so the bot attempts to mine it.">✓</button>
