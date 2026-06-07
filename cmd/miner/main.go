@@ -120,14 +120,20 @@ func run() error {
 		return acc.WebhookUrl.String
 	}
 
-	filter := &notify.VerbosityFilter{Allow: map[string]bool{
-		notify.EventClaim:    true,
-		notify.EventError:    true,
-		notify.EventProgress: true,
-		notify.EventAuth:     true,
-	}}
-
 	buildNotifier := func() notify.Notifier {
+		// Build the per-kind filter from the saved toggles every time so
+		// toggling CLAIMS/PROGRESS/AUTH/ERRORS on /settings + Save actually
+		// takes effect (previously the filter was hardcoded all-true, so
+		// PROGRESS fired regardless of the checkbox). State events are
+		// never sent to Discord (too noisy).
+		claim, progress, auth, errs := settingsStore.NotifyKinds(ctx)
+		filter := &notify.VerbosityFilter{Allow: map[string]bool{
+			notify.EventClaim:    claim,
+			notify.EventProgress: progress,
+			notify.EventAuth:     auth,
+			notify.EventError:    errs,
+			notify.EventState:    false,
+		}}
 		globalURL, _ := settingsStore.GlobalDiscordWebhook(ctx)
 		if globalURL == "" {
 			globalURL = cfg.DiscordWebhookURL
@@ -263,8 +269,10 @@ func run() error {
 		// reloading takes effect. See ForceLinked in watcher.Config.
 		forceLinked := loadLinkOverrides(ctx, q)
 
+		acctLabel := "@" + a.Login
 		w := watcher.New(watcher.Config{
-			AccountID: a.ID, Backend: b, Session: sess,
+			AccountID: a.ID, AccountLabel: acctLabel, Platform: a.Platform,
+			Backend: b, Session: sess,
 			Notifier: notifier, TickInterval: 500 * time.Millisecond,
 			AllowGame: allow, GameRank: rank,
 			PriorityMode:  priorityMode,

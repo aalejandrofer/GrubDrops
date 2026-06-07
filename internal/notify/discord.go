@@ -53,12 +53,63 @@ func (d *DiscordWebhook) Notify(ctx context.Context, event Event, fields map[str
 }
 
 func buildEmbed(event Event, fields map[string]any) map[string]any {
-	return map[string]any{
-		"title":       titleFor(event),
-		"description": descFor(event, fields),
-		"color":       colorFor(event),
-		"timestamp":   time.Now().UTC().Format(time.RFC3339),
+	embed := map[string]any{
+		"title":     titleFor(event),
+		"color":     colorFor(event),
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	}
+
+	// Render known human fields as proper inline embed fields instead of
+	// dumping raw "account: acc_… / benefit: <uuid>" lines. account_label
+	// is the @handle (account is the raw id used only for routing).
+	str := func(k string) string {
+		if v, ok := fields[k]; ok {
+			if s, ok := v.(string); ok {
+				return s
+			}
+		}
+		return ""
+	}
+	var ef []map[string]any
+	addField := func(name, val string, inline bool) {
+		if val == "" {
+			return
+		}
+		ef = append(ef, map[string]any{"name": name, "value": val, "inline": inline})
+	}
+	acct := str("account_label")
+	if acct == "" {
+		acct = str("account")
+	}
+	addField("Account", acct, true)
+	addField("Game", str("game"), true)
+	addField("Drop", str("drop"), false)
+	if ch := str("channel"); ch != "" {
+		plat := str("platform")
+		link := ch
+		switch plat {
+		case "twitch":
+			link = "[" + ch + "](https://twitch.tv/" + ch + ")"
+		case "kick":
+			link = "[" + ch + "](https://kick.com/" + ch + ")"
+		}
+		addField("Channel", link, true)
+	}
+	if msg := str("msg"); msg != "" {
+		addField("Detail", msg, false)
+	}
+
+	if len(ef) > 0 {
+		embed["fields"] = ef
+	} else {
+		// Fallback for events without recognised fields (state/auth/error
+		// emitters that pass arbitrary keys).
+		embed["description"] = descFor(event, fields)
+	}
+	if img := str("image"); img != "" {
+		embed["thumbnail"] = map[string]any{"url": img}
+	}
+	return embed
 }
 
 func titleFor(event Event) string {

@@ -36,6 +36,8 @@ type ClaimRecorder interface {
 
 type Config struct {
 	AccountID    string
+	AccountLabel string // human handle (@login) for notifications; falls back to AccountID
+	Platform     string // "twitch" | "kick" — for notification context
 	Backend      platform.Backend
 	Session      platform.Session
 	Notifier     Notifier
@@ -410,6 +412,46 @@ func (w *Watcher) Snapshot() Snapshot {
 	s.MinutesWatched = w.lastProgressMin
 	s.StartedAt = w.watchStartedAt
 	return s
+}
+
+// notifyFields builds the field map for a claim/progress notification.
+// "account" stays the account ID (the router keys per-account webhooks on
+// it); human-facing values (account_label, game, drop, channel, image) are
+// added so the Discord embed can render names instead of raw IDs. extra
+// overrides/augments (e.g. progress counters).
+func (w *Watcher) notifyFields(extra map[string]any) map[string]any {
+	f := map[string]any{"account": w.cfg.AccountID}
+	if w.cfg.AccountLabel != "" {
+		f["account_label"] = w.cfg.AccountLabel
+	}
+	if w.cfg.Platform != "" {
+		f["platform"] = w.cfg.Platform
+	}
+	w.mu.Lock()
+	if w.currentCampaign != nil {
+		if w.currentCampaign.Game != "" {
+			f["game"] = w.currentCampaign.Game
+		}
+		if w.currentCampaign.Name != "" {
+			f["campaign"] = w.currentCampaign.Name
+		}
+	}
+	if w.currentBenefit != nil {
+		if w.currentBenefit.Name != "" {
+			f["drop"] = w.currentBenefit.Name
+		}
+		if w.currentBenefit.ImageURL != "" {
+			f["image"] = w.currentBenefit.ImageURL
+		}
+	}
+	if w.currentStream != nil && w.currentStream.Channel != "" {
+		f["channel"] = w.currentStream.Channel
+	}
+	w.mu.Unlock()
+	for k, v := range extra {
+		f[k] = v
+	}
+	return f
 }
 
 func (w *Watcher) setState(ctx context.Context, s State) {
@@ -1165,9 +1207,7 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 		}
 	}
 
-	_ = w.cfg.Notifier.Notify(ctx, "progress", map[string]any{
-		"account": w.cfg.AccountID, "benefit": benefit.ID,
-	})
+	_ = w.cfg.Notifier.Notify(ctx, "progress", w.notifyFields(nil))
 	return nil
 }
 
@@ -1218,9 +1258,11 @@ func (w *Watcher) claim(ctx context.Context) error {
 		"benefit_name", benefit.Name,
 		"channel", handle.Channel)
 
-	_ = w.cfg.Notifier.Notify(ctx, "claim", map[string]any{
-		"account": w.cfg.AccountID, "benefit": benefit.ID,
-	})
+	_ = w.cfg.Notifier.Notify(ctx, "claim", w.notifyFields(map[string]any{
+		// benefit/handle are captured locals; currentStream may already be
+		// cleared by claim time, so pass channel explicitly.
+		"drop": benefit.Name, "channel": handle.Channel,
+	}))
 
 	w.mu.Lock()
 	w.currentBenefit = nil
