@@ -54,7 +54,7 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// On-disk claims (real drop claims with benefit_id).
-	if rows, err := d.q.ListRecentClaims(ctx, 200); err == nil {
+	if rows, err := d.q.ListRecentClaims(ctx, 500); err == nil {
 		for _, row := range rows {
 			acc := row.AccountName
 			if acc != "" {
@@ -123,8 +123,8 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 	sort.SliceStable(page.Claims, func(i, j int) bool {
 		return page.Claims[i].When > page.Claims[j].When
 	})
-	if len(page.Claims) > 100 {
-		page.Claims = page.Claims[:100]
+	if len(page.Claims) > 300 {
+		page.Claims = page.Claims[:300]
 	}
 
 	// Recent activity (everything not just claims). Newest first; cap

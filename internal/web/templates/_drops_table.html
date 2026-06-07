@@ -125,15 +125,16 @@
                  "not whitelisted" label + bottom add block). stopPropagation
                  so interacting with it doesn't toggle the row open. */}}
             <span class="ac whitelist-add" onclick="event.stopPropagation()">
-              {{if $accts}}
+              {{if not .Game}}<span style="color:var(--muted);" title="this campaign reports no game — nothing to whitelist">no game</span>
+              {{else if $accts}}
               <form method="post" action="/drops/whitelist/add" class="disc-add-form" onsubmit="this.querySelector('button').disabled=true">
                 <input type="hidden" name="csrf_token" value="{{$csrf}}">
                 <input type="hidden" name="name" value="{{.Game}}">
-                <select name="account_id" title="whitelist {{.Game}} for…">
+                <select name="account_id" onclick="event.stopPropagation()" title="whitelist {{.Game}} for…">
                   <option value="__global__">★ Global</option>
                   {{range $accts}}<option value="{{.ID}}">{{.Label}}</option>{{end}}
                 </select>
-                <button class="btn sm" type="submit">whitelist +</button>
+                <button class="btn sm" type="submit" onclick="event.stopPropagation()">whitelist +</button>
               </form>
               {{else}}<span style="color:var(--muted);">no accounts</span>{{end}}
             </span>

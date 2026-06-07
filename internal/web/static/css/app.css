@@ -2221,7 +2221,12 @@
     border-radius: 2px;
   }
   .add-by-name input[type="text"]:focus { border-color: var(--accent); outline: none; }
-  .settings-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .settings-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: stretch; }
+  /* Both priority columns share the row height (= the taller "Selected"
+     list); "Available" fills it and scrolls internally so the two columns
+     line up instead of the right one stopping short. */
+  .settings-grid-2 > div { display: flex; flex-direction: column; min-height: 0; }
+  .settings-grid-2 > div > .kicker { flex: 0 0 auto; }
   .settings-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
   /* KV-style status read-out used in settings status panel. */
   .kvlist {
@@ -2249,7 +2254,7 @@
     border: 1px dashed var(--line);
     min-height: 160px;
   }
-  .rank-list.rank-available { max-height: 260px; overflow-y: auto; }
+  .rank-list.rank-available { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .rank-list li {
     padding: 8px 12px;
     border-bottom: 1px solid var(--line);
