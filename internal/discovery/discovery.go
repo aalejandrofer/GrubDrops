@@ -89,6 +89,24 @@ func NewQueriesWhitelist(q *gen.Queries) WhitelistSource {
 				}
 			}
 		}
+		// Also union the GLOBAL priority list. Accounts that haven't picked
+		// a per-account whitelist mine from global_games (account_games is
+		// empty for them), so without this the discovery whitelist comes
+		// back empty and EVERY tick no-ops — campaigns never refresh and
+		// new ones never appear. The watcher applies the same global
+		// fallback per-account; discovery must mirror it.
+		gg, err := q.ListGlobalGames(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range gg {
+			if n := strings.ToLower(strings.TrimSpace(r.Name)); n != "" {
+				set[n] = struct{}{}
+			}
+			if s := strings.ToLower(strings.TrimSpace(r.Slug)); s != "" {
+				set[s] = struct{}{}
+			}
+		}
 		out := make([]string, 0, len(set))
 		for k := range set {
 			out = append(out, k)

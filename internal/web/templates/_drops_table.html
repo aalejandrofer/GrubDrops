@@ -74,7 +74,7 @@
               <form method="post" action="/drops/link" onclick="event.stopPropagation()" onsubmit="this.querySelector('button').disabled=true">
                 <input type="hidden" name="csrf_token" value="{{$csrf}}">
                 <input type="hidden" name="campaign_id" value="{{.CampaignID}}">
-                <button class="btn sm linked-btn" type="submit" title="Already connected this account? Mark it linked and the bot will attempt to mine it.">✓ I've linked it</button>
+                <button class="btn sm linked-btn" type="submit" title="I've linked this account — mark it linked so the bot attempts to mine it.">✓</button>
               </form>
               {{end}}
             </span>
