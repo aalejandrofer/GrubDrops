@@ -241,6 +241,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/settings", settingsH.post)
 	authed.Post("/settings/global-games", settingsH.globalGamesPost)
 	authed.Post("/settings/global-games/add", settingsH.globalGamesAdd)
+	authed.Post("/settings/password", settingsH.changePassword)
 	authed.Get("/drops", dropsH.list)
 	authed.Get("/drops/campaigns/{id}/items", dropsH.items)
 	authed.Post("/drops/whitelist/add", dropsH.addWhitelist)

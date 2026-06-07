@@ -11,6 +11,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
+	"github.com/aalejandrofer/dropsminer/internal/auth"
 	"github.com/aalejandrofer/dropsminer/internal/scheduler"
 	"github.com/aalejandrofer/dropsminer/internal/store"
 	"github.com/aalejandrofer/dropsminer/internal/store/gen"
@@ -217,6 +218,48 @@ func (d *settingsDeps) globalGamesAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	d.applyReload(ctx)
 	d.sm.Put(ctx, "flash", "added "+name+" to global priority")
+	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+}
+
+// changePassword handles POST /settings/password — verifies the current
+// master password, then sets a new one (bcrypt). Min 8 chars; new + confirm
+// must match. Flashes the outcome back to /settings.
+func (d *settingsDeps) changePassword(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	cur := r.FormValue("current_password")
+	nw := r.FormValue("new_password")
+	cf := r.FormValue("confirm_password")
+	fail := func(msg string) {
+		d.sm.Put(ctx, "flash", msg)
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+	}
+	admin, err := d.q.GetAdmin(ctx)
+	if err != nil {
+		fail("admin not configured")
+		return
+	}
+	if err := auth.VerifyPassword(admin.PasswordHash, cur); err != nil {
+		fail("current password is wrong")
+		return
+	}
+	if len(nw) < 8 {
+		fail("new password must be at least 8 characters")
+		return
+	}
+	if nw != cf {
+		fail("new passwords do not match")
+		return
+	}
+	hash, err := auth.HashPassword(nw)
+	if err != nil {
+		fail("could not hash password")
+		return
+	}
+	if err := d.q.UpsertAdmin(ctx, gen.UpsertAdminParams{PasswordHash: hash, CreatedAt: time.Now().Unix()}); err != nil {
+		fail("could not save password")
+		return
+	}
+	d.sm.Put(ctx, "flash", "master password changed")
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
 

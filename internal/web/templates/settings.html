@@ -135,6 +135,28 @@
       </div>
     </section>
 
+    <section class="settings-card">
+      <header class="section-h"><h3>Master password</h3><span class="meta">Admin login</span></header>
+      <form method="post" action="/settings/password" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <label>Current password
+          <input type="password" name="current_password" required autocomplete="current-password">
+        </label>
+        <div class="settings-grid-2">
+          <label>New password
+            <input type="password" name="new_password" required minlength="8" autocomplete="new-password">
+          </label>
+          <label>Confirm new password
+            <input type="password" name="confirm_password" required minlength="8" autocomplete="new-password">
+          </label>
+        </div>
+        <div class="row">
+          <span class="field-hint" style="margin:0;">Minimum 8 characters. You stay logged in after changing it.</span>
+          <button class="btn primary" type="submit">Change password →</button>
+        </div>
+      </form>
+    </section>
+
   </div>
   {{end}}
 </div>
