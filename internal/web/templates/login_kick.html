@@ -4,76 +4,73 @@
 
 {{define "content"}}
 {{with .Page}}
-<div class="auth-wrap wide">
-  <div class="auth-card">
-    <div class="kicker">// kick · authorize</div>
-    <h1>Authorize {{.DisplayName}}</h1>
-    <p class="intro">Kick has no public OAuth. GrubDrops replays your kick.com session directly over a Chrome-fingerprinted HTTP client (utls) — no browser, no sidecar. When discovery logs cloudflare / 401, the cookies have gone stale — re-grab here.</p>
+<div class="shell narrow">
+  <div class="ph">
+    <div>
+      <div class="kicker">// kick · authorize</div>
+      <h1>Authorize {{.DisplayName}}</h1>
+    </div>
+    <div class="actions"><a class="btn ghost" href="/accounts">← accounts</a></div>
   </div>
 
-  <div class="auth-card method preferred">
-    <div class="method-head">
-      <span class="method-tag">recommended</span>
-      <h2>Download the helper</h2>
-    </div>
-    <p>A tiny app that reads your local browser's kick.com cookies and pushes them here — no DevTools, no copy-paste. Grab the build for your OS:</p>
-    <div class="dl-row">
-      <a class="btn sm" href="/download/helper?os=macos">⬇ macOS (Apple Silicon)</a>
-      <a class="btn sm" href="/download/helper?os=macos-intel">⬇ macOS (Intel)</a>
-      <a class="btn sm" href="/download/helper?os=windows">⬇ Windows</a>
-      <a class="btn sm" href="/download/helper?os=linux">⬇ Linux</a>
-    </div>
-    <ol class="steps">
-      <li>Make sure you're signed in to <code>kick.com</code> in your everyday browser.</li>
-      <li><b>Double-click</b> the downloaded helper. It opens a console and walks you through it.<br><span class="hint">macOS / Linux: first run <code>chmod +x</code> the file; macOS may need right-click → Open the first time.</span></li>
-      <li>When prompted, paste this <b>Account ID</b> and the Kick channel(s) you want to mine:</li>
-    </ol>
-    <div class="cli-box">
-      <div class="cli-label">account id</div>
-      <pre class="cli-code">{{.AccountID}}</pre>
-      <div class="cli-hint">Miner URL defaults to this deployment. You'll also be asked for your admin password.</div>
-    </div>
-  </div>
-  {{end}}
-  {{if .Flash}}<div class="auth-flash"><div class="err">{{.Flash}}</div></div>{{end}}
-  {{with .Page}}
+  <p class="lede">Kick has no public OAuth. GrubDrops replays your kick.com session directly over a Chrome-fingerprinted HTTP client (utls) — no browser, no sidecar. When discovery logs cloudflare / 401, the cookies have gone stale — re-grab here.</p>
 
-  <div class="auth-card method">
-    <div class="method-head">
-      <span class="method-tag muted">fallback</span>
-      <h2>Manual cookie paste</h2>
-    </div>
-    <ol class="steps">
-      <li>Open <code>kick.com</code> in any browser and sign in.</li>
-      <li>DevTools → Application → Cookies → <code>kick.com</code>.</li>
-      <li>Copy <code>kick_session</code> + <code>XSRF-TOKEN</code> (required), and <code>session_token</code> (needed to claim drops). <code>cf_clearance</code> optional.</li>
-      <li>Paste below + one or more channels (comma/space-separated).</li>
-    </ol>
-    <form method="post" action="/accounts/{{.AccountID}}/login">
-      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-      <label>kick_session <span class="req">(required)</span><input type="text" name="kick_session" required autocomplete="off"></label>
-      <label>XSRF-TOKEN <span class="req">(required)</span><input type="text" name="xsrf_token" required autocomplete="off"></label>
-      <label>session_token <span class="opt">(needed for claims)</span><input type="text" name="session_token" autocomplete="off"></label>
-      <label>cf_clearance <span class="opt">(optional)</span><input type="text" name="cf_clearance" autocomplete="off"></label>
-      <label>Channels to mine <span class="req">(required)</span><input type="text" name="channel" required placeholder="streamer1, streamer2, streamer3"></label>
-      <div class="submit-row">
-        <a class="alt" href="/accounts">← cancel</a>
-        <button class="btn primary" type="submit">Authorize →</button>
+  {{if $.Flash}}<div class="login-flash">{{$.Flash}}</div>{{end}}
+
+  <div class="settings-stack">
+
+    <section class="settings-card">
+      <header class="section-h"><h3>Download the helper</h3><span class="meta rec">recommended</span></header>
+      <p class="lede sm">A tiny app that reads your local browser's kick.com cookies and pushes them here — no DevTools, no copy-paste. Grab the build for your OS:</p>
+      <div class="dl-row">
+        <a class="btn sm" href="/download/helper?os=macos">⬇ macOS (Apple Silicon)</a>
+        <a class="btn sm" href="/download/helper?os=macos-intel">⬇ macOS (Intel)</a>
+        <a class="btn sm" href="/download/helper?os=windows">⬇ Windows</a>
+        <a class="btn sm" href="/download/helper?os=linux">⬇ Linux</a>
       </div>
-    </form>
-  </div>
+      <ol class="steps">
+        <li>Make sure you're signed in to <code>kick.com</code> in your everyday browser.</li>
+        <li><b>Double-click</b> the downloaded helper. It opens a console and walks you through it.<br><span class="step-hint">macOS / Linux: first <code>chmod +x</code> the file; macOS may need right-click → Open the first time.</span></li>
+        <li>When prompted, paste this <b>Account ID</b> and the Kick channel(s) you want to mine:</li>
+      </ol>
+      <div class="cli-box">
+        <div class="cli-label">account id</div>
+        <pre class="cli-code">{{.AccountID}}</pre>
+        <div class="cli-hint">Miner URL defaults to this deployment. You'll also be asked for your admin password.</div>
+      </div>
+    </section>
 
-  <div class="auth-card method">
-    <div class="method-head">
-      <span class="method-tag muted">developers</span>
-      <h2>Run from source</h2>
-    </div>
-    <p>Have Go installed? Skip the download and run the helper straight from the repo:</p>
-    <div class="cli-box">
-      <div class="cli-label">one-liner</div>
-      <pre class="cli-code">go run ./cmd/dropsminer-helper kick {{.AccountID}} --channel STREAMER[,STREAMER2,...]</pre>
-      <div class="cli-hint">Pass one or more Kick channel logins (comma-separated, or repeat <code>--channel</code>). Add <code>--miner URL</code> for a remote deployment, <code>--password PW</code> to skip the prompt.</div>
-    </div>
+    <section class="settings-card">
+      <header class="section-h"><h3>Manual cookie paste</h3><span class="meta">fallback</span></header>
+      <ol class="steps">
+        <li>Open <code>kick.com</code> in any browser and sign in.</li>
+        <li>DevTools → Application → Cookies → <code>kick.com</code>.</li>
+        <li>Copy <code>kick_session</code> + <code>XSRF-TOKEN</code> (required), and <code>session_token</code> (needed to claim drops). <code>cf_clearance</code> optional.</li>
+      </ol>
+      <form method="post" action="/accounts/{{.AccountID}}/login">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <label>kick_session <span class="req">required</span><input type="text" name="kick_session" required autocomplete="off"></label>
+        <label>XSRF-TOKEN <span class="req">required</span><input type="text" name="xsrf_token" required autocomplete="off"></label>
+        <label>session_token <span class="opt">needed for claims</span><input type="text" name="session_token" autocomplete="off"></label>
+        <label>cf_clearance <span class="opt">optional</span><input type="text" name="cf_clearance" autocomplete="off"></label>
+        <label>Channels to mine <span class="req">required</span><input type="text" name="channel" required placeholder="streamer1, streamer2, streamer3"></label>
+        <div class="row">
+          <a class="back-link" href="/accounts">← cancel</a>
+          <button class="btn primary" type="submit">Authorize →</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="settings-card">
+      <header class="section-h"><h3>Run from source</h3><span class="meta">developers</span></header>
+      <p class="lede sm">Have Go installed? Skip the download and run the helper straight from the repo:</p>
+      <div class="cli-box">
+        <div class="cli-label">one-liner</div>
+        <pre class="cli-code">go run ./cmd/dropsminer-helper kick {{.AccountID}} --channel STREAMER[,STREAMER2,...]</pre>
+        <div class="cli-hint">Pass one or more Kick channel logins (comma-separated, or repeat <code>--channel</code>). Add <code>--miner URL</code> for a remote deployment, <code>--password PW</code> to skip the prompt.</div>
+      </div>
+    </section>
+
   </div>
 </div>
 {{end}}
