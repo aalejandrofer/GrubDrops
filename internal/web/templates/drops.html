@@ -63,6 +63,7 @@
         <span class="meta">{{len .UnlinkedRows}} · not mined</span>
       </header>
       <div class="events drops-rows">
+        {{$csrf := .CSRFToken}}
         {{range .UnlinkedRows}}
         <details class="ev kind-auth drop-dim"
                  {{if .CampaignID}}hx-get="/drops/campaigns/{{.CampaignID}}/items"
@@ -74,7 +75,16 @@
             <span class="t">—</span>
             <span class="lvl" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">●</span>
             <span class="body"><em style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{.Platform}}</em> · <span style="color:var(--muted);">{{.Game}}</span> · {{.CampaignName}}</span>
-            <span class="ac">{{if .LinkURL}}<a href="{{.LinkURL}}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent);">connect account →</a>{{else}}account not linked{{end}}</span>
+            <span class="ac link-actions">
+              {{if .LinkURL}}<a href="{{.LinkURL}}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent);">connect account →</a>{{else}}account not linked{{end}}
+              {{if .CampaignID}}
+              <form method="post" action="/drops/link" onclick="event.stopPropagation()" onsubmit="this.querySelector('button').disabled=true">
+                <input type="hidden" name="csrf_token" value="{{$csrf}}">
+                <input type="hidden" name="campaign_id" value="{{.CampaignID}}">
+                <button class="btn sm linked-btn" type="submit" title="Already connected this account? Mark it linked and the bot will attempt to mine it.">✓ I've linked it</button>
+              </form>
+              {{end}}
+            </span>
           </summary>
           <div class="ev-detail-slot">
             {{if .CampaignID}}

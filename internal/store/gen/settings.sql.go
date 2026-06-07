@@ -7,7 +7,17 @@ package gen
 
 import (
 	"context"
+	"database/sql"
 )
+
+const deleteKV = `-- name: DeleteKV :exec
+DELETE FROM kv WHERE key = ?
+`
+
+func (q *Queries) DeleteKV(ctx context.Context, key string) error {
+	_, err := q.db.ExecContext(ctx, deleteKV, key)
+	return err
+}
 
 const getSettingString = `-- name: GetSettingString :one
 SELECT value FROM kv WHERE key = ?
@@ -18,6 +28,33 @@ func (q *Queries) GetSettingString(ctx context.Context, key string) ([]byte, err
 	var value []byte
 	err := row.Scan(&value)
 	return value, err
+}
+
+const listKVByPrefix = `-- name: ListKVByPrefix :many
+SELECT key, value FROM kv WHERE key LIKE ?1 || '%'
+`
+
+func (q *Queries) ListKVByPrefix(ctx context.Context, dollar_1 sql.NullString) ([]Kv, error) {
+	rows, err := q.db.QueryContext(ctx, listKVByPrefix, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Kv
+	for rows.Next() {
+		var i Kv
+		if err := rows.Scan(&i.Key, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const upsertSettingString = `-- name: UpsertSettingString :exec

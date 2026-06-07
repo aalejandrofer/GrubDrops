@@ -80,6 +80,16 @@ type Config struct {
 	// backend confirms a claim. Without it the /drops Past tab + the
 	// /history view stay empty.
 	ClaimRecorder ClaimRecorder
+
+	// ForceLinked, when set and returning true for a campaign id, treats
+	// that campaign as account-linked even if the backend reports it
+	// unlinked. Backs the manual "I've linked it" override on /drops:
+	// Kick connect_url campaigns 403 /drops/progress until the account has
+	// already earned (a deadlock), so the API can't pre-confirm the link.
+	// The override lets the user assert the link; the watcher then attempts
+	// to mine and the live progress check confirms it. Best-effort — if the
+	// account truly isn't linked the watch just accrues no progress.
+	ForceLinked func(campaignID string) bool
 }
 
 type Watcher struct {
@@ -669,8 +679,15 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 		// unverified default (avoids regressing platforms/paths that
 		// don't surface the flag).
 		if (c.Platform == "twitch" || c.AccountLinkChecked) && !c.AccountLinked {
-			skippedUnlinked++
-			continue
+			// Manual "I've linked it" override: the user asserted the
+			// external account is connected, so attempt to mine despite the
+			// backend reporting unlinked. The live progress check confirms.
+			if w.cfg.ForceLinked != nil && w.cfg.ForceLinked(c.ID) {
+				slog.Info("watcher mining link-overridden campaign", "kind", "discovery", "account", w.cfg.AccountID, "campaign", c.Name)
+			} else {
+				skippedUnlinked++
+				continue
+			}
 		}
 		// P3: exclude-game set short-circuits the pick. Whitelist
 		// already passed; exclude is a finer-grained skip without

@@ -6,6 +6,7 @@ package gen
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
@@ -22,6 +23,7 @@ type Querier interface {
 	CountClaims(ctx context.Context) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
 	DeleteAccount(ctx context.Context, id string) error
+	DeleteKV(ctx context.Context, key string) error
 	GetAccount(ctx context.Context, id string) (Account, error)
 	GetAccountByPlatformLogin(ctx context.Context, arg GetAccountByPlatformLoginParams) (Account, error)
 	GetAdmin(ctx context.Context) (Admin, error)
@@ -43,6 +45,7 @@ type Querier interface {
 	ListCurrentCampaigns(ctx context.Context, arg ListCurrentCampaignsParams) ([]Campaign, error)
 	ListEnabledAccounts(ctx context.Context) ([]Account, error)
 	ListGlobalGames(ctx context.Context) ([]ListGlobalGamesRow, error)
+	ListKVByPrefix(ctx context.Context, dollar_1 sql.NullString) ([]Kv, error)
 	// Campaigns that have ended. Whitelist filtering is applied in Go.
 	ListPastCampaigns(ctx context.Context, arg ListPastCampaignsParams) ([]Campaign, error)
 	ListRecentClaims(ctx context.Context, limit int64) ([]ListRecentClaimsRow, error)

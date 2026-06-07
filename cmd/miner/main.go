@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -256,6 +257,11 @@ func run() error {
 		// the entry; the next Reload picks up changes.
 		priorityMode, _ := settingsStore.PriorityMode(ctx)
 
+		// Manual "I've linked it" overrides — campaign ids the user asserted
+		// are account-linked. Loaded per build (per Reload) so toggling +
+		// reloading takes effect. See ForceLinked in watcher.Config.
+		forceLinked := loadLinkOverrides(ctx, q)
+
 		w := watcher.New(watcher.Config{
 			AccountID: a.ID, Backend: b, Session: sess,
 			Notifier: notifier, TickInterval: 500 * time.Millisecond,
@@ -263,6 +269,7 @@ func run() error {
 			PriorityMode:  priorityMode,
 			Persister:     campaignPersister,
 			ClaimRecorder: claimRecorder,
+			ForceLinked:   forceLinked,
 		})
 		return scheduler.NewEntry(a.ID, w), nil
 	}
@@ -353,6 +360,26 @@ func run() error {
 type nopRunner struct{}
 
 func (nopRunner) Run(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }
+
+// loadLinkOverrides reads the manual "I've linked it" campaign overrides
+// from kv (keys prefixed store.LinkOverridePrefix) and returns a membership
+// predicate. Errors degrade to "no overrides" — the gate just stays on.
+func loadLinkOverrides(ctx context.Context, q *gen.Queries) func(campaignID string) bool {
+	set := map[string]bool{}
+	rows, err := q.ListKVByPrefix(ctx, sql.NullString{String: store.LinkOverridePrefix, Valid: true})
+	if err == nil {
+		for _, kv := range rows {
+			if string(kv.Value) != "1" {
+				continue
+			}
+			set[strings.TrimPrefix(kv.Key, store.LinkOverridePrefix)] = true
+		}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	return func(campaignID string) bool { return set[campaignID] }
+}
 
 type indirectNotifier struct {
 	mu  *sync.Mutex

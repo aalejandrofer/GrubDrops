@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"database/sql"
+	"log/slog"
 	"math"
 	"net/http"
 	"sort"
@@ -10,12 +12,31 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/aalejandrofer/dropsminer/internal/store"
 	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
 type dropsDeps struct {
-	q *gen.Queries
-	t Renderer
+	q      *gen.Queries
+	t      Renderer
+	reload func(context.Context) error
+}
+
+// linkOverrides returns the set of campaign ids the user manually marked
+// "I've linked it" (kv keys store.LinkOverridePrefix, value "1"). Best
+// effort — a query error yields an empty set (gate stays on).
+func (d *dropsDeps) linkOverrides(ctx context.Context) map[string]bool {
+	set := map[string]bool{}
+	rows, err := d.q.ListKVByPrefix(ctx, sql.NullString{String: store.LinkOverridePrefix, Valid: true})
+	if err != nil {
+		return set
+	}
+	for _, kv := range rows {
+		if string(kv.Value) == "1" {
+			set[strings.TrimPrefix(kv.Key, store.LinkOverridePrefix)] = true
+		}
+	}
+	return set
 }
 
 // dropTab is one of "past" | "current" | "upcoming". The /drops page
@@ -286,9 +307,11 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		// Split the whitelisted Current list: linked → mineable (Rows),
 		// not-linked → a separate table so the operator sees what they'd
 		// mine once the account is connected. The watcher already skips
-		// the not-linked ones.
+		// the not-linked ones. A manual "I've linked it" override promotes
+		// a row into the mineable list (matches the watcher's ForceLinked).
+		overrides := d.linkOverrides(r.Context())
 		for _, row := range currentRows {
-			if row.Linked {
+			if row.Linked || overrides[row.CampaignID] {
 				page.Rows = append(page.Rows, row)
 			} else {
 				page.UnlinkedRows = append(page.UnlinkedRows, row)
@@ -612,6 +635,38 @@ func (d *dropsDeps) addWhitelist(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	http.Redirect(w, r, "/drops", http.StatusSeeOther)
+}
+
+// markLinked handles the manual "I've linked it" toggle on a not-linked
+// row. Sets (or clears, when unlink=1) the kv override that the watcher's
+// ForceLinked reads, then reloads the scheduler so the campaign starts
+// (or stops) being mined immediately. The live /drops/progress check is
+// what ultimately confirms the assertion.
+func (d *dropsDeps) markLinked(w http.ResponseWriter, r *http.Request) {
+	campaignID := strings.TrimSpace(r.FormValue("campaign_id"))
+	if campaignID == "" {
+		http.Redirect(w, r, "/drops", http.StatusSeeOther)
+		return
+	}
+	key := store.LinkOverridePrefix + campaignID
+	if r.FormValue("unlink") == "1" {
+		_ = d.q.DeleteKV(r.Context(), key)
+	} else {
+		if err := d.q.UpsertSettingString(r.Context(), gen.UpsertSettingStringParams{
+			Key: key, Value: []byte("1"),
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	// Reload so ForceLinked picks up the change without waiting for the
+	// next discovery cycle. Non-fatal — the change is persisted regardless.
+	if d.reload != nil {
+		if err := d.reload(r.Context()); err != nil {
+			slog.Warn("scheduler reload after link override failed", "campaign", campaignID, "err", err)
+		}
 	}
 	http.Redirect(w, r, "/drops", http.StatusSeeOther)
 }

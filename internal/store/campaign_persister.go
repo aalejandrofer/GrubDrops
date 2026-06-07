@@ -9,6 +9,12 @@ import (
 	"github.com/aalejandrofer/dropsminer/internal/store/gen"
 )
 
+// LinkOverridePrefix namespaces the manual "I've linked it" overrides in
+// the kv table. A key `link_override:<campaignID>` with value "1" means the
+// user asserted the campaign's external account is connected, so the
+// watcher should attempt to mine it despite the backend reporting unlinked.
+const LinkOverridePrefix = "link_override:"
+
 // gameIDFromName turns a Twitch/Kick display name into a stable
 // game_id used as the games.id primary key. "Minecraft" -> "g_minecraft",
 // "Apex Legends" -> "g_apex_legends". Mirrors slugify() in twitch

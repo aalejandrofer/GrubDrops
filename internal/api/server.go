@@ -227,7 +227,7 @@ func NewRouter(d Deps) http.Handler {
 		gitCommit:   d.GitCommit,
 		version:     d.Version,
 	}
-	dropsH := &dropsDeps{q: d.Q, t: d.Templates}
+	dropsH := &dropsDeps{q: d.Q, t: d.Templates, reload: d.Reload}
 	historyH := &historyDeps{q: d.Q, ring: d.LogRing, t: d.Templates}
 
 	authed.Get("/settings", settingsH.get)
@@ -237,6 +237,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/drops", dropsH.list)
 	authed.Get("/drops/campaigns/{id}/items", dropsH.items)
 	authed.Post("/drops/whitelist/add", dropsH.addWhitelist)
+	authed.Post("/drops/link", dropsH.markLinked)
 	authed.Get("/history", historyH.get)
 
 	r.Mount("/", withSession(CSRF(authed)))

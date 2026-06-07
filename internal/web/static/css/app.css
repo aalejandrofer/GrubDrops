@@ -575,6 +575,24 @@
     padding: 4px 7px;
     max-width: 220px;
   }
+  /* not-linked row actions: "connect account →" link + "I've linked it"
+     override button, kept on one line, right-aligned in the .ac cell. */
+  .link-actions { display: inline-flex; align-items: center; gap: 10px; justify-content: flex-end; }
+  .link-actions form { display: inline; margin: 0; }
+  .linked-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    padding: 3px 8px;
+    white-space: nowrap;
+    color: var(--green);
+    border: 1px solid rgba(111, 181, 107, 0.45);
+    background: rgba(111, 181, 107, 0.06);
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  .linked-btn:hover { background: rgba(111, 181, 107, 0.14); }
+  .linked-btn:disabled { opacity: 0.5; cursor: default; }
   /* COLLECTED marks — one chip per account that claimed the benefit. */
   .drop-item-collected { display: flex; flex-wrap: wrap; gap: 5px; }
   .cmark {
