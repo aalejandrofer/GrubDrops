@@ -607,6 +607,11 @@
   }
   .linked-btn:hover { background: rgba(111, 181, 107, 0.14); }
   .linked-btn:disabled { opacity: 0.5; cursor: default; }
+  /* Collection ✓/✗ mark on /drops rows (account identity doesn't matter). */
+  .ac.collect .cmark { font-size: 13px; font-weight: 700; }
+  .ac.collect .cmark.ok { color: var(--green); }
+  .ac.collect .cmark.no { color: var(--accent); }
+  .ac.collect .cmark.na { color: var(--dim); }
   /* COLLECTED marks — one chip per account that claimed the benefit. */
   .drop-item-collected { display: flex; flex-wrap: wrap; gap: 5px; }
   .cmark {

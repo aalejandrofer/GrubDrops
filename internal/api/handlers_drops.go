@@ -153,7 +153,10 @@ type dropsRow struct {
 	// ActionOnly = campaign has benefits but none are watch-time (nothing
 	// the miner can auto-collect → cross). Collectors = accounts that have
 	// claimed at least one benefit, with Full = claimed every watch-time one.
+	// Collected = at least one account claimed a watch-time benefit — drives
+	// the simplified ✓/✗ mark (which account doesn't matter to the user).
 	ActionOnly bool
+	Collected  bool
 	Collectors []collectMark
 
 	// Linked is true when the account can earn this campaign (external
@@ -789,6 +792,9 @@ func (d *dropsDeps) attachCollection(ctx context.Context, row *dropsRow) {
 	sort.Strings(logins)
 	for _, l := range logins {
 		a := byLogin[l]
+		if len(a.got) > 0 {
+			row.Collected = true
+		}
 		row.Collectors = append(row.Collectors, collectMark{
 			Login:    l,
 			Platform: a.platform,

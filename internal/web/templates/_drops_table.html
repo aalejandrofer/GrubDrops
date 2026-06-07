@@ -34,7 +34,7 @@
             <span class="t">{{.When}}</span>
             <span class="lvl" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">●</span>
             <span class="body"><em style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{.Platform}}</em>{{if eq .Kind "reward"}} · reward{{end}} · <span style="color:var(--muted);">{{.Game}}</span> · {{.CampaignName}}{{if .BenefitName}} · <strong>{{.BenefitName}}</strong>{{end}}</span>
-            <span class="ac collect">{{if .AccountName}}<span style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">@{{.AccountName}}</span>{{else if .ActionOnly}}<span class="ccross" title="only action-required drops — nothing to auto-collect">✗</span>{{else if .Collectors}}{{range .Collectors}}<span class="ccol {{if eq .Platform "twitch"}}tw{{else if eq .Platform "kick"}}kk{{end}}" title="{{if .Full}}collected all watch-time drops{{else}}partially collected{{end}}"><span class="tk{{if not .Full}} partial{{end}}">✓</span> @{{.Login}}</span>{{end}}{{else}}<span style="color:var(--dim)">—</span>{{end}}</span>
+            <span class="ac collect">{{if eq $.Tab "upcoming"}}<span style="color:var(--dim)">—</span>{{else if .Collected}}<span class="cmark ok" title="collected">✓</span>{{else if .ActionOnly}}<span class="cmark na" title="action-required only — nothing to auto-collect">✗</span>{{else}}<span class="cmark no" title="not collected by any account">✗</span>{{end}}</span>
           </summary>
           <div class="ev-detail-slot">
             {{if not .CampaignID}}
