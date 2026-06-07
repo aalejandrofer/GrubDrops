@@ -19,34 +19,39 @@ type imageProxyDeps struct {
 	registry *platform.Registry
 }
 
-// allowedImageHosts gates the proxy to Kick's asset hosts so it can't be
-// turned into an open SSRF relay.
-var allowedImageHosts = map[string]bool{
-	"files.kick.com":  true,
-	"images.kick.com": true,
-	"assets.kick.com": true,
-}
+// kickCDNHost is the real Kick reward-image CDN (verified from the browser:
+// ext.cdn.kick.com, NOT files.kick.com). Cloudflare-fronted, so a plain
+// hotlink can 403 — we fetch it over the utls transport.
+const kickCDNHost = "ext.cdn.kick.com"
 
-const kickFilesBaseAPI = "https://files.kick.com/"
+// kickImageTransform mirrors Kick's own on-the-fly resize/format params so
+// we serve a small webp instead of the full-size png.
+const kickImageTransform = "width=384,format=webp,quality=75"
 
-// kick proxies a Kick reward image. ?u= is the stored image value (an
-// absolute files.kick.com URL or a host-relative path). Relative paths are
-// resolved against files.kick.com; the resolved host must be on the
-// allow-list. The bytes are streamed back with a long cache TTL.
+// kick proxies a Kick reward image. ?u= is the stored image value (absolute
+// URL or host-relative path). We trust only the PATH and always fetch from
+// ext.cdn.kick.com — robust regardless of whatever host was persisted
+// (older rows stored files.kick.com, which 502s). The path must be a Kick
+// reward-image path to avoid turning this into an open relay.
 func (d *imageProxyDeps) kick(w http.ResponseWriter, r *http.Request) {
 	raw := strings.TrimSpace(r.URL.Query().Get("u"))
 	if raw == "" {
 		http.Error(w, "missing u", http.StatusBadRequest)
 		return
 	}
-	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
-		raw = kickFilesBaseAPI + strings.TrimPrefix(raw, "/")
+	path := raw
+	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
+		if u, err := url.Parse(raw); err == nil {
+			path = u.Path
+		}
 	}
-	u, err := url.Parse(raw)
-	if err != nil || !allowedImageHosts[u.Host] {
-		http.Error(w, "bad image url", http.StatusBadRequest)
+	path = strings.TrimPrefix(path, "/")
+	// SSRF guard: only Kick reward/drop image paths.
+	if !strings.HasPrefix(path, "drops/") && !strings.HasPrefix(path, "images/") {
+		http.Error(w, "bad image path", http.StatusBadRequest)
 		return
 	}
+	target := "https://" + kickCDNHost + "/" + path + "?" + kickImageTransform
 
 	b, ok := d.registry.Get("kick")
 	if !ok {
@@ -59,15 +64,13 @@ func (d *imageProxyDeps) kick(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, ct, status, err := fetcher.FetchImage(r.Context(), raw)
+	data, ct, status, err := fetcher.FetchImage(r.Context(), target)
 	if err != nil || status != http.StatusOK {
-		// Upstream miss — let the browser fall back to its broken-image
-		// placeholder rather than caching a bad body.
 		http.Error(w, "image fetch failed", http.StatusBadGateway)
 		return
 	}
 	if ct == "" {
-		ct = "image/png"
+		ct = "image/webp"
 	}
 	w.Header().Set("Content-Type", ct)
 	w.Header().Set("Cache-Control", "public, max-age=86400")

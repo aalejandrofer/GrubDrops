@@ -12,9 +12,11 @@ import (
 
 // kickFilesBase is the CDN host for Kick reward/drop images. The drops
 // API returns image_url as a host-relative path (e.g.
-// "drops/reward-image/01k….png"); the UI needs an absolute URL or the
-// <img> renders broken.
-const kickFilesBase = "https://files.kick.com/"
+// "drops/reward-image/01k….png"); the UI needs an absolute URL. The real
+// host is ext.cdn.kick.com (Cloudflare-fronted). Images are proxied
+// through /img/kick anyway, which only trusts the path — this is for
+// completeness/back-compat.
+const kickFilesBase = "https://ext.cdn.kick.com/"
 
 // absImageURL turns a Kick image_url into an absolute URL. Already-absolute
 // URLs (http/https) and empty strings pass through unchanged.
