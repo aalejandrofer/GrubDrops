@@ -2,7 +2,9 @@
 
 All notable changes to GrubDrops.
 
-## [Unreleased] — v1.0.0 prep
+## [1.0.0] — 2026-06-07
+
+First tagged release.
 
 ### Added
 - **Auth-health agent** — periodic (12h) per-account auth probe (Twitch token /
@@ -26,6 +28,12 @@ All notable changes to GrubDrops.
   (`ext.cdn.kick.com`), bypassing Cloudflare hotlink blocks.
 - **GrubDrops logo** + SVG favicon + README.
 - Discord notifications: rich embeds (drop image, game, channel, account handle).
+- **Downloadable cookie helper** — pre-built macOS/Windows/Linux binaries baked
+  into the image and served from the Kick login page; double-click runs an
+  interactive prompt (Kick-only) instead of flashing a console and closing.
+- **GitHub link** in the header.
+- Template parse smoke test (`web.Templates()`) so a bad template fails CI
+  instead of crash-looping in prod.
 
 ### Changed
 - Channel selection now requires the stream to actually be playing the
@@ -37,6 +45,9 @@ All notable changes to GrubDrops.
 - /drops: tab filter now re-renders all panes; whitelist control moved inline;
   borderless item panel; boxed ✓ collection marks (orange ✗ for action-only).
 - Discord verbosity toggles (claims/progress/auth/errors) are now honored.
+- Module/binary/image renamed `dropsminer` → `grubdrops`.
+- Kick login page rebuilt on the flat design system (dashed-rule sections,
+  flat fields) with the download helper as the recommended path.
 
 ### Fixed
 - **Discovery stall** — the discovery whitelist ignored the global games list,
