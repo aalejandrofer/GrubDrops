@@ -1,56 +1,56 @@
 <p align="center">
-  <img src="internal/web/static/img/logo.svg" width="84" alt="GrubDrops">
+  <img src="internal/web/static/img/logo.svg" width="88" alt="GrubDrops logo">
 </p>
 
 <h1 align="center">GrubDrops</h1>
 
+<p align="center"><b>Self-hosted Twitch &amp; Kick drops miner.</b><br>
+Pick your games, it watches the right streams, mines the drops, and claims them — hands-free.</p>
+
 <p align="center">
-  A self-hosted, whitelist-driven drops miner for <b>Twitch</b> and <b>Kick</b>.<br>
-  Watch the right streams, mine the drops you actually want, claim them automatically.
+  <img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white">
+  <img alt="Twitch" src="https://img.shields.io/badge/Twitch-drops-9146FF?logo=twitch&logoColor=white">
+  <img alt="Kick" src="https://img.shields.io/badge/Kick-drops-53FC18?logo=kick&logoColor=black">
+  <img alt="UI" src="https://img.shields.io/badge/UI-HTMX%20%2B%20Go%20templates-2c2c2c">
+  <img alt="Storage" src="https://img.shields.io/badge/DB-SQLite-003B57?logo=sqlite&logoColor=white">
+  <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-Docker-2496ED?logo=docker&logoColor=white">
 </p>
 
 ---
 
-## What it does
+**Keywords:** twitch drops miner · kick drops miner · self-hosted · multi-account · headless · auto-claim
 
-- **Whitelist-driven.** You pick the games (global priority list or per-account). GrubDrops only ever watches/mines whitelisted games — nothing else is touched.
-- **Twitch + Kick.** One dashboard, both platforms, multiple accounts each.
-- **Watch → mine → claim.** Picks an eligible live channel actually playing the campaign's game, accrues watch-time, and claims drops as they complete.
-- **Connection-aware.** Campaigns that need an external account link (Krafton/PUBG, Embark, …) are surfaced separately with per-account "connect" chips, and skipped until linked — with a manual "I've linked it" override.
-- **Live console.** Real-time event feed, currently-mining panel, per-account state, auth-health checks, and a `/drops` catalog (past / current / upcoming + discoverable).
-- **Discord notifications.** Per-kind toggles (claims / progress / auth / errors) with rich embeds (drop image, game, channel).
+## Why
 
-## How it works
+A whitelist-driven drops miner for **both Twitch and Kick**, multiple accounts each, from one dashboard. You choose the games; it never touches anything else.
 
-- **Twitch** — direct GraphQL against the Android client, authenticated via the **device-code** flow (no password/cookies through GrubDrops). Real-time progress/claim/stream events over PubSub; a 60s minute-watched beacon credits watch-time.
-- **Kick** — Kick's API sits behind Cloudflare bot-management that 403s any browser-driven client. GrubDrops talks to it over a pure-HTTP client with a **real Chrome TLS fingerprint** (`utls` + HTTP/2) — no browser, no `cf_clearance`. Watch presence runs over Kick's viewer WebSocket.
-- **Discovery** scrapes the active catalog every few minutes and persists campaigns + benefits to SQLite, so the UI is populated even when nothing is actively mining.
+## Features
+
+- 🎯 **Whitelist-driven** — global priority list or per-account; only your games are mined.
+- 🟣🟢 **Twitch + Kick**, multi-account — watch → mine → claim, automatically.
+- 🔗 **Connection-aware** — campaigns needing an external link (Krafton, Embark…) are flagged per-account and skipped until linked.
+- 🖥️ **Live console** — real-time event feed, currently-mining panel, `/drops` catalog, auth-health checks.
+- 🔔 **Discord** notifications with rich embeds (per-kind toggles).
+
+## How
+
+- **Twitch** — official **device-code** OAuth (no password/cookies); GraphQL + PubSub for real-time progress/claims.
+- **Kick** — pure-HTTP client with a real **Chrome TLS fingerprint** (`utls`) that walks past Cloudflare — no browser, no `cf_clearance`.
 
 ## Stack
 
-Go · `html/template` + HTMX (no SPA) · SQLite (sqlc + goose) · age-encrypted sessions · Docker. No JavaScript build step.
+Go · `html/template` + HTMX (no JS build) · SQLite (sqlc + goose) · age-encrypted sessions · Docker.
 
 ## Quick start
 
 ```bash
-# build + run locally
 go build ./cmd/miner
-MINER_MASTER_KEY=$(head -c32 /dev/urandom | base64) ./miner
-# open http://localhost:8080 → first-run setup creates the admin login
+MINER_MASTER_KEY=$(head -c32 /dev/urandom | base64) ./miner   # → http://localhost:8080
 ```
 
-Key env vars: `MINER_MASTER_KEY` (session encryption), `MINER_HTTP_ADDR`,
-`MINER_DISCOVERY_INTERVAL` (default 5m), `MINER_AUTHCHECK_INTERVAL` (default 12h),
-`MINER_DISCORD_WEBHOOK_URL` (optional global webhook).
+First run creates the admin login. See [`CHANGELOG.md`](CHANGELOG.md) for what's new.
 
-## Deploy
+---
 
-`linux/amd64` container. Build, transfer the image, and `docker compose up` —
-the compose file references a local `grubdrops`/`dropsminer:latest` tag and
-persists `/data` (SQLite) across redeploys. Routed behind a reverse proxy;
-`/healthz` returns `ok`.
+<sub>Built by [@aalejandrofer](https://github.com/aalejandrofer) with [Claude Code](https://claude.com/claude-code) (Opus 4.8).</sub>
 
-## Status
-
-Active development. Twitch mining + claiming and Kick discovery/watch are
-working in production.

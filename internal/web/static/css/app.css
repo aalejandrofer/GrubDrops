@@ -1192,7 +1192,10 @@
   }
   .drawer-head .ev-account:focus { outline: 1px solid var(--accent); }
 
-  .events { padding: 4px 0; max-height: 320px; overflow: auto; }
+  .events { padding: 4px 0; }
+  /* Only the dashboard live-events drawer is a fixed scrollable feed; the
+     /history + /drops lists grow with content (no black dead-space). */
+  .drawer .events { max-height: 320px; overflow: auto; }
   /* Each .ev is a <details> element so the operator can click to
      reveal the structured fields from the underlying log line. One
      tight summary row: chevron · timestamp · kind-colored dot · body
