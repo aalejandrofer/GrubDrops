@@ -162,10 +162,12 @@ type dropsRow struct {
 	// table and NOT mined. LinkURL is where to connect it (may be empty).
 	Linked  bool
 	LinkURL string
-	// ConnectChips lists the per-account link state for a not-linked row:
-	// one chip per account on this platform, ✓ for connected, "connect →"
-	// for those that still need it. Populated only for UnlinkedRows.
+	// ConnectChips lists the per-account link state: one chip per account
+	// that whitelists this game, ✓ for connected, "connect →" for those
+	// that still need it. NeedsConnect is true when at least one chip is
+	// unlinked — drives the mineable-row connect nudge.
 	ConnectChips []connectChip
+	NeedsConnect bool
 }
 
 // connectChip is one account's link state on a not-linked campaign row.
@@ -385,14 +387,18 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 	case tabPast:
 		page.Rows = pastRows
 	case tabCurrent:
-		// Split the whitelisted Current list: linked → mineable (Rows),
-		// not-linked → a separate table so the operator sees what they'd
-		// mine once the account is connected. The watcher already skips
-		// the not-linked ones. A manual "I've linked it" override promotes
-		// a row into the mineable list (matches the watcher's ForceLinked).
+		// Split the whitelisted Current list using mineable-if-any: a
+		// campaign stays in the main (mineable) list if at least one account
+		// that whitelists its game is linked — even when another account
+		// isn't. It drops to the not-linked table only when NO whitelisting
+		// account can mine it. Per-account connect chips ride along on both.
+		// A manual "I've linked it" override always promotes to mineable.
 		overrides := d.linkOverrides(r.Context())
+		wl, plat := d.accountWhitelists(r.Context())
 		for _, row := range currentRows {
-			if row.Linked || overrides[row.CampaignID] {
+			mineable, chips := d.linkGrouping(r.Context(), &row, wl, plat)
+			row.ConnectChips = chips
+			if mineable || overrides[row.CampaignID] {
 				page.Rows = append(page.Rows, row)
 			} else {
 				page.UnlinkedRows = append(page.UnlinkedRows, row)
@@ -402,10 +408,10 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		page.Rows = upcomingRows
 	}
 
-	// Collection chips + per-account connect chips for the not-linked rows.
+	// Collection status for the not-linked rows (connect chips were set
+	// during the split above).
 	for i := range page.UnlinkedRows {
 		d.attachCollection(r.Context(), &page.UnlinkedRows[i])
-		d.attachConnectChips(r.Context(), &page.UnlinkedRows[i])
 	}
 
 	// Collection status (cross / per-account ticks) for the rows actually
@@ -758,32 +764,108 @@ func (d *dropsDeps) markLinked(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/drops", http.StatusSeeOther)
 }
 
-// attachConnectChips fills a not-linked row's per-account connect chips
-// from account_campaign_links. Each enabled account on the row's platform
-// gets a chip: ✓ when connected, "connect →" when it still needs linking.
-// Falls back to the campaign-level LinkURL when no per-account URL stored.
-func (d *dropsDeps) attachConnectChips(ctx context.Context, row *dropsRow) {
+// accountWhitelists returns, per enabled account, the set of lowercased
+// game names+slugs it mines (its own account_games, or the global list when
+// it has none), plus each account's platform. Used to decide which accounts
+// a campaign's link state is even relevant to.
+func (d *dropsDeps) accountWhitelists(ctx context.Context) (map[string]map[string]bool, map[string]string) {
+	sets := map[string]map[string]bool{}
+	plat := map[string]string{}
+	accs, err := d.q.ListAllAccounts(ctx)
+	if err != nil {
+		return sets, plat
+	}
+	var globalSet map[string]bool
+	globalOnce := func() map[string]bool {
+		if globalSet != nil {
+			return globalSet
+		}
+		globalSet = map[string]bool{}
+		if gg, err := d.q.ListGlobalGames(ctx); err == nil {
+			for _, g := range gg {
+				addGameKeys(globalSet, g.Name, g.Slug)
+			}
+		}
+		return globalSet
+	}
+	for _, a := range accs {
+		if a.Enabled != 1 {
+			continue
+		}
+		plat[a.ID] = a.Platform
+		rows, _ := d.q.ListAccountGames(ctx, a.ID)
+		if len(rows) == 0 {
+			sets[a.ID] = globalOnce() // follows the global priority list
+			continue
+		}
+		s := map[string]bool{}
+		for _, g := range rows {
+			addGameKeys(s, g.Name, g.Slug)
+		}
+		sets[a.ID] = s
+	}
+	return sets, plat
+}
+
+func addGameKeys(set map[string]bool, name, slug string) {
+	if n := strings.ToLower(strings.TrimSpace(name)); n != "" {
+		set[n] = true
+	}
+	if s := strings.ToLower(strings.TrimSpace(slug)); s != "" {
+		set[s] = true
+	}
+}
+
+// linkGrouping decides whether a whitelisted campaign is mineable and builds
+// the per-account connect chips. Mineable-if-any: the campaign stays in the
+// main list when at least one account that WHITELISTS its game is linked (or
+// when no whitelisting account's link state is known). It drops to the
+// not-linked section only when every whitelisting account with a known link
+// state is unlinked. Chips are emitted only for whitelisting accounts that
+// have a checked link state.
+func (d *dropsDeps) linkGrouping(ctx context.Context, row *dropsRow, wl map[string]map[string]bool, plat map[string]string) (mineable bool, chips []connectChip) {
 	if row.CampaignID == "" {
-		return
+		return true, nil
 	}
 	links, err := d.q.ListAccountLinksForCampaign(ctx, row.CampaignID)
 	if err != nil {
-		return
+		return true, nil
 	}
+	linkByAcc := make(map[string]gen.ListAccountLinksForCampaignRow, len(links))
 	for _, l := range links {
-		if l.Platform != row.Platform {
+		linkByAcc[l.AccountID] = l
+	}
+	game := strings.ToLower(strings.TrimSpace(row.Game))
+	anyLinked, hasChecked := false, false
+	for accID, set := range wl {
+		if plat[accID] != row.Platform || !set[game] {
 			continue
 		}
+		l, ok := linkByAcc[accID]
+		if !ok || l.Checked == 0 {
+			continue // whitelists it but link state unknown — don't block, no chip
+		}
+		hasChecked = true
 		url := l.LinkUrl
 		if url == "" {
 			url = row.LinkURL
 		}
-		row.ConnectChips = append(row.ConnectChips, connectChip{
-			Login:   l.Login,
-			Linked:  l.Linked != 0,
-			LinkURL: url,
-		})
+		linked := l.Linked != 0
+		if linked {
+			anyLinked = true
+		}
+		chips = append(chips, connectChip{Login: l.Login, Linked: linked, LinkURL: url})
 	}
+	sort.Slice(chips, func(i, j int) bool { return chips[i].Login < chips[j].Login })
+	for _, c := range chips {
+		if !c.Linked {
+			row.NeedsConnect = true
+			break
+		}
+	}
+	// Mineable unless we positively know every whitelisting account is unlinked.
+	mineable = anyLinked || !hasChecked
+	return mineable, chips
 }
 
 // attachCollection fills a row's collection status from the campaign's

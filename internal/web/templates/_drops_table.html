@@ -24,7 +24,7 @@
       {{else}}
       <div class="events drops-rows">
         {{range .Rows}}
-        <details class="ev kind-{{if eq .Kind "reward"}}auth{{else}}claim{{end}}{{if eq .Kind "reward"}} drop-dim{{end}}"
+        <details class="ev kind-{{if eq .Kind "reward"}}auth{{else}}claim{{end}}{{if eq .Kind "reward"}} drop-dim{{end}}{{if .NeedsConnect}} ev-linkrow{{end}}"
                  {{if .CampaignID}}hx-get="/drops/campaigns/{{.CampaignID}}/items"
                  hx-target="find .ev-detail-slot"
                  hx-trigger="toggle once from:closest details"
@@ -34,7 +34,10 @@
             <span class="t">{{.When}}</span>
             <span class="lvl" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">●</span>
             <span class="body"><em style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{.Platform}}</em>{{if eq .Kind "reward"}} · reward{{end}} · <span style="color:var(--muted);">{{.Game}}</span> · {{.CampaignName}}{{if .BenefitName}} · <strong>{{.BenefitName}}</strong>{{end}}</span>
-            <span class="ac collect">{{if eq $.Tab "upcoming"}}<span style="color:var(--dim)">—</span>{{else if .ActionOnly}}<span class="collect-box" title="only action-required drops — nothing to auto-collect"><span class="tk cross">✗</span></span>{{else if .Collectors}}<span class="collect-box">{{range .Collectors}}<span class="tk{{if not .Full}} partial{{end}}" title="{{if .Full}}{{.Login}} collected all watch-time drops{{else}}{{.Login}} partially collected{{end}}">✓</span>{{end}}</span>{{else}}<span style="color:var(--dim)">—</span>{{end}}</span>
+            <span class="ac collect{{if .NeedsConnect}} link-actions{{end}}">
+              {{/* connect nudge: accounts that whitelist this game but aren't linked — it's still mined by the linked ones */}}
+              {{range .ConnectChips}}{{if not .Linked}}<a class="conn-chip need" href="{{.LinkURL}}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="connect {{.Login}}">{{.Login}} →</a>{{end}}{{end}}
+              {{if eq $.Tab "upcoming"}}<span style="color:var(--dim)">—</span>{{else if .ActionOnly}}<span class="collect-box" title="only action-required drops — nothing to auto-collect"><span class="tk cross">✗</span></span>{{else if .Collectors}}<span class="collect-box">{{range .Collectors}}<span class="tk{{if not .Full}} partial{{end}}" title="{{if .Full}}{{.Login}} collected all watch-time drops{{else}}{{.Login}} partially collected{{end}}">✓</span>{{end}}</span>{{else}}<span style="color:var(--dim)">—</span>{{end}}</span>
           </summary>
           <div class="ev-detail-slot">
             {{if not .CampaignID}}
