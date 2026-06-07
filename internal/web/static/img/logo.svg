@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="GrubDrops">
+  <defs>
+    <linearGradient id="gd" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f2811d"/>
+      <stop offset="1" stop-color="#8fd14f"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="#1e1f23"/>
+  <!-- flame / leaf teardrop -->
+  <path fill="url(#gd)" d="M32 10 C26 22 21 28 21 36 a11 11 0 0 0 22 0 C43 28 38 22 32 10 Z"/>
+  <!-- downward chevron — the drop "catch" -->
+  <path fill="none" stroke="url(#gd)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" d="M20 43 L32 52 L44 43"/>
+</svg>
