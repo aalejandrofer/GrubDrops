@@ -1,144 +1,130 @@
-# DropsMiner UI Design
+# GrubDrops UI Design
 
-Single source of truth for visual primitives. Reference page: `/history`.
-When adding a new page or section, pick from these primitives; do NOT
-invent ad-hoc styles inline.
+Single source of truth for visual primitives. Reference pages: `/drops`
+and `/` (Console). When adding a page/section, pick from these primitives;
+do NOT invent ad-hoc styles inline.
+
+## Core principle — FLAT
+
+The app is **flat**: group content with **uppercase mono labels + a dashed
+rule + spacing + a soft hover tint** — never with panel borders, filled
+boxes, table chrome, or zebra striping. If you're reaching for a `border:
+1px` box around a section, stop — use a dashed-rule section header instead.
+
+- ❌ no panel/card borders or fills around sections (Currently Mining, Live
+  Events, stat strip are all borderless)
+- ❌ no `<table>` borders / header backgrounds / per-row border lines
+- ❌ no zebra / alternating-row dual-tone
+- ✅ dashed rule (`1px dashed var(--line)`) under section labels
+- ✅ kind-colored 3px left accent on rows (`box-shadow: inset 3px 0 0 …`)
+- ✅ soft `var(--surface-2)` hover on interactive rows
 
 ## Palette
 
-Defined as CSS variables in `internal/web/static/css/app.css`:
+CSS variables in `internal/web/static/css/app.css`. Always reference them;
+never hard-code colors.
 
-- `--bg`, `--bg-grad`: page background.
-- `--surface`, `--surface-2`, `--surface-3`: card / panel / hover backgrounds.
-- `--line`, `--line-soft`: dividers.
-- `--text`, `--muted`, `--dim`: type hierarchy.
-- `--accent` (#d4631e), `--accent-2`: primary actions, highlights.
-- `--green`, `--amber`, `--blue`, `--red`: status colors.
-- `--purple` (twitch), `--kick`: platform tints.
-
-Always reference variables. Never hard-code colors in templates.
+- `--bg`, `--bg-grad`; `--surface`, `--surface-2`; `--line`, `--line-soft`
+- `--text`, `--muted`, `--dim`
+- `--accent` (#d4631e), `--accent-2`; `--green` `--amber` `--blue` `--red`
+- `--purple` (twitch), `--kick` (kick)
 
 ## Type
 
-- **Display headings** (`h1` in `.ph`): Bricolage Grotesque, large, tight tracking.
-- **Section labels / kicker / button labels**: JetBrains Mono, 10–11px, uppercase, letter-spacing ~0.14–0.18em, colored `--muted`.
-- **Body text**: IBM Plex Sans, ~13px, `--text`.
-- **Tabular data**: JetBrains Mono.
+- **Display headings** (`h1` in `.ph`): Bricolage Grotesque, tight tracking.
+- **Section labels / kicker / button labels**: JetBrains Mono, 10–11px,
+  uppercase, letter-spacing ~0.14–0.18em, `--muted`.
+- **Body / tabular data**: JetBrains Mono.
+- Account names render the **display Label**, not the `@username`.
 
 ## Page skeleton
 
 ```html
 <div class="shell">
   <div class="ph">
-    <div>
-      <div class="kicker">// section</div>
-      <h1>Title</h1>
-    </div>
-    <div class="actions">
-      <a class="btn primary" href="…">Primary →</a>
-    </div>
+    <div><div class="kicker">// section</div><h1>Title</h1></div>
+    <div class="actions"><a class="btn primary" href="…">Primary →</a></div>
   </div>
-
-  <!-- Optional subnav -->
-  <nav class="subnav">
-    <a class="subnav-link on" href="…">Tab</a>
-  </nav>
-
-  <!-- Sections … -->
+  <!-- sections … -->
 </div>
 ```
 
-Reference: `internal/web/templates/history.html`.
-
-## Section header
-
-The `/history` row-list style is the canonical section header:
+## Section header (dashed rule)
 
 ```html
-<header class="drops-pane-h">
-  <h3>Recent claims</h3>
-  <span class="meta">{{len .Rows}}</span>
-</header>
+<header class="drops-pane-h"><h3>Recent claims</h3><span class="meta">12</span></header>
 ```
+Mono uppercase title, muted count right, **dashed** bottom rule. On the
+console, `.sec-head`/`.mining-col-head`/`.drawer-head` all use a dashed rule.
 
-Monospace uppercase title, muted count on the right, dashed bottom border.
+## Stat strip
 
-## Tables / rows
+Flat grid, no boxed cells: `.telemetry` is gap-separated, closed by a dashed
+bottom rule. Each `.stat` is borderless with a 2px `--accent` top tick.
+Never re-introduce the `gap:1px;background:var(--line)` boxed grid.
 
-**Prefer `.ev / .events` rows over `<table>`** for any list with mixed
-content (logs, claims, campaigns). Each row is a `<details>` with:
+## Rows (lists, logs, claims, campaigns)
+
+`.ev / .events` rows over `<table>`. Each row is a `<details>`:
 
 ```html
-<details class="ev kind-{state|claim|discovery|auth|error|info}">
+<details class="ev kind-{state|claim|progress|discovery|auth|error|info}">
   <summary>
-    <span class="chev" aria-hidden="true">›</span>
-    <span class="t">15:57:34</span>
-    <span class="lvl" style="color:var(--{green|amber|blue|red|accent|muted})">●</span>
-    <span class="body"><em>kind</em> · message text</span>
+    <span class="chev">›</span><span class="t">15:57</span>
+    <span class="lvl" style="color:var(--…)">●</span>
+    <span class="body"><em>kind</em> · message</span>
     <span class="ac">@account</span>
   </summary>
-  <div class="ev-detail">
-    <span class="kv"><span class="k">key</span><span class="eq">=</span><span class="v">value</span></span>
-    …
-  </div>
+  <div class="ev-detail"><span class="kv"><span class="k">key</span><span class="eq">=</span><span class="v">val</span></span></div>
 </details>
 ```
+Kind sets a colored left accent. `.kv` chips are the canonical key/value
+display in expanded rows. Keep all `<details>` expand behavior.
 
-`.kv` chips inside `.ev-detail` are the canonical key/value display
-inside expanded rows. Bordered, monospace, uppercase muted label.
+## Collection + link marks (/drops)
 
-When a real tabular layout is needed (small fixed columns), use
-`.tbl` — but only inside a card or section, never as the primary
-content. Default to `.events` rows.
+- **Collection**: `.collect-box` — a bordered box of green `✓` ticks (one per
+  collector); orange `✗` (`.tk.cross`) for action-only campaigns that can't
+  be auto-mined. Account identity doesn't matter — no `@login` text.
+- **Connect chips**: `.conn-chip` — `✓ login` (green) when linked, `login →`
+  (`.need`, accent) when an account that whitelists the game must connect.
 
-## Cards
+## Forms (flat)
 
-- `.form-card`: padded card for forms / configuration.
-- `.drawer`: panel with `.drawer-head` (live events, live channels).
+- Section labels: dashed-rule (`.sec` style), uppercase mono.
+- Fields: `.inp` — subtle `var(--surface)` fill, **no box border**, bottom
+  border that turns `--accent` on focus, 4px top radius. Caption above in
+  uppercase mono `--muted`.
+- Checkbox toggles (notify kinds): `.chk` with an accent-filled box when on.
+- Don't use the old boxed `.form-card` look; flat fields on the page.
 
 ## Buttons
 
-`.btn` (default), `.btn.primary`, `.btn.sm`, `.btn.ghost`. Never set
-inline `padding` / `font` / `border` on a button — adjust the class.
-
-## Modifiers
-
-- Kind color on the left edge of `.ev`: `kind-claim` (green),
-  `kind-progress` (amber), `kind-state` (blue), `kind-discovery`
-  (dim), `kind-error` (red), `kind-auth` (accent), `kind-info` (line).
-- Platform tint on the chevron / pip:
-  `<span class="pip twitch|kick"></span>`.
+`.btn`, `.btn.primary` (accent fill), `.btn.sm`, `.btn.ghost`. Never inline
+`padding`/`font`/`border` on a button — adjust the class.
 
 ## Subnav
 
-```html
-<nav class="subnav">
-  <a class="subnav-link on" href="…">General</a>
-  <a class="subnav-link"     href="…">Accounts</a>
-</nav>
-```
-
-`.on` highlights the active tab with accent color + light wash.
+`.subnav` + `.subnav-link` / `.subnav-link.on` (accent + light wash).
 
 ## Polling
 
-`hx-trigger="every Ns"` — pick N ≥ 10. Sub-10s polling makes the UI
-feel jumpy and breaks `<details>` open state on swap. Live channels +
-live events poll every 10s; mining cards every 10s.
+`hx-trigger="every Ns"`, N ≥ 10. Sub-10s feels jumpy + breaks `<details>`
+open state on swap.
 
 ## What NOT to do
 
-- ❌ Inline `<style>` blocks per template — push to `app.css`.
-- ❌ Inline `style="font-family:'JetBrains Mono'…"` per chip — use `.kv`.
-- ❌ Inline `style="font-family:'Bricolage Grotesque'…"` per heading — use `<h1>` inside `.ph`.
-- ❌ `<table>` for list views — use `.events` rows.
-- ❌ Hard-coded colors — always `var(--…)`.
-- ❌ Polling intervals < 10s.
+- ❌ panel/section borders or filled boxes — flat + dashed rules only
+- ❌ `<table>` for lists; table borders / header bg / row border-lines
+- ❌ zebra / dual-tone alternating rows
+- ❌ inline `<style>` blocks or inline font/color on chips/headings
+- ❌ hard-coded colors — always `var(--…)`
+- ❌ polling < 10s
+- ❌ showing `@username` where the display Label is meaningful
 
 ## Adding a new page
 
-1. Copy `history.html` skeleton.
-2. Replace title + sections.
-3. Use `.events` rows by default.
-4. Test in narrow viewport (~1100px); rows must not overflow.
-5. Update this file if a new primitive is needed.
+1. Copy the `/drops` or `history.html` skeleton.
+2. Flat sections: dashed-rule label + `.events` rows.
+3. Test at ~1100px; rows must not overflow.
+4. Update this file if a new primitive is needed.
