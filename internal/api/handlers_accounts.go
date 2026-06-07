@@ -250,7 +250,9 @@ func (d accountsDeps) addGame(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	d.applyReload(r.Context())
+	// No auto-reload: whitelist/priority/account edits take effect on the
+	// next manual "Apply changes" (or the next discovery tick for /drops).
+	// Avoids tearing down + respinning every watcher on each small save.
 	d.sm.Put(r.Context(), "flash", "added "+name)
 	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
@@ -295,7 +297,9 @@ func (d accountsDeps) useGlobal(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	d.applyReload(r.Context())
+	// No auto-reload: whitelist/priority/account edits take effect on the
+	// next manual "Apply changes" (or the next discovery tick for /drops).
+	// Avoids tearing down + respinning every watcher on each small save.
 	d.sm.Put(r.Context(), "flash", "account whitelist cleared — now follows global priority")
 	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
@@ -326,7 +330,9 @@ func (d accountsDeps) games(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	d.applyReload(r.Context())
+	// No auto-reload: whitelist/priority/account edits take effect on the
+	// next manual "Apply changes" (or the next discovery tick for /drops).
+	// Avoids tearing down + respinning every watcher on each small save.
 	d.sm.Put(r.Context(), "flash", "games saved")
 	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
@@ -362,7 +368,9 @@ func (d accountsDeps) update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	d.applyReload(r.Context())
+	// No auto-reload: whitelist/priority/account edits take effect on the
+	// next manual "Apply changes" (or the next discovery tick for /drops).
+	// Avoids tearing down + respinning every watcher on each small save.
 	d.sm.Put(r.Context(), "flash", "saved")
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
@@ -373,7 +381,9 @@ func (d accountsDeps) delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	d.applyReload(r.Context())
+	// No auto-reload: whitelist/priority/account edits take effect on the
+	// next manual "Apply changes" (or the next discovery tick for /drops).
+	// Avoids tearing down + respinning every watcher on each small save.
 	d.sm.Put(r.Context(), "flash", "deleted")
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
