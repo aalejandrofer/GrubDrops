@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
 // fakeDoer returns canned (status, body) per request path and records calls,

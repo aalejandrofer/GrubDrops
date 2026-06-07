@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
 type claimer struct {

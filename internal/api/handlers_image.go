@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
 // imageFetcher is satisfied by the Kick backend — pulls a CDN asset over

@@ -18,7 +18,7 @@ import (
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 
-	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/grubdrops/internal/auth/browser/gen/browser/v1"
 )
 
 // Twitch keeps one persistent logged-in twitch.tv tab per account and

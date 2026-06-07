@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
 // MockBackend produces one campaign with one drop benefit. The watcher

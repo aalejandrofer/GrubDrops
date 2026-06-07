@@ -13,7 +13,7 @@ import (
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 
-	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
+	pb "github.com/aalejandrofer/grubdrops/internal/auth/browser/gen/browser/v1"
 )
 
 // Kick wraps Browser with Kick.com-specific page logic.

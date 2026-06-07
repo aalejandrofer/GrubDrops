@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
 // discovery wraps the low-level client and implements campaign + inventory queries.

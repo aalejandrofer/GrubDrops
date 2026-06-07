@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/aalejandrofer/dropsminer/internal/platform"
-	"github.com/aalejandrofer/dropsminer/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
 // SessionStore persists encrypted platform.Session blobs in the sessions

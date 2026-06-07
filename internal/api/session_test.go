@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/aalejandrofer/dropsminer/internal/store"
+	"github.com/aalejandrofer/grubdrops/internal/store"
 )
 
 func TestKVStore_CommitFindDelete(t *testing.T) {

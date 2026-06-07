@@ -1,4 +1,4 @@
-module github.com/aalejandrofer/dropsminer
+module github.com/aalejandrofer/grubdrops
 
 go 1.26.2
 

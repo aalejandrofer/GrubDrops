@@ -4,7 +4,7 @@ RUN apk add --no-cache git ca-certificates
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/miner ./cmd/miner
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/grubdrops ./cmd/miner
 
 # Cross-compile the downloadable Kick/Twitch cookie helper for the common
 # desktop targets, baked into the image and served at /download/helper.
@@ -18,9 +18,9 @@ RUN set -eux; \
     done
 
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=build /out/miner /miner
+COPY --from=build /out/grubdrops /grubdrops
 COPY --from=build /helpers /helpers
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 USER nonroot:nonroot
 EXPOSE 8080
-ENTRYPOINT ["/miner"]
+ENTRYPOINT ["/grubdrops"]

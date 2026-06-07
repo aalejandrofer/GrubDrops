@@ -13,9 +13,9 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/aalejandrofer/dropsminer/internal/authcheck"
-	"github.com/aalejandrofer/dropsminer/internal/scheduler"
-	"github.com/aalejandrofer/dropsminer/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/authcheck"
+	"github.com/aalejandrofer/grubdrops/internal/scheduler"
+	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
 type accountsDeps struct {

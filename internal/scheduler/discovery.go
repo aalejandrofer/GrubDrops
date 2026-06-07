@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aalejandrofer/dropsminer/internal/platform"
-	"github.com/aalejandrofer/dropsminer/internal/watcher"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/watcher"
 )
 
 // AccountDiscovery is the per-account view of the most recent

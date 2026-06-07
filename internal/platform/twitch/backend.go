@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
 // VerifyAuth probes the Twitch token with a cheap CurrentUser query. A

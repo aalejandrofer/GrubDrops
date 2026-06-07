@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 	utls "github.com/refraction-networking/utls"
 	"golang.org/x/net/http2"
 )

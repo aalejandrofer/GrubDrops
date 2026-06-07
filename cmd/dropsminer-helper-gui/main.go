@@ -31,7 +31,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aalejandrofer/dropsminer/internal/helper"
+	"github.com/aalejandrofer/grubdrops/internal/helper"
 )
 
 //go:embed index.html

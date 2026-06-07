@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
 type Notifier interface {

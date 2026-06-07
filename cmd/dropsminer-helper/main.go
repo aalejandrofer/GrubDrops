@@ -23,7 +23,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/aalejandrofer/dropsminer/internal/helper"
+	"github.com/aalejandrofer/grubdrops/internal/helper"
 )
 
 func main() {

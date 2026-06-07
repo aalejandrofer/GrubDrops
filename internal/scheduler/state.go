@@ -1,6 +1,6 @@
 package scheduler
 
-import "github.com/aalejandrofer/dropsminer/internal/watcher"
+import "github.com/aalejandrofer/grubdrops/internal/watcher"
 
 type AccountState struct {
 	AccountID string

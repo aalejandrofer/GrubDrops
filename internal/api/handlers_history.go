@@ -5,8 +5,8 @@ import (
 	"sort"
 	"time"
 
-	mlog "github.com/aalejandrofer/dropsminer/internal/log"
-	"github.com/aalejandrofer/dropsminer/internal/store/gen"
+	mlog "github.com/aalejandrofer/grubdrops/internal/log"
+	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
 // historyDeps owns /history. Pulls claims from the on-disk claims

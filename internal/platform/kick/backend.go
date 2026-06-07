@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aalejandrofer/dropsminer/internal/auth/browser"
-	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/auth/browser"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
 // Backend implements platform.Backend for Kick over a pure-HTTP utls client

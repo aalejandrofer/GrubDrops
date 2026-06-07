@@ -11,10 +11,10 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
-	"github.com/aalejandrofer/dropsminer/internal/auth"
-	"github.com/aalejandrofer/dropsminer/internal/scheduler"
-	"github.com/aalejandrofer/dropsminer/internal/store"
-	"github.com/aalejandrofer/dropsminer/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/auth"
+	"github.com/aalejandrofer/grubdrops/internal/scheduler"
+	"github.com/aalejandrofer/grubdrops/internal/store"
+	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
 type settingsDeps struct {

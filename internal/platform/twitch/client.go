@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
 // gqlTransport sends a POST body to gql.twitch.tv/gql and returns the

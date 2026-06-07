@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
-	"github.com/aalejandrofer/dropsminer/internal/platform"
+	pb "github.com/aalejandrofer/grubdrops/internal/auth/browser/gen/browser/v1"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
 // isTabMissingErr matches the sidecar's "no authenticated tab for

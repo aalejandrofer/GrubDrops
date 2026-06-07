@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/aalejandrofer/dropsminer/internal/platform"
-	"github.com/aalejandrofer/dropsminer/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
 // ClaimRecorder implements watcher.ClaimRecorder by writing a row to

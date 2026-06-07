@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aalejandrofer/dropsminer/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
 const sendEventsMutation = `mutation SendEvents($input: SendSpadeEventsInput!) {

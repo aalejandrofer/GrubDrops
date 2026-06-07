@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
-	"github.com/aalejandrofer/dropsminer/internal/platform"
+	pb "github.com/aalejandrofer/grubdrops/internal/auth/browser/gen/browser/v1"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
 // fakeSidecar implements TwitchGQLSender + TwitchSidecarAuthenticator.

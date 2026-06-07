@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aalejandrofer/dropsminer/internal/platform"
-	"github.com/aalejandrofer/dropsminer/internal/store"
-	"github.com/aalejandrofer/dropsminer/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/store"
+	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
 // twitchSessionSource returns (account_id, session, ok). ok=false means

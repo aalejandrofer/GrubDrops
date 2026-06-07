@@ -3,8 +3,8 @@ package kick
 import (
 	"encoding/json"
 
-	pb "github.com/aalejandrofer/dropsminer/internal/auth/browser/gen/browser/v1"
-	"github.com/aalejandrofer/dropsminer/internal/platform"
+	pb "github.com/aalejandrofer/grubdrops/internal/auth/browser/gen/browser/v1"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
 // kickSession is the JSON we serialize into platform.Session.Cookies +

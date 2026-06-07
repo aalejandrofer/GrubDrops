@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/aalejandrofer/dropsminer/internal/platform"
-	"github.com/aalejandrofer/dropsminer/internal/platform/platformtest"
-	"github.com/aalejandrofer/dropsminer/internal/watcher"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform/platformtest"
+	"github.com/aalejandrofer/grubdrops/internal/watcher"
 )
 
 type silentNotifier struct{}
