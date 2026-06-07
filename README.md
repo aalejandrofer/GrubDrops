@@ -16,6 +16,10 @@ Pick your games, it watches the right streams, mines the drops, and claims them 
   <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-Docker-2496ED?logo=docker&logoColor=white">
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/console.png" width="900" alt="GrubDrops Console — lifetime stats, currently-mining per account, live event feed">
+</p>
+
 ---
 
 **Keywords:** twitch drops miner · kick drops miner · self-hosted · multi-account · headless · auto-claim · twitch drops bot · kick drops bot
