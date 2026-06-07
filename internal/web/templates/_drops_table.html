@@ -107,7 +107,7 @@
       {{if not .UnlistedRows}}
       <div class="empty">All discovered campaigns are on at least one whitelist.</div>
       {{else}}
-      <div class="events drops-rows">
+      <div class="events drops-rows scroll-cap">
         {{$accts := .Accounts}}
         {{$csrf := .CSRFToken}}
         {{range .UnlistedRows}}

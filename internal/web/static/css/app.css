@@ -1225,6 +1225,11 @@
     list-style: none;
     line-height: 1.3;
   }
+  /* Long lists (Discoverable) scroll inside the pane instead of stretching
+     the page to thousands of px. Capped + scrollable; other panes stay
+     uncapped. */
+  .drops-rows.scroll-cap { max-height: 520px; overflow-y: auto; }
+
   /* Wider time column variant — used by /drops + /history rows where
      the timestamp includes the date (16 chars vs the dashboard
      drawer's 8 chars). Override the second grid track explicitly. */
@@ -2307,8 +2312,10 @@
     padding: 0;
     border: 1px dashed var(--line);
     min-height: 160px;
+    max-height: 360px;
+    overflow-y: auto;
   }
-  .rank-list.rank-available { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .rank-list.rank-available { flex: 1 1 auto; min-height: 0; max-height: 360px; overflow-y: auto; }
   .rank-list li {
     padding: 8px 12px;
     border-bottom: 1px solid var(--line);
