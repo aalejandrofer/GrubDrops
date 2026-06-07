@@ -8,7 +8,7 @@
   <div class="auth-card">
     <div class="kicker">// kick · authorize</div>
     <h1>Authorize {{.DisplayName}}</h1>
-    <p class="intro">Kick has no public OAuth. The sidecar replays your existing browser session via a chromedp tab. When discovery starts logging <code>blocked by cloudflare</code>, the cookies have gone stale — re-paste here.</p>
+    <p class="intro">Kick has no public OAuth. GrubDrops replays your kick.com session directly over a Chrome-fingerprinted HTTP client (utls) — no browser, no sidecar. When discovery logs cloudflare / 401, the cookies have gone stale — re-grab here.</p>
   </div>
 
   <div class="auth-card method preferred">
@@ -16,7 +16,7 @@
       <span class="method-tag">recommended</span>
       <h2>Helper CLI / pre-built app</h2>
     </div>
-    <p>The helper opens your local browser, snapshots kick.com cookies (<code>kick_session</code>, <code>XSRF-TOKEN</code>, <code>cf_clearance</code>), and pushes them. No DevTools, no copy-paste.</p>
+    <p>The helper reads your local browser's kick.com cookies (<code>kick_session</code>, <code>XSRF-TOKEN</code>, <code>cf_clearance</code>, <code>session_token</code>) and pushes them. No DevTools, no copy-paste.</p>
     <div class="cli-box">
       <div class="cli-label">one-liner</div>
       <pre class="cli-code">go run ./cmd/dropsminer-helper kick {{.AccountID}} --channel STREAMER[,STREAMER2,...]</pre>
@@ -33,7 +33,7 @@
     <ol class="steps">
       <li>Open <code>kick.com</code> in any browser and sign in.</li>
       <li>DevTools → Application → Cookies → <code>kick.com</code>.</li>
-      <li>Copy <code>kick_session</code> and <code>XSRF-TOKEN</code> (required). <code>cf_clearance</code> optional — sidecar generates its own when needed.</li>
+      <li>Copy <code>kick_session</code> + <code>XSRF-TOKEN</code> (required), and <code>session_token</code> (needed to claim drops). <code>cf_clearance</code> optional.</li>
       <li>Paste below + one or more channels (comma/space-separated).</li>
     </ol>
   </div>
@@ -45,6 +45,7 @@
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
       <label>kick_session <span class="req">(required)</span><input type="text" name="kick_session" required autocomplete="off"></label>
       <label>XSRF-TOKEN <span class="req">(required)</span><input type="text" name="xsrf_token" required autocomplete="off"></label>
+      <label>session_token <span class="opt">(needed for claims)</span><input type="text" name="session_token" autocomplete="off"></label>
       <label>cf_clearance <span class="opt">(optional)</span><input type="text" name="cf_clearance" autocomplete="off"></label>
       <label>Channels to mine <span class="req">(required)</span><input type="text" name="channel" required placeholder="streamer1, streamer2, streamer3"></label>
       <div class="submit-row">

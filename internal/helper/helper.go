@@ -119,7 +119,7 @@ func PushKick(ctx context.Context, req KickRequest) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("read browser cookies: %w", err)
 	}
-	picked := pickCookies(cookies, []string{"kick_session", "XSRF-TOKEN", "cf_clearance"})
+	picked := pickCookies(cookies, []string{"kick_session", "XSRF-TOKEN", "cf_clearance", "session_token"})
 	if _, ok := picked["kick_session"]; !ok {
 		return Result{}, fmt.Errorf("kick_session cookie not found — are you signed in to kick.com?")
 	}
@@ -140,6 +140,12 @@ func PushKick(ctx context.Context, req KickRequest) (Result, error) {
 	form.Set("xsrf_token", picked["XSRF-TOKEN"])
 	if v, ok := picked["cf_clearance"]; ok {
 		form.Set("cf_clearance", v)
+	}
+	// session_token carries the Sanctum bearer the utls transport needs for
+	// authed drops calls (progress/claim). Optional — older sessions worked
+	// without it for discovery, but claims need it.
+	if v, ok := picked["session_token"]; ok {
+		form.Set("session_token", v)
 	}
 	// Server-side parseKickChannels accepts comma/space-separated input.
 	form.Set("channel", strings.Join(channels, ","))

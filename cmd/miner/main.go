@@ -345,10 +345,15 @@ func run() error {
 
 	// Avoid typed-nil-interface trap: only assign if the concrete pointer is non-nil.
 	var bc api.KickBrowserClient
-	var reg api.KickChannelRegistrar
 	if browserClient != nil {
 		bc = browserClient // *browser.Client satisfies KickBrowserClient
-		reg = kickBackend  // *kick.Backend satisfies KickChannelRegistrar
+	}
+	// The Kick registrar/verifier is the utls backend — always wire it
+	// (independent of the browser sidecar) so Kick login can register
+	// channels + verify cookies over utls with no sidecar.
+	var reg api.KickChannelRegistrar
+	if kickBackend != nil {
+		reg = kickBackend // *kick.Backend: RegisterChannels + VerifyAuth
 	}
 
 	deps := api.Deps{

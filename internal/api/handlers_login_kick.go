@@ -50,10 +50,6 @@ type loginKickPageData struct {
 }
 
 func (d *loginKickDeps) get(w http.ResponseWriter, r *http.Request) {
-	if d.browser == nil {
-		http.Error(w, "browser sidecar not configured (set MINER_BROWSER_URL)", http.StatusServiceUnavailable)
-		return
-	}
 	id := chi.URLParam(r, "id")
 	acc, err := d.q.GetAccount(r.Context(), id)
 	if err != nil {
@@ -67,10 +63,6 @@ func (d *loginKickDeps) get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
-	if d.browser == nil {
-		http.Error(w, "browser sidecar not configured (set MINER_BROWSER_URL)", http.StatusServiceUnavailable)
-		return
-	}
 	id := chi.URLParam(r, "id")
 	acc, err := d.q.GetAccount(r.Context(), id)
 	if err != nil {
@@ -81,39 +73,23 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 	kickSessionCookie := r.FormValue("kick_session")
 	xsrf := r.FormValue("xsrf_token")
 	cfClearance := r.FormValue("cf_clearance")
+	sessionToken := r.FormValue("session_token")
 	channels := parseKickChannels(r.FormValue("channel"))
 
-	cookies := []*pb.Cookie{
-		{Name: "kick_session", Value: kickSessionCookie, Domain: "kick.com", Path: "/"},
-		{Name: "XSRF-TOKEN", Value: xsrf, Domain: "kick.com", Path: "/"},
-	}
 	stored := []cookieStored{
 		{Name: "kick_session", Value: kickSessionCookie, Domain: "kick.com", Path: "/"},
 		{Name: "XSRF-TOKEN", Value: xsrf, Domain: "kick.com", Path: "/"},
 	}
 	if cfClearance != "" {
-		cookies = append(cookies, &pb.Cookie{Name: "cf_clearance", Value: cfClearance, Domain: "kick.com", Path: "/"})
 		stored = append(stored, cookieStored{Name: "cf_clearance", Value: cfClearance, Domain: "kick.com", Path: "/"})
 	}
-
-	pbSession := &pb.KickSession{Cookies: cookies, XsrfToken: xsrf}
-	slog.Info("kick login attempt", "kind", "auth", "account", id, "platform", "kick", "channels", channels, "cookie_count", len(cookies), "has_cf_clearance", cfClearance != "", "kick_session_len", len(kickSessionCookie), "xsrf_len", len(xsrf))
-
-	// Same pattern as the Twitch paste handler: persist cookies even
-	// when the sidecar can't verify them right now. Verification can
-	// fail transiently (Cloudflare interstitial, missing channel, JS
-	// challenge needs a moment) — we don't want to throw away the
-	// operator's paste because of a flaky probe. The watcher retries
-	// on its own clock and surfaces needs_auth if cookies really are
-	// invalid.
-	var username string
-	resp, vErr := d.browser.Authenticate(r.Context(), pbSession)
-	if vErr != nil {
-		slog.Warn("kick sidecar verify failed; persisting cookies anyway", "kind", "auth", "account", id, "platform", "kick", "err", vErr)
-	} else {
-		username = resp.Username
-		slog.Info("kick sidecar verified", "kind", "auth", "account", id, "platform", "kick", "username", username)
+	if sessionToken != "" {
+		// The Sanctum bearer for authed drops calls (progress/claim) — the
+		// utls transport extracts it from this cookie.
+		stored = append(stored, cookieStored{Name: "session_token", Value: sessionToken, Domain: "kick.com", Path: "/"})
 	}
+
+	slog.Info("kick login attempt", "kind", "auth", "account", id, "platform", "kick", "channels", channels, "has_cf_clearance", cfClearance != "", "has_session_token", sessionToken != "", "kick_session_len", len(kickSessionCookie), "xsrf_len", len(xsrf))
 
 	legacyChannel := ""
 	if len(channels) > 0 {
@@ -124,18 +100,32 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 		XSRFToken: xsrf,
 		Channel:   legacyChannel, // back-compat: first entry mirrors old single-channel field
 		Channels:  channels,
-		Username:  username,
 	}
 	raw, _ := json.Marshal(internal)
-	if err := d.sessions.Put(r.Context(), id, platform.Session{
+	sess := platform.Session{
+		AccountID: id,
 		Cookies:   map[string]string{"kick": string(raw)},
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
-	}); err != nil {
+	}
+	if err := d.sessions.Put(r.Context(), id, sess); err != nil {
 		slog.Error("persist kick session failed", "account", id, "err", err)
 		d.renderError(w, r, id, acc.DisplayName, "failed to persist session: "+err.Error())
 		return
 	}
-	slog.Info("kick session persisted", "account", id, "channels", channels, "username", username)
+	slog.Info("kick session persisted", "account", id, "channels", channels)
+
+	// Verify over the utls transport (no browser sidecar). A transient
+	// failure isn't fatal — cookies are already persisted and the watcher
+	// retries; we only use the result for the flash message.
+	verified := false
+	if v, ok := d.registrar.(kickAuthVerifier); ok {
+		if err := v.VerifyAuth(r.Context(), sess); err != nil {
+			slog.Warn("kick utls verify failed; persisting anyway", "kind", "auth", "account", id, "err", err)
+		} else {
+			verified = true
+			slog.Info("kick utls verified", "kind", "auth", "account", id)
+		}
+	}
 
 	if d.registrar != nil {
 		d.registrar.RegisterChannels(id, channels)
@@ -149,14 +139,19 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	flash := "Kick cookies persisted"
-	if username != "" {
-		flash = "Kick session authorized for " + username
-	} else {
-		flash += " — sidecar could not verify yet; watcher will retry"
+	flash := "Kick cookies persisted — watcher will verify shortly"
+	if verified {
+		flash = "Kick session verified ✓"
 	}
 	d.sm.Put(r.Context(), "flash", flash)
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
+}
+
+// kickAuthVerifier lets the login handler verify pasted cookies over the
+// kick.Backend's utls transport (no browser sidecar). Satisfied by
+// *kick.Backend (which implements platform.AuthChecker).
+type kickAuthVerifier interface {
+	VerifyAuth(ctx context.Context, s platform.Session) error
 }
 
 func (d *loginKickDeps) renderError(w http.ResponseWriter, r *http.Request, id, name, flash string) {
