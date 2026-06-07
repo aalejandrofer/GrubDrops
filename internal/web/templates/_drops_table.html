@@ -104,7 +104,7 @@
         {{$accts := .Accounts}}
         {{$csrf := .CSRFToken}}
         {{range .UnlistedRows}}
-        <details class="ev kind-{{if eq .Kind "reward"}}auth{{else}}discovery{{end}}{{if eq .Kind "reward"}} drop-dim{{end}}"
+        <details class="ev kind-{{if eq .Kind "reward"}}auth{{else}}discovery{{end}} ev-linkrow"
                  {{if .CampaignID}}hx-get="/drops/campaigns/{{.CampaignID}}/items"
                  hx-target="find .ev-detail-slot"
                  hx-trigger="toggle once from:closest details"
@@ -114,31 +114,28 @@
             <span class="t">{{if .When}}{{.When}}{{else}}—{{end}}</span>
             <span class="lvl" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">●</span>
             <span class="body"><em style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{.Platform}}</em>{{if eq .Kind "reward"}} · reward{{end}} · <span style="color:var(--muted);">{{.Game}}</span> · {{.CampaignName}}</span>
-            <span class="ac">not whitelisted</span>
+            {{/* Whitelist control lives in the right cell (replaces the old
+                 "not whitelisted" label + bottom add block). stopPropagation
+                 so interacting with it doesn't toggle the row open. */}}
+            <span class="ac whitelist-add" onclick="event.stopPropagation()">
+              {{if $accts}}
+              <form method="post" action="/drops/whitelist/add" class="disc-add-form" onsubmit="this.querySelector('button').disabled=true">
+                <input type="hidden" name="csrf_token" value="{{$csrf}}">
+                <input type="hidden" name="name" value="{{.Game}}">
+                <select name="account_id" title="whitelist {{.Game}} for…">
+                  <option value="__global__">★ Global</option>
+                  {{range $accts}}<option value="{{.ID}}">{{.Label}}</option>{{end}}
+                </select>
+                <button class="btn sm" type="submit">whitelist +</button>
+              </form>
+              {{else}}<span style="color:var(--muted);">no accounts</span>{{end}}
+            </span>
           </summary>
-          {{/* Contents first — the drop's items/benefits (lazy-loaded). */}}
           <div class="ev-detail-slot">
             {{if .CampaignID}}
             <div class="ev-detail" style="color:var(--muted);font-size:11px;">Loading items…</div>
             {{else}}
             <div class="ev-detail" style="color:var(--muted);font-size:11px;">No item details available for this campaign.</div>
-            {{end}}
-          </div>
-          {{/* Add control — secondary, below the contents. Per-account only. */}}
-          <div class="disc-add">
-            {{if $accts}}
-            <form method="post" action="/drops/whitelist/add" class="disc-add-form">
-              <input type="hidden" name="csrf_token" value="{{$csrf}}">
-              <input type="hidden" name="name" value="{{.Game}}">
-              <span class="disc-add-label">add <strong>{{.Game}}</strong> to</span>
-              <select name="account_id">
-                <option value="__global__">★ Global priority list (all accounts)</option>
-                {{range $accts}}<option value="{{.ID}}">{{.Label}}</option>{{end}}
-              </select>
-              <button class="btn sm" type="submit">add +</button>
-            </form>
-            {{else}}
-            <span class="disc-add-label" style="color:var(--muted);">no accounts configured — add one first</span>
             {{end}}
           </div>
         </details>

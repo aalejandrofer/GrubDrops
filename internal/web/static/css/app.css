@@ -624,6 +624,20 @@
   }
   .linked-btn:hover { border-color: color-mix(in srgb, var(--green) 45%, transparent); }
   .linked-btn:disabled { opacity: 0.5; cursor: default; }
+  /* Discoverable row right-cell whitelist control (compact select + button). */
+  .whitelist-add { display: inline-flex; justify-content: flex-end; }
+  .whitelist-add .disc-add-form { display: inline-flex; gap: 6px; align-items: center; flex-wrap: nowrap; }
+  .whitelist-add select {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 3px 5px;
+    max-width: 130px;
+  }
+  .whitelist-add .btn.sm { white-space: nowrap; font-size: 10px; padding: 3px 8px; }
   /* COLLECTED marks — one chip per account that claimed the benefit. */
   .drop-item-collected { display: flex; flex-wrap: wrap; gap: 5px; }
   .cmark {
