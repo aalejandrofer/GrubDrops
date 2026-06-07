@@ -5,28 +5,60 @@ import (
 	"sync"
 )
 
-// runState tracks an in-flight Start so Stop can cancel + wait.
+// runState tracks an in-flight Start. Each entry runs under its OWN child
+// context (derived from the run's parent) so a single entry can be
+// restarted — ReloadAccount — without disturbing the others. cancel cancels
+// the parent (→ every child) for a full Stop.
 type runState struct {
+	parent context.Context
 	cancel context.CancelFunc
 	wg     *sync.WaitGroup
+
+	mu    sync.Mutex
+	units map[string]*runUnit
+}
+
+// runUnit is one running entry: its cancel + a channel closed when the
+// supervise goroutine exits (so ReloadAccount can wait for a clean stop
+// before respawning).
+type runUnit struct {
+	cancel context.CancelFunc
+	done   chan struct{}
 }
 
 func (s *Scheduler) startInternal(parent context.Context) *runState {
 	ctx, cancel := context.WithCancel(parent)
-	wg := &sync.WaitGroup{}
+	rs := &runState{
+		parent: ctx,
+		cancel: cancel,
+		wg:     &sync.WaitGroup{},
+		units:  map[string]*runUnit{},
+	}
 
 	s.mu.Lock()
 	entries := append([]entry(nil), s.entries...)
 	s.mu.Unlock()
 
 	for _, e := range entries {
-		wg.Add(1)
-		go func(e entry) {
-			defer wg.Done()
-			s.supervise(ctx, e)
-		}(e)
+		rs.startUnit(s, e)
 	}
-	return &runState{cancel: cancel, wg: wg}
+	return rs
+}
+
+// startUnit spawns one entry under its own child context + done channel.
+func (rs *runState) startUnit(s *Scheduler, e entry) {
+	cctx, ccancel := context.WithCancel(rs.parent)
+	done := make(chan struct{})
+	rs.mu.Lock()
+	rs.units[e.id] = &runUnit{cancel: ccancel, done: done}
+	rs.mu.Unlock()
+
+	rs.wg.Add(1)
+	go func() {
+		defer rs.wg.Done()
+		defer close(done)
+		s.supervise(cctx, e)
+	}()
 }
 
 // Stop cancels the in-flight run and waits for goroutines to exit.
@@ -57,6 +89,49 @@ func (s *Scheduler) Reload(parent context.Context, builders []EntryBuilder) erro
 		s.AddEntry(b())
 	}
 	return s.Start(parent)
+}
+
+// ReloadAccount restarts a SINGLE account's entry (build a fresh one) while
+// every other account keeps running untouched. Used for targeted account
+// edits so we don't tear down the whole roster. If the scheduler isn't
+// running, it just updates the stored entry set. Serialized via reloadMu.
+func (s *Scheduler) ReloadAccount(_ context.Context, id string, build EntryBuilder) {
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
+
+	e := build()
+	s.replaceEntry(e)
+
+	s.runMu.Lock()
+	rs := s.current
+	s.runMu.Unlock()
+	if rs == nil {
+		return // not running; entry set updated, next Start picks it up
+	}
+
+	// Stop the old unit (if any) and wait for it to exit, then spawn fresh.
+	rs.mu.Lock()
+	u := rs.units[id]
+	delete(rs.units, id)
+	rs.mu.Unlock()
+	if u != nil {
+		u.cancel()
+		<-u.done
+	}
+	rs.startUnit(s, e)
+}
+
+// replaceEntry swaps the stored entry with matching id, or appends it.
+func (s *Scheduler) replaceEntry(e entry) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.entries {
+		if s.entries[i].id == e.id {
+			s.entries[i] = e
+			return
+		}
+	}
+	s.entries = append(s.entries, e)
 }
 
 // EntryBuilder produces a fresh Entry on demand.

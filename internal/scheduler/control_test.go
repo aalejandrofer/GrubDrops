@@ -57,4 +57,13 @@ func TestScheduler_StopThenReloadAddsAccount(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return notif.claims.Load() == 3
 	}, 4*time.Second, 5*time.Millisecond, "acc2 + acc3 should each claim after reload")
+
+	// Targeted reload: restart only acc2 (fresh backend → claims its benefit
+	// again, +1) while acc3 keeps running untouched.
+	s.ReloadAccount(ctx, "acc2", mkBuilder("acc2"))
+	require.Eventually(t, func() bool {
+		return notif.claims.Load() == 4
+	}, 4*time.Second, 5*time.Millisecond, "reloaded acc2 should re-claim; acc3 untouched")
+
+	s.Stop(ctx)
 }

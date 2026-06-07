@@ -23,8 +23,9 @@ type accountsDeps struct {
 	t         Renderer
 	sm        *scs.SessionManager
 	sch       *scheduler.Scheduler
-	reload    func(context.Context) error
-	authCheck func(context.Context) // auth-health sweep (manual trigger)
+	reload        func(context.Context) error
+	authCheck     func(context.Context)         // auth-health sweep (manual trigger)
+	reloadAccount func(context.Context, string) // targeted single-account reload
 }
 
 // applyReload calls the scheduler reload hook if wired, swallowing
@@ -368,10 +369,13 @@ func (d accountsDeps) update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	// No auto-reload: whitelist/priority/account edits take effect on the
-	// next manual "Apply changes" (or the next discovery tick for /drops).
-	// Avoids tearing down + respinning every watcher on each small save.
-	d.sm.Put(r.Context(), "flash", "saved")
+	// Targeted reload: an account edit (enable/disable, label, webhook)
+	// restarts ONLY this account's watcher — the rest of the roster keeps
+	// running. (Whitelist/priority saves still defer to the manual Apply.)
+	if d.reloadAccount != nil {
+		d.reloadAccount(r.Context(), id)
+	}
+	d.sm.Put(r.Context(), "flash", "saved — this account reloaded")
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
 

@@ -303,6 +303,24 @@ func run() error {
 		return sched.Reload(parent, builders)
 	}
 
+	// reloadAccount restarts a SINGLE account's watcher (targeted account
+	// edit) without touching the rest of the roster.
+	reloadAccount := func(parent context.Context, accountID string) {
+		acc, err := q.GetAccount(parent, accountID)
+		if err != nil {
+			logger.Warn("reloadAccount: account not found", "account", accountID, "err", err)
+			return
+		}
+		sched.ReloadAccount(parent, accountID, func() scheduler.Entry {
+			e, err := build(acc)
+			if err != nil {
+				logger.Error("account skipped on targeted reload", "account", accountID, "err", err)
+				return scheduler.NewEntry(accountID, nopRunner{})
+			}
+			return e
+		})
+	}
+
 	if err := loadAndStart(ctx); err != nil {
 		return fmt.Errorf("initial scheduler boot: %w", err)
 	}
@@ -343,6 +361,7 @@ func run() error {
 		SettingsStore:    settingsStore,
 		OnSettingsUpdate: onSettingsUpdate,
 		AuthCheck:        authChecker.CheckAll,
+		ReloadAccount:    reloadAccount,
 		TwitchBrowser:       twitchBrowserEnabled && browserClient != nil,
 		LogRing:             ring,
 		StartTime:           startTime,

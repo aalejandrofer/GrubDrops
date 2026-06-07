@@ -64,6 +64,9 @@ type Deps struct {
 	// AuthCheck runs the auth-health sweep across all accounts (manual
 	// "check auth now" button on /accounts). Nil disables the button.
 	AuthCheck func(context.Context)
+	// ReloadAccount restarts a single account's watcher (targeted account
+	// edit) without reloading the whole roster.
+	ReloadAccount func(context.Context, string)
 	// TwitchBrowser indicates the Twitch backend is the browser-routed
 	// variant; the login handler redirects to the cookie-paste page
 	// instead of the device-code flow when true.
@@ -111,7 +114,7 @@ func NewRouter(d Deps) http.Handler {
 		start:           startedAt,
 		channelCounters: channelCountersFromRegistry(d.Registry),
 	}
-	accs := accountsDeps{q: d.Q, t: d.Templates, sm: d.Session, sch: d.Scheduler, reload: d.Reload, authCheck: d.AuthCheck}
+	accs := accountsDeps{q: d.Q, t: d.Templates, sm: d.Session, sch: d.Scheduler, reload: d.Reload, authCheck: d.AuthCheck, reloadAccount: d.ReloadAccount}
 	loginTwitch := newLoginTwitchDeps(d, d.RootCtx)
 	loginKick := &loginKickDeps{
 		q:         d.Q,
