@@ -544,6 +544,23 @@
   .ccol .tk.partial { color: var(--amber); }
   .ccross { color: var(--red); font-family: 'JetBrains Mono', monospace; font-size: 13px; }
 
+  /* Collection marks: one bordered box holding a green ✓ per collector
+     (no @login — account identity doesn't matter), or an orange ✗ for
+     action-required campaigns that can't be auto-mined. Shared style so
+     every page renders collection the same way. */
+  .collect-box {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 9px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    line-height: 1;
+  }
+  .collect-box .tk { color: var(--green); font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; }
+  .collect-box .tk.partial { color: var(--amber); }
+  .collect-box .tk.cross { color: var(--accent); }
+
   /* Non-watch-time drops/items (reward / 0-min action) read as dimmed —
      they can't be auto-mined. Hover restores full opacity for legibility. */
   .drop-dim { opacity: 0.5; }
@@ -607,11 +624,6 @@
   }
   .linked-btn:hover { background: rgba(111, 181, 107, 0.14); }
   .linked-btn:disabled { opacity: 0.5; cursor: default; }
-  /* Collection ✓/✗ mark on /drops rows (account identity doesn't matter). */
-  .ac.collect .cmark { font-size: 13px; font-weight: 700; }
-  .ac.collect .cmark.ok { color: var(--green); }
-  .ac.collect .cmark.no { color: var(--accent); }
-  .ac.collect .cmark.na { color: var(--dim); }
   /* COLLECTED marks — one chip per account that claimed the benefit. */
   .drop-item-collected { display: flex; flex-wrap: wrap; gap: 5px; }
   .cmark {
