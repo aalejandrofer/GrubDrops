@@ -38,6 +38,24 @@ func (q *Queries) CountClaims(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countClaimsFor = `-- name: CountClaimsFor :one
+SELECT COUNT(*) FROM claims WHERE account_id = ? AND benefit_id = ?
+`
+
+type CountClaimsForParams struct {
+	AccountID string `json:"account_id"`
+	BenefitID string `json:"benefit_id"`
+}
+
+// Claim rows for one account+benefit. Zero means none. Keeps the
+// inventory-ownership reconcile idempotent.
+func (q *Queries) CountClaimsFor(ctx context.Context, arg CountClaimsForParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countClaimsFor, arg.AccountID, arg.BenefitID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getProgress = `-- name: GetProgress :one
 SELECT account_id, benefit_id, minutes_watched, claimed_at, updated_at FROM progress WHERE account_id = ? AND benefit_id = ?
 `

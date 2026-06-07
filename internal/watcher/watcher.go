@@ -665,6 +665,29 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 		}
 	}
 
+	// Reconcile inventory ownership into the claims table: a drop the
+	// account already owns (claimed[]) but we have no claims row for — e.g.
+	// claimed MANUALLY on Twitch outside the bot — gets recorded so the
+	// /drops COLLECTED mark reflects it. Idempotent (RecordClaimIfNew skips
+	// existing rows). Benefits were just persisted above, satisfying the
+	// claims.benefit_id FK.
+	if rec, ok := w.cfg.ClaimRecorder.(interface {
+		RecordClaimIfNew(context.Context, string, platform.DropBenefit) (bool, error)
+	}); ok && len(claimed) > 0 {
+		for _, c := range campaigns {
+			for _, b := range c.Benefits {
+				if !claimed[b.ID] && !(b.RewardID != "" && claimed[b.RewardID]) {
+					continue
+				}
+				if wrote, err := rec.RecordClaimIfNew(ctx, w.cfg.AccountID, b); err == nil && wrote {
+					slog.Info("watcher reconciled owned drop into claims",
+						"kind", "claim", "account", w.cfg.AccountID,
+						"benefit", b.ID, "benefit_name", b.Name)
+				}
+			}
+		}
+	}
+
 	// Apply the per-account whitelist to EVERYTHING the backend returned —
 	// active, expired, upcoming. Non-whitelisted campaigns are dropped
 	// here so they never reach the mining loop. (They DID reach the

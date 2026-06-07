@@ -21,6 +21,9 @@ type Querier interface {
 	CountClaimedForCampaign(ctx context.Context, campaignID string) (int64, error)
 	// Lifetime total drops claimed (every row in the claims table).
 	CountClaims(ctx context.Context) (int64, error)
+	// Claim rows for one account+benefit. Zero means none. Keeps the
+	// inventory-ownership reconcile idempotent.
+	CountClaimsFor(ctx context.Context, arg CountClaimsForParams) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
 	DeleteAccount(ctx context.Context, id string) error
 	DeleteKV(ctx context.Context, key string) error

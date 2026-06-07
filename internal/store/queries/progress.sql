@@ -23,6 +23,11 @@ WHERE p.account_id = ?
 INSERT INTO claims (id, account_id, benefit_id, claimed_at, value_meta_json)
 VALUES (?, ?, ?, ?, ?);
 
+-- name: CountClaimsFor :one
+-- Claim rows for one account+benefit. Zero means none. Keeps the
+-- inventory-ownership reconcile idempotent.
+SELECT COUNT(*) FROM claims WHERE account_id = ? AND benefit_id = ?;
+
 -- name: CountClaimedForCampaign :one
 -- Distinct benefits already claimed by any account in this campaign.
 -- The dashboard divides this by len(Benefits) to render the
