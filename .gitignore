@@ -45,3 +45,4 @@ out/
 # playwright / scratch
 .playwright-mcp/
 /tmp/
+.superpowers/
