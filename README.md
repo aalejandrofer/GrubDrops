@@ -3,7 +3,7 @@
 </p>
 
 <p align="center"><b>Self-hosted Twitch &amp; Kick drops miner.</b><br>
-Pick your games, it watches the right streams, mines the drops, and claims them — hands-free.</p>
+You pick the games. It watches the right streams, racks up the watch-time, and claims the drops for you.</p>
 
 <p align="center">
   <img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white">
@@ -16,81 +16,92 @@ Pick your games, it watches the right streams, mines the drops, and claims them 
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/console.png" width="900" alt="GrubDrops console — watch-time stats, per-account mining across Twitch + Kick, live event feed">
+  <img src="docs/screenshots/console.png" width="900" alt="GrubDrops console: watch-time stats, per-account mining across Twitch and Kick, and a live event feed">
 </p>
 
 ---
 
-Pick your games once. GrubDrops watches an eligible live channel that's actually playing each one, accrues watch-time across all your Twitch + Kick accounts, and claims drops as they complete — no browser farm, no clicking.
+Tell GrubDrops which games you care about. It finds a live channel that's actually playing one of them, keeps a viewer present so the watch-time counts, and claims each drop the moment it's ready. No browser farm, no tabs to babysit, no clicking. Add as many Twitch and Kick accounts as you like and run them all from one dashboard.
 
-## Features
+## What it does
 
-- 🎯 **Whitelist-driven** — global or per-account priority list; only your games get mined.
-- 🟣🟢 **Twitch + Kick**, multiple accounts each, one dashboard.
-- ✅ **Game-aware** channel pick — never wastes watch-time on the wrong game.
-- 🔗 **Connection-aware** — flags campaigns needing an external account link, with an "I've linked it" override.
-- 🖥️ **Live console** — event feed, currently-mining panel, drops catalog, claim history.
-- 🔔 **Discord** notifications with per-kind toggles.
+- **You set a whitelist** (one global list, or a per-account one) and nothing outside it ever gets mined.
+- **Twitch and Kick together**, several accounts each, all on one page.
+- **It checks the game.** A stream has to actually be playing the campaign's game, so you never burn watch-time on the wrong thing.
+- **It knows about account links.** Campaigns that need an external account connected (Krafton, Embark, and friends) get flagged per account, and there's an "I've linked it" override when the check is being stubborn.
+- **A live console** shows lifetime stats, what's mining right now, the drops catalog, and a claim history.
+- **Discord notifications** if you want them, with toggles per event type.
 
 ## How it works
 
-- **Twitch** — official device-code OAuth (no password/cookies through GrubDrops) + GraphQL + PubSub.
-- **Kick** — pure-HTTP client with a real Chrome TLS fingerprint (`utls`), beating Cloudflare with no browser; watch presence over Kick's viewer WebSocket.
-- **Discovery** scrapes the catalog every few minutes into SQLite, so the UI stays populated even when idle.
+Twitch and Kick don't let you in the same way, so GrubDrops talks to each one on its own terms:
+
+- **Twitch** uses the official device-code login (your password and cookies never touch GrubDrops), then GraphQL plus PubSub for live progress and claims.
+- **Kick** has no public API and sits behind Cloudflare, so GrubDrops speaks to it over a plain HTTP client wearing a real Chrome TLS fingerprint (`utls`). No headless browser, no `cf_clearance` dance. Watch-time is kept alive over Kick's viewer WebSocket.
+- **Discovery** sweeps the active catalog every few minutes into SQLite, so the dashboard stays useful even when nothing's actively mining.
 
 ## Pages
 
-| Page | What |
+| Page | What's on it |
 |------|------|
-| **Console** (`/`) | Lifetime stats, currently-mining per platform/account, live event feed. |
-| **Drops** (`/drops`) | Whitelisted past/current/upcoming + discoverable campaigns; per-campaign items, collection marks, connect chips, one-click whitelist. |
-| **History** (`/history`) | Claim log across accounts. |
-| **Settings** (`/settings`) | Global priority list, runtime intervals, Discord, log level, **change master password**. |
-| **Accounts** | Add accounts, per-account whitelist, re-auth, auth-health. |
+| **Console** (`/`) | Lifetime stats, what each account is mining, a live event feed. |
+| **Drops** (`/drops`) | Past, current, upcoming and discoverable campaigns; per-campaign items, collection marks, connect chips, one-click whitelisting. |
+| **History** (`/history`) | The claim log across every account. |
+| **Settings** (`/settings`) | Global priority list, intervals, Discord, log level, change master password. |
+| **Accounts** | Add accounts, edit per-account whitelists, re-auth, check auth health. |
 
 ## Quick start
 
 ```bash
 go build -o grubdrops ./cmd/miner
-MINER_MASTER_KEY=$(head -c32 /dev/urandom | base64) ./grubdrops   # → http://localhost:8080
+MINER_MASTER_KEY=$(head -c32 /dev/urandom | base64) ./grubdrops   # http://localhost:8080
 ```
 
-First run creates the admin login. Add a Twitch account → approve a **device code** at `twitch.tv/activate`. Add a Kick account → download the **helper** from the Kick login page (or paste cookies).
+The first run asks you to create an admin login. For Twitch, add an account and approve the device code at `twitch.tv/activate`. For Kick, download the helper from the Kick login page (or paste your cookies in by hand). Channels auto-discover from each campaign's game, so there's nothing else to configure.
 
 ## Configuration
 
-All via env vars:
+Everything is set through environment variables:
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `MINER_MASTER_KEY` | — (required) | Key for age-encrypted session storage. |
+| `MINER_MASTER_KEY` | required | Key for the age-encrypted session store. |
 | `MINER_HTTP_ADDR` | `:8080` | Listen address. |
-| `MINER_DISCOVERY_INTERVAL` | `5m` | Catalog scrape cadence. |
-| `MINER_AUTHCHECK_INTERVAL` | `12h` | Auth-health sweep cadence. |
-| `MINER_DISCORD_WEBHOOK_URL` | — | Optional global Discord webhook. |
+| `MINER_DISCOVERY_INTERVAL` | `5m` | How often the catalog is scraped. |
+| `MINER_AUTHCHECK_INTERVAL` | `12h` | How often auth health is swept. |
+| `MINER_DISCORD_WEBHOOK_URL` | none | Optional global Discord webhook. |
 | `MINER_HELPER_DIR` | `/helpers` | Where the baked cookie-helper binaries live. |
-| `MINER_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error`. |
+| `MINER_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
 
 ## Deploy
 
-`linux/amd64` container (built from `deploy/Dockerfile.miner`). Build → transfer the image → `docker compose up`. The image bakes the cross-compiled cookie helpers (served at `/download/helper`). Persist `/data` (SQLite) across redeploys; route behind a reverse proxy; `/healthz` returns `ok`.
+It ships as a `linux/amd64` container built from `deploy/Dockerfile.miner`. Build it, move the image to your host, and `docker compose up`. The image bakes in the cross-compiled cookie helpers (served from `/download/helper`). Keep `/data` (the SQLite file) across redeploys, put it behind a reverse proxy, and `/healthz` will tell you it's alive.
 
 ## Project layout
 
 ```
 cmd/miner               main daemon
-cmd/grubdrops-helper   cookie helper CLI (cross-compiled into the image)
-internal/platform/twitch · kick   per-platform backends
-internal/watcher        per-account state machine (watch/mine/claim)
+cmd/grubdrops-helper    cookie helper CLI (cross-compiled into the image)
+internal/platform/...   per-platform backends (twitch, kick)
+internal/watcher        per-account state machine (watch, mine, claim)
 internal/discovery      catalog scraper
-internal/api + web      HTMX UI + handlers
+internal/api + web      HTMX UI and handlers
 internal/store          SQLite (sqlc + goose), age-encrypted sessions
 ```
 
-## Status & notes
+## Credits
 
-Active development. Twitch mining + claiming and Kick discovery/watch run in production. Self-hosted, single-tenant. Use responsibly and within each platform's Terms of Service — you run it against your own accounts at your own risk.
+GrubDrops stands on the shoulders of two excellent projects that figured out the hard parts first:
+
+- **[DevilXD/TwitchDropsMiner](https://github.com/DevilXD/TwitchDropsMiner)** for the Twitch side: the device-code flow, the GraphQL queries, and the watch-time mechanics all trace back to it.
+- **[HyperBeats/KickDropsMiner](https://github.com/HyperBeats/KickDropsMiner)** for the Kick side, which mapped out how Kick drops work in the first place.
+
+GrubDrops is its own Go rewrite with a web UI and multi-account support, but it wouldn't exist without their groundwork. Thank you.
+
+## Notes
+
+Still actively developed. Twitch mining and claiming plus Kick discovery and watching run in production. It's self-hosted and single-tenant. Use it responsibly and within each platform's Terms of Service, against your own accounts, at your own risk.
 
 ---
 
-<sub>Built by <a href="https://github.com/aalejandrofer">@aalejandrofer</a> with <a href="https://claude.com/claude-code">Claude Code</a> (Opus 4.8). See <a href="CHANGELOG.md">CHANGELOG</a> · <a href="docs/DESIGN.md">DESIGN</a>.</sub>
+<sub>Built by <a href="https://github.com/aalejandrofer">@aalejandrofer</a> with <a href="https://claude.com/claude-code">Claude Code</a>. See the <a href="CHANGELOG.md">changelog</a> and <a href="docs/DESIGN.md">design notes</a>.</sub>
