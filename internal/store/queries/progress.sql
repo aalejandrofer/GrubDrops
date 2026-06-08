@@ -21,7 +21,10 @@ WHERE p.account_id = ?
 
 -- name: InsertClaim :exec
 INSERT INTO claims (id, account_id, benefit_id, claimed_at, value_meta_json)
-VALUES (?, ?, ?, ?, ?);
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(account_id, benefit_id) DO UPDATE SET
+    claimed_at = excluded.claimed_at,
+    value_meta_json = excluded.value_meta_json;
 
 -- name: CountClaimsFor :one
 -- Claim rows for one account+benefit. Zero means none. Keeps the

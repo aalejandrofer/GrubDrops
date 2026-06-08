@@ -81,6 +81,9 @@ func (q *Queries) GetProgress(ctx context.Context, arg GetProgressParams) (Progr
 const insertClaim = `-- name: InsertClaim :exec
 INSERT INTO claims (id, account_id, benefit_id, claimed_at, value_meta_json)
 VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(account_id, benefit_id) DO UPDATE SET
+    claimed_at = excluded.claimed_at,
+    value_meta_json = excluded.value_meta_json
 `
 
 type InsertClaimParams struct {
