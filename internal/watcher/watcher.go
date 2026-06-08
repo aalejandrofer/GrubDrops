@@ -1243,7 +1243,13 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 		}
 	}
 
-	_ = w.cfg.Notifier.Notify(ctx, "progress", w.notifyFields(nil))
+	w.mu.Lock()
+	curMin := w.lastProgressMin
+	w.mu.Unlock()
+	_ = w.cfg.Notifier.Notify(ctx, "progress", w.notifyFields(map[string]any{
+		"cur_min": curMin,
+		"req_min": benefit.RequiredMinutes,
+	}))
 	return nil
 }
 
@@ -1296,8 +1302,10 @@ func (w *Watcher) claim(ctx context.Context) error {
 
 	_ = w.cfg.Notifier.Notify(ctx, "claim", w.notifyFields(map[string]any{
 		// benefit/handle are captured locals; currentStream may already be
-		// cleared by claim time, so pass channel explicitly.
+		// cleared by claim time, so pass channel explicitly. A claim implies
+		// the watch requirement was met, so report the bar as full.
 		"drop": benefit.Name, "channel": handle.Channel,
+		"cur_min": benefit.RequiredMinutes, "req_min": benefit.RequiredMinutes,
 	}))
 
 	w.mu.Lock()

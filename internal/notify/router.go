@@ -17,6 +17,10 @@ type AccountRoutedNotifier struct {
 	resolve  AccountURLResolver
 	filter   *VerbosityFilter
 
+	// Branding applied to each per-account webhook client.
+	Username  string
+	AvatarURL string
+
 	mu    sync.Mutex
 	cache map[string]*DiscordWebhook
 }
@@ -50,6 +54,8 @@ func (r *AccountRoutedNotifier) client(url string) *DiscordWebhook {
 		return wh
 	}
 	wh := NewDiscordWebhook(url, r.filter)
+	wh.Username = r.Username
+	wh.AvatarURL = r.AvatarURL
 	r.cache[url] = wh
 	return wh
 }
