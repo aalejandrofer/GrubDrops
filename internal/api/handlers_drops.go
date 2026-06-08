@@ -630,7 +630,18 @@ func (d *dropsDeps) collectAll(
 		}
 		return ai < aj
 	})
-	sortBySoonest(past)
+	// Past campaigns already ended, so "ending soonest" reads backwards —
+	// show the most recently ended at the top, oldest at the bottom.
+	sort.SliceStable(past, func(i, j int) bool {
+		ai, aj := past[i].sortKey, past[j].sortKey
+		if ai == 0 {
+			return false
+		}
+		if aj == 0 {
+			return true
+		}
+		return ai > aj
+	})
 	sortBySoonest(upcoming)
 	sortBySoonest(unlisted)
 
