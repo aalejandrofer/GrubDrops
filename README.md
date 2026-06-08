@@ -25,12 +25,12 @@ Tell GrubDrops which games you care about. It finds a live channel that's actual
 
 ## What it does
 
-- **You set a whitelist** (one global list, or a per-account one) and nothing outside it ever gets mined.
-- **Twitch and Kick together**, several accounts each, all on one page.
-- **It checks the game.** A stream has to actually be playing the campaign's game, so you never burn watch-time on the wrong thing.
-- **It knows about account links.** Campaigns that need an external account connected (Krafton, Embark, and friends) get flagged per account, and there's an "I've linked it" override when the check is being stubborn.
-- **A live console** shows lifetime stats, what's mining right now, the drops catalog, and a claim history.
-- **Discord notifications** if you want them, with toggles per event type.
+- 🎯 **You set a whitelist** (one global list, or a per-account one) and nothing outside it ever gets mined.
+- 🟣🟢 **Twitch and Kick together**, several accounts each, all on one page.
+- ✅ **It checks the game.** A stream has to actually be playing the campaign's game, so you never burn watch-time on the wrong thing.
+- 🔗 **It knows about account links.** Campaigns that need an external account connected (Krafton, Embark, and friends) get flagged per account, and there's an "I've linked it" override when the check is being stubborn.
+- 🖥️ **A live console** shows lifetime stats, what's mining right now, the drops catalog, and a claim history.
+- 🔔 **Discord notifications** if you want them, with toggles per event type.
 
 ## How it works
 
