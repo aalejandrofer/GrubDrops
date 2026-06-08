@@ -11,6 +11,7 @@ import (
 
 const (
 	keyGlobalDiscord    = "settings:discord_webhook"
+	keyNotifyAvatarURL  = "settings:notify_avatar_url"
 	keyLogRetention     = "settings:log_retention_days"
 	keyLogLevel         = "settings:log_level"
 	keyTickIntervalMs   = "settings:tick_interval_ms"
@@ -64,6 +65,16 @@ func (s *Settings) GlobalDiscordWebhook(ctx context.Context) (string, error) {
 
 func (s *Settings) SetGlobalDiscordWebhook(ctx context.Context, url string) error {
 	return s.setString(ctx, keyGlobalDiscord, url)
+}
+
+// NotifyAvatarURL is the avatar image used for the Discord webhook sender.
+// Empty means "use the webhook's own avatar" (the payload field is omitted).
+func (s *Settings) NotifyAvatarURL(ctx context.Context) (string, error) {
+	return s.getString(ctx, keyNotifyAvatarURL)
+}
+
+func (s *Settings) SetNotifyAvatarURL(ctx context.Context, url string) error {
+	return s.setString(ctx, keyNotifyAvatarURL, url)
 }
 
 func (s *Settings) LogRetentionDays(ctx context.Context) (int, error) {

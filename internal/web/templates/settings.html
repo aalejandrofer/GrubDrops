@@ -109,11 +109,50 @@
         <label>Global Discord webhook URL
           <input type="url" name="discord_webhook" value="{{.GlobalDiscordWebhook}}" placeholder="https://discord.com/api/webhooks/…">
         </label>
+        <label>Bot avatar URL <span class="field-hint" style="margin:0;font-weight:400;">optional — image shown as the sender avatar</span>
+          <input type="url" name="notify_avatar_url" value="{{.NotifyAvatarURL}}" placeholder="https://…/avatar.png">
+        </label>
         <div class="settings-grid-4">
           <label class="cb"><input type="checkbox" name="notify_claim" value="1" {{if .NotifyClaim}}checked{{end}}> claims</label>
           <label class="cb"><input type="checkbox" name="notify_progress" value="1" {{if .NotifyProgress}}checked{{end}}> progress</label>
           <label class="cb"><input type="checkbox" name="notify_auth" value="1" {{if .NotifyAuth}}checked{{end}}> auth</label>
           <label class="cb"><input type="checkbox" name="notify_error" value="1" {{if .NotifyError}}checked{{end}}> errors</label>
+        </div>
+
+        {{/* Live preview of the embed style + a button to fire a real test
+             notification through the configured webhook. The button is
+             type=button with hx-post so it never submits the settings form. */}}
+        <div class="notify-preview">
+          <div class="notify-preview-label">Preview</div>
+          <div class="np-msg">
+            <div class="np-avatar">G</div>
+            <div style="flex:1">
+              <div class="np-bot">GrubDrops <span class="np-badge">APP</span><span class="np-ts">just now</span></div>
+              <div class="np-embed">
+                <div class="np-thumb">🎁</div>
+                <div class="np-body">
+                  <div class="np-author"><span class="np-pi">T</span>League of Legends · Twitch</div>
+                  <div class="np-title">Hextech Chest</div>
+                  <div class="np-fields">
+                    <div><div class="np-fn">Account</div><div class="np-fv">@TTik3r</div></div>
+                    <div><div class="np-fn">Channel</div><div class="np-fv np-link">riotgames</div></div>
+                  </div>
+                  <div class="np-prog-n">⏳ Mining · 45/60 min</div>
+                  <div class="np-bar"><i></i></div>
+                  <div class="np-footer"><span class="np-fi"></span>GrubDrops • Summer Drops 2026</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="row" style="margin-top:10px;align-items:center;gap:12px;">
+            <button class="btn" type="button"
+              hx-post="/settings/notify-test"
+              hx-target="#notify-test-result"
+              hx-swap="innerHTML"
+              hx-headers='{"X-CSRF-Token": "{{$.CSRFToken}}"}'>Send test →</button>
+            <span id="notify-test-result"></span>
+          </div>
+          <div class="field-hint" style="margin:6px 0 0;">Sends a sample drop-claim embed to the global webhook above. Save the webhook first.</div>
         </div>
 
         <div class="row">

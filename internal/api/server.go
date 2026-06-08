@@ -48,6 +48,13 @@ func applyRedirectTarget(r *http.Request) string {
 	return target
 }
 
+// Notifier fires a Discord notification. Matches notify.Notifier; kept as a
+// local interface so the api package stays decoupled from internal/notify.
+// Used by the /settings "send test" button.
+type Notifier interface {
+	Notify(ctx context.Context, event string, fields map[string]any) error
+}
+
 type Deps struct {
 	DB               *sql.DB
 	Q                *gen.Queries
@@ -62,6 +69,9 @@ type Deps struct {
 	Registrar        KickChannelRegistrar
 	SettingsStore    *store.Settings
 	OnSettingsUpdate func()
+	// Notifier is the live Discord notifier, used by the /settings "send
+	// test" button. Nil disables the button.
+	Notifier Notifier
 	// AuthCheck runs the auth-health sweep across all accounts (manual
 	// "check auth now" button on /accounts). Nil disables the button.
 	AuthCheck func(context.Context)
@@ -232,6 +242,7 @@ func NewRouter(d Deps) http.Handler {
 		sm:          d.Session,
 		onUpdate:    d.OnSettingsUpdate,
 		reload:      d.Reload,
+		notifier:    d.Notifier,
 		startedAt:   startedAt,
 		logLevelEnv: d.LogLevelEnv,
 		browserURL:  d.BrowserURLDisplay,
@@ -246,6 +257,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/settings/global-games", settingsH.globalGamesPost)
 	authed.Post("/settings/global-games/add", settingsH.globalGamesAdd)
 	authed.Post("/settings/password", settingsH.changePassword)
+	authed.Post("/settings/notify-test", settingsH.notifyTest)
 	authed.Get("/drops", dropsH.list)
 	authed.Get("/drops/campaigns/{id}/items", dropsH.items)
 	authed.Post("/drops/whitelist/add", dropsH.addWhitelist)

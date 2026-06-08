@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -17,6 +18,11 @@ type DiscordWebhook struct {
 	URL    string
 	Filter *VerbosityFilter
 	HTTP   *http.Client
+
+	// Username / AvatarURL brand the webhook sender. Empty values are
+	// omitted from the payload (Discord then uses the webhook's own name).
+	Username  string
+	AvatarURL string
 }
 
 func NewDiscordWebhook(url string, filter *VerbosityFilter) *DiscordWebhook {
@@ -32,7 +38,14 @@ func (d *DiscordWebhook) Notify(ctx context.Context, event Event, fields map[str
 		return nil
 	}
 	embed := buildEmbed(event, fields)
-	body, err := json.Marshal(map[string]any{"embeds": []any{embed}})
+	payload := map[string]any{"embeds": []any{embed}}
+	if d.Username != "" {
+		payload["username"] = d.Username
+	}
+	if d.AvatarURL != "" {
+		payload["avatar_url"] = d.AvatarURL
+	}
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
@@ -52,16 +65,16 @@ func (d *DiscordWebhook) Notify(ctx context.Context, event Event, fields map[str
 	return nil
 }
 
+// buildEmbed renders a notify event into a Discord embed.
+//
+// For drop events (progress/claim) it produces the rich layout: an author
+// line ("Game · Platform"), the drop name as title, a platform-brand accent
+// (green on claim), Account/Channel fields, a progress field with a unicode
+// bar, the benefit image as thumbnail, and a "GrubDrops • Campaign" footer.
+//
+// Events without a drop/game (auth/error/state emitters) fall back to a
+// simple title + key/value description so nothing is lost.
 func buildEmbed(event Event, fields map[string]any) map[string]any {
-	embed := map[string]any{
-		"title":     titleFor(event),
-		"color":     colorFor(event),
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-	}
-
-	// Render known human fields as proper inline embed fields instead of
-	// dumping raw "account: acc_… / benefit: <uuid>" lines. account_label
-	// is the @handle (account is the raw id used only for routing).
 	str := func(k string) string {
 		if v, ok := fields[k]; ok {
 			if s, ok := v.(string); ok {
@@ -70,46 +83,128 @@ func buildEmbed(event Event, fields map[string]any) map[string]any {
 		}
 		return ""
 	}
-	var ef []map[string]any
-	addField := func(name, val string, inline bool) {
-		if val == "" {
-			return
+	intf := func(k string) int {
+		if v, ok := fields[k]; ok {
+			if n, ok := v.(int); ok {
+				return n
+			}
 		}
-		ef = append(ef, map[string]any{"name": name, "value": val, "inline": inline})
-	}
-	acct := str("account_label")
-	if acct == "" {
-		acct = str("account")
-	}
-	addField("Account", acct, true)
-	addField("Game", str("game"), true)
-	addField("Drop", str("drop"), false)
-	if ch := str("channel"); ch != "" {
-		plat := str("platform")
-		link := ch
-		switch plat {
-		case "twitch":
-			link = "[" + ch + "](https://twitch.tv/" + ch + ")"
-		case "kick":
-			link = "[" + ch + "](https://kick.com/" + ch + ")"
-		}
-		addField("Channel", link, true)
-	}
-	if msg := str("msg"); msg != "" {
-		addField("Detail", msg, false)
+		return 0
 	}
 
-	if len(ef) > 0 {
-		embed["fields"] = ef
-	} else {
-		// Fallback for events without recognised fields (state/auth/error
-		// emitters that pass arbitrary keys).
-		embed["description"] = descFor(event, fields)
+	embed := map[string]any{
+		"color":     colorFor(event, fields),
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	}
-	if img := str("image"); img != "" {
-		embed["thumbnail"] = map[string]any{"url": img}
+
+	game := str("game")
+	drop := str("drop")
+
+	// Rich path: a real drop event with game/drop context.
+	if game != "" || drop != "" {
+		if drop != "" {
+			embed["title"] = drop
+		} else {
+			embed["title"] = titleFor(event)
+		}
+		if game != "" {
+			name := game
+			if plat := platformLabel(str("platform")); plat != "" {
+				name = game + " · " + plat
+			}
+			embed["author"] = map[string]any{"name": name}
+		}
+
+		var ef []map[string]any
+		add := func(name, val string, inline bool) {
+			if val == "" {
+				return
+			}
+			ef = append(ef, map[string]any{"name": name, "value": val, "inline": inline})
+		}
+		acct := str("account_label")
+		if acct == "" {
+			acct = str("account")
+		}
+		add("Account", acct, true)
+		if ch := str("channel"); ch != "" {
+			add("Channel", channelLink(str("platform"), ch), true)
+		}
+		// Progress field: status label + minutes + unicode bar.
+		if req := intf("req_min"); req > 0 {
+			cur := intf("cur_min")
+			label := "⏳ Mining"
+			if event == EventClaim {
+				label = "✅ Claimed"
+				if cur < req {
+					cur = req // claim implies the requirement is met
+				}
+			}
+			add(label, fmt.Sprintf("`%d/%d min`\n%s", cur, req, progressBar(cur, req)), false)
+		}
+		if msg := str("msg"); msg != "" {
+			add("Detail", msg, false)
+		}
+		if len(ef) > 0 {
+			embed["fields"] = ef
+		}
+
+		if img := str("image"); img != "" {
+			embed["thumbnail"] = map[string]any{"url": img}
+		}
+		footer := "GrubDrops"
+		if camp := str("campaign"); camp != "" {
+			footer = "GrubDrops • " + camp
+		}
+		embed["footer"] = map[string]any{"text": footer}
+		return embed
 	}
+
+	// Fallback path: auth/error/state — simple title + description dump.
+	embed["title"] = titleFor(event)
+	embed["description"] = descFor(event, fields)
 	return embed
+}
+
+// progressBar renders cur/req as a fixed 10-segment unicode bar. Returns
+// "" when req<=0 (nothing to chart). Over-full clamps to all-filled.
+func progressBar(cur, req int) string {
+	if req <= 0 {
+		return ""
+	}
+	const segments = 10
+	filled := (cur*segments + req/2) / req // round to nearest segment
+	if filled > segments {
+		filled = segments
+	}
+	if filled < 0 {
+		filled = 0
+	}
+	return strings.Repeat("▰", filled) + strings.Repeat("▱", segments-filled)
+}
+
+func platformLabel(p string) string {
+	switch p {
+	case "twitch":
+		return "Twitch"
+	case "kick":
+		return "Kick"
+	case "":
+		return ""
+	default:
+		return strings.ToUpper(p[:1]) + p[1:]
+	}
+}
+
+func channelLink(platform, ch string) string {
+	switch platform {
+	case "twitch":
+		return "[" + ch + "](https://twitch.tv/" + ch + ")"
+	case "kick":
+		return "[" + ch + "](https://kick.com/" + ch + ")"
+	default:
+		return ch
+	}
 }
 
 func titleFor(event Event) string {
@@ -129,17 +224,27 @@ func titleFor(event Event) string {
 	}
 }
 
-func colorFor(event Event) int {
+// colorFor picks the embed accent. Claim is always green and error always
+// red; otherwise drop events take their platform's brand color.
+func colorFor(event Event, fields map[string]any) int {
 	switch event {
 	case EventClaim:
-		return 0x2ecc71
+		return 0x23A55A
 	case EventError:
-		return 0xe74c3c
-	case EventProgress:
-		return 0xf1c40f
-	default:
-		return 0x95a5a6
+		return 0xE74C3C
 	}
+	if plat, _ := fields["platform"].(string); plat != "" {
+		switch plat {
+		case "twitch":
+			return 0x9146FF
+		case "kick":
+			return 0x53FC18
+		}
+	}
+	if event == EventProgress {
+		return 0xF1C40F
+	}
+	return 0x95A5A6
 }
 
 func descFor(_ Event, fields map[string]any) string {

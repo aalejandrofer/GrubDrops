@@ -138,13 +138,21 @@ func run() error {
 		if globalURL == "" {
 			globalURL = cfg.DiscordWebhookURL
 		}
+		avatarURL, _ := settingsStore.NotifyAvatarURL(ctx)
+		const botUsername = "GrubDrops"
 		var fallback notify.Notifier
 		if globalURL != "" {
-			fallback = notify.NewDiscordWebhook(globalURL, filter)
+			wh := notify.NewDiscordWebhook(globalURL, filter)
+			wh.Username = botUsername
+			wh.AvatarURL = avatarURL
+			fallback = wh
 		} else {
 			fallback = &notify.NoopNotifier{Logger: logger}
 		}
-		return notify.NewAccountRouted(fallback, resolver, filter)
+		routed := notify.NewAccountRouted(fallback, resolver, filter)
+		routed.Username = botUsername
+		routed.AvatarURL = avatarURL
+		return routed
 	}
 
 	var notifierMu sync.Mutex
@@ -365,6 +373,7 @@ func run() error {
 		Registrar:         reg,
 		SettingsStore:     settingsStore,
 		OnSettingsUpdate:  onSettingsUpdate,
+		Notifier:          notifier,
 		AuthCheck:         authChecker.CheckAll,
 		ReloadAccount:     reloadAccount,
 		HelperDir:         os.Getenv("MINER_HELPER_DIR"),
