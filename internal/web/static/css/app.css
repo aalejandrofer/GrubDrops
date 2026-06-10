@@ -2843,6 +2843,15 @@
 }
 .btn-sso:hover { background: var(--accent); color: #1a1006; }
 .btn-sso:active { transform: translateY(1px); }
+/* SSO disabled (OIDC not configured) — faded, non-interactive, keeps layout */
+.btn-sso.is-disabled {
+  color: var(--dim);
+  border-color: var(--line);
+  background: transparent;
+  cursor: not-allowed;
+  pointer-events: none;
+  opacity: .65;
+}
 
 /* password + square arrow submit, side by side */
 .login-row {

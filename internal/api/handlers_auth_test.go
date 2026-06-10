@@ -37,10 +37,14 @@ func TestLogin_SSOEnabled_ShowsPrimaryButton(t *testing.T) {
 	}
 }
 
-func TestLogin_SSODisabled_PasswordOnly(t *testing.T) {
+func TestLogin_SSODisabled_FadedNotLinked(t *testing.T) {
 	out := renderLogin(t, templateData{OIDCEnabled: false})
-	if strings.Contains(out, "Continue with SSO") || strings.Contains(out, "/auth/oidc/login") {
-		t.Errorf("SSO button must be hidden when OIDC disabled")
+	// SSO stays visible (keeps layout) but faded + not a live link.
+	if strings.Contains(out, `href="/auth/oidc/login"`) {
+		t.Errorf("SSO must not be a live link when OIDC disabled")
+	}
+	if !strings.Contains(out, "is-disabled") {
+		t.Errorf("disabled SSO should render faded (is-disabled)")
 	}
 	if !strings.Contains(out, `name="password"`) {
 		t.Errorf("expected password field present")

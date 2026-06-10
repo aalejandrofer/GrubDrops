@@ -11,8 +11,10 @@
 
     {{if .OIDCEnabled}}
     <a class="btn-sso" href="/auth/oidc/login">Continue with SSO</a>
-    <div class="sso-divider"><span>or</span></div>
+    {{else}}
+    <span class="btn-sso is-disabled" aria-disabled="true" title="SSO not configured">Continue with SSO</span>
     {{end}}
+    <div class="sso-divider"><span>or</span></div>
 
     <form method="post" action="/login" class="auth-secondary">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
