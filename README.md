@@ -21,8 +21,6 @@ You pick the games. It watches the right streams, racks up the watch-time, and c
 
 ---
 
-Tell GrubDrops which games you care about. It finds a live channel that's actually playing one of them, keeps a viewer present so the watch-time counts, and claims each drop the moment it's ready. No browser farm, no twenty pinned tabs, no 2am "did I claim it?" — the little purple guy does the lurking. Add as many Twitch and Kick accounts as you like and run them all from one dashboard.
-
 ## What it does
 
 - 🎯 **You set a whitelist** (one global list, or a per-account one) and nothing outside it ever gets mined.
@@ -57,7 +55,11 @@ go build -o grubdrops ./cmd/miner
 GRUB_MASTER_KEY=$(head -c32 /dev/urandom | base64) ./grubdrops   # http://localhost:8080
 ```
 
-The first run asks you to create an admin login. For Twitch, add an account and approve the device code at `twitch.tv/activate`. For Kick, download the helper from the Kick login page (or paste your cookies in by hand). Channels auto-discover from each campaign's game, so there's nothing else to configure.
+First run asks you to create an admin login.
+
+For Twitch, add an account and approve the device code at `twitch.tv/activate`. For Kick, download the helper from the Kick login page, or paste your cookies in by hand.
+
+Channels auto-discover from each campaign's game, so there's nothing else to set up.
 
 ## Configuration
 
@@ -75,11 +77,12 @@ Everything is set through environment variables:
 
 ### Single sign-on (OIDC)
 
-Optional. Adds a "Sign in with …" button to the login page next to the admin
-password (the password stays as a fallback). Works with any OpenID Connect
-provider — authentik, Auth0, Keycloak, Google, Okta, Azure AD, … SSO turns on
-only when the first four variables are all set; discovery uses the issuer's
-`/.well-known/openid-configuration`.
+Optional. Adds a "Sign in with your provider" button to the login page, next
+to the admin password (the password stays as a fallback).
+
+Works with any OpenID Connect provider: authentik, Auth0, Keycloak, Google,
+Okta, Azure AD, and the rest. SSO turns on only when the first four variables
+are all set. Discovery uses the issuer's `/.well-known/openid-configuration`.
 
 | Var | Required | Purpose |
 |-----|----------|---------|
@@ -92,13 +95,15 @@ only when the first four variables are all set; discovery uses the issuer's
 | `GRUB_OIDC_ALLOWED_GROUPS` | no | Comma-separated required group(s) on the `groups` claim. |
 
 Anyone the configured issuer authenticates (and who passes the optional
-allowlists) is granted the single admin session. **With no allowlist set, any
-user the IdP can authenticate becomes admin** — scope membership in the IdP, or
-set an allowlist, on shared/multi-tenant providers.
+allowlists) gets the single admin session. **With no allowlist set, any user
+the IdP can authenticate becomes admin.** On shared or multi-tenant providers,
+scope membership in the IdP, or set an allowlist.
 
 ## Deploy
 
-It ships as a `linux/amd64` container built from `deploy/Dockerfile.miner`. Build it, move the image to your host, and `docker compose up`. The image bakes in the cross-compiled cookie helpers (served from `/download/helper`). Keep `/data` (the SQLite file) across redeploys, put it behind a reverse proxy, and `/healthz` will tell you it's alive.
+It ships as a `linux/amd64` container built from `deploy/Dockerfile.miner`. Build it, move the image to your host, then `docker compose up`.
+
+The image bakes in the cross-compiled cookie helpers (served from `/download/helper`). Keep `/data` (the SQLite file) across redeploys, put it behind a reverse proxy, and `/healthz` tells you it's alive.
 
 ## Project layout
 
