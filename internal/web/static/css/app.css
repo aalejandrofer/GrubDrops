@@ -2832,14 +2832,14 @@
   justify-content: center;
   font-family: 'JetBrains Mono', monospace;
   font-size: 18px;
-  color: var(--text);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
   border-radius: 2px;
   cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
+  transition: background .15s, color .15s;
 }
-.btn-arrow:hover { background: var(--accent); border-color: var(--accent); color: #1a1006; }
+.btn-arrow:hover { background: var(--accent); color: #1a1006; }
 .btn-arrow:active { transform: translateY(1px); }
 
 .sso-divider {
