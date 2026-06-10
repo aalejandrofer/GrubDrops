@@ -21,7 +21,7 @@ func TestSettingsTemplateRenders(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	err = tmpl.ExecuteTemplate(&buf, "settings.html", templateData{
-		AuthedAdmin: true, CSRFToken: "tok", Active: "settings",
+		AuthedAdmin: true, CSRFToken: "tok", Active: "notifications",
 		Page: settingsPageData{
 			GlobalDiscordWebhook: "https://discord.com/api/webhooks/x",
 			NotifyAvatarURL:      "https://img/a.png",
@@ -141,6 +141,7 @@ func TestSettings_SSOCard_Enabled(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	err = tmpl.ExecuteTemplate(&buf, "settings.html", templateData{
+		Active: "security",
 		Page: settingsPageData{
 			OIDC: settingsOIDC{
 				Enabled:      true,
@@ -168,12 +169,85 @@ func TestSettings_SSOCard_Disabled(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	err = tmpl.ExecuteTemplate(&buf, "settings.html", templateData{
-		Page: settingsPageData{OIDC: settingsOIDC{Enabled: false}},
+		Active: "security",
+		Page:   settingsPageData{OIDC: settingsOIDC{Enabled: false}},
 	})
 	if err != nil {
 		t.Fatalf("render settings: %v", err)
 	}
 	if !strings.Contains(buf.String(), "Not configured") {
 		t.Errorf("expected disabled SSO card to show 'Not configured'")
+	}
+}
+
+func renderSettingsTab(t *testing.T, active string, page settingsPageData) string {
+	t.Helper()
+	tmpl, err := web.Templates()
+	if err != nil {
+		t.Fatalf("load templates: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, "settings.html", templateData{Active: active, Page: page}); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	return buf.String()
+}
+
+func TestSettingsTabs_SubnavHasFiveLinks(t *testing.T) {
+	out := renderSettingsTab(t, "settings", settingsPageData{})
+	for _, want := range []string{
+		`href="/settings"`, `href="/settings/priority"`,
+		`href="/settings/notifications"`, `href="/settings/security"`, `href="/accounts"`,
+		"General", "Drop Priority", "Notifications", "Security", "Accounts",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("subnav missing %q", want)
+		}
+	}
+}
+
+func TestSettingsTabs_GeneralSectionOnly(t *testing.T) {
+	out := renderSettingsTab(t, "settings", settingsPageData{})
+	if !strings.Contains(out, `name="tick_interval_ms"`) {
+		t.Errorf("general tab should show interval fields")
+	}
+	if strings.Contains(out, `action="/settings/global-games"`) {
+		t.Errorf("general tab should NOT show the priority list form")
+	}
+	if strings.Contains(out, `name="discord_webhook"`) {
+		t.Errorf("general tab should NOT show notifications")
+	}
+}
+
+func TestSettingsTabs_PrioritySection(t *testing.T) {
+	out := renderSettingsTab(t, "priority", settingsPageData{})
+	if !strings.Contains(out, `action="/settings/global-games"`) {
+		t.Errorf("priority tab should show the global priority list form")
+	}
+	if !strings.Contains(out, `name="priority_mode"`) {
+		t.Errorf("priority tab should show the priority mode selector")
+	}
+	if !strings.Contains(out, `action="/settings/priority-mode"`) {
+		t.Errorf("priority mode posts to its own endpoint")
+	}
+}
+
+func TestSettingsTabs_NotificationsSection(t *testing.T) {
+	out := renderSettingsTab(t, "notifications", settingsPageData{})
+	if !strings.Contains(out, `name="discord_webhook"`) {
+		t.Errorf("notifications tab should show the webhook field")
+	}
+	if !strings.Contains(out, `action="/settings/notifications"`) {
+		t.Errorf("notifications form posts to /settings/notifications")
+	}
+}
+
+func TestSettingsTabs_SecuritySection(t *testing.T) {
+	out := renderSettingsTab(t, "security", settingsPageData{OIDC: settingsOIDC{Enabled: false}})
+	if !strings.Contains(out, "Single sign-on") {
+		t.Errorf("security tab should show the SSO card")
+	}
+	if !strings.Contains(out, `action="/settings/password"`) {
+		t.Errorf("security tab should show the password form")
 	}
 }

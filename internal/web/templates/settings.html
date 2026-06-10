@@ -15,6 +15,9 @@
   </div>
   <nav class="subnav">
     <a href="/settings" class="subnav-link {{if eq .Active "settings"}}on{{end}}">General</a>
+    <a href="/settings/priority" class="subnav-link {{if eq .Active "priority"}}on{{end}}">Drop Priority</a>
+    <a href="/settings/notifications" class="subnav-link {{if eq .Active "notifications"}}on{{end}}">Notifications</a>
+    <a href="/settings/security" class="subnav-link {{if eq .Active "security"}}on{{end}}">Security</a>
     <a href="/accounts" class="subnav-link {{if eq .Active "accounts"}}on{{end}}">Accounts</a>
   </nav>
 
@@ -23,6 +26,7 @@
   {{with .Page}}
   <div class="settings-stack">
 
+    {{if eq $.Active "priority"}}
     <section class="settings-card">
       <header class="section-h"><h3>Global priority list</h3><span class="meta">Fallback when account list empty</span></header>
       <form method="post" action="/settings/global-games" id="global-games-form">
@@ -72,40 +76,28 @@
     </section>
 
     <section class="settings-card">
-      <header class="section-h"><h3>Runtime · Notifications</h3><span class="meta">Reload required for tick/discovery</span></header>
-      <form method="post" action="/settings" id="settings-form">
+      <header class="section-h"><h3>Drop priority mode</h3><span class="meta">How accounts pick the next campaign</span></header>
+      <form method="post" action="/settings/priority-mode">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-
-        <div class="settings-grid-2">
-          <label>Watcher tick interval (ms)
-            <input type="number" name="tick_interval_ms" value="{{.TickIntervalMs}}" min="100" max="60000">
-          </label>
-          <label>Discovery interval (seconds)
-            <input type="number" name="discovery_interval_sec" value="{{.DiscoveryIntervalSec}}" min="30" max="3600">
-          </label>
-        </div>
         <label>Priority mode
           <select name="priority_mode">
             <option value="ordered" {{if eq .PriorityMode "ordered"}}selected{{end}}>Ordered — top whitelist first</option>
             <option value="ending_soonest" {{if eq .PriorityMode "ending_soonest"}}selected{{end}}>Ending soonest — claim expiring first</option>
           </select>
         </label>
-        <div class="settings-grid-2">
-          <label>Log level
-            <select name="log_level">
-              <option value="" {{if eq .LogLevel ""}}selected{{end}}>default ({{.LogLevelEnv}})</option>
-              <option value="debug" {{if eq .LogLevel "debug"}}selected{{end}}>debug</option>
-              <option value="info" {{if eq .LogLevel "info"}}selected{{end}}>info</option>
-              <option value="warn" {{if eq .LogLevel "warn"}}selected{{end}}>warn</option>
-              <option value="error" {{if eq .LogLevel "error"}}selected{{end}}>error</option>
-            </select>
-          </label>
-          <label>Log retention (days)
-            <input type="number" name="log_retention_days" value="{{.LogRetentionDays}}" min="1" max="365">
-          </label>
+        <div class="row">
+          <span class="hint">Applies live to all accounts.</span>
+          <button class="btn primary" type="submit">Save →</button>
         </div>
+      </form>
+    </section>
+    {{end}}
 
-        <div class="settings-sub-h">Discord notifications</div>
+    {{if eq $.Active "notifications"}}
+    <section class="settings-card">
+      <header class="section-h"><h3>Notifications</h3><span class="meta">Discord</span></header>
+      <form method="post" action="/settings/notifications" id="notifications-form">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
         <label>Global Discord webhook URL
           <input type="url" name="discord_webhook" value="{{.GlobalDiscordWebhook}}" placeholder="https://discord.com/api/webhooks/…">
         </label>
@@ -118,9 +110,6 @@
           <label class="cb"><input type="checkbox" name="notify_auth" value="1" {{if .NotifyAuth}}checked{{end}}> auth</label>
           <label class="cb"><input type="checkbox" name="notify_error" value="1" {{if .NotifyError}}checked{{end}}> errors</label>
         </div>
-
-        {{/* Fire a real test notification through the configured webhook. The
-             button is type=button with hx-post so it never submits the form. */}}
         <div class="row" style="margin-top:10px;align-items:center;gap:12px;">
           <button class="btn" type="button"
             hx-post="/settings/notify-test"
@@ -130,26 +119,15 @@
           <span id="notify-test-result"></span>
         </div>
         <div class="field-hint" style="margin:6px 0 0;">Sends a sample embed to your webhook (global, or the first account webhook). Save the webhook first.</div>
-
         <div class="row">
           <a class="back-link" href="/">← back</a>
           <button class="btn primary" type="submit">Save →</button>
         </div>
       </form>
     </section>
+    {{end}}
 
-    <section class="settings-card">
-      <header class="section-h"><h3>Status</h3><span class="meta">Read-only</span></header>
-      <div class="kvlist">
-        <div class="kvrow"><span class="k">uptime</span><span class="v">{{if .Uptime}}{{.Uptime}}{{else}}—{{end}}</span></div>
-        <div class="kvrow"><span class="k">go</span><span class="v">{{.GoVersion}}</span></div>
-        <div class="kvrow"><span class="k">goroutines</span><span class="v">{{.Goroutines}}</span></div>
-        <div class="kvrow"><span class="k">sidecar</span><span class="v">{{if .BrowserURL}}{{.BrowserURL}}{{else}}—{{end}}</span></div>
-        {{if .GitCommit}}<div class="kvrow"><span class="k">commit</span><span class="v">{{.GitCommit}}</span></div>{{end}}
-        {{if .Version}}<div class="kvrow"><span class="k">version</span><span class="v">{{.Version}}</span></div>{{end}}
-      </div>
-    </section>
-
+    {{if eq $.Active "security"}}
     <section class="settings-card">
       <header class="section-h">
         <h3>Single sign-on (SSO)</h3>
@@ -201,11 +179,60 @@
         </div>
       </form>
     </section>
+    {{end}}
+
+    {{if or (eq $.Active "settings") (eq $.Active "")}}
+    <section class="settings-card">
+      <header class="section-h"><h3>Runtime</h3><span class="meta">Reload required for tick/discovery</span></header>
+      <form method="post" action="/settings" id="settings-form">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <div class="settings-grid-2">
+          <label>Watcher tick interval (ms)
+            <input type="number" name="tick_interval_ms" value="{{.TickIntervalMs}}" min="100" max="60000">
+          </label>
+          <label>Discovery interval (seconds)
+            <input type="number" name="discovery_interval_sec" value="{{.DiscoveryIntervalSec}}" min="30" max="3600">
+          </label>
+        </div>
+        <div class="settings-grid-2">
+          <label>Log level
+            <select name="log_level">
+              <option value="" {{if eq .LogLevel ""}}selected{{end}}>default ({{.LogLevelEnv}})</option>
+              <option value="debug" {{if eq .LogLevel "debug"}}selected{{end}}>debug</option>
+              <option value="info" {{if eq .LogLevel "info"}}selected{{end}}>info</option>
+              <option value="warn" {{if eq .LogLevel "warn"}}selected{{end}}>warn</option>
+              <option value="error" {{if eq .LogLevel "error"}}selected{{end}}>error</option>
+            </select>
+          </label>
+          <label>Log retention (days)
+            <input type="number" name="log_retention_days" value="{{.LogRetentionDays}}" min="1" max="365">
+          </label>
+        </div>
+        <div class="row">
+          <a class="back-link" href="/">← back</a>
+          <button class="btn primary" type="submit">Save →</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="settings-card">
+      <header class="section-h"><h3>Status</h3><span class="meta">Read-only</span></header>
+      <div class="kvlist">
+        <div class="kvrow"><span class="k">uptime</span><span class="v">{{if .Uptime}}{{.Uptime}}{{else}}—{{end}}</span></div>
+        <div class="kvrow"><span class="k">go</span><span class="v">{{.GoVersion}}</span></div>
+        <div class="kvrow"><span class="k">goroutines</span><span class="v">{{.Goroutines}}</span></div>
+        <div class="kvrow"><span class="k">sidecar</span><span class="v">{{if .BrowserURL}}{{.BrowserURL}}{{else}}—{{end}}</span></div>
+        {{if .GitCommit}}<div class="kvrow"><span class="k">commit</span><span class="v">{{.GitCommit}}</span></div>{{end}}
+        {{if .Version}}<div class="kvrow"><span class="k">version</span><span class="v">{{.Version}}</span></div>{{end}}
+      </div>
+    </section>
+    {{end}}
 
   </div>
   {{end}}
 </div>
 
+{{if eq .Active "priority"}}
 <script>
 (function() {
   var sel = document.getElementById('global-selected');
@@ -281,4 +308,5 @@
   form.addEventListener('submit', addInputs);
 })();
 </script>
+{{end}}
 {{end}}
