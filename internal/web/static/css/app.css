@@ -2803,14 +2803,14 @@
   padding: 13px 16px;
   font-size: 14px;
   font-weight: 600;
-  color: #1a1006;
-  background: var(--accent);
+  color: var(--accent);
+  background: transparent;
   border: 1px solid var(--accent);
   border-radius: 2px;
   text-decoration: none;
-  transition: background .15s, transform .05s;
+  transition: background .15s, color .15s, transform .05s;
 }
-.btn-sso:hover { background: var(--accent-2); }
+.btn-sso:hover { background: var(--accent); color: #1a1006; }
 .btn-sso:active { transform: translateY(1px); }
 
 /* password + square arrow submit, side by side */
