@@ -5,7 +5,8 @@
 {{define "content"}}
 <div class="auth-wrap">
   <div class="auth-card auth-centered">
-    <img class="auth-logo" src="/static/img/icon-512.png" alt="GrubDrops" width="104" height="104">
+    <img class="auth-logo" src="/static/img/icon-512.png" alt="GrubDrops" width="96" height="96">
+    <h1 class="auth-name">GrubDrops</h1>
     {{if .Flash}}<div class="err">{{.Flash}}</div>{{end}}
 
     {{if .OIDCEnabled}}
@@ -15,9 +16,8 @@
 
     <form method="post" action="/login" class="auth-secondary">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-      <label for="pw">Admin password</label>
       <div class="login-row">
-        <input id="pw" type="password" name="password" required {{if not .OIDCEnabled}}autofocus{{end}}>
+        <input id="pw" type="password" name="password" placeholder="Password" required {{if not .OIDCEnabled}}autofocus{{end}}>
         <button class="btn-arrow" type="submit" aria-label="Log in">→</button>
       </div>
     </form>

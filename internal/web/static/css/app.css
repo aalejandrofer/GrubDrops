@@ -2791,9 +2791,9 @@
 /* --- login SSO --- */
 /* centered auth card */
 .auth-centered { text-align: center; }
-.auth-logo { display: block; width: 104px; height: 104px; margin: 4px auto 22px; }
-.auth-centered .kicker { text-align: left; }
+.auth-logo { display: block; width: 96px; height: 96px; margin: 4px auto 10px; }
 .auth-centered .login-row { text-align: left; }
+.auth-centered .login-row input::placeholder { color: var(--muted); }
 
 .btn-sso {
   display: block;
