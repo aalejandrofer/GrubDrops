@@ -96,7 +96,7 @@ type settingsPageData struct {
 	OIDC settingsOIDC
 }
 
-func (d *settingsDeps) get(w http.ResponseWriter, r *http.Request) {
+func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active string) {
 	ctx := r.Context()
 	url, _ := d.s.GlobalDiscordWebhook(ctx)
 	avatarURL, _ := d.s.NotifyAvatarURL(ctx)
@@ -142,7 +142,7 @@ func (d *settingsDeps) get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	render(w, d.t, "settings.html", templateData{
-		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "settings",
+		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: active,
 		Page: settingsPageData{
 			GlobalDiscordWebhook: url,
 			NotifyAvatarURL:      avatarURL,
@@ -170,14 +170,20 @@ func (d *settingsDeps) get(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (d *settingsDeps) post(w http.ResponseWriter, r *http.Request) {
+func (d *settingsDeps) get(w http.ResponseWriter, r *http.Request) { d.renderTab(w, r, "settings") }
+func (d *settingsDeps) getPriority(w http.ResponseWriter, r *http.Request) {
+	d.renderTab(w, r, "priority")
+}
+func (d *settingsDeps) getNotifications(w http.ResponseWriter, r *http.Request) {
+	d.renderTab(w, r, "notifications")
+}
+func (d *settingsDeps) getSecurity(w http.ResponseWriter, r *http.Request) {
+	d.renderTab(w, r, "security")
+}
+
+// postGeneral saves the General tab: tick/discovery intervals + logging.
+func (d *settingsDeps) postGeneral(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	url := r.FormValue("discord_webhook")
-	if err := d.s.SetGlobalDiscordWebhook(ctx, url); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	_ = d.s.SetNotifyAvatarURL(ctx, strings.TrimSpace(r.FormValue("notify_avatar_url")))
 	if v := r.FormValue("log_retention_days"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			_ = d.s.SetLogRetentionDays(ctx, n)
@@ -185,10 +191,6 @@ func (d *settingsDeps) post(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = d.s.SetLogLevel(ctx, r.FormValue("log_level"))
 
-	// Tick/discovery intervals are read once at startup, so a change only
-	// takes effect after a container restart. Track whether either actually
-	// changed so the flash only nags about a restart when it's warranted —
-	// webhook/avatar/notify toggles all apply live via onUpdate.
 	intervalsChanged := false
 	if v := r.FormValue("tick_interval_ms"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -206,10 +208,6 @@ func (d *settingsDeps) post(w http.ResponseWriter, r *http.Request) {
 			_ = d.s.SetDiscoveryIntervalSec(ctx, n)
 		}
 	}
-	_ = d.s.SetPriorityMode(ctx, r.FormValue("priority_mode"))
-	on := func(name string) bool { return r.FormValue(name) == "1" }
-	_ = d.s.SetNotifyKinds(ctx, on("notify_claim"), on("notify_progress"), on("notify_auth"), on("notify_error"))
-
 	if d.onUpdate != nil {
 		d.onUpdate()
 	}
@@ -219,6 +217,34 @@ func (d *settingsDeps) post(w http.ResponseWriter, r *http.Request) {
 	}
 	d.sm.Put(ctx, "flash", msg)
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+}
+
+// postNotifications saves the Notifications tab: webhook, avatar, notify kinds.
+func (d *settingsDeps) postNotifications(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if err := d.s.SetGlobalDiscordWebhook(ctx, r.FormValue("discord_webhook")); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	_ = d.s.SetNotifyAvatarURL(ctx, strings.TrimSpace(r.FormValue("notify_avatar_url")))
+	on := func(name string) bool { return r.FormValue(name) == "1" }
+	_ = d.s.SetNotifyKinds(ctx, on("notify_claim"), on("notify_progress"), on("notify_auth"), on("notify_error"))
+	if d.onUpdate != nil {
+		d.onUpdate()
+	}
+	d.sm.Put(ctx, "flash", "notifications saved")
+	http.Redirect(w, r, "/settings/notifications", http.StatusSeeOther)
+}
+
+// postPriorityMode saves the Drop Priority tab's mode selector.
+func (d *settingsDeps) postPriorityMode(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	_ = d.s.SetPriorityMode(ctx, r.FormValue("priority_mode"))
+	if d.onUpdate != nil {
+		d.onUpdate()
+	}
+	d.sm.Put(ctx, "flash", "priority mode saved")
+	http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
 }
 
 // notifyTest fires one representative sample event through the live notifier
@@ -297,17 +323,17 @@ func (d *settingsDeps) notifyTest(w http.ResponseWriter, r *http.Request) {
 func (d *settingsDeps) globalGamesAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if d.q == nil {
-		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
 		return
 	}
 	name := strings.TrimSpace(r.FormValue("name"))
 	if name == "" {
-		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
 		return
 	}
 	slug := gameslug.Slug(name)
 	if slug == "" {
-		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
 		return
 	}
 	gameID := "g_" + slug
@@ -336,7 +362,7 @@ func (d *settingsDeps) globalGamesAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	d.applyReload(ctx)
 	d.sm.Put(ctx, "flash", "added "+name+" to global priority")
-	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+	http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
 }
 
 // changePassword handles POST /settings/password — verifies the current
@@ -349,7 +375,7 @@ func (d *settingsDeps) changePassword(w http.ResponseWriter, r *http.Request) {
 	cf := r.FormValue("confirm_password")
 	fail := func(msg string) {
 		d.sm.Put(ctx, "flash", msg)
-		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		http.Redirect(w, r, "/settings/security", http.StatusSeeOther)
 	}
 	admin, err := d.q.GetAdmin(ctx)
 	if err != nil {
@@ -378,7 +404,7 @@ func (d *settingsDeps) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.sm.Put(ctx, "flash", "master password changed")
-	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+	http.Redirect(w, r, "/settings/security", http.StatusSeeOther)
 }
 
 // globalGamesPost handles POST /settings/global-games — replaces the
@@ -391,7 +417,7 @@ func (d *settingsDeps) globalGamesPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if d.q == nil {
-		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
 		return
 	}
 	ids := r.Form["game_ids[]"]
@@ -412,7 +438,7 @@ func (d *settingsDeps) globalGamesPost(w http.ResponseWriter, r *http.Request) {
 	}
 	d.applyReload(ctx)
 	d.sm.Put(ctx, "flash", "global priority saved")
-	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+	http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
 }
 
 // applyReload calls the scheduler reload hook if wired. Logs but
