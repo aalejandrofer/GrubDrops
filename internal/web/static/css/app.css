@@ -2799,6 +2799,18 @@
 .auth-bare .btn-sso,
 .auth-bare .btn-arrow,
 .auth-bare .login-row input { border-radius: 0; }
+/* login wordmark — matches the nav GRUB·DROPS mark (uppercase, wide, accent dot) */
+.auth-card h1.auth-name {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 700;
+  font-variation-settings: 'opsz' 96, 'wdth' 200;
+  font-size: 28px;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  line-height: 1;
+  margin: 0 0 22px;
+}
+.auth-name .dot { color: var(--accent); }
 
 .btn-sso {
   display: block;
