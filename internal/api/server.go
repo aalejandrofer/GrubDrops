@@ -275,7 +275,12 @@ func NewRouter(d Deps) http.Handler {
 	historyH := &historyDeps{q: d.Q, ring: d.LogRing, t: d.Templates}
 
 	authed.Get("/settings", settingsH.get)
-	authed.Post("/settings", settingsH.post)
+	authed.Get("/settings/priority", settingsH.getPriority)
+	authed.Get("/settings/notifications", settingsH.getNotifications)
+	authed.Get("/settings/security", settingsH.getSecurity)
+	authed.Post("/settings", settingsH.postGeneral)
+	authed.Post("/settings/priority-mode", settingsH.postPriorityMode)
+	authed.Post("/settings/notifications", settingsH.postNotifications)
 	authed.Post("/settings/global-games", settingsH.globalGamesPost)
 	authed.Post("/settings/global-games/add", settingsH.globalGamesAdd)
 	authed.Post("/settings/password", settingsH.changePassword)
