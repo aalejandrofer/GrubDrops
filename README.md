@@ -21,7 +21,7 @@ You pick the games. It watches the right streams, racks up the watch-time, and c
 
 ---
 
-Tell GrubDrops which games you care about. It finds a live channel that's actually playing one of them, keeps a viewer present so the watch-time counts, and claims each drop the moment it's ready. No browser farm, no tabs to babysit, no clicking. Add as many Twitch and Kick accounts as you like and run them all from one dashboard.
+Tell GrubDrops which games you care about. It finds a live channel that's actually playing one of them, keeps a viewer present so the watch-time counts, and claims each drop the moment it's ready. No browser farm, no twenty pinned tabs, no 2am "did I claim it?" — the little purple guy does the lurking. Add as many Twitch and Kick accounts as you like and run them all from one dashboard.
 
 ## What it does
 
@@ -123,7 +123,7 @@ GrubDrops is its own Go rewrite with a web UI and multi-account support, but it 
 
 ## Notes
 
-Still actively developed. Twitch mining and claiming plus Kick discovery and watching run in production. It's self-hosted and single-tenant. Use it responsibly and within each platform's Terms of Service, against your own accounts, at your own risk.
+Still actively developed (and yes, the mascot is new). Twitch mining and claiming plus Kick discovery and watching run in production. It's self-hosted and single-tenant. Use it responsibly and within each platform's Terms of Service, against your own accounts, at your own risk.
 
 ---
 
