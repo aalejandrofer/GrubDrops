@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="internal/web/static/img/logo.png" width="240" alt="GrubDrops">
+  <img src="internal/web/static/img/logo.png" width="160" alt="GrubDrops">
 </p>
 
 <p align="center"><b>Self-hosted Twitch &amp; Kick drops miner.</b><br>
