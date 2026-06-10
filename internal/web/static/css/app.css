@@ -63,7 +63,7 @@
   .brand {
     display: flex; align-items: center; gap: 9px;
   }
-  .brand-logo { display: block; width: 24px; height: 24px; }
+  .brand-logo { display: block; width: 32px; height: 32px; }
   .brand .mark {
     font-family: 'Bricolage Grotesque', sans-serif;
     font-weight: 700;
