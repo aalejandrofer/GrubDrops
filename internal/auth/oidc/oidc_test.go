@@ -2,9 +2,14 @@ package oidc
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"net/url"
 	"testing"
+	"time"
 
+	jose "github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/stretchr/testify/require"
 )
 
@@ -60,5 +65,31 @@ func TestExchangeAndVerify_NonceMismatch(t *testing.T) {
 	p := newTestProvider(t, idp)
 
 	_, err := p.ExchangeAndVerify(context.Background(), "any-code", "verifier", "expected-nonce")
+	require.Error(t, err)
+}
+
+func TestExchangeAndVerify_RejectsWrongKey(t *testing.T) {
+	idp := newFakeIDP(t)
+	idp.nonce = "n"
+	p := newTestProvider(t, idp)
+
+	// Mint a token signed by a key the JWKS does NOT contain.
+	wrongKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	signer, err := jose.NewSigner(
+		jose.SigningKey{Algorithm: jose.RS256, Key: wrongKey},
+		(&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", idp.keyID),
+	)
+	require.NoError(t, err)
+	raw, err := jwt.Signed(signer).Claims(map[string]any{
+		"iss": idp.srv.URL, "sub": "s", "aud": "test-client",
+		"exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(),
+		"email": "x@y.com", "nonce": "n",
+	}).Serialize()
+	require.NoError(t, err)
+
+	// Verify directly against the provider's verifier (bypassing the token
+	// endpoint, which always signs with the correct key).
+	_, err = p.verifier.Verify(context.Background(), raw)
 	require.Error(t, err)
 }

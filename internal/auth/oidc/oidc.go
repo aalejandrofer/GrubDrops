@@ -77,6 +77,9 @@ func (p *Provider) Name() string { return p.name }
 
 // AuthCodeURL builds the IdP authorize URL with state, nonce, and PKCE.
 func (p *Provider) AuthCodeURL(state, nonce, challenge string) string {
+	if p.verifier == nil {
+		return ""
+	}
 	return p.oauth.AuthCodeURL(state,
 		gooidc.Nonce(nonce),
 		oauth2.SetAuthURLParam("code_challenge", challenge),
@@ -87,8 +90,11 @@ func (p *Provider) AuthCodeURL(state, nonce, challenge string) string {
 // ExchangeAndVerify swaps the authorization code for tokens, verifies the ID
 // token signature/issuer/audience/expiry, checks the nonce, and returns the
 // parsed claims.
-func (p *Provider) ExchangeAndVerify(ctx context.Context, code, verifier, wantNonce string) (Claims, error) {
-	tok, err := p.oauth.Exchange(ctx, code, oauth2.SetAuthURLParam("code_verifier", verifier))
+func (p *Provider) ExchangeAndVerify(ctx context.Context, code, codeVerifier, wantNonce string) (Claims, error) {
+	if p.verifier == nil {
+		return Claims{}, fmt.Errorf("oidc: provider not configured")
+	}
+	tok, err := p.oauth.Exchange(ctx, code, oauth2.SetAuthURLParam("code_verifier", codeVerifier))
 	if err != nil {
 		return Claims{}, fmt.Errorf("token exchange: %w", err)
 	}
@@ -101,7 +107,7 @@ func (p *Provider) ExchangeAndVerify(ctx context.Context, code, verifier, wantNo
 		return Claims{}, fmt.Errorf("verify id_token: %w", err)
 	}
 	if idTok.Nonce != wantNonce {
-		return Claims{}, fmt.Errorf("nonce mismatch")
+		return Claims{}, fmt.Errorf("nonce mismatch: got %q, want %q", idTok.Nonce, wantNonce)
 	}
 	var c Claims
 	if err := idTok.Claims(&c); err != nil {
