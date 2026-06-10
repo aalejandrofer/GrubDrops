@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alexedwards/scs/v2"
 	jose "github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
-	"github.com/alexedwards/scs/v2"
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
 
