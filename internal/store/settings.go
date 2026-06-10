@@ -97,7 +97,7 @@ func (s *Settings) SetLogRetentionDays(ctx context.Context, days int) error {
 }
 
 // LogLevel is the runtime log level. "" means "use the launch env
-// MINER_LOG_LEVEL"; explicit value here overrides it.
+// GRUB_LOG_LEVEL"; explicit value here overrides it.
 func (s *Settings) LogLevel(ctx context.Context) (string, error) {
 	return s.getString(ctx, keyLogLevel)
 }

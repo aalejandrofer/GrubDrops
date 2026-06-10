@@ -50,13 +50,13 @@ func main() {
 	// GUI always streams debug logs to the launching terminal so the
 	// user (or whoever sent them this binary) can paste them back to
 	// us when something breaks.
-	if os.Getenv("MINER_HELPER_DEBUG") == "" {
-		_ = os.Setenv("MINER_HELPER_DEBUG", "1")
+	if os.Getenv("GRUB_HELPER_DEBUG") == "" {
+		_ = os.Setenv("GRUB_HELPER_DEBUG", "1")
 	}
 
 	mux := http.NewServeMux()
 
-	defaultMiner := os.Getenv("MINER_URL")
+	defaultMiner := os.Getenv("GRUB_URL")
 	if defaultMiner == "" {
 		defaultMiner = "http://localhost:8080"
 	}

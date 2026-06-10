@@ -47,12 +47,12 @@ func NewRing(size int) *Ring {
 	return &Ring{buf: make([]LogLine, size), size: size}
 }
 
-// NewRingFromEnv constructs a Ring sized from MINER_LOG_RING (default
+// NewRingFromEnv constructs a Ring sized from GRUB_LOG_RING (default
 // `def` when unset / unparseable / non-positive). Centralised so the
 // main entrypoint doesn't have to repeat the env parsing.
 func NewRingFromEnv(def int) *Ring {
 	size := def
-	if v := os.Getenv("MINER_LOG_RING"); v != "" {
+	if v := os.Getenv("GRUB_LOG_RING"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			size = n
 		}

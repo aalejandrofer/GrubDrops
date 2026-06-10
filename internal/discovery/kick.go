@@ -18,7 +18,7 @@ type kickSessionSource func(ctx context.Context) (string, platform.Session, bool
 // to enumerate active drop campaigns. Per ref_kickdropsminer.md, Kick is
 // browser-only — Cloudflare's JS challenge defeats every pure-HTTP path
 // — so a working sidecar is non-negotiable. When the sidecar isn't
-// configured (MINER_BROWSER_URL empty) the registry never registers a
+// configured (GRUB_BROWSER_URL empty) the registry never registers a
 // Kick backend, so this Scraper's Backend is nil and Scrape no-ops.
 //
 // Like TwitchScraper we borrow ONE enabled Kick account's session (the
@@ -76,7 +76,7 @@ func (s *KickScraper) Name() string { return "kick" }
 
 func (s *KickScraper) Scrape(ctx context.Context, whitelist []string) ([]platform.Campaign, error) {
 	if s == nil || s.Backend == nil || s.Source == nil {
-		// No sidecar configured (MINER_BROWSER_URL empty) — graceful
+		// No sidecar configured (GRUB_BROWSER_URL empty) — graceful
 		// no-op so the Scraper just logs once and continues.
 		return nil, nil
 	}

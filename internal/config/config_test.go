@@ -8,16 +8,16 @@ import (
 )
 
 func TestLoad_RequiresMasterKey(t *testing.T) {
-	t.Setenv("MINER_MASTER_KEY", "")
+	t.Setenv("GRUB_MASTER_KEY", "")
 	_, err := Load()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "MINER_MASTER_KEY")
+	assert.Contains(t, err.Error(), "GRUB_MASTER_KEY")
 }
 
 func TestLoad_DefaultsApplied(t *testing.T) {
-	t.Setenv("MINER_MASTER_KEY", "AGE-SECRET-KEY-1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX0")
-	t.Setenv("MINER_DISCORD_WEBHOOK", "")
-	t.Setenv("MINER_BROWSER_URL", "")
+	t.Setenv("GRUB_MASTER_KEY", "AGE-SECRET-KEY-1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX0")
+	t.Setenv("GRUB_DISCORD_WEBHOOK", "")
+	t.Setenv("GRUB_BROWSER_URL", "")
 
 	cfg, err := Load()
 	require.NoError(t, err)
@@ -28,11 +28,11 @@ func TestLoad_DefaultsApplied(t *testing.T) {
 }
 
 func TestLoad_Overrides(t *testing.T) {
-	t.Setenv("MINER_MASTER_KEY", "AGE-SECRET-KEY-1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX0")
-	t.Setenv("MINER_HTTP_ADDR", "127.0.0.1:9000")
-	t.Setenv("MINER_DB_PATH", "/tmp/m.db")
-	t.Setenv("MINER_DISCORD_WEBHOOK", "https://discord.example/wh/x")
-	t.Setenv("MINER_BROWSER_URL", "browser:9090")
+	t.Setenv("GRUB_MASTER_KEY", "AGE-SECRET-KEY-1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX0")
+	t.Setenv("GRUB_HTTP_ADDR", "127.0.0.1:9000")
+	t.Setenv("GRUB_DB_PATH", "/tmp/m.db")
+	t.Setenv("GRUB_DISCORD_WEBHOOK", "https://discord.example/wh/x")
+	t.Setenv("GRUB_BROWSER_URL", "browser:9090")
 
 	cfg, err := Load()
 	require.NoError(t, err)

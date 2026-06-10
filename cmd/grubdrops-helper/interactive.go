@@ -31,7 +31,7 @@ func runInteractive() error {
 	}
 
 	minerURL := prompt(in, "Miner URL", "http://localhost:8080")
-	password := prompt(in, "Admin password", os.Getenv("MINER_PASSWORD"))
+	password := prompt(in, "Admin password", os.Getenv("GRUB_PASSWORD"))
 	if strings.TrimSpace(password) == "" {
 		return fmt.Errorf("admin password is required")
 	}

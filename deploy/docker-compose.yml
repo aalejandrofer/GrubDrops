@@ -8,10 +8,10 @@ services:
     ports:
       - "8080:8080"
     environment:
-      MINER_MASTER_KEY: ${MINER_MASTER_KEY:?MINER_MASTER_KEY required}
-      MINER_DB_PATH: /data/miner.db
-      MINER_HTTP_ADDR: 0.0.0.0:8080
-      MINER_BROWSER_URL: ${MINER_BROWSER_URL:-}
+      GRUB_MASTER_KEY: ${GRUB_MASTER_KEY:?GRUB_MASTER_KEY required}
+      GRUB_DB_PATH: /data/miner.db
+      GRUB_HTTP_ADDR: 0.0.0.0:8080
+      GRUB_BROWSER_URL: ${GRUB_BROWSER_URL:-}
     volumes:
       - ./data:/data
 

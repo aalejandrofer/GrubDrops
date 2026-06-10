@@ -9,7 +9,7 @@
 // Flags:
 //
 //	--miner    URL    Base URL of the miner (default http://localhost:8080)
-//	--password STR    Admin password. Falls back to MINER_PASSWORD env.
+//	--password STR    Admin password. Falls back to GRUB_PASSWORD env.
 //	--browser  NAME   Limit cookie search to a specific browser.
 //	--channel  NAMES  One or more Kick channels (comma/space-separated; repeatable).
 //	--insecure        Skip TLS verification (debug only).
@@ -71,7 +71,7 @@ Usage:
 
 Flags:
   --miner     base URL of the miner (default http://localhost:8080)
-  --password  admin password (or set MINER_PASSWORD)
+  --password  admin password (or set GRUB_PASSWORD)
   --browser   limit cookie search to this browser (chrome, firefox, safari, ...)
   --channel   one or more Kick channels (comma/space-separated; repeatable)
   --insecure  skip TLS verification
@@ -91,7 +91,7 @@ var boolFlagsByName = map[string]bool{"insecure": true}
 func parseCommon(fs *flag.FlagSet, args []string, extra func(*flag.FlagSet)) (commonFlags, []string, error) {
 	cf := commonFlags{Config: helper.Config{
 		MinerURL: "http://localhost:8080",
-		Password: os.Getenv("MINER_PASSWORD"),
+		Password: os.Getenv("GRUB_PASSWORD"),
 	}}
 	fs.StringVar(&cf.MinerURL, "miner", cf.MinerURL, "base URL of the miner")
 	fs.StringVar(&cf.Password, "password", cf.Password, "admin password")
@@ -109,7 +109,7 @@ func parseCommon(fs *flag.FlagSet, args []string, extra func(*flag.FlagSet)) (co
 		return cf, nil, err
 	}
 	if cf.Password == "" {
-		return cf, nil, fmt.Errorf("missing --password (or MINER_PASSWORD env)")
+		return cf, nil, fmt.Errorf("missing --password (or GRUB_PASSWORD env)")
 	}
 	return cf, fs.Args(), nil
 }

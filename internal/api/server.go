@@ -89,8 +89,8 @@ type Deps struct {
 	StartTime     time.Time
 
 	// Diagnostics surfaced on /settings (read-only).
-	LogLevelEnv       string // MINER_LOG_LEVEL value (config.Load)
-	BrowserURLDisplay string // MINER_BROWSER_URL value (config.Load)
+	LogLevelEnv       string // GRUB_LOG_LEVEL value (config.Load)
+	BrowserURLDisplay string // GRUB_BROWSER_URL value (config.Load)
 	GitCommit         string // build-time git commit short hash
 	Version           string // semver / release tag
 }

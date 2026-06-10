@@ -22,10 +22,10 @@ import (
 	_ "github.com/browserutils/kooky/browser/all" // register cookie store finders
 )
 
-// debug returns true when MINER_HELPER_DEBUG=1 — prints every miner
+// debug returns true when GRUB_HELPER_DEBUG=1 — prints every miner
 // HTTP request + response and lists which browser stores yielded
 // cookies.
-func debug() bool { return os.Getenv("MINER_HELPER_DEBUG") == "1" }
+func debug() bool { return os.Getenv("GRUB_HELPER_DEBUG") == "1" }
 
 func dlog(format string, args ...any) {
 	if debug() {

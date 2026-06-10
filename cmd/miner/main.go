@@ -87,7 +87,7 @@ func run() error {
 
 	var browserClient *browser.Client
 	var kickBackend *kick.Backend
-	twitchBrowserEnabled := os.Getenv("MINER_TWITCH_BROWSER") == "1"
+	twitchBrowserEnabled := os.Getenv("GRUB_TWITCH_BROWSER") == "1"
 	if cfg.BrowserURL != "" {
 		bc, err := browser.Dial(cfg.BrowserURL)
 		if err != nil {
@@ -98,7 +98,7 @@ func run() error {
 	}
 	// Kick runs over the pure-HTTP utls transport (Chrome TLS fingerprint) and
 	// no longer needs the chromedp sidecar for data — Kick's API 403s any
-	// CDP browser but accepts utls. Register it regardless of MINER_BROWSER_URL;
+	// CDP browser but accepts utls. Register it regardless of GRUB_BROWSER_URL;
 	// the browser client (may be nil) is kept only for the legacy login path.
 	kickBackend = kick.New(browserClient)
 	registry.Register(kickBackend)
@@ -342,7 +342,7 @@ func run() error {
 	// enabled account's — so we don't multiply the gql cost across the
 	// account roster. Whitelist is the union of every enabled account's
 	// game opt-ins; non-whitelisted games are never scraped.
-	discoveryInterval := parseDuration(os.Getenv("MINER_DISCOVERY_INTERVAL"), 5*time.Minute)
+	discoveryInterval := parseDuration(os.Getenv("GRUB_DISCOVERY_INTERVAL"), 5*time.Minute)
 	startDiscovery(ctx, logger, q, sessions, registry, campaignPersister, discoveryInterval)
 
 	// Auth-health sweep: probe each account's auth (Twitch token / Kick
@@ -350,7 +350,7 @@ func run() error {
 	// flag before an account silently stops mining. CheckAll is also wired
 	// to a manual button on /accounts.
 	authChecker := authcheck.New(q, sessions, registry)
-	authInterval := parseDuration(os.Getenv("MINER_AUTHCHECK_INTERVAL"), 12*time.Hour)
+	authInterval := parseDuration(os.Getenv("GRUB_AUTHCHECK_INTERVAL"), 12*time.Hour)
 	go authChecker.Run(ctx, authInterval)
 
 	// Avoid typed-nil-interface trap: only assign if the concrete pointer is non-nil.
@@ -378,14 +378,14 @@ func run() error {
 		Notifier:          notifier,
 		AuthCheck:         authChecker.CheckAll,
 		ReloadAccount:     reloadAccount,
-		HelperDir:         os.Getenv("MINER_HELPER_DIR"),
+		HelperDir:         os.Getenv("GRUB_HELPER_DIR"),
 		TwitchBrowser:     twitchBrowserEnabled && browserClient != nil,
 		LogRing:           ring,
 		StartTime:         startTime,
 		LogLevelEnv:       cfg.LogLevel,
 		BrowserURLDisplay: cfg.BrowserURL,
 		GitCommit:         os.Getenv("GIT_COMMIT"),
-		Version:           os.Getenv("MINER_VERSION"),
+		Version:           os.Getenv("GRUB_VERSION"),
 	}
 
 	srv := &http.Server{
@@ -605,7 +605,7 @@ func startDiscovery(
 	if b, ok := registry.Get("kick"); ok {
 		providers = append(providers, discovery.NewKickScraperFromStore(q, sessions, b))
 	} else {
-		logger.Warn("discovery: no kick backend registered (MINER_BROWSER_URL empty?); skipping kick scraper")
+		logger.Warn("discovery: no kick backend registered (GRUB_BROWSER_URL empty?); skipping kick scraper")
 	}
 	if len(providers) == 0 {
 		logger.Warn("discovery: no providers configured; /drops page will only show watcher-discovered campaigns")

@@ -18,13 +18,13 @@ const (
 
 // RequireAdmin redirects unauthenticated users to /login.
 //
-// If the env var MINER_AUTH_BYPASS_LOCAL=1 is set, requests whose
+// If the env var GRUB_AUTH_BYPASS_LOCAL=1 is set, requests whose
 // X-Forwarded-For chain originates from a loopback address (or that
 // have no XFF and connect from loopback themselves) are allowed
 // through without a session. Intended for `curl localhost:8080` from
 // the homelab host for debugging — leave disabled in normal operation.
 func RequireAdmin(sm *scs.SessionManager) func(http.Handler) http.Handler {
-	bypassLocal := os.Getenv("MINER_AUTH_BYPASS_LOCAL") == "1"
+	bypassLocal := os.Getenv("GRUB_AUTH_BYPASS_LOCAL") == "1"
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if bypassLocal && isLoopbackRequest(r) {

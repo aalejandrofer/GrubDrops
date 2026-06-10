@@ -78,19 +78,19 @@ func TestPushEvent_NilReceiverIsNoop(t *testing.T) {
 }
 
 func TestNewRingFromEnv_DefaultWhenUnset(t *testing.T) {
-	t.Setenv("MINER_LOG_RING", "")
+	t.Setenv("GRUB_LOG_RING", "")
 	rb := NewRingFromEnv(7)
 	assert.Equal(t, 7, rb.size)
 }
 
 func TestNewRingFromEnv_HonoursValidEnv(t *testing.T) {
-	t.Setenv("MINER_LOG_RING", "42")
+	t.Setenv("GRUB_LOG_RING", "42")
 	rb := NewRingFromEnv(7)
 	assert.Equal(t, 42, rb.size)
 }
 
 func TestNewRingFromEnv_FallsBackOnGarbage(t *testing.T) {
-	t.Setenv("MINER_LOG_RING", "not-a-number")
+	t.Setenv("GRUB_LOG_RING", "not-a-number")
 	rb := NewRingFromEnv(7)
 	assert.Equal(t, 7, rb.size)
 }

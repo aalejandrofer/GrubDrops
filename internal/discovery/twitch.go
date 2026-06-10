@@ -18,7 +18,7 @@ type twitchSessionSource func(ctx context.Context) (string, platform.Session, bo
 
 // TwitchScraper borrows the first enabled Twitch account's session and
 // proxies ListActiveCampaigns to whichever Twitch backend the registry
-// has (HTTP backend, or BrowserBackend when MINER_TWITCH_BROWSER=1 —
+// has (HTTP backend, or BrowserBackend when GRUB_TWITCH_BROWSER=1 —
 // the latter is required when Twitch's integrity wall is up). Scrape
 // applies a GameFilter built from the union whitelist so the backend
 // short-circuits non-whitelisted games BEFORE the per-campaign detail

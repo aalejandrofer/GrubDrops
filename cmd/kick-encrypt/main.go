@@ -1,8 +1,8 @@
 // Command kick-encrypt builds a Kick platform.Session from a flat cookies JSON
-// and age-encrypts it with MINER_MASTER_KEY, emitting the ciphertext as hex for
+// and age-encrypts it with GRUB_MASTER_KEY, emitting the ciphertext as hex for
 // a direct sessions-table UPSERT. One-shot ops tool (not committed long-term).
 //
-//	MINER_MASTER_KEY=... kick-encrypt cookies.json > ct.hex
+//	GRUB_MASTER_KEY=... kick-encrypt cookies.json > ct.hex
 package main
 
 import (
@@ -20,11 +20,11 @@ const chromeUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/53
 
 func main() {
 	if len(os.Args) < 2 {
-		die("usage: kick-encrypt cookies.json (MINER_MASTER_KEY env)")
+		die("usage: kick-encrypt cookies.json (GRUB_MASTER_KEY env)")
 	}
-	key := os.Getenv("MINER_MASTER_KEY")
+	key := os.Getenv("GRUB_MASTER_KEY")
 	if key == "" {
-		die("MINER_MASTER_KEY unset")
+		die("GRUB_MASTER_KEY unset")
 	}
 	raw, err := os.ReadFile(os.Args[1])
 	if err != nil {

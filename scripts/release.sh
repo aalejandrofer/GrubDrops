@@ -19,14 +19,14 @@ if [[ -z "$TAG" ]]; then
 fi
 
 REGISTRY="ghcr.io/aalejandrofer"
-MINER_IMAGE="$REGISTRY/grubdrops"
+GRUB_IMAGE="$REGISTRY/grubdrops"
 BROWSER_IMAGE="$REGISTRY/grubdrops-browser"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
-echo "=== Building $MINER_IMAGE:$TAG ==="
-docker build -f deploy/Dockerfile.miner -t "$MINER_IMAGE:$TAG" -t "$MINER_IMAGE:latest" .
+echo "=== Building $GRUB_IMAGE:$TAG ==="
+docker build -f deploy/Dockerfile.miner -t "$GRUB_IMAGE:$TAG" -t "$GRUB_IMAGE:latest" .
 
 echo "=== Building $BROWSER_IMAGE:$TAG ==="
 docker build -f deploy/Dockerfile.browser -t "$BROWSER_IMAGE:$TAG" -t "$BROWSER_IMAGE:latest" .
@@ -37,8 +37,8 @@ if [[ "$MODE" == "--build-only" ]]; then
 fi
 
 echo "=== Pushing miner ==="
-docker push "$MINER_IMAGE:$TAG"
-docker push "$MINER_IMAGE:latest"
+docker push "$GRUB_IMAGE:$TAG"
+docker push "$GRUB_IMAGE:latest"
 
 echo "=== Pushing browser ==="
 docker push "$BROWSER_IMAGE:$TAG"
@@ -46,7 +46,7 @@ docker push "$BROWSER_IMAGE:latest"
 
 echo
 echo "Released:"
-echo "  $MINER_IMAGE:$TAG"
+echo "  $GRUB_IMAGE:$TAG"
 echo "  $BROWSER_IMAGE:$TAG"
 echo
 echo "Next: update your homelab compose.yml image tags, commit, deploy."
