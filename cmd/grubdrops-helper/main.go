@@ -1,18 +1,21 @@
-// grubdrops-helper is a small CLI that copies cookies from the
-// user's local browser into the grubdrops deployment.
+// grubdrops-helper is a small CLI that copies your local browser's
+// kick.com cookies into a grubdrops deployment so it can mine on your
+// behalf. (Twitch needs no helper — it authorizes via device code on the
+// miner itself.)
 //
 // Usage:
 //
-//	grubdrops-helper twitch <account-id> [flags]
-//	grubdrops-helper kick   <account-id> --channel STREAMER[,STREAMER2,...] [flags]
+//	grubdrops-helper kick <account-id> [flags]
 //
 // Flags:
 //
-//	--miner    URL    Base URL of the miner (default http://localhost:8080)
-//	--password STR    Admin password. Falls back to GRUB_PASSWORD env.
+//	--miner    URL    Base URL of the miner (default https://drops.ryuzec.dev)
 //	--browser  NAME   Limit cookie search to a specific browser.
-//	--channel  NAMES  One or more Kick channels (comma/space-separated; repeatable).
+//	--channel  NAMES  Optional Kick channels to pin (comma/space-separated; repeatable).
+//	                  Omit to auto-discover channels from each campaign's game.
 //	--insecure        Skip TLS verification (debug only).
+//
+// No password: the unguessable account ID is the only credential.
 package main
 
 import (
@@ -45,10 +48,11 @@ func main() {
 
 	var err error
 	switch cmd {
-	case "twitch":
-		err = runTwitch(args)
 	case "kick":
 		err = runKick(args)
+	case "twitch":
+		fmt.Fprintln(os.Stderr, "Twitch needs no helper — authorize it via device code on the miner's account page.")
+		os.Exit(2)
 	case "-h", "--help", "help":
 		usage(os.Stdout)
 	default:
@@ -63,18 +67,20 @@ func main() {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprint(w, `grubdrops-helper — push browser cookies to a grubdrops deployment
+	fmt.Fprint(w, `grubdrops-helper — push your kick.com cookies to a grubdrops deployment
 
 Usage:
-  grubdrops-helper twitch <account-id> [--miner URL] [--password PW] [--browser NAME]
-  grubdrops-helper kick   <account-id> [--miner URL] [--password PW] [--browser NAME] --channel NAMES
+  grubdrops-helper kick <account-id> [--miner URL] [--browser NAME] [--channel NAMES]
 
 Flags:
-  --miner     base URL of the miner (default http://localhost:8080)
-  --password  admin password (or set GRUB_PASSWORD)
-  --browser   limit cookie search to this browser (chrome, firefox, safari, ...)
-  --channel   one or more Kick channels (comma/space-separated; repeatable)
+  --miner     base URL of the miner (default https://drops.ryuzec.dev)
+  --browser   limit cookie search to this browser (chrome, firefox, safari, operagx, ...)
+  --channel   optional Kick channels to pin (comma/space-separated; repeatable).
+              Omit to auto-discover channels from each campaign's game.
   --insecure  skip TLS verification
+
+No password needed — the account ID is the only credential.
+Twitch authorizes via device code on the miner; it needs no helper.
 
 `)
 }
@@ -90,11 +96,9 @@ var boolFlagsByName = map[string]bool{"insecure": true}
 
 func parseCommon(fs *flag.FlagSet, args []string, extra func(*flag.FlagSet)) (commonFlags, []string, error) {
 	cf := commonFlags{Config: helper.Config{
-		MinerURL: "http://localhost:8080",
-		Password: os.Getenv("GRUB_PASSWORD"),
+		MinerURL: helper.DefaultMinerURL,
 	}}
 	fs.StringVar(&cf.MinerURL, "miner", cf.MinerURL, "base URL of the miner")
-	fs.StringVar(&cf.Password, "password", cf.Password, "admin password")
 	fs.StringVar(&cf.Browser, "browser", "", "limit cookie search to this browser")
 	fs.BoolVar(&cf.Insecure, "insecure", false, "skip TLS verification")
 	if extra != nil {
@@ -107,9 +111,6 @@ func parseCommon(fs *flag.FlagSet, args []string, extra func(*flag.FlagSet)) (co
 	// tokens (with their values) to the front before parsing.
 	if err := fs.Parse(reorderArgs(args, boolFlagsByName)); err != nil {
 		return cf, nil, err
-	}
-	if cf.Password == "" {
-		return cf, nil, fmt.Errorf("missing --password (or GRUB_PASSWORD env)")
 	}
 	return cf, fs.Args(), nil
 }
@@ -148,23 +149,6 @@ func reorderArgs(args []string, bools map[string]bool) []string {
 		i++
 	}
 	return append(flagToks, posToks...)
-}
-
-func runTwitch(args []string) error {
-	fs := flag.NewFlagSet("twitch", flag.ContinueOnError)
-	cf, rest, err := parseCommon(fs, args, nil)
-	if err != nil {
-		return err
-	}
-	if len(rest) != 1 {
-		return fmt.Errorf("twitch requires exactly one account-id argument")
-	}
-	res, err := helper.PushTwitch(context.Background(), helper.TwitchRequest{Config: cf.Config, AccountID: rest[0]})
-	if err != nil {
-		return err
-	}
-	fmt.Printf("✓ %s (%v)\n", res.Message, res.UploadedCookies)
-	return nil
 }
 
 // channelList implements flag.Value so --channel can be repeated or

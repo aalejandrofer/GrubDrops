@@ -8,14 +8,12 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"html"
 	"io"
 	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/browserutils/kooky"
@@ -33,19 +31,18 @@ func dlog(format string, args ...any) {
 	}
 }
 
-// Config carries the connection details shared by every push.
+// DefaultMinerURL is the production deployment. The helper is handed to
+// friends to authorize their own accounts against prod, so this — not
+// localhost — is the sensible default.
+const DefaultMinerURL = "https://drops.ryuzec.dev"
+
+// Config carries the connection details shared by every push. There is no
+// password: the unguessable acc_<24hex> account ID in the upload path is the
+// only credential the no-auth /helper endpoint requires.
 type Config struct {
-	MinerURL string // e.g. http://localhost:8080
-	Password string // admin password
+	MinerURL string // e.g. https://drops.ryuzec.dev
 	Browser  string // optional — limit cookie scan to a specific browser
 	Insecure bool   // skip TLS verify (debug)
-}
-
-// TwitchRequest pushes the local twitch.tv cookies onto a single
-// account on the miner.
-type TwitchRequest struct {
-	Config
-	AccountID string
 }
 
 // KickRequest pushes the local kick.com cookies + the channel choice.
@@ -64,46 +61,10 @@ type Result struct {
 	Message         string   // human-readable summary
 }
 
-// PushTwitch reads twitch.tv cookies and POSTs them to
-// /accounts/<id>/twitch/paste.
-func PushTwitch(ctx context.Context, req TwitchRequest) (Result, error) {
-	if req.AccountID == "" {
-		return Result{}, fmt.Errorf("account-id is required")
-	}
-	cookies, err := readDomainCookies(ctx, "twitch.tv", req.Browser)
-	if err != nil {
-		return Result{}, fmt.Errorf("read browser cookies: %w", err)
-	}
-	want := []string{"auth-token", "persistent", "server_session_id", "twilight-user", "unique_id", "login", "name"}
-	picked := pickCookies(cookies, want)
-	if _, ok := picked["auth-token"]; !ok {
-		return Result{}, fmt.Errorf("auth-token cookie not found in any browser jar — are you signed in to twitch.tv?")
-	}
-
-	client, err := newMinerClient(req.Config)
-	if err != nil {
-		return Result{}, err
-	}
-	if err := client.adminLogin(ctx, req.Password); err != nil {
-		return Result{}, fmt.Errorf("miner login: %w", err)
-	}
-
-	form := url.Values{}
-	names := make([]string, 0, len(picked))
-	for k, v := range picked {
-		form.Set(k, v)
-		names = append(names, k)
-	}
-	if err := client.submit(ctx, "/accounts/"+req.AccountID+"/twitch/paste", form); err != nil {
-		return Result{}, err
-	}
-	return Result{
-		UploadedCookies: names,
-		Message:         fmt.Sprintf("uploaded %d twitch cookies for account %s", len(names), req.AccountID),
-	}, nil
-}
-
-// PushKick reads kick.com cookies and POSTs them to /accounts/<id>/login.
+// PushKick reads kick.com cookies and POSTs them to the no-auth helper
+// endpoint /helper/accounts/<id>/kick. No password; the account ID is the
+// credential. Channels are optional — they auto-discover from each campaign's
+// game, so an empty list is fine.
 func PushKick(ctx context.Context, req KickRequest) (Result, error) {
 	if req.AccountID == "" {
 		return Result{}, fmt.Errorf("account-id is required")
@@ -111,9 +72,6 @@ func PushKick(ctx context.Context, req KickRequest) (Result, error) {
 	channels := req.Channels
 	if len(channels) == 0 && req.Channel != "" {
 		channels = []string{req.Channel}
-	}
-	if len(channels) == 0 {
-		return Result{}, fmt.Errorf("at least one channel is required")
 	}
 	cookies, err := readDomainCookies(ctx, "kick.com", req.Browser)
 	if err != nil {
@@ -131,9 +89,6 @@ func PushKick(ctx context.Context, req KickRequest) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if err := client.adminLogin(ctx, req.Password); err != nil {
-		return Result{}, fmt.Errorf("miner login: %w", err)
-	}
 
 	form := url.Values{}
 	form.Set("kick_session", picked["kick_session"])
@@ -147,20 +102,26 @@ func PushKick(ctx context.Context, req KickRequest) (Result, error) {
 	if v, ok := picked["session_token"]; ok {
 		form.Set("session_token", v)
 	}
-	// Server-side parseKickChannels accepts comma/space-separated input.
-	form.Set("channel", strings.Join(channels, ","))
+	// Server-side parseKickChannels accepts comma/space-separated input;
+	// empty is fine (channels auto-discover).
+	if len(channels) > 0 {
+		form.Set("channel", strings.Join(channels, ","))
+	}
 
-	if err := client.submit(ctx, "/accounts/"+req.AccountID+"/login", form); err != nil {
+	if err := client.postForm(ctx, "/helper/accounts/"+req.AccountID+"/kick", form); err != nil {
 		return Result{}, err
 	}
 	names := []string{"kick_session", "XSRF-TOKEN"}
 	if _, ok := picked["cf_clearance"]; ok {
 		names = append(names, "cf_clearance")
 	}
-	return Result{
-		UploadedCookies: names,
-		Message:         fmt.Sprintf("uploaded kick cookies for account %s (channels %s)", req.AccountID, strings.Join(channels, ", ")),
-	}, nil
+	msg := fmt.Sprintf("uploaded kick cookies for account %s", req.AccountID)
+	if len(channels) > 0 {
+		msg += fmt.Sprintf(" (channels %s)", strings.Join(channels, ", "))
+	} else {
+		msg += " (channels auto-discover)"
+	}
+	return Result{UploadedCookies: names, Message: msg}, nil
 }
 
 // --- cookie reading ---
@@ -173,6 +134,11 @@ func PushKick(ctx context.Context, req KickRequest) (Result, error) {
 // as warnings and only return an error when nothing came back.
 func readDomainCookies(ctx context.Context, domain, browser string) ([]*kooky.Cookie, error) {
 	cookies, probeErr := kooky.ReadCookies(ctx, kooky.Valid, kooky.DomainHasSuffix(domain))
+	// kooky can't find some Chromium-based browsers (notably Opera GX, which it
+	// only knows as "Opera Stable"). Scan their cookie DBs explicitly and merge
+	// — the on-disk format is identical to Chrome's, and kooky's chrome reader
+	// auto-locates each profile's Local State for decryption.
+	cookies = append(cookies, readExtraChromiumCookies(ctx, domain, browser)...)
 	if browser != "" {
 		out := cookies[:0]
 		for _, c := range cookies {
@@ -234,9 +200,6 @@ func newMinerClient(cf Config) (*minerClient, error) {
 	if cf.MinerURL == "" {
 		return nil, fmt.Errorf("miner URL is required")
 	}
-	if cf.Password == "" {
-		return nil, fmt.Errorf("admin password is required")
-	}
 	base, err := url.Parse(cf.MinerURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse miner URL: %w", err)
@@ -249,116 +212,24 @@ func newMinerClient(cf Config) (*minerClient, error) {
 	return &minerClient{base: base, http: &http.Client{Jar: jar, Transport: tr}}, nil
 }
 
-func (c *minerClient) adminLogin(ctx context.Context, password string) error {
-	body, err := c.get(ctx, "/login")
-	if err != nil {
-		return err
-	}
-	tok, err := extractCSRF(body)
-	if err != nil {
-		return fmt.Errorf("extract csrf: %w", err)
-	}
-	form := url.Values{"password": {password}, "csrf_token": {tok}}
-	resp, err := c.postRaw(ctx, "/login", form)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusOK {
-		raw, _ := io.ReadAll(resp.Body)
-		if strings.Contains(string(raw), "wrong password") {
-			return fmt.Errorf("wrong password")
-		}
-	}
-	if resp.StatusCode != http.StatusSeeOther && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("login responded %s", resp.Status)
-	}
-	return nil
-}
-
-// submitErrorMarkers are substrings that, when present in the body of
-// a 200 response to a form POST, indicate the miner re-rendered the
-// page with an error flash rather than redirecting on success. Real
-// successes are signaled by a 303 + Location header (the server's
-// http.Redirect for the post-success view); a 200 means the same
-// template came back, almost always because the handler appended a
-// flash and called render().
-//
-// This list is intentionally a small, hand-picked allowlist of the
-// markers the miner UI is known to produce. Each entry must match the
-// exact phrase used by the server-side flash so we never report
-// success when one of these errors is shown.
-var submitErrorMarkers = []string{
-	"sidecar rejected",
-	"failed to persist",
-	"wrong password",
-	"CSRF token invalid",
-}
-
-// submit posts form to path on the miner and returns nil only when the
-// miner responded with a redirect (303 + Location) — the unambiguous
-// signal that the handler completed and moved the user to a new page.
-//
-// Heuristic for 200 OK: the miner re-renders the same template on
-// failure (with an error flash appended), so a 200 here is NOT a
-// success signal on its own. We peek at the body for known error
-// markers (see submitErrorMarkers) and surface the matching marker as
-// the error message. If a 200 carries no known marker we still treat
-// it as success — better than blocking legitimate flows when the
-// server happens to land on a 200 path we haven't catalogued yet.
-func (c *minerClient) submit(ctx context.Context, path string, form url.Values) error {
-	body, err := c.get(ctx, path)
-	if err != nil {
-		return err
-	}
-	tok, err := extractCSRF(body)
-	if err != nil {
-		return fmt.Errorf("extract csrf: %w", err)
-	}
-	form.Set("csrf_token", tok)
+// postForm POSTs form to path on the miner and returns nil on any 2xx.
+// The /helper endpoints are no-auth and CSRF-exempt — keyed only by the
+// account ID in the path — so there's no login or CSRF dance. A 404 means
+// the account ID is wrong; surface that clearly.
+func (c *minerClient) postForm(ctx context.Context, path string, form url.Values) error {
 	resp, err := c.postRaw(ctx, path, form)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	switch {
-	case resp.StatusCode == http.StatusSeeOther && resp.Header.Get("Location") != "":
-		// Real success — server redirected us to a new page.
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return nil
-	case resp.StatusCode == http.StatusOK:
-		raw, _ := io.ReadAll(resp.Body)
-		bodyStr := string(raw)
-		for _, marker := range submitErrorMarkers {
-			if strings.Contains(bodyStr, marker) {
-				return fmt.Errorf("POST %s: %s", path, marker)
-			}
-		}
-		return nil
-	case resp.StatusCode == http.StatusSeeOther:
-		// 303 with no Location header — treat as a malformed response.
-		return fmt.Errorf("POST %s: 303 with no Location header", path)
-	default:
-		raw, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("POST %s: %s — %s", path, resp.Status, truncate(string(raw), 200))
 	}
-}
-
-func (c *minerClient) get(ctx context.Context, path string) (string, error) {
-	u := *c.base
-	u.Path = path
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	dlog("GET %s", u.String())
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return "", err
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("account not found on the miner — double-check the Account ID (it should look like acc_…)")
 	}
-	defer resp.Body.Close()
-	dlog("← %s (%d bytes)", resp.Status, resp.ContentLength)
-	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("GET %s: %s", path, resp.Status)
-	}
-	raw, err := io.ReadAll(resp.Body)
-	return string(raw), err
+	return fmt.Errorf("POST %s: %s — %s", path, resp.Status, truncate(string(raw), 200))
 }
 
 func (c *minerClient) postRaw(ctx context.Context, path string, form url.Values) (*http.Response, error) {
@@ -390,19 +261,6 @@ func (c *minerClient) postRaw(ctx context.Context, path string, form url.Values)
 		dlog("← %s", resp.Status)
 	}
 	return resp, err
-}
-
-var csrfRE = regexp.MustCompile(`name="csrf_token"\s+value="([^"]+)"`)
-
-func extractCSRF(body string) (string, error) {
-	m := csrfRE.FindStringSubmatch(body)
-	if len(m) < 2 {
-		return "", fmt.Errorf("csrf_token form field not found")
-	}
-	// Go html/template auto-escapes input value="..." attributes —
-	// "+" becomes "&#43;", "=" stays, etc. Unescape so we post the
-	// raw token nosurf actually generated.
-	return html.UnescapeString(m[1]), nil
 }
 
 func truncate(s string, n int) string {

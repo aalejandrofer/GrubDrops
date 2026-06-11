@@ -30,13 +30,13 @@
       </div>
       <ol class="steps">
         <li>Make sure you're signed in to <code>kick.com</code> in your everyday browser.</li>
-        <li><b>Double-click</b> the downloaded helper. It opens a console and walks you through it.<br><span class="step-hint">macOS / Linux: first <code>chmod +x</code> the file; macOS may need right-click → Open the first time.</span></li>
-        <li>When prompted, paste this <b>Account ID</b>:</li>
+        <li><b>Double-click</b> the downloaded helper. It opens a console and walks you through it.<br><span class="step-hint">macOS / Linux: first <code>chmod +x</code> the file. macOS Gatekeeper blocks unsigned downloads — right-click → Open → Open Anyway, or run <code>xattr -d com.apple.quarantine &lt;file&gt;</code> once.</span></li>
+        <li>When prompted, paste this <b>Account ID</b> (then just press Enter through the rest):</li>
       </ol>
       <div class="cli-box">
         <div class="cli-label">account id</div>
         <pre class="cli-code">{{.AccountID}}</pre>
-        <div class="cli-hint">Miner URL defaults to this deployment. You'll also be asked for your admin password. Channels are discovered automatically from each campaign's game.</div>
+        <div class="cli-hint">No password needed — your Account ID is the only credential. Miner URL defaults to this deployment; channels auto-discover from each campaign's game.</div>
       </div>
     </section>
 
@@ -66,7 +66,7 @@
       <div class="cli-box">
         <div class="cli-label">one-liner</div>
         <pre class="cli-code">go run ./cmd/grubdrops-helper kick {{.AccountID}}</pre>
-        <div class="cli-hint">Channels auto-discover from each campaign's game. Add <code>--miner URL</code> for a remote deployment, <code>--password PW</code> to skip the prompt. (Optional: <code>--channel STREAMER</code> to pin specific channels.)</div>
+        <div class="cli-hint">No password needed. Channels auto-discover from each campaign's game. Add <code>--miner URL</code> for a self-hosted deployment. (Optional: <code>--channel STREAMER</code> to pin specific channels.)</div>
       </div>
     </section>
 

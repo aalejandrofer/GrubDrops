@@ -11,7 +11,7 @@ import (
 )
 
 // newTestClient builds a minerClient pointed at srv with cookie jar
-// enabled — matches the production wiring closely enough for submit().
+// enabled — matches the production wiring closely enough for postForm().
 func newTestClient(t *testing.T, srv *httptest.Server) *minerClient {
 	t.Helper()
 	jar, err := cookiejar.New(nil)
@@ -28,90 +28,49 @@ func newTestClient(t *testing.T, srv *httptest.Server) *minerClient {
 	}
 }
 
-// csrfPageBody is the minimum body shape submit() needs to extract a
-// CSRF token via extractCSRF.
-const csrfPageBody = `<form><input name="csrf_token" value="tok-123"></form>`
-
-func TestSubmitTreats303AsSuccess(t *testing.T) {
+func TestPostForm200IsSuccess(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			_, _ = w.Write([]byte(csrfPageBody))
-			return
+		if r.Method != http.MethodPost {
+			t.Errorf("want POST, got %s", r.Method)
 		}
-		// Real success: 303 with Location header.
-		w.Header().Set("Location", "/done")
-		w.WriteHeader(http.StatusSeeOther)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok\n"))
 	}))
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	if err := c.submit(context.Background(), "/path", url.Values{}); err != nil {
-		t.Fatalf("submit returned error: %v", err)
+	if err := c.postForm(context.Background(), "/helper/accounts/acc_x/kick", url.Values{}); err != nil {
+		t.Fatalf("postForm returned error: %v", err)
 	}
 }
 
-func TestSubmitTreats200WithoutMarkerAsSuccess(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			_, _ = w.Write([]byte(csrfPageBody))
-			return
-		}
-		_, _ = w.Write([]byte("<html><body>ok page</body></html>"))
+func TestPostForm404IsFriendlyAccountError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	if err := c.submit(context.Background(), "/path", url.Values{}); err != nil {
-		t.Fatalf("submit returned error: %v", err)
+	err := c.postForm(context.Background(), "/helper/accounts/acc_bad/kick", url.Values{})
+	if err == nil {
+		t.Fatal("expected an error on 404, got nil")
+	}
+	if !strings.Contains(err.Error(), "Account ID") {
+		t.Fatalf("404 error should mention the Account ID, got %v", err)
 	}
 }
 
-func TestSubmit200WithErrorMarkerReturnsError(t *testing.T) {
-	for _, marker := range []string{
-		"sidecar rejected",
-		"failed to persist",
-		"wrong password",
-		"CSRF token invalid",
-	} {
-		marker := marker
-		t.Run(marker, func(t *testing.T) {
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method == http.MethodGet {
-					_, _ = w.Write([]byte(csrfPageBody))
-					return
-				}
-				// Server re-rendered the form with an error flash.
-				_, _ = w.Write([]byte("<div class='err'>" + marker + "</div>" + csrfPageBody))
-			}))
-			defer srv.Close()
-
-			c := newTestClient(t, srv)
-			err := c.submit(context.Background(), "/path", url.Values{})
-			if err == nil {
-				t.Fatalf("expected error containing %q, got nil", marker)
-			}
-			if !strings.Contains(err.Error(), marker) {
-				t.Fatalf("expected error to mention marker %q, got %v", marker, err)
-			}
-		})
-	}
-}
-
-func TestSubmitNon200Non303ReturnsError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			_, _ = w.Write([]byte(csrfPageBody))
-			return
-		}
+func TestPostFormNon2xxReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte("boom"))
 	}))
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	err := c.submit(context.Background(), "/path", url.Values{})
+	err := c.postForm(context.Background(), "/helper/accounts/acc_x/kick", url.Values{})
 	if err == nil {
-		t.Fatalf("expected error on 500 response, got nil")
+		t.Fatal("expected error on 500, got nil")
 	}
 	if !strings.Contains(err.Error(), "500") {
 		t.Fatalf("expected error to mention status, got %v", err)

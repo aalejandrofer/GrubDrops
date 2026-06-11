@@ -70,73 +70,16 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	kickSessionCookie := r.FormValue("kick_session")
-	xsrf := r.FormValue("xsrf_token")
-	cfClearance := r.FormValue("cf_clearance")
-	sessionToken := r.FormValue("session_token")
-	channels := parseKickChannels(r.FormValue("channel"))
-
-	stored := []cookieStored{
-		{Name: "kick_session", Value: kickSessionCookie, Domain: "kick.com", Path: "/"},
-		{Name: "XSRF-TOKEN", Value: xsrf, Domain: "kick.com", Path: "/"},
-	}
-	if cfClearance != "" {
-		stored = append(stored, cookieStored{Name: "cf_clearance", Value: cfClearance, Domain: "kick.com", Path: "/"})
-	}
-	if sessionToken != "" {
-		// The Sanctum bearer for authed drops calls (progress/claim) — the
-		// utls transport extracts it from this cookie.
-		stored = append(stored, cookieStored{Name: "session_token", Value: sessionToken, Domain: "kick.com", Path: "/"})
-	}
-
-	slog.Info("kick login attempt", "kind", "auth", "account", id, "platform", "kick", "channels", channels, "has_cf_clearance", cfClearance != "", "has_session_token", sessionToken != "", "kick_session_len", len(kickSessionCookie), "xsrf_len", len(xsrf))
-
-	legacyChannel := ""
-	if len(channels) > 0 {
-		legacyChannel = channels[0]
-	}
-	internal := kickSessionForStorage{
-		Cookies:   stored,
-		XSRFToken: xsrf,
-		Channel:   legacyChannel, // back-compat: first entry mirrors old single-channel field
-		Channels:  channels,
-	}
-	raw, _ := json.Marshal(internal)
-	sess := platform.Session{
-		AccountID: id,
-		Cookies:   map[string]string{"kick": string(raw)},
-		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
-	}
-	if err := d.sessions.Put(r.Context(), id, sess); err != nil {
-		slog.Error("persist kick session failed", "account", id, "err", err)
+	verified, err := d.persistKickSession(r.Context(), id, kickCookieForm{
+		KickSession:  r.FormValue("kick_session"),
+		XSRF:         r.FormValue("xsrf_token"),
+		CFClearance:  r.FormValue("cf_clearance"),
+		SessionToken: r.FormValue("session_token"),
+		Channels:     parseKickChannels(r.FormValue("channel")),
+	})
+	if err != nil {
 		d.renderError(w, r, id, acc.DisplayName, "failed to persist session: "+err.Error())
 		return
-	}
-	slog.Info("kick session persisted", "account", id, "channels", channels)
-
-	// Verify over the utls transport (no browser sidecar). A transient
-	// failure isn't fatal — cookies are already persisted and the watcher
-	// retries; we only use the result for the flash message.
-	verified := false
-	if v, ok := d.registrar.(kickAuthVerifier); ok {
-		if err := v.VerifyAuth(r.Context(), sess); err != nil {
-			slog.Warn("kick utls verify failed; persisting anyway", "kind", "auth", "account", id, "err", err)
-		} else {
-			verified = true
-			slog.Info("kick utls verified", "kind", "auth", "account", id)
-		}
-	}
-
-	if d.registrar != nil {
-		d.registrar.RegisterChannels(id, channels)
-	}
-
-	if d.reload != nil {
-		if err := d.reload(r.Context()); err != nil {
-			slog.Error("scheduler reload after kick login failed", "account", id, "err", err)
-		} else {
-			slog.Info("scheduler reloaded after kick login", "account", id)
-		}
 	}
 
 	flash := "Kick cookies persisted — watcher will verify shortly"
@@ -145,6 +88,118 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 	}
 	d.sm.Put(r.Context(), "flash", flash)
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
+}
+
+// helperIngest is the no-auth cookie upload used by grubdrops-helper. It is
+// NOT behind the admin session or CSRF: the unguessable acc_<24hex> ID in the
+// path is the only credential (404 on an unknown ID). The helper runs on a
+// friend's machine and can't carry an admin cookie, so the random account ID
+// is the bearer secret — security by obscurity on 96 bits.
+func (d *loginKickDeps) helperIngest(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	acc, err := d.q.GetAccount(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r) // unknown ID — don't reveal whether it could exist
+		return
+	}
+	if acc.Platform != "kick" {
+		http.Error(w, "account is not a kick account", http.StatusBadRequest)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "parse form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, err := d.persistKickSession(r.Context(), id, kickCookieForm{
+		KickSession:  r.FormValue("kick_session"),
+		XSRF:         r.FormValue("xsrf_token"),
+		CFClearance:  r.FormValue("cf_clearance"),
+		SessionToken: r.FormValue("session_token"),
+		Channels:     parseKickChannels(r.FormValue("channel")),
+	}); err != nil {
+		http.Error(w, "persist session: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok\n"))
+}
+
+// kickCookieForm carries the cookie/channel fields a Kick login submits,
+// shared by the authed HTML handler and the no-auth helper endpoint.
+type kickCookieForm struct {
+	KickSession  string
+	XSRF         string
+	CFClearance  string
+	SessionToken string
+	Channels     []string
+}
+
+// persistKickSession stores the Kick cookies, registers the channel list,
+// reloads the scheduler, and best-effort verifies over the utls transport.
+// Returns whether verification succeeded (cookies are persisted regardless).
+func (d *loginKickDeps) persistKickSession(ctx context.Context, id string, f kickCookieForm) (bool, error) {
+	stored := []cookieStored{
+		{Name: "kick_session", Value: f.KickSession, Domain: "kick.com", Path: "/"},
+		{Name: "XSRF-TOKEN", Value: f.XSRF, Domain: "kick.com", Path: "/"},
+	}
+	if f.CFClearance != "" {
+		stored = append(stored, cookieStored{Name: "cf_clearance", Value: f.CFClearance, Domain: "kick.com", Path: "/"})
+	}
+	if f.SessionToken != "" {
+		// The Sanctum bearer for authed drops calls (progress/claim) — the
+		// utls transport extracts it from this cookie.
+		stored = append(stored, cookieStored{Name: "session_token", Value: f.SessionToken, Domain: "kick.com", Path: "/"})
+	}
+
+	slog.Info("kick login attempt", "kind", "auth", "account", id, "platform", "kick", "channels", f.Channels, "has_cf_clearance", f.CFClearance != "", "has_session_token", f.SessionToken != "", "kick_session_len", len(f.KickSession), "xsrf_len", len(f.XSRF))
+
+	legacyChannel := ""
+	if len(f.Channels) > 0 {
+		legacyChannel = f.Channels[0]
+	}
+	internal := kickSessionForStorage{
+		Cookies:   stored,
+		XSRFToken: f.XSRF,
+		Channel:   legacyChannel, // back-compat: first entry mirrors old single-channel field
+		Channels:  f.Channels,
+	}
+	raw, _ := json.Marshal(internal)
+	sess := platform.Session{
+		AccountID: id,
+		Cookies:   map[string]string{"kick": string(raw)},
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+	}
+	if err := d.sessions.Put(ctx, id, sess); err != nil {
+		slog.Error("persist kick session failed", "account", id, "err", err)
+		return false, err
+	}
+	slog.Info("kick session persisted", "account", id, "channels", f.Channels)
+
+	// Verify over the utls transport (no browser sidecar). A transient
+	// failure isn't fatal — cookies are already persisted and the watcher
+	// retries; we only use the result for the flash message.
+	verified := false
+	if v, ok := d.registrar.(kickAuthVerifier); ok {
+		if err := v.VerifyAuth(ctx, sess); err != nil {
+			slog.Warn("kick utls verify failed; persisting anyway", "kind", "auth", "account", id, "err", err)
+		} else {
+			verified = true
+			slog.Info("kick utls verified", "kind", "auth", "account", id)
+		}
+	}
+
+	if d.registrar != nil {
+		d.registrar.RegisterChannels(id, f.Channels)
+	}
+
+	if d.reload != nil {
+		if err := d.reload(ctx); err != nil {
+			slog.Error("scheduler reload after kick login failed", "account", id, "err", err)
+		} else {
+			slog.Info("scheduler reloaded after kick login", "account", id)
+		}
+	}
+	return verified, nil
 }
 
 // kickAuthVerifier lets the login handler verify pasted cookies over the

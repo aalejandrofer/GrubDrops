@@ -127,41 +127,32 @@
 <body>
   <div class="card">
     <div class="kicker">// grubdrops · helper</div>
-    <h1>Authorize an account</h1>
+    <h1>Authorize a Kick account</h1>
     <p class="intro">
-      Reads your browser's <code>twitch.tv</code> or <code>kick.com</code> cookies and uploads them to the miner.
-      Make sure you're signed in to that site in your usual browser first.
+      Reads your browser's <code>kick.com</code> cookies and uploads them to the miner.
+      Make sure you're signed in to Kick in your usual browser first.
+      <br>(Twitch needs no helper — it authorizes via device code on the miner.)
     </p>
 
     <form id="form">
       <label>Miner URL
         <input type="url" name="miner" value="{{.DefaultMiner}}" required>
       </label>
-      <label>Admin password
-        <input type="password" name="password" required>
+      <label>Browser <span style="text-transform:none;font-weight:400;color:var(--muted)">(optional)</span>
+        <select name="browser">
+          <option value="">auto (any installed)</option>
+          <option value="chrome">Chrome</option>
+          <option value="firefox">Firefox</option>
+          <option value="safari">Safari</option>
+          <option value="edge">Edge</option>
+          <option value="brave">Brave</option>
+          <option value="operagx">Opera GX</option>
+        </select>
       </label>
-      <div class="row">
-        <label>Platform
-          <select name="platform" id="platform" required>
-            <option value="twitch">Twitch</option>
-            <option value="kick">Kick</option>
-          </select>
-        </label>
-        <label>Browser <span style="text-transform:none;font-weight:400;color:var(--muted)">(optional)</span>
-          <select name="browser">
-            <option value="">auto (any installed)</option>
-            <option value="chrome">Chrome</option>
-            <option value="firefox">Firefox</option>
-            <option value="safari">Safari</option>
-            <option value="edge">Edge</option>
-            <option value="brave">Brave</option>
-          </select>
-        </label>
-      </div>
       <div style="margin-bottom: 14px;">
         <div class="kicker">step 1 · sign in</div>
         <button type="button" id="open-platform" style="background: var(--surface-2); color: var(--text); border: 1px solid var(--line); margin-top: 6px; width: 100%; padding: 12px;">
-          Open <span id="platform-label">Twitch</span> in a new tab →
+          Open Kick in a new tab →
         </button>
         <div style="font-size: 11px; color: var(--muted); margin-top: 6px;">
           A new tab opens. Sign in there if you're not already, then return here.
@@ -169,11 +160,11 @@
       </div>
       <div>
         <div class="kicker">step 2 · upload</div>
-        <label style="margin-top: 6px;">Account ID <span style="text-transform:none;font-weight:400;color:var(--muted)">(copy from the miner's Accounts page)</span>
+        <label style="margin-top: 6px;">Account ID <span style="text-transform:none;font-weight:400;color:var(--muted)">(copy from the miner's Kick authorize page)</span>
           <input type="text" name="account_id" placeholder="acc_…" required>
         </label>
-        <label class="kick-only hide">Kick channels <span style="text-transform:none;font-weight:400;color:var(--muted)">(comma/space separated)</span>
-          <input type="text" name="channel" placeholder="streamer1, streamer2, streamer3">
+        <label>Kick channels <span style="text-transform:none;font-weight:400;color:var(--muted)">(optional — auto-discovered if blank)</span>
+          <input type="text" name="channel" placeholder="streamer1, streamer2 (optional)">
         </label>
       </div>
       <div class="submit-row">
@@ -186,34 +177,11 @@
 
 <script>
 const form = document.getElementById('form');
-const platform = document.getElementById('platform');
-const platformLabel = document.getElementById('platform-label');
 const openBtn = document.getElementById('open-platform');
-const kickOnly = document.querySelector('.kick-only');
-const channelInput = kickOnly.querySelector('input');
 const status = document.getElementById('status');
 const submit = document.getElementById('submit');
 
-const PLATFORM_URL = {
-  twitch: 'https://www.twitch.tv/login',
-  kick:   'https://kick.com/'
-};
-
 let openedTab = null;
-
-function syncPlatform() {
-  const p = platform.value;
-  platformLabel.textContent = p === 'kick' ? 'Kick' : 'Twitch';
-  if (p === 'kick') {
-    kickOnly.classList.remove('hide');
-    channelInput.required = true;
-  } else {
-    kickOnly.classList.add('hide');
-    channelInput.required = false;
-  }
-}
-platform.addEventListener('change', syncPlatform);
-syncPlatform();
 
 openBtn.addEventListener('click', () => {
   // Reuse the same window slot so repeated clicks don't spam tabs.
@@ -222,7 +190,7 @@ openBtn.addEventListener('click', () => {
     openedTab.focus();
     return;
   }
-  openedTab = window.open(PLATFORM_URL[platform.value], 'dm_helper_login');
+  openedTab = window.open('https://kick.com/', 'dm_helper_login');
 });
 
 form.addEventListener('submit', async (e) => {

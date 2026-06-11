@@ -58,7 +58,7 @@ func main() {
 
 	defaultMiner := os.Getenv("GRUB_URL")
 	if defaultMiner == "" {
-		defaultMiner = "http://localhost:8080"
+		defaultMiner = helper.DefaultMinerURL
 	}
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -83,35 +83,22 @@ func main() {
 		}
 		cfg := helper.Config{
 			MinerURL: strings.TrimSpace(r.FormValue("miner")),
-			Password: r.FormValue("password"),
 			Browser:  strings.TrimSpace(r.FormValue("browser")),
 			Insecure: r.FormValue("insecure") == "1",
 		}
 		accountID := strings.TrimSpace(r.FormValue("account_id"))
 		channels := splitKickChannels(r.FormValue("channel"))
-		platform := r.FormValue("platform")
 
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
 
-		switch platform {
-		case "twitch":
-			res, err := helper.PushTwitch(ctx, helper.TwitchRequest{Config: cfg, AccountID: accountID})
-			if err != nil {
-				writeJSON(w, submitResp{Error: err.Error()})
-				return
-			}
-			writeJSON(w, submitResp{OK: true, Message: res.Message, UploadedCookies: res.UploadedCookies})
-		case "kick":
-			res, err := helper.PushKick(ctx, helper.KickRequest{Config: cfg, AccountID: accountID, Channels: channels})
-			if err != nil {
-				writeJSON(w, submitResp{Error: err.Error()})
-				return
-			}
-			writeJSON(w, submitResp{OK: true, Message: res.Message, UploadedCookies: res.UploadedCookies})
-		default:
-			writeJSON(w, submitResp{Error: "platform must be twitch or kick"})
+		// Kick only — Twitch authorizes via device code on the miner.
+		res, err := helper.PushKick(ctx, helper.KickRequest{Config: cfg, AccountID: accountID, Channels: channels})
+		if err != nil {
+			writeJSON(w, submitResp{Error: err.Error()})
+			return
 		}
+		writeJSON(w, submitResp{OK: true, Message: res.Message, UploadedCookies: res.UploadedCookies})
 	})
 
 	// Bind to 127.0.0.1 only — no LAN exposure.

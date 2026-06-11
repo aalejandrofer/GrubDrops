@@ -25,22 +25,19 @@ func runInteractive() error {
 	fmt.Println("Pushes your local browser's kick.com cookies to your miner.")
 	fmt.Println()
 
-	accountID := prompt(in, "Account ID (from the miner's Kick login page URL)", "")
+	accountID := prompt(in, "Account ID (shown on the miner's Kick authorize page)", "")
 	if strings.TrimSpace(accountID) == "" {
 		return fmt.Errorf("account ID is required")
 	}
 
-	minerURL := prompt(in, "Miner URL", "http://localhost:8080")
-	password := prompt(in, "Admin password", os.Getenv("GRUB_PASSWORD"))
-	if strings.TrimSpace(password) == "" {
-		return fmt.Errorf("admin password is required")
-	}
+	// Miner URL defaults to prod; just press Enter unless self-hosting.
+	minerURL := prompt(in, "Miner URL", helper.DefaultMinerURL)
 
 	// Channels auto-discover from each campaign's game; optional pin.
 	channels := splitChannels(prompt(in, "Pin specific channels? (optional, comma-separated — Enter to skip)", ""))
 
 	res, err := helper.PushKick(context.Background(), helper.KickRequest{
-		Config:    helper.Config{MinerURL: strings.TrimSpace(minerURL), Password: password},
+		Config:    helper.Config{MinerURL: strings.TrimSpace(minerURL)},
 		AccountID: strings.TrimSpace(accountID),
 		Channels:  channels,
 	})

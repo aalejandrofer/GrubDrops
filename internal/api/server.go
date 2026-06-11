@@ -172,6 +172,12 @@ func NewRouter(d Deps) http.Handler {
 	r.Method(http.MethodGet, "/auth/oidc/login", withSession(http.HandlerFunc(oidcH.loginRedirect)))
 	r.Method(http.MethodGet, "/auth/oidc/callback", withSession(http.HandlerFunc(oidcH.callback)))
 
+	// grubdrops-helper cookie upload. No admin session, no CSRF — the
+	// unguessable acc_<24hex> ID in the path is the only credential (the
+	// helper runs on a friend's machine and can't carry an admin cookie).
+	// 404 on an unknown ID. See loginKickDeps.helperIngest.
+	r.Post("/helper/accounts/{id}/kick", loginKick.helperIngest)
+
 	// Authed area
 	authed := chi.NewRouter()
 	authed.Use(RequireAdmin(d.Session))
