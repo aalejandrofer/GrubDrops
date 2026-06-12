@@ -2,7 +2,7 @@
   <img src="internal/web/static/img/logo.png" width="160" alt="GrubDrops">
 </p>
 
-<p align="center"><b>Self-hosted, set-and-forget Twitch &amp; Kick drops miner.</b></p>
+<h3 align="center">Self-hosted, set-and-forget Twitch &amp; Kick drops miner.</h3>
 
 <p align="center">
   <img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white">
