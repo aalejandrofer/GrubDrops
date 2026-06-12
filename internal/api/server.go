@@ -85,9 +85,6 @@ type Deps struct {
 	// ReloadAccount restarts a single account's watcher (targeted account
 	// edit) without reloading the whole roster.
 	ReloadAccount func(context.Context, string)
-	// HelperDir is where the baked cookie-helper binaries live (default
-	// /helpers). Served at /download/helper.
-	HelperDir string
 	// TwitchBrowser indicates the Twitch backend is the browser-routed
 	// variant; the login handler redirects to the cookie-paste page
 	// instead of the device-code flow when true.
@@ -171,12 +168,6 @@ func NewRouter(d Deps) http.Handler {
 	r.Method(http.MethodPost, "/login", withSession(CSRF(http.HandlerFunc(authH.loginPost))))
 	r.Method(http.MethodGet, "/auth/oidc/login", withSession(http.HandlerFunc(oidcH.loginRedirect)))
 	r.Method(http.MethodGet, "/auth/oidc/callback", withSession(http.HandlerFunc(oidcH.callback)))
-
-	// grubdrops-helper cookie upload. No admin session, no CSRF — the
-	// unguessable acc_<24hex> ID in the path is the only credential (the
-	// helper runs on a friend's machine and can't carry an admin cookie).
-	// 404 on an unknown ID. See loginKickDeps.helperIngest.
-	r.Post("/helper/accounts/{id}/kick", loginKick.helperIngest)
 
 	// Authed area
 	authed := chi.NewRouter()
@@ -297,8 +288,6 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/drops/link", dropsH.markLinked)
 	imgH := &imageProxyDeps{registry: d.Registry}
 	authed.Get("/img/kick", imgH.kick)
-	dlH := &downloadDeps{dir: d.HelperDir}
-	authed.Get("/download/helper", dlH.helper)
 	authed.Get("/history", historyH.get)
 
 	r.Mount("/", withSession(CSRF(authed)))

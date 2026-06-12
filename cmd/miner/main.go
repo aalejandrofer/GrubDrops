@@ -443,7 +443,6 @@ func run() error {
 		Notifier:          notifier,
 		AuthCheck:         authChecker.CheckAll,
 		ReloadAccount:     reloadAccount,
-		HelperDir:         os.Getenv("GRUB_HELPER_DIR"),
 		TwitchBrowser:     twitchBrowserEnabled && browserClient != nil,
 		LogRing:           ring,
 		StartTime:         startTime,
