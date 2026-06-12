@@ -25,11 +25,11 @@
     {{else}}
     <div class="events">
       {{range .Claims}}
-      <details class="ev kind-{{if eq .Source "reward"}}auth{{else}}claim{{end}}">
+      <details class="ev kind-{{if eq .Source "reward"}}auth{{else}}claim{{end}}" style="box-shadow:inset 3px 0 0 var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">
         <summary>
           <span class="chev" aria-hidden="true">›</span>
           <span class="t">{{.When}}</span>
-          <span class="lvl" style="color:var(--{{if eq .Source "reward"}}accent{{else}}green{{end}})">●</span>
+          <span class="lvl" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">●</span>
           <span class="body"><em>{{.Source}}</em> · {{if .Game}}{{.Game}} · {{end}}{{.Title}}</span>
           <span class="ac" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{if .Account}}{{.Account}}{{else}}—{{end}}</span>
         </summary>
