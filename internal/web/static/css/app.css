@@ -1840,7 +1840,7 @@
   .device-code .url:hover { color: var(--accent); }
 
   /* Wider auth card for richer flows (Kick cookie paste, Twitch login) */
-  .auth-wrap.wide { max-width: 620px; }
+  .auth-wrap.wide { max-width: 620px; margin: 0 auto; }
   .auth-wrap.wide .auth-card + .auth-card { margin-top: 16px; }
 
   /* Method cards used by twitch paste page — one card per auth method
