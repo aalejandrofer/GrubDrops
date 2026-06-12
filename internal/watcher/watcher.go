@@ -959,17 +959,18 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			return ri < rj
 		})
 	}
-	// Kick accrues OPEN campaigns (empty AllowedChannels) passively on any
-	// participating live channel in the category, so the watch slot is only
-	// worth spending on channel-RESTRICTED (team) campaigns — open ones
-	// complete themselves while a team channel is watched. Stable partition:
-	// restricted first, preserving the priority order within each group.
-	// Twitch accrues only the watched campaign, so this is Kick-only.
-	if w.cfg.Platform == "kick" {
-		sort.SliceStable(matched, func(i, j int) bool {
-			return len(matched[i].AllowedChannels) > 0 && len(matched[j].AllowedChannels) == 0
-		})
-	}
+	// Channel-RESTRICTED (team / ACL-limited) campaigns first, OPEN ones
+	// (empty AllowedChannels) last. Stable partition: preserves the priority
+	// order within each group. Applies to both platforms:
+	//   Kick — open campaigns accrue passively on any participating live
+	//     channel in the category, so they complete themselves while a team
+	//     channel is watched; the slot is only worth spending on restricted ones.
+	//   Twitch — restricted campaigns are limited to specific broadcasters who
+	//     are live only in narrow windows, so finish them while they're live;
+	//     open campaigns can be mined from any channel for the game anytime.
+	sort.SliceStable(matched, func(i, j int) bool {
+		return len(matched[i].AllowedChannels) > 0 && len(matched[j].AllowedChannels) == 0
+	})
 	slog.Info("watcher discovery", "kind", "discovery", "account", w.cfg.AccountID, "campaigns_total", len(campaigns), "campaigns_eligible", len(matched), "claimed_count", len(claimed))
 
 	for _, c := range matched {

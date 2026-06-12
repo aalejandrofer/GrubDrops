@@ -561,10 +561,11 @@ func TestWatcher_KickPicksRestrictedCampaignFirst(t *testing.T) {
 		"kick watcher must mine the channel-restricted campaign first; open ones accrue passively")
 }
 
-// TestWatcher_TwitchKeepsListOrderForRestricted: the restricted-first
-// partition is Kick-specific (Twitch accrues only the watched campaign,
-// so there is nothing to gain by reordering).
-func TestWatcher_TwitchKeepsListOrderForRestricted(t *testing.T) {
+// TestWatcher_TwitchPicksRestrictedCampaignFirst: the restricted-first
+// partition applies to Twitch too — restricted campaigns are limited to
+// specific broadcasters live only in narrow windows, so they're mined ahead
+// of open campaigns (which can be done from any channel for the game anytime).
+func TestWatcher_TwitchPicksRestrictedCampaignFirst(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -582,8 +583,8 @@ func TestWatcher_TwitchKeepsListOrderForRestricted(t *testing.T) {
 	go func() { _ = w.Run(ctx) }()
 	require.Eventually(t, func() bool { return backend.firstPicked() != "" },
 		time.Second, 5*time.Millisecond, "watcher never picked a campaign")
-	assert.Equal(t, "open", backend.firstPicked(),
-		"twitch watcher must keep discovery order; restricted-first is Kick-only")
+	assert.Equal(t, "team", backend.firstPicked(),
+		"twitch watcher must mine the channel-restricted campaign first")
 }
 
 // pubsubAwareBackend captures hook registration calls so we can verify
