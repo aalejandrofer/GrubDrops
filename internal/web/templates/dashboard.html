@@ -38,9 +38,9 @@
   <div class="stat"><div class="label">Watch time</div><div class="value">{{.Tele.WatchTimeTotal}}<sup>h:m</sup></div><div class="delta flat">lifetime</div></div>
   <div class="stat"><div class="label">Drops claimed</div><div class="value">{{.Tele.ClaimsTotal}}<sup>items</sup></div><div class="delta flat">lifetime</div></div>
   <div class="stat"><div class="label">Active campaigns</div><div class="value">{{.Tele.ActiveCamps}}<sup>discovered</sup></div><div class="delta flat">—</div></div>
-  <div class="stat"><div class="label">In progress</div><div class="value">{{.Tele.InProgress}}<sup>drops</sup></div><div class="delta flat">—</div></div>
+  <div class="stat"><div class="label">Completed</div><div class="value">{{.Tele.Completed}} / {{.Tele.TotalDrops}}<sup>drops</sup></div><div class="delta flat">discovered</div></div>
   <div class="stat"><div class="label">Next claim</div><div class="value" style="color:var(--accent)">{{.Tele.NextClaimETA}}<sup>h:m</sup></div><div class="delta">{{.Tele.NextClaimName}}</div></div>
-  <div class="stat"><div class="label">Heartbeats / hr</div><div class="value">{{.Tele.HeartbeatsHour}}<sup>last hr</sup></div><div class="delta flat">—</div></div>
+  <div class="stat"><div class="label">Next poll</div><div class="value">{{.Tele.NextPoll}}<sup>countdown</sup></div><div class="delta flat">60s cadence</div></div>
 </section>
 
 {{/* Next-claim ETAs section removed — the Currently Mining band below

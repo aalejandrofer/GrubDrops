@@ -66,10 +66,11 @@ type dashTelemetry struct {
 	WatchTimeTotal string // lifetime watch time, "h:m" (sum of progress minutes)
 	ClaimsTotal    int    // lifetime drops claimed (claims table count)
 	ActiveCamps    int
-	InProgress     int
+	Completed      int    // discovered drops already claimed/completed (X in "X / Y")
+	TotalDrops     int    // total discovered drops across active campaigns (Y in "X / Y")
 	NextClaimETA   string // "00:13 h:m" or "—"
 	NextClaimName  string // "Wolf Helmet" or ""
-	HeartbeatsHour int
+	NextPoll       string // countdown to the soonest upcoming progress poll, "42s" or "—"
 }
 
 type dashMineCard struct {
@@ -297,12 +298,14 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 		}
 	}
 
+	camps := activeCampsFromDiscovery(r.Context(), d.sch, d.channelCounters, d.q)
+
 	page := dashPage{
-		Tele:          telemetryWithClaims(telemetryFrom(cards, snapshots), d.ring, d.q, r.Context()),
+		Tele:          telemetryWithClaims(telemetryFrom(snapshots), d.q, r.Context()),
 		Alerts:        alerts,
 		Mining:        bucketMiningByPlatform(cards),
 		NextClaims:    nextClaimsFrom(cards),
-		ActiveCamps:   activeCampsFromDiscovery(r.Context(), d.sch, d.channelCounters, d.q),
+		ActiveCamps:   camps,
 		LiveChannels:  liveChannelsFor(accs, snapshots, allowed),
 		Events:        eventsFromRing(d.ring, "", "", accs),
 		EventAccounts: eventAccountsFrom(accs),
@@ -310,6 +313,11 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 		UpdatedAt:     nowPoll(time.Now()),
 		Uptime:        formatUptime(time.Since(d.start)),
 	}
+	// "X / Y completed": Y = total discovered drops across active
+	// campaigns, X = how many of those are already claimed. Both come from
+	// the rows we just built (Total = len(Benefits), Claimed =
+	// CountClaimedForCampaign) so there are no extra backend calls.
+	page.Tele.Completed, page.Tele.TotalDrops = completedFromCamps(camps)
 	return page
 }
 
@@ -385,6 +393,22 @@ func activeCampsFromDiscovery(ctx context.Context, sch *scheduler.Scheduler, cha
 		})
 	}
 	return out
+}
+
+// completedFromCamps sums the active-campaign rows into the "X / Y"
+// completed tile: total = every discovered drop (Total mirrors
+// len(Benefits)), done = the claimed subset. Claimed is clamped to Total
+// per row so a stale over-count can't push the tile past 100%.
+func completedFromCamps(camps []dashCampaign) (done, total int) {
+	for _, c := range camps {
+		total += c.Total
+		claimed := c.Claimed
+		if claimed > c.Total {
+			claimed = c.Total
+		}
+		done += claimed
+	}
+	return done, total
 }
 
 // formatEndsIn renders a duration as "12d", "18h", or "42m" so the
@@ -574,14 +598,11 @@ func mineCardFromSnap(a gen.Account, s watcher.Snapshot) dashMineCard {
 	return c
 }
 
-// telemetryWithClaims layers the "Drops claimed · 7d" count onto a
-// base telemetry struct. Counts two sources: the on-disk claims table
-// (real drop claims via platform.Claim) AND any kind=claim event in
-// the in-memory log ring (reward reaper claims, which don't go through
-// the benefits table so they never make it to claims/). The union is
-// deduped by (account_id, title) so the same reward isn't counted
-// twice if it appears in both sources.
-func telemetryWithClaims(base dashTelemetry, ring *mlog.Ring, q *gen.Queries, ctx context.Context) dashTelemetry {
+// telemetryWithClaims layers the persistent-store counts (lifetime
+// drops claimed, active-campaign count, lifetime watch time) onto a
+// base telemetry struct already populated from the live watcher
+// snapshots by telemetryFrom.
+func telemetryWithClaims(base dashTelemetry, q *gen.Queries, ctx context.Context) dashTelemetry {
 	// Lifetime drops claimed = every row in the persistent claims table.
 	// (Reward-reaper claims that never reach the claims table aren't counted —
 	// they only live in the ephemeral log ring.)
@@ -610,19 +631,10 @@ func telemetryWithClaims(base dashTelemetry, ring *mlog.Ring, q *gen.Queries, ct
 		}
 	}
 
-	// Heartbeats in the last hour, from kind=heartbeat log events the
-	// watcher emits per minute-watched beacon. The ring (default 1000
-	// lines) comfortably covers an hour of beacons.
-	if ring != nil {
-		hourAgo := time.Now().Add(-time.Hour)
-		hbHour := 0
-		for _, l := range ring.Snapshot() {
-			if l.Kind == "heartbeat" && l.TS.After(hourAgo) {
-				hbHour++
-			}
-		}
-		base.HeartbeatsHour = hbHour
-	}
+	// NextPoll is derived in telemetryFrom from the watcher snapshots (it
+	// has the per-account LastPollAt); the log ring no longer feeds
+	// telemetry now that the poll cadence is locked to 60s and a
+	// heartbeats/hr count is low-signal.
 
 	// Lifetime watch time = sum of persistent per-benefit progress minutes.
 	// Survives restarts (unlike the heartbeat ring) and doesn't zero out
@@ -635,7 +647,7 @@ func telemetryWithClaims(base dashTelemetry, ring *mlog.Ring, q *gen.Queries, ct
 	return base
 }
 
-func telemetryFrom(cards []dashMineCard, snaps []watcher.Snapshot) dashTelemetry {
+func telemetryFrom(snaps []watcher.Snapshot) dashTelemetry {
 	var nextETA time.Duration = -1
 	var nextName string
 	for _, s := range snaps {
@@ -649,9 +661,9 @@ func telemetryFrom(cards []dashMineCard, snaps []watcher.Snapshot) dashTelemetry
 		}
 	}
 	tele := dashTelemetry{
-		InProgress:    countActive(cards),
 		ActiveCamps:   distinctCampaigns(snaps),
 		NextClaimName: nextName,
+		NextPoll:      nextPollFrom(snaps, time.Now()),
 	}
 	if nextETA >= 0 {
 		tele.NextClaimETA = formatHM(nextETA)
@@ -750,15 +762,34 @@ func etaFrom(watched, required int) string {
 	return formatHM(time.Duration(rem) * time.Minute)
 }
 
-func countActive(cards []dashMineCard) int {
-	n := 0
-	for _, c := range cards {
-		switch c.State {
-		case "watching", "claiming", "pick_stream":
-			n++
+// nextPollFrom returns the countdown to the soonest upcoming progress
+// poll across active accounts, formatted like "42s". The poll cadence is
+// locked to 60s, so each watching account's next poll is LastPollAt+60s;
+// we report the minimum remaining. A poll that's already due (or an
+// account that hasn't polled yet) counts as "0s". Returns "—" when
+// nothing is watching.
+func nextPollFrom(snaps []watcher.Snapshot, now time.Time) string {
+	const cadence = 60 * time.Second
+	var soonest time.Duration = -1
+	for _, s := range snaps {
+		if s.State != "watching" {
+			continue
+		}
+		remain := time.Duration(0)
+		if !s.LastPollAt.IsZero() {
+			remain = s.LastPollAt.Add(cadence).Sub(now)
+			if remain < 0 {
+				remain = 0
+			}
+		}
+		if soonest < 0 || remain < soonest {
+			soonest = remain
 		}
 	}
-	return n
+	if soonest < 0 {
+		return "—"
+	}
+	return fmt.Sprintf("%ds", int(soonest/time.Second))
 }
 
 func (d dashboardDeps) page(w http.ResponseWriter, r *http.Request) {
