@@ -2546,7 +2546,8 @@
   .settings-card input[type="url"],
   .settings-card input[type="password"],
   .settings-card input[type="number"],
-  .settings-card select {
+  .settings-card select,
+  .settings-card textarea {
     display: block;
     width: 100%;
     margin-top: 8px;
@@ -2562,7 +2563,9 @@
     transition: border-color .15s, background .15s;
   }
   .form-card input:focus, .form-card select:focus,
-  .settings-card input:focus, .settings-card select:focus { border-bottom-color: var(--accent); background: var(--surface-2); }
+  .settings-card input:focus, .settings-card select:focus,
+  .settings-card textarea:focus { border-bottom-color: var(--accent); background: var(--surface-2); }
+  .settings-card textarea { min-height: 120px; resize: vertical; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
   /* Numeric inputs hold a handful of digits — don't stretch them to the full
      column like text/URL fields. Keep them compact + left-aligned. */
   .form-card input[type="number"],

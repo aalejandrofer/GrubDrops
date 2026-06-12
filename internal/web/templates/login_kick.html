@@ -13,30 +13,38 @@
     <div class="actions"><a class="btn ghost" href="/accounts">← accounts</a></div>
   </div>
 
-  <p class="lede">Kick has no public OAuth. GrubDrops replays your kick.com session directly over a Chrome-fingerprinted HTTP client (utls) — no browser, no sidecar. When discovery logs cloudflare / 401, the cookies have gone stale — re-grab here.</p>
+  <p class="lede">Kick has no public OAuth, so GrubDrops replays your kick.com session. Export your cookies once with a browser extension and paste them here — when discovery logs cloudflare / 401 the cookies have gone stale; re-export and paste again.</p>
 
   {{if $.Flash}}<div class="login-flash">{{$.Flash}}</div>{{end}}
 
   <div class="settings-stack">
 
     <section class="settings-card">
-      <header class="section-h"><h3>Manual cookie paste</h3></header>
+      <header class="section-h"><h3>cookies.txt</h3></header>
       <ol class="steps">
-        <li>Open <code>kick.com</code> in any browser and sign in.</li>
-        <li>DevTools → Application → Cookies → <code>kick.com</code>.</li>
-        <li>Copy <code>kick_session</code> + <code>XSRF-TOKEN</code> (required), and <code>session_token</code> (needed to claim drops). <code>cf_clearance</code> optional.</li>
+        <li>Install <a href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc" target="_blank" rel="noopener noreferrer">Get cookies.txt LOCALLY</a> (Chrome / Edge / Brave) or <a href="https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/" target="_blank" rel="noopener noreferrer">cookies.txt</a> (Firefox).</li>
+        <li>Sign in at <code>kick.com</code>, click the extension's icon and hit <b>Export</b> (current site only).</li>
+        <li>Pick the downloaded file below — or open it and paste everything into the box.</li>
       </ol>
       <form method="post" action="/accounts/{{.AccountID}}/login">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-        <label>kick_session <span class="req">required</span><input type="text" name="kick_session" required autocomplete="off"></label>
-        <label>XSRF-TOKEN <span class="req">required</span><input type="text" name="xsrf_token" required autocomplete="off"></label>
-        <label>session_token <span class="opt">needed for claims</span><input type="text" name="session_token" autocomplete="off"></label>
-        <label>cf_clearance <span class="opt">optional</span><input type="text" name="cf_clearance" autocomplete="off"></label>
+        <label>cookies.txt file <span class="opt">fills the box for you</span>
+          <input type="file" id="cookies-file" accept=".txt,text/plain">
+        </label>
+        <label>contents <span class="req">required</span>
+          <textarea name="cookies_txt" rows="8" required autocomplete="off" spellcheck="false" placeholder="# Netscape HTTP Cookie File&#10;.kick.com&#9;TRUE&#9;/&#9;TRUE&#9;…&#9;kick_session&#9;…"></textarea>
+        </label>
         <div class="row">
           <a class="back-link" href="/accounts">← cancel</a>
           <button class="btn-linear" type="submit">Authorize →</button>
         </div>
       </form>
+      <script>
+        document.getElementById('cookies-file').addEventListener('change', async (e) => {
+          const f = e.target.files[0];
+          if (f) document.querySelector('textarea[name="cookies_txt"]').value = await f.text();
+        });
+      </script>
     </section>
 
   </div>
