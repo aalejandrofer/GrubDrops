@@ -20,20 +20,17 @@ A broken miner must never ship under a version tag.
 
 ### Release notes format
 
-Never a paragraph wall. Lead with a one-line plain-text **highlight**, then a
-single ` ```diff ` fenced block so the +/- lines render green/red natively (no
-emoji background). Prefix every line by category and group like with like, in
-this order (omit empty categories):
+Never a paragraph wall. Lead with a one-line **highlight**, then group entries
+under these emoji section headers, in this order (omit empty sections):
 
-```diff
-+ Added — new feature (renders green)
-🔄 Changed — behaviour / UX change
-🐛 Fixed — bug fix
-- Removed — removed feature, flag, or path (renders red)
-```
+- **🌱 Added** — new features
+- **⚙️ Changed** — behaviour / UX changes
+- **🐛 Fixed** — bug fixes
+- **🔥 Removed** — removed features, flags, or paths
 
-Keep each line user-facing — what changed + why it matters, not commit-speak.
-The notes are a curated subset of `[Unreleased]`, not the raw changelog.
+Bold the subject of each bullet; write what changed + why it matters in plain
+user-facing language, not commit-speak. The notes are a curated subset of
+`[Unreleased]`, not the raw changelog.
 
 ## Architecture constraints
 
