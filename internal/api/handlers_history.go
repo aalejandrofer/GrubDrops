@@ -1,8 +1,10 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	mlog "github.com/aalejandrofer/grubdrops/internal/log"
@@ -72,51 +74,16 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Ring-buffered reward-reaper claims (no benefit_id, so they don't
-	// reach the claims table). Walk the ring for kind=claim entries.
+	// Ring-buffered reward claims (no benefit_id, so they don't reach
+	// the claims table). Walk the ring for kind=claim entries.
 	if d.ring != nil {
-		for _, l := range d.ring.Snapshot() {
-			if l.Kind != "claim" {
-				continue
-			}
-			acc := fieldStr(l.Fields, "account")
-			title := fieldStr(l.Fields, "title")
-			game := fieldStr(l.Fields, "game")
-			// Skip malformed reward entries (would render "reward · — · —").
-			// A real reward claim carries both a game and a title.
-			if title == "" || game == "" {
-				continue
-			}
-			label := labelByID[acc]
-			if label == "" {
-				label = acc
-			}
-			page.Claims = append(page.Claims, historyClaim{
-				When:     l.TS.UTC().Format("2006-01-02 15:04"),
-				Platform: "twitch", // reward reaper is Twitch-only
-				Game:     game,
-				Title:    title,
-				Account:  label,
-				Source:   "reward",
-			})
-		}
+		page.Claims = append(page.Claims, rewardClaimsFromRing(d.ring.Snapshot(), labelByID)...)
 	}
 
-	// Dedupe — the ring can carry the same reward claim more than once
-	// (reaper re-fires) and we don't want duplicate rows.
-	{
-		seen := make(map[string]bool, len(page.Claims))
-		deduped := page.Claims[:0]
-		for _, c := range page.Claims {
-			k := c.Account + "|" + c.Platform + "|" + c.Game + "|" + c.Title + "|" + c.When
-			if seen[k] {
-				continue
-			}
-			seen[k] = true
-			deduped = append(deduped, c)
-		}
-		page.Claims = deduped
-	}
+	// Dedupe — a single reward claim is double-emitted by the watcher
+	// (multi-reward sweep + benefit-complete flow) and the sweep can
+	// also re-fire, so collapse to one row.
+	page.Claims = dedupeClaims(page.Claims)
 
 	// Sort claims newest-first by When (string sort works because of
 	// fixed-width ISO format).
@@ -153,4 +120,72 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "history",
 		Page: page,
 	})
+}
+
+// rewardClaimsFromRing turns kind=claim ring entries into reward
+// history rows. The watcher double-emits a single claim: the
+// multi-reward sweep carries a "title" but no game, while the
+// benefit-complete flow carries "benefit_name" but no "title". Only
+// the title-bearing entry is a renderable reward row — the other would
+// render "reward · — · —", so we drop any entry without a non-empty
+// title. A legitimate Kick reward has no game, so game is NOT required.
+func rewardClaimsFromRing(lines []mlog.LogLine, labelByID map[string]string) []historyClaim {
+	var out []historyClaim
+	for _, l := range lines {
+		if l.Kind != "claim" {
+			continue
+		}
+		title := fieldClean(l.Fields, "title")
+		if title == "" {
+			// No real title (missing/blank/"—") — malformed, skip.
+			continue
+		}
+		game := fieldClean(l.Fields, "game")
+		acc := fieldClean(l.Fields, "account")
+		label := labelByID[acc]
+		if label == "" {
+			label = acc
+		}
+		out = append(out, historyClaim{
+			When:     l.TS.UTC().Format("2006-01-02 15:04"),
+			Platform: "twitch", // reward reaper is Twitch-only
+			Game:     game,
+			Title:    title,
+			Account:  label,
+			Source:   "reward",
+		})
+	}
+	return out
+}
+
+// dedupeClaims collapses duplicate claim rows. The key intentionally
+// omits game (a Kick reward emit may or may not carry one) so the
+// sweep + benefit-complete double-emit and reaper re-fires collapse to
+// a single row.
+func dedupeClaims(claims []historyClaim) []historyClaim {
+	seen := make(map[string]bool, len(claims))
+	deduped := claims[:0]
+	for _, c := range claims {
+		k := c.Account + "|" + c.Platform + "|" + c.Title + "|" + c.CampaignName + "|" + c.When
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		deduped = append(deduped, c)
+	}
+	return deduped
+}
+
+// fieldClean reads a string field and normalises the "missing" cases
+// (absent key, blank, or the "—" sentinel fieldStr emits) to "". It
+// lets callers test for a genuinely present value with `== ""`.
+func fieldClean(f map[string]any, k string) string {
+	if v, ok := f[k]; ok {
+		s := strings.TrimSpace(fmt.Sprintf("%v", v))
+		if s == "—" {
+			return ""
+		}
+		return s
+	}
+	return ""
 }
