@@ -122,17 +122,26 @@ func TestKickBackend_ListActiveCampaigns_DefaultRequiredMinutes(t *testing.T) {
 }
 
 func TestKickBackend_InventoryProgress(t *testing.T) {
+	// Live-verified shape: progress nests rewards under each campaign, and
+	// reward.progress is the FRACTION watched (minutes = progress*required_units).
 	f := &fakeDoer{resp: map[string]fakeResp{
 		"https://web.kick.com/api/v1/drops/progress": {200, `{"data":[
-			{"reward_id":"d1","campaign_id":"c1","minutes_watched":45,"claimed":false}
-		]}`},
+			{"id":"c1","name":"Rust Drops","progress_units":45,"rewards":[
+				{"id":"d1","claimed":false,"progress":0.75,"required_units":60},
+				{"id":"d2","claimed":true,"progress":1,"required_units":30}
+			]}
+		],"message":"Success"}`},
 	}}
 	b := withFake(f)
 	pr, err := b.InventoryProgress(context.Background(), sess("acc1"))
 	require.NoError(t, err)
-	require.Len(t, pr, 1)
+	require.Len(t, pr, 2)
 	assert.Equal(t, "d1", pr[0].BenefitID)
-	assert.Equal(t, 45, pr[0].MinutesWatched)
+	assert.Equal(t, 45, pr[0].MinutesWatched) // round(0.75 * 60)
+	assert.False(t, pr[0].Claimed)
+	assert.Equal(t, "d2", pr[1].BenefitID)
+	assert.Equal(t, 30, pr[1].MinutesWatched) // round(1 * 30)
+	assert.True(t, pr[1].Claimed)
 }
 
 func TestKickBackend_Claim_PostsRewardAndCampaign(t *testing.T) {
@@ -166,6 +175,48 @@ func TestKickBackend_ListEligibleChannels_LiveCampaignChannel(t *testing.T) {
 	// ChannelID is the CHANNEL id (for the viewer-WS handshake), not livestream id.
 	assert.Equal(t, "27589", out[0].ChannelID)
 	assert.Equal(t, 50, out[0].ViewerCount)
+}
+
+// An OPEN campaign (no channels of its own) must borrow the category-wide pool
+// of participating channels gathered from sibling campaigns — that's how the
+// daemon finds a live Rust channel for "Kick Off 2 - General Drops" et al.
+// Verifies liveness + category before committing (no junk picks).
+func TestKickBackend_OpenCampaignBorrowsCategoryPool(t *testing.T) {
+	f := &fakeDoer{resp: map[string]fakeResp{
+		"https://web.kick.com/api/v1/drops/campaigns": {200, `{"data":[
+			{"id":"c-A","game":"Rust","name":"A","status":"active",
+			 "channels":[{"slug":"tippie","id":"27589"}],
+			 "rewards":[{"id":"b1","required_units":60}]},
+			{"id":"c-B","game":"Rust","name":"B (open)","status":"active",
+			 "rewards":[{"id":"b2","required_units":60}]}
+		]}`},
+		"https://kick.com/api/v2/channels/tippie/livestream": {200, `{"data":{"id":999,"viewer_count":50,"categories":[{"name":"Rust","slug":"rust"}]}}`},
+	}}
+	b := withFake(f)
+	_, err := b.ListActiveCampaigns(context.Background(), sess("acc1"))
+	require.NoError(t, err)
+
+	// c-B has no channels of its own; it should borrow tippie from the Rust pool.
+	out, err := b.ListEligibleChannels(context.Background(), sess("acc1"),
+		platform.Campaign{ID: "c-B", Game: "Rust"})
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	assert.Equal(t, "tippie", out[0].Channel)
+	assert.Equal(t, "27589", out[0].ChannelID)
+}
+
+// A live channel streaming a DIFFERENT game than the campaign must be rejected
+// (watching it accrues nothing) — guards against the old generic-feed junk.
+func TestKickBackend_RejectsWrongCategoryChannel(t *testing.T) {
+	f := &fakeDoer{resp: map[string]fakeResp{
+		"https://kick.com/api/v2/channels/wrong/livestream": {200, `{"data":{"id":1,"viewer_count":9,"categories":[{"name":"Left 4 Dead 2","slug":"left-4-dead-2"}]}}`},
+	}}
+	b := withFake(f)
+	b.campaignChannels["c1"] = []kickChannel{{Slug: "wrong", ID: "1"}}
+	out, err := b.ListEligibleChannels(context.Background(), sess("acc1"),
+		platform.Campaign{ID: "c1", Game: "Rust"})
+	require.NoError(t, err)
+	assert.Empty(t, out)
 }
 
 func TestKickBackend_DeviceLoginRejected(t *testing.T) {

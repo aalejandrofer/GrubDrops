@@ -37,6 +37,7 @@ type Backend struct {
 	handleByAcc      map[string]string // accountID -> watch handle
 	channelsByAcc    map[string][]string
 	campaignChannels map[string][]kickChannel // campaignID -> eligible channels (slug+id)
+	categoryChannels map[string][]kickChannel // game/category -> union of participating channels across campaigns
 }
 
 var _ platform.Backend = (*Backend)(nil)
@@ -51,6 +52,7 @@ func New(c *browser.Client) *Backend {
 		handleByAcc:      map[string]string{},
 		channelsByAcc:    map[string][]string{},
 		campaignChannels: map[string][]kickChannel{},
+		categoryChannels: map[string][]kickChannel{},
 	}
 }
 
@@ -212,9 +214,16 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 		for _, ch := range c.Channels {
 			slugs = append(slugs, ch.Slug)
 		}
-		if c.ID != "" {
+		if c.ID != "" && len(c.Channels) > 0 {
 			b.mu.Lock()
 			b.campaignChannels[c.ID] = c.Channels // slug+id, for the watch handshake
+			// Kick drops accrue on ANY participating live channel in the
+			// campaign's category, so pool every campaign's channels by game.
+			// Open campaigns (channels: []) borrow this pool — that's how the
+			// daemon finds a live Rust channel for "Kick Off 2" et al.
+			if c.Game != "" {
+				b.categoryChannels[c.Game] = mergeChannels(b.categoryChannels[c.Game], c.Channels)
+			}
 			b.mu.Unlock()
 		}
 		camp := platform.Campaign{
@@ -259,21 +268,54 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 }
 
 func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, c platform.Campaign) ([]platform.Stream, error) {
-	// 1) Best: the campaign's own eligible channels (embedded in the campaigns
-	// payload). Check each for liveness — only LIVE ones can accrue watch time,
-	// and we need the livestream id for the watch ping. Cap the probes.
-	const maxProbe = 12
+	// Candidate pool:
+	//  - Restricted campaign (has its own channels, e.g. "Team Oilrats"): ONLY
+	//    those channels can accrue, so use them.
+	//  - Open campaign (channels: []): Kick drops accrue on ANY participating
+	//    live channel in the same category, so use the category-wide union we
+	//    pooled across all campaigns in ListActiveCampaigns.
+	// Every candidate is verified LIVE + actually streaming the campaign's
+	// category before we commit (a live channel on a DIFFERENT game accrues
+	// nothing; an offline one can't be watched). This replaces the old generic
+	// /stream/livestreams feed, which ignored the category slug and returned
+	// unrelated games (smite, slots, …) — the bot would watch them for nothing.
 	b.mu.Lock()
-	chans := b.campaignChannels[c.ID]
+	pool := append([]kickChannel(nil), b.campaignChannels[c.ID]...)
+	if len(pool) == 0 {
+		pool = append(pool, b.categoryChannels[c.Game]...)
+	}
 	b.mu.Unlock()
+
+	if live := b.probeLive(ctx, s, c, pool); len(live) > 0 {
+		return live, nil
+	}
+
+	// Fallback: channels the operator registered manually. Returned as-is (no
+	// liveness probe) — an explicit operator override, and the watch loop will
+	// drop a dead one on the next heartbeat.
+	b.mu.Lock()
+	manual := b.channelsByAcc[s.AccountID]
+	b.mu.Unlock()
+	out := make([]platform.Stream, 0, len(manual))
+	for _, ch := range manual {
+		out = append(out, platform.Stream{Channel: ch, DropsEnabled: true})
+	}
+	return out, nil
+}
+
+// probeLive checks each candidate channel's livestream and returns the ones
+// that are LIVE and streaming the campaign's category. Caps the number of
+// network probes. ChannelLivestream returns the channel id when known (campaign
+// channels carry it; bare slugs fall back to the livestream id, which the watch
+// handshake also accepts).
+func (b *Backend) probeLive(ctx context.Context, s platform.Session, c platform.Campaign, pool []kickChannel) []platform.Stream {
+	const maxProbe = 12
 	var live []platform.Stream
-	probed := 0
-	for _, ch := range chans {
-		if probed >= maxProbe {
+	for i, ch := range pool {
+		if i >= maxProbe {
 			break
 		}
-		probed++
-		ok, _, viewers, category, err := b.api.ChannelLivestream(ctx, s, ch.Slug)
+		ok, lsID, viewers, category, err := b.api.ChannelLivestream(ctx, s, ch.Slug)
 		if err != nil {
 			slog.Debug("kick channel liveness check failed", "channel", ch.Slug, "err", err)
 			continue
@@ -281,49 +323,37 @@ func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, 
 		if !ok {
 			continue
 		}
-		// Category gate: a campaign channel that's live but streaming a
-		// DIFFERENT game accrues no drop progress. Skip it so the watcher
-		// moves to a channel actually playing the campaign's game. Only
-		// filter when both sides are known (unknown category falls
-		// through — rare metadata gap).
 		if c.Game != "" && category != "" && !strings.EqualFold(strings.TrimSpace(category), strings.TrimSpace(c.Game)) {
-			slog.Debug("kick skip campaign channel on wrong category", "channel", ch.Slug, "streaming", category, "want", c.Game)
+			slog.Debug("kick skip channel on wrong category", "channel", ch.Slug, "streaming", category, "want", c.Game)
 			continue
 		}
-		// ChannelID carries the CHANNEL id (for the viewer-WS handshake),
-		// not the livestream id.
-		live = append(live, platform.Stream{Channel: ch.Slug, ChannelID: ch.ID, ViewerCount: viewers, DropsEnabled: true})
-	}
-	if len(live) > 0 {
-		return live, nil
-	}
-	// 2) Auto-discover live channels in the campaign's category (public).
-	if slug := categorySlug(c.Game); slug != "" {
-		if streams, err := b.api.DiscoverChannelsForCategory(ctx, s, slug); err == nil && len(streams) > 0 {
-			return streams, nil
-		} else if err != nil {
-			slog.Debug("kick category discovery failed; falling back", "game", c.Game, "err", err)
+		id := ch.ID
+		if id == "" {
+			id = lsID // bare slug: best-effort, watch handshake accepts the livestream id
 		}
+		live = append(live, platform.Stream{Channel: ch.Slug, ChannelID: id, ViewerCount: viewers, DropsEnabled: true})
 	}
-	// 3) Fallback: any channels the operator registered manually.
-	b.mu.Lock()
-	chs := b.channelsByAcc[s.AccountID]
-	b.mu.Unlock()
-	out := make([]platform.Stream, 0, len(chs))
-	for _, ch := range chs {
-		out = append(out, platform.Stream{Channel: ch, DropsEnabled: true})
-	}
-	return out, nil
+	return live
 }
 
-// categorySlug maps a campaign's game name to Kick's category slug for the
-// public livestreams endpoint (e.g. "Rust" -> "rust").
-func categorySlug(game string) string {
-	g := strings.TrimSpace(strings.ToLower(game))
-	if g == "" {
-		return ""
+// mergeChannels appends src to dst, deduping by lowercased slug.
+func mergeChannels(dst, src []kickChannel) []kickChannel {
+	seen := make(map[string]struct{}, len(dst))
+	for _, c := range dst {
+		seen[strings.ToLower(c.Slug)] = struct{}{}
 	}
-	return strings.ReplaceAll(g, " ", "-")
+	for _, c := range src {
+		k := strings.ToLower(c.Slug)
+		if c.Slug == "" {
+			continue
+		}
+		if _, dup := seen[k]; dup {
+			continue
+		}
+		seen[k] = struct{}{}
+		dst = append(dst, c)
+	}
+	return dst
 }
 
 func (b *Backend) InventoryProgress(ctx context.Context, s platform.Session) ([]platform.Progress, error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 
@@ -223,34 +224,41 @@ func (a *api) ChannelLivestream(ctx context.Context, sess platform.Session, slug
 	return true, fmt.Sprintf("%d", r.Data.ID), r.Data.ViewerCount, cat, nil
 }
 
-// Progress returns drop progress/inventory. AUTHED. Tolerant parsing (see
-// Campaigns) — the benefit/reward id keys the watcher's claimed[] set.
+// Progress returns drop progress for the authed account. AUTHED — requires the
+// Authorization: Bearer = full session_token (see transport.cookieHeaderFor).
+//
+// Live-verified shape (2026-06-12): {data:[{ id, name, progress_units,
+// user_app_connected, rewards:[{ id, claimed(bool), progress(0..1 float),
+// required_units, external_id }] }]}. progress is the FRACTION watched toward
+// that reward, so minutes_watched = round(progress * required_units). The
+// reward id matches the campaign benefit id (claimed[]/skip set key).
 func (a *api) Progress(ctx context.Context, sess platform.Session) ([]platform.Progress, error) {
 	body, status, err := a.d.do(ctx, sess, http.MethodGet, dropsBase+"/api/v1/drops/progress", nil)
 	if err != nil {
 		return nil, err
 	}
-	if status == 403 {
-		// Kick returns 403 on /drops/progress until the account is enrolled /
-		// participating in an active drop. Treat as "no progress yet" rather
-		// than erroring the watch loop — the viewer-WS presence keeps accruing
-		// time server-side; progress should open up once enrolled.
-		return nil, nil
-	}
 	if status != 200 {
-		return nil, fmt.Errorf("drops progress: status %d", status)
+		return nil, fmt.Errorf("drops progress: status %d body %s", status, truncate(body, 200))
 	}
-	items, err := asList(body, "data", "progress", "drops")
+	camps, err := asList(body, "data", "progress", "drops")
 	if err != nil {
 		return nil, fmt.Errorf("decode progress: %w", err)
 	}
-	out := make([]platform.Progress, 0, len(items))
-	for _, m := range items {
-		out = append(out, platform.Progress{
-			BenefitID:      mstr(m, "reward_id", "rewardId", "benefit_id", "benefitId", "id"),
-			MinutesWatched: mnum(m, "minutes_watched", "minutesWatched", "current_minutes", "progress", "watched_minutes"),
-			Claimed:        mbool(m, "claimed", "is_claimed", "isClaimed"),
-		})
+	var out []platform.Progress
+	for _, camp := range camps {
+		for _, rm := range mlist(camp, "rewards", "benefits", "drops", "tiers") {
+			req := mnum(rm, "required_units", "required_minutes", "requiredMinutes", "minutes")
+			frac := mfloat(rm, "progress", "progress_fraction")
+			minutes := 0
+			if req > 0 && frac > 0 {
+				minutes = int(math.Round(frac * float64(req)))
+			}
+			out = append(out, platform.Progress{
+				BenefitID:      mstr(rm, "id", "reward_id", "rewardId", "benefit_id", "benefitId"),
+				MinutesWatched: minutes,
+				Claimed:        mbool(rm, "claimed", "is_claimed", "isClaimed"),
+			})
+		}
 	}
 	return out, nil
 }
@@ -319,6 +327,25 @@ func mnum(m map[string]any, keys ...string) int {
 				var i int
 				if _, err := fmt.Sscanf(n, "%d", &i); err == nil {
 					return i
+				}
+			}
+		}
+	}
+	return 0
+}
+
+// mfloat reads a fractional value (e.g. progress 0..1) from the first matching
+// key. Accepts JSON numbers (float64) and numeric strings.
+func mfloat(m map[string]any, keys ...string) float64 {
+	for _, k := range keys {
+		if v, ok := m[k]; ok {
+			switch n := v.(type) {
+			case float64:
+				return n
+			case string:
+				var f float64
+				if _, err := fmt.Sscanf(n, "%g", &f); err == nil {
+					return f
 				}
 			}
 		}

@@ -201,12 +201,11 @@ func cookieHeaderFor(ks kickSession) (cookieHeader, xsrf, bearer string) {
 		case "XSRF-TOKEN":
 			xsrf = c.Value
 		case "session_token":
-			st := strings.ReplaceAll(c.Value, "%7C", "|")
-			if i := strings.IndexByte(st, '|'); i >= 0 {
-				bearer = st[i+1:]
-			} else {
-				bearer = st
-			}
+			// Kick's web app sends Authorization: Bearer = the ENTIRE
+			// session_token (Laravel Sanctum "id|token"), NOT just the part
+			// after "|". Sending only the tail 403s authed endpoints like
+			// /drops/progress (verified via live DevTools capture 2026-06-12).
+			bearer = strings.ReplaceAll(c.Value, "%7C", "|")
 		}
 	}
 	if xsrf == "" {
