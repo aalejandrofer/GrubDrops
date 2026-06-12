@@ -12,6 +12,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/platform/platformtest"
 	"github.com/aalejandrofer/grubdrops/internal/scheduler"
+	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 	"github.com/aalejandrofer/grubdrops/internal/watcher"
 )
 
@@ -122,4 +123,119 @@ func TestActiveCampsFromDiscovery_NilDepsFallBackToZero(t *testing.T) {
 // ActiveCamps field, so an early return preserves that contract.
 func TestActiveCampsFromDiscovery_NilScheduler(t *testing.T) {
 	assert.Nil(t, activeCampsFromDiscovery(context.Background(), nil, nil, nil))
+}
+
+// stubCompletedSource is a deterministic completedDataSource for the
+// "X / Y collected" tile tests. Link + claim rows are seeded per
+// campaign id at construction time.
+type stubCompletedSource struct {
+	links  map[string][]gen.ListAccountLinksForCampaignRow
+	claims map[string][]gen.ListClaimsForCampaignRow
+}
+
+func (s stubCompletedSource) ListAccountLinksForCampaign(_ context.Context, id string) ([]gen.ListAccountLinksForCampaignRow, error) {
+	return s.links[id], nil
+}
+
+func (s stubCompletedSource) ListClaimsForCampaign(_ context.Context, id string) ([]gen.ListClaimsForCampaignRow, error) {
+	return s.claims[id], nil
+}
+
+// TestCompletedByAllConnected covers the COMPLETED tile semantics: a drop
+// counts only when EVERY account connected/linked to its campaign has a
+// claim for that benefit. Total is every discovered drop regardless of
+// claims.
+//
+//	camp-1: connected = {a, b}; benefits b1, b2, b3
+//	  b1 claimed by a + b  -> completed
+//	  b2 claimed by a only -> NOT completed (b missing)
+//	  b3 claimed by nobody -> NOT completed
+//	camp-2 (no link rows): falls back to EligibleAccounts = {a};
+//	  benefit b4 claimed by a -> completed
+//
+// total = 4 drops, done = 2 (b1 + b4).
+func TestCompletedByAllConnected(t *testing.T) {
+	snap := []scheduler.DiscoveredCampaign{
+		{
+			Campaign: platform.Campaign{
+				ID: "camp-1",
+				Benefits: []platform.DropBenefit{
+					{ID: "b1"}, {ID: "b2"}, {ID: "b3"},
+				},
+			},
+			EligibleAccounts: []string{"a", "b"},
+		},
+		{
+			Campaign: platform.Campaign{
+				ID:       "camp-2",
+				Benefits: []platform.DropBenefit{{ID: "b4"}},
+			},
+			EligibleAccounts: []string{"a"},
+		},
+	}
+	src := stubCompletedSource{
+		links: map[string][]gen.ListAccountLinksForCampaignRow{
+			"camp-1": {
+				{AccountID: "a", Linked: 1},
+				{AccountID: "b", Linked: 1},
+			},
+			// camp-2 deliberately has no link rows -> EligibleAccounts fallback.
+		},
+		claims: map[string][]gen.ListClaimsForCampaignRow{
+			"camp-1": {
+				{BenefitID: "b1", AccountID: "a"},
+				{BenefitID: "b1", AccountID: "b"},
+				{BenefitID: "b2", AccountID: "a"},
+			},
+			"camp-2": {
+				{BenefitID: "b4", AccountID: "a"},
+			},
+		},
+	}
+
+	done, total := completedByAllConnected(context.Background(), snap, src)
+	assert.Equal(t, 4, total, "total = every discovered drop")
+	assert.Equal(t, 2, done, "only b1 (all connected) + b4 (fallback) are complete")
+}
+
+// TestCompletedByAllConnected_PartialLinkExcludesUnlinked verifies that an
+// account with linked=0 is NOT part of the connected set: a benefit all
+// linked accounts collected counts as complete even if an unlinked account
+// hasn't.
+func TestCompletedByAllConnected_PartialLinkExcludesUnlinked(t *testing.T) {
+	snap := []scheduler.DiscoveredCampaign{
+		{
+			Campaign: platform.Campaign{
+				ID:       "camp-1",
+				Benefits: []platform.DropBenefit{{ID: "b1"}},
+			},
+			EligibleAccounts: []string{"a", "b"},
+		},
+	}
+	src := stubCompletedSource{
+		links: map[string][]gen.ListAccountLinksForCampaignRow{
+			"camp-1": {
+				{AccountID: "a", Linked: 1},
+				{AccountID: "b", Linked: 0}, // not connected -> ignored
+			},
+		},
+		claims: map[string][]gen.ListClaimsForCampaignRow{
+			"camp-1": {{BenefitID: "b1", AccountID: "a"}},
+		},
+	}
+	done, total := completedByAllConnected(context.Background(), snap, src)
+	assert.Equal(t, 1, total)
+	assert.Equal(t, 1, done, "b1 is complete: the only connected account (a) collected it")
+}
+
+// TestCompletedByAllConnected_NilQueriesCountsTotalOnly ensures the tile
+// stays safe with no store handle: total still reflects discovered drops,
+// done is zero.
+func TestCompletedByAllConnected_NilQueriesCountsTotalOnly(t *testing.T) {
+	snap := []scheduler.DiscoveredCampaign{
+		{Campaign: platform.Campaign{ID: "c", Benefits: []platform.DropBenefit{{ID: "x"}, {ID: "y"}}}},
+	}
+	done, total := completedByAllConnected(context.Background(), snap, nil)
+	assert.Equal(t, 2, total)
+	assert.Equal(t, 0, done)
 }

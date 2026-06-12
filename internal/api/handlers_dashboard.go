@@ -71,6 +71,11 @@ type dashTelemetry struct {
 	NextClaimETA   string // "00:13 h:m" or "—"
 	NextClaimName  string // "Wolf Helmet" or ""
 	NextPoll       string // countdown to the soonest upcoming progress poll, "42s" or "—"
+	// NextPollSecs is the raw seconds remaining to the soonest poll, seeded
+	// into the dashboard's data-next-poll-secs attribute so the inline JS
+	// can run a live client-side countdown between full page renders. -1
+	// when nothing is watching (NextPoll renders "—" and JS shows no tick).
+	NextPollSecs int
 }
 
 type dashMineCard struct {
@@ -313,11 +318,13 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 		UpdatedAt:     nowPoll(time.Now()),
 		Uptime:        formatUptime(time.Since(d.start)),
 	}
-	// "X / Y completed": Y = total discovered drops across active
-	// campaigns, X = how many of those are already claimed. Both come from
-	// the rows we just built (Total = len(Benefits), Claimed =
-	// CountClaimedForCampaign) so there are no extra backend calls.
-	page.Tele.Completed, page.Tele.TotalDrops = completedFromCamps(camps)
+	// "X / Y collected": Y = total discovered drops across active
+	// campaigns (one per benefit). X = drops COMPLETED, i.e. every account
+	// connected/linked to the drop's campaign has claimed that benefit. A
+	// drop only *some* accounts collected is not completed. Computed from
+	// the discovery snapshot (benefit + eligible-account sets) joined with
+	// the persistent link + claim tables.
+	page.Tele.Completed, page.Tele.TotalDrops = completedByAllConnected(r.Context(), d.sch.DiscoverySnapshot(), d.q)
 	return page
 }
 
@@ -395,18 +402,102 @@ func activeCampsFromDiscovery(ctx context.Context, sch *scheduler.Scheduler, cha
 	return out
 }
 
-// completedFromCamps sums the active-campaign rows into the "X / Y"
-// completed tile: total = every discovered drop (Total mirrors
-// len(Benefits)), done = the claimed subset. Claimed is clamped to Total
-// per row so a stale over-count can't push the tile past 100%.
-func completedFromCamps(camps []dashCampaign) (done, total int) {
-	for _, c := range camps {
-		total += c.Total
-		claimed := c.Claimed
-		if claimed > c.Total {
-			claimed = c.Total
+// completedDataSource is the subset of *gen.Queries that
+// completedByAllConnected needs: the per-campaign account-link state
+// (who is connected/linked) and the per-campaign claim rows (who
+// collected which benefit). Declared as an interface so tests can inject
+// a stub without a real sqlite database.
+type completedDataSource interface {
+	ListAccountLinksForCampaign(ctx context.Context, campaignID string) ([]gen.ListAccountLinksForCampaignRow, error)
+	ListClaimsForCampaign(ctx context.Context, campaignID string) ([]gen.ListClaimsForCampaignRow, error)
+}
+
+// completedByAllConnected computes the "X / Y collected" tile.
+//
+//   - total (Y) = every discovered drop: the sum of len(Benefits) across
+//     all discovered campaigns. Unchanged from the old behaviour.
+//   - done (X)  = drops that are COMPLETED, meaning EVERY account
+//     connected/linked to the drop's campaign has a claim for that
+//     benefit. A drop only some connected accounts collected does NOT
+//     count.
+//
+// The "connected accounts" set for a campaign is the accounts with
+// linked=1 in account_campaign_links (the per-account link state the
+// campaign persister maintains). When a campaign has no link rows
+// recorded — common for platforms/campaigns that don't require an
+// external-account link probe (e.g. Kick), or campaigns discovered before
+// the link table was populated — we fall back to the campaign's
+// EligibleAccounts (the accounts whose whitelist matched the game, i.e.
+// the accounts that would mine + claim it). See the LIMITATION note below.
+//
+// One ListAccountLinksForCampaign + one ListClaimsForCampaign call per
+// discovered campaign. Discovery snapshots are small (tens of campaigns),
+// so this stays well within the per-tick budget; no per-benefit fan-out.
+//
+// LIMITATION: the link-table fallback to EligibleAccounts is an
+// approximation — EligibleAccounts is "accounts allowed to mine" not
+// "accounts that must be linked". For platforms with no link concept it's
+// the best available signal (an account that mines + claims is, in effect,
+// the connected account). If/when every campaign reliably records link
+// rows, drop the fallback and use the link set alone.
+func completedByAllConnected(ctx context.Context, snap []scheduler.DiscoveredCampaign, q completedDataSource) (done, total int) {
+	for _, dc := range snap {
+		total += len(dc.Benefits)
+		if q == nil || len(dc.Benefits) == 0 {
+			continue
 		}
-		done += claimed
+
+		// Connected = accounts with linked=1 for this campaign.
+		connected := map[string]struct{}{}
+		if links, err := q.ListAccountLinksForCampaign(ctx, dc.ID); err == nil {
+			for _, l := range links {
+				if l.Linked == 1 {
+					connected[l.AccountID] = struct{}{}
+				}
+			}
+		}
+		// Fallback: no recorded link rows -> treat the eligible accounts as
+		// the connected set (see LIMITATION above).
+		if len(connected) == 0 {
+			for _, aid := range dc.EligibleAccounts {
+				connected[aid] = struct{}{}
+			}
+		}
+		// No connected accounts at all -> none of this campaign's drops can
+		// be "collected by all connected accounts". Skip (contributes 0).
+		if len(connected) == 0 {
+			continue
+		}
+
+		// claimers[benefitID] = set of accounts that claimed that benefit.
+		claimers := map[string]map[string]struct{}{}
+		if claims, err := q.ListClaimsForCampaign(ctx, dc.ID); err == nil {
+			for _, c := range claims {
+				if claimers[c.BenefitID] == nil {
+					claimers[c.BenefitID] = map[string]struct{}{}
+				}
+				claimers[c.BenefitID][c.AccountID] = struct{}{}
+			}
+		}
+
+		// A benefit is completed iff every connected account is in its
+		// claimer set.
+		for _, b := range dc.Benefits {
+			got := claimers[b.ID]
+			if got == nil {
+				continue
+			}
+			all := true
+			for aid := range connected {
+				if _, ok := got[aid]; !ok {
+					all = false
+					break
+				}
+			}
+			if all {
+				done++
+			}
+		}
 	}
 	return done, total
 }
@@ -660,10 +751,12 @@ func telemetryFrom(snaps []watcher.Snapshot) dashTelemetry {
 			nextName = s.BenefitName
 		}
 	}
+	pollSecs := nextPollSecsFrom(snaps, time.Now())
 	tele := dashTelemetry{
 		ActiveCamps:   distinctCampaigns(snaps),
 		NextClaimName: nextName,
-		NextPoll:      nextPollFrom(snaps, time.Now()),
+		NextPoll:      formatNextPoll(pollSecs),
+		NextPollSecs:  pollSecs,
 	}
 	if nextETA >= 0 {
 		tele.NextClaimETA = formatHM(nextETA)
@@ -762,13 +855,13 @@ func etaFrom(watched, required int) string {
 	return formatHM(time.Duration(rem) * time.Minute)
 }
 
-// nextPollFrom returns the countdown to the soonest upcoming progress
-// poll across active accounts, formatted like "42s". The poll cadence is
-// locked to 60s, so each watching account's next poll is LastPollAt+60s;
-// we report the minimum remaining. A poll that's already due (or an
-// account that hasn't polled yet) counts as "0s". Returns "—" when
-// nothing is watching.
-func nextPollFrom(snaps []watcher.Snapshot, now time.Time) string {
+// nextPollSecsFrom returns the seconds remaining to the soonest upcoming
+// progress poll across active accounts. The poll cadence is locked to
+// 60s, so each watching account's next poll is LastPollAt+60s; we report
+// the minimum remaining. A poll that's already due (or an account that
+// hasn't polled yet) counts as 0. Returns -1 when nothing is watching, so
+// callers can render "—" and the client countdown can stay idle.
+func nextPollSecsFrom(snaps []watcher.Snapshot, now time.Time) int {
 	const cadence = 60 * time.Second
 	var soonest time.Duration = -1
 	for _, s := range snaps {
@@ -787,9 +880,18 @@ func nextPollFrom(snaps []watcher.Snapshot, now time.Time) string {
 		}
 	}
 	if soonest < 0 {
+		return -1
+	}
+	return int(soonest / time.Second)
+}
+
+// formatNextPoll renders the next-poll seconds for the dashboard tile:
+// "42s", or "—" when nothing is watching (secs < 0).
+func formatNextPoll(secs int) string {
+	if secs < 0 {
 		return "—"
 	}
-	return fmt.Sprintf("%ds", int(soonest/time.Second))
+	return fmt.Sprintf("%ds", secs)
 }
 
 func (d dashboardDeps) page(w http.ResponseWriter, r *http.Request) {
