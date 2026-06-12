@@ -23,44 +23,38 @@ You pick the games. It watches the right streams, racks up the watch-time, and c
 
 ## What is GrubDrops?
 
-Twitch and Kick give away in-game rewards ("drops") for watching streams of a
-particular game. Earning them by hand means leaving a browser tab open on the
-right stream for hours and remembering to click *claim* — for every game, on
-every account.
+Twitch and Kick hand out in-game rewards ("drops") for watching a game's
+streams. Earning them by hand means parking a tab on the right stream for hours
+and remembering to click *claim*, per game, per account.
 
-GrubDrops does that for you. Tell it which games you care about; it discovers
-the campaigns, finds a live stream actually playing the right game, watches it
-to bank the watch-time, and claims each drop as it unlocks. One small web app,
-running on your own machine, handling several Twitch and Kick accounts at once.
+GrubDrops does it for you. You pick the games; it finds the campaigns, picks a
+live stream playing the right game, banks the watch-time, and claims each drop.
+One small web app on your own box, running several Twitch and Kick accounts at
+once. Ships as a Docker image, keeps everything in one SQLite file.
 
-It's built for people who already self-host things: it ships as a Docker image,
-keeps everything in a single SQLite file, and stays out of your way.
+## Features
 
-## Why you might want it
-
-- **Set it and forget it.** A whitelist of games is the only thing you maintain.
-- **Twitch *and* Kick, together** — multiple accounts each, one dashboard.
-- **No wasted watch-time.** It verifies the stream is on the right game before
-  watching.
-- **Your credentials stay yours.** Twitch uses the official device-code login;
-  Kick uses a session you export yourself. No passwords are ever sent to GrubDrops.
-- **It tells you what it's doing** — a live console, claim history, and optional
-  Discord pings per event.
+- 🎯 **You set a whitelist** (global or per-account). Nothing outside it gets mined.
+- 🟣🟢 **Twitch and Kick together**, several accounts each, all on one page.
+- ✅ **It checks the game** so you never burn watch-time on the wrong stream.
+- 🔗 **It knows about account links** (Krafton, Embark, …) with a per-account "I've linked it" override.
+- 🖥️ **A live console**: lifetime stats, current mining, drops catalog, claim history.
+- 🔔 **Discord notifications**, toggle per event type.
+- 🔒 **Your credentials stay yours**: Twitch uses the official device-code login, Kick uses a session you export. No passwords sent to GrubDrops.
 
 ## Getting started
 
 ### Prerequisites
 
-- **Docker** and **Docker Compose** (the quick path), or **Go 1.26+** to build
-  from source.
-- For Kick watch-time: a host that can run the Chrome sidecar and a mounted
+- **Docker** + **Docker Compose** (quick path), or **Go 1.26+** to build from source.
+- For Kick watch-time: a host that can run the Chrome sidecar plus a mounted
   docker socket. Twitch-only setups need neither.
 
 ### Run it
 
-The fastest path is Docker Compose with the published images. You need two:
+Docker Compose with the published images is the fastest path. You need two:
 the **miner** itself, and a codec-enabled Chrome **sidecar** that earns the
-Kick watch-time. (Twitch-only? You can skip the sidecar — see below.)
+Kick watch-time. (Twitch-only? Skip the sidecar, see below.)
 
 ```yaml
 # compose.yml
@@ -87,60 +81,77 @@ services:
     expose: ["9090"]
 ```
 
-Then bring it up — the `GRUB_MASTER_KEY` encrypts the stored sessions, so
-generate a real one:
+Bring it up. `GRUB_MASTER_KEY` encrypts the stored sessions, so generate a real one:
 
 ```bash
 GRUB_MASTER_KEY=$(head -c32 /dev/urandom | base64) docker compose up -d
 ```
 
-Open **http://localhost:8080**. The first visit asks you to create an admin
-login, and you're in.
+Open **http://localhost:8080**. The first visit asks you to create an admin login.
 
-**Twitch only?** The miner image alone is enough — drop the sidecar service,
-the docker-socket mount, and `GRUB_KICK_BROWSER_WATCH`.
+**Twitch only?** The miner image alone is enough. Drop the sidecar service, the
+docker-socket mount, and `GRUB_KICK_BROWSER_WATCH`.
 
 **Want every knob?** The full reference compose (sidecar profiles, OIDC, each
 setting commented) lives in
 [`deploy/docker-compose.yml`](deploy/docker-compose.yml).
 
-**Prefer to build it yourself?** `docker build -f deploy/Dockerfile.miner .`,
-or plain `go build ./cmd/miner` for a local binary.
+**Build it yourself?** `docker build -f deploy/Dockerfile.miner .`, or plain
+`go build ./cmd/miner` for a local binary.
 
 ## Adding accounts
 
-Once you're in, head to **Accounts** and add one per platform.
+Go to **Accounts** and add one per platform.
 
-**Twitch** — click add, then approve the code shown at `twitch.tv/activate`.
+**Twitch.** Click add, then approve the code shown at `twitch.tv/activate`.
 That's the official device-code flow; your password and cookies never touch
 GrubDrops.
 
-**Kick** — Kick has no public login API, so you hand GrubDrops your existing
+**Kick.** Kick has no public login API, so you hand GrubDrops your existing
 kick.com session as a `cookies.txt` file exported from your browser:
 
-1. Install a cookie-export extension —
+1. Install a cookie-export extension:
    [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
    for Chrome/Edge/Brave, or
    [cookies.txt](https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/) for Firefox.
-2. Sign in at `kick.com`, click the extension icon, and **Export** the current site.
+2. Sign in at `kick.com`, click the extension icon, **Export** the current site.
 3. In GrubDrops, open the account's **Authorize** page and upload (or paste) the export.
 
-That's it — channels auto-discover from each campaign's game, so there's nothing
-else to wire up. When the session eventually goes stale (discovery starts logging
-Cloudflare or 401 errors), just re-export and paste again.
+Channels auto-discover from each campaign's game, so there's nothing else to
+configure. When the session goes stale (discovery logs Cloudflare or 401
+errors), re-export and paste again.
 
 ## How it works
 
-- **Twitch:** logs in with the device-code flow, then uses GraphQL and PubSub
-  to track progress and fire claims in real time.
+- **Twitch:** device-code login, then GraphQL and PubSub to track progress and
+  fire claims in real time.
 - **Kick:** detection and claims ride a Chrome-TLS-fingerprinted HTTP client
   (`utls`), so there's no Cloudflare dance and no browser to babysit. The
-  *watch-time itself* needs a real player, so it runs in an on-demand,
-  per-account Chrome sidecar that plays the IVS stream. The miner starts and
-  stops that container over the docker socket, so Chrome only runs while it's
-  actually watching.
+  watch-time itself needs a real player, so it runs in an on-demand, per-account
+  Chrome sidecar that plays the IVS stream. The miner starts and stops that
+  container over the docker socket, so Chrome only runs while watching.
 - **Discovery** sweeps both catalogs into SQLite every few minutes so the
   dashboard always reflects what's live.
+
+## Priority logic
+
+Each account mines one campaign at a time. When several whitelisted campaigns
+are eligible, GrubDrops picks in this order:
+
+```
+1. Campaign, by your priority mode (Settings):
+   ├─ ordered (default)  → your whitelist rank, top of the list first
+   ├─ ending_soonest     → soonest deadline first
+   └─ low_avbl_first     → fewest available channels first
+2. Tiebreak: closest to a claim (fewest watch-minutes remaining)
+3. Kick only: restricted (team) campaigns ahead of open ones
+4. Channel: a live stream confirmed on the campaign's game,
+   highest viewer count first (Twitch also probes for one
+   actually serving the target drop)
+```
+
+Whitelist and priority are per-account, falling back to the global list. A
+campaign with no live stream is skipped, not slept on.
 
 ## Configuration
 
@@ -160,14 +171,14 @@ required; the rest have sensible defaults.
 | `GRUB_DISCOVERY_INTERVAL` | `60m` | Catalog-scrape cadence (e.g. `30m`, `2h`); also editable in Settings. |
 | `GRUB_AUTHCHECK_INTERVAL` | `12h` | Auth-health sweep cadence. |
 | `GRUB_DISCORD_WEBHOOK` | none | Optional global Discord webhook. |
-| `GRUB_SECURE_COOKIES` | `0` | Secure session cookies — turn on behind HTTPS. |
+| `GRUB_SECURE_COOKIES` | `0` | Secure session cookies; turn on behind HTTPS. |
 | `GRUB_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
 
 ### Single sign-on (OIDC)
 
-Optional, and password login stays as a fallback. Works with any OIDC provider
-(authentik, Auth0, Keycloak, Google, Okta, …). SSO switches on as soon as the
-first four variables are set:
+Optional; password login stays as a fallback. Works with any OIDC provider
+(authentik, Auth0, Keycloak, Google, Okta, …). SSO switches on once the first
+four variables are set:
 
 | Var | Required | Purpose |
 |-----|----------|---------|
@@ -192,7 +203,7 @@ first four variables are set:
 | **Settings** (`/settings`) | Priority list, intervals, Discord, log level, password. |
 | **Accounts** | Add accounts, per-account whitelists, re-auth, auth health. |
 
-## Project layout
+## Architecture
 
 ```
 cmd/miner               main daemon
@@ -209,9 +220,9 @@ internal/store          SQLite (sqlc + goose), age-encrypted sessions
 GrubDrops stands on the shoulders of the projects that figured out the hard
 parts first:
 
-- **[DevilXD/TwitchDropsMiner](https://github.com/DevilXD/TwitchDropsMiner)** —
+- **[DevilXD/TwitchDropsMiner](https://github.com/DevilXD/TwitchDropsMiner)**:
   the Twitch device-code flow, GraphQL queries, and watch-time mechanics.
-- **[HyperBeats/KickDropsMiner](https://github.com/HyperBeats/KickDropsMiner)** —
+- **[HyperBeats/KickDropsMiner](https://github.com/HyperBeats/KickDropsMiner)**:
   mapped out how Kick drops work in the first place.
 
 GrubDrops is its own Go rewrite with a web UI and multi-account support, but it
@@ -223,7 +234,7 @@ Released under the [MIT License](LICENSE).
 
 ## A note on responsible use
 
-Self-hosted, single-tenant, and actively developed. `/healthz` answers liveness
+Self-hosted, single-tenant, actively developed. `/healthz` answers liveness
 checks; keep `/data` across redeploys; put it behind a reverse proxy if you
 expose it. Use it within each platform's Terms of Service, against your own
 accounts, at your own risk.
