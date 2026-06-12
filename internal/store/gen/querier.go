@@ -26,6 +26,16 @@ type Querier interface {
 	CountClaimsFor(ctx context.Context, arg CountClaimsForParams) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
 	DeleteAccount(ctx context.Context, id string) error
+	DeleteAccountCampaignLinks(ctx context.Context, accountID string) error
+	DeleteAccountCampaignPriorities(ctx context.Context, accountID sql.NullString) error
+	DeleteAccountClaims(ctx context.Context, accountID string) error
+	DeleteAccountProgress(ctx context.Context, accountID string) error
+	// The explicit per-account child deletes below back a transactional account
+	// purge in the delete handler. The schema declares ON DELETE CASCADE on every
+	// account child, but cascade only fires when foreign_keys is enforced on the
+	// live connection; deleting the children first makes the purge correct even if
+	// enforcement is ever off. Run them before DeleteAccount in one transaction.
+	DeleteAccountSession(ctx context.Context, accountID string) error
 	DeleteKV(ctx context.Context, key string) error
 	GetAccount(ctx context.Context, id string) (Account, error)
 	GetAdmin(ctx context.Context) (Admin, error)

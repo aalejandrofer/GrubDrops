@@ -21,6 +21,7 @@ import (
 
 type accountsDeps struct {
 	q             *gen.Queries
+	db            *sql.DB
 	t             Renderer
 	sm            *scs.SessionManager
 	sch           *scheduler.Scheduler
@@ -349,9 +350,49 @@ func (d accountsDeps) update(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
 
+// purgeAccount hard-deletes an account and every row that belongs to it,
+// inside one transaction. The schema declares ON DELETE CASCADE on every
+// account child, but cascade only fires when foreign_keys enforcement is on
+// for the live connection — historically a deleted account's session and
+// related rows survived and the account kept being loaded and scheduled on
+// boot. Deleting the children explicitly (then the account row) makes the
+// purge correct regardless of the FK pragma state. There is no soft-delete
+// column in the schema, so this matches the existing hard-delete design.
+func (d accountsDeps) purgeAccount(ctx context.Context, id string) error {
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op once Commit succeeds
+	qtx := d.q.WithTx(tx)
+
+	if err := qtx.DeleteAccountSession(ctx, id); err != nil {
+		return err
+	}
+	if err := qtx.ClearAccountGames(ctx, id); err != nil {
+		return err
+	}
+	if err := qtx.DeleteAccountCampaignLinks(ctx, id); err != nil {
+		return err
+	}
+	if err := qtx.DeleteAccountCampaignPriorities(ctx, sql.NullString{String: id, Valid: true}); err != nil {
+		return err
+	}
+	if err := qtx.DeleteAccountProgress(ctx, id); err != nil {
+		return err
+	}
+	if err := qtx.DeleteAccountClaims(ctx, id); err != nil {
+		return err
+	}
+	if err := qtx.DeleteAccount(ctx, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (d accountsDeps) delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if err := d.q.DeleteAccount(r.Context(), id); err != nil {
+	if err := d.purgeAccount(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

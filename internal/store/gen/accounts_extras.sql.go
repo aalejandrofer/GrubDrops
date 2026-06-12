@@ -19,6 +19,57 @@ func (q *Queries) DeleteAccount(ctx context.Context, id string) error {
 	return err
 }
 
+const deleteAccountCampaignLinks = `-- name: DeleteAccountCampaignLinks :exec
+DELETE FROM account_campaign_links WHERE account_id = ?
+`
+
+func (q *Queries) DeleteAccountCampaignLinks(ctx context.Context, accountID string) error {
+	_, err := q.db.ExecContext(ctx, deleteAccountCampaignLinks, accountID)
+	return err
+}
+
+const deleteAccountCampaignPriorities = `-- name: DeleteAccountCampaignPriorities :exec
+DELETE FROM campaign_priorities WHERE account_id = ?
+`
+
+func (q *Queries) DeleteAccountCampaignPriorities(ctx context.Context, accountID sql.NullString) error {
+	_, err := q.db.ExecContext(ctx, deleteAccountCampaignPriorities, accountID)
+	return err
+}
+
+const deleteAccountClaims = `-- name: DeleteAccountClaims :exec
+DELETE FROM claims WHERE account_id = ?
+`
+
+func (q *Queries) DeleteAccountClaims(ctx context.Context, accountID string) error {
+	_, err := q.db.ExecContext(ctx, deleteAccountClaims, accountID)
+	return err
+}
+
+const deleteAccountProgress = `-- name: DeleteAccountProgress :exec
+DELETE FROM progress WHERE account_id = ?
+`
+
+func (q *Queries) DeleteAccountProgress(ctx context.Context, accountID string) error {
+	_, err := q.db.ExecContext(ctx, deleteAccountProgress, accountID)
+	return err
+}
+
+const deleteAccountSession = `-- name: DeleteAccountSession :exec
+
+DELETE FROM sessions WHERE account_id = ?
+`
+
+// The explicit per-account child deletes below back a transactional account
+// purge in the delete handler. The schema declares ON DELETE CASCADE on every
+// account child, but cascade only fires when foreign_keys is enforced on the
+// live connection; deleting the children first makes the purge correct even if
+// enforcement is ever off. Run them before DeleteAccount in one transaction.
+func (q *Queries) DeleteAccountSession(ctx context.Context, accountID string) error {
+	_, err := q.db.ExecContext(ctx, deleteAccountSession, accountID)
+	return err
+}
+
 const listAllAccounts = `-- name: ListAllAccounts :many
 SELECT id, platform, display_name, status, proxy_url, webhook_url, fingerprint_json, enabled, created_at, updated_at FROM accounts ORDER BY created_at ASC
 `

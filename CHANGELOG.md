@@ -90,6 +90,12 @@ First tagged release.
   flat fields) with the download helper as the recommended path.
 
 ### Fixed
+- **Account deletion now fully purges** — deleting an account explicitly removes
+  its session, games, campaign links/priorities, progress, and claims inside one
+  transaction before deleting the account row, instead of relying solely on
+  `ON DELETE CASCADE` (which only fires when foreign-key enforcement is on for
+  the live connection). A deleted account could survive and keep being loaded,
+  device-code-polled, and idled on every boot. Hard-delete; no soft-delete column.
 - **Discovery stall** — the discovery whitelist ignored the global games list,
   so every tick no-opped and campaigns went stale (looked like "Kick campaigns
   vanished after reload"). Now unions the global list.
