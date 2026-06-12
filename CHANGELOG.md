@@ -24,6 +24,14 @@ All notable changes to GrubDrops.
 
 ### Changed
 
+- **Button system redesign** — global refresh of the `.btn` (secondary) and
+  `.btn.primary` pair for a cohesive, restrained hierarchy: secondary is now a
+  quiet ghost (transparent, muted mono label, soft border) that lifts to full
+  text + warmed accent border + faint tint on hover; primary keeps the accent
+  fill with a hairline top highlight and lightens to `--accent-2` on hover.
+  Wider mono tracking (0.14em), tactile `:active`, and a visible accent
+  `:focus-visible` ring on both. Applies to all `.btn`/`.btn.sm`/`.btn.ghost`
+  usages (page-head actions, account pages, alert CTAs, nav). CSS-only.
 - README rewritten deployment-first (Docker Compose quickstart, cookie-export
   instructions, environment variable reference).
 - `cmd/kick-encrypt` one-shot ops tool deleted (superseded by cookies.txt form).
