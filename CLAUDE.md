@@ -14,3 +14,28 @@ A commit is **not** a release. Day-to-day work lands on `master` freely.
    in the GitHub **Releases** tab.
 
 A broken miner must never ship under a version tag.
+
+## Architecture constraints
+
+- **The browser sidecar stack is core, not dead code.** Do not delete
+  `cmd/browser-sidecar`, `internal/auth/browser`, `internal/dockerctl`,
+  `proto/` + buf config, or the Twitch `BrowserBackend`. Kick watch-time (IVS
+  playback credit) depends on the on-demand chromedp sidecars. Cleanup passes
+  have wrongly flagged these as removable — leave them.
+- **Stay Go + html/template + HTMX.** A React/Vite port was tried and scrapped
+  (2026-06-06). Do not re-propose a JS port; build features in templates.
+
+## Platform gotchas
+
+- **Twitch = Android device-code OAuth over direct HTTP.** Never send a
+  `Client-Integrity` header; adding it was a self-inflicted integrity wall.
+  Don't re-implement logged-out catalog scraping either — `/drops/campaigns`
+  while logged out is just a login wall.
+- **Twitch credit beacon is gated by `HeartbeatInterval`** (1 minute credited
+  per beacon), so anything above 60s under-credits. Keep it at 60s. Kick is
+  immune.
+
+## sqlc
+
+- **Never put `?` or parentheses in a `queries/*.sql` comment.** It corrupts
+  placeholder rewriting for later queries, producing a cryptic SQL syntax error.
