@@ -41,12 +41,13 @@ func TestDiscoverySnapshot_UnionAndDedup(t *testing.T) {
 
 	mkWatcher := func(id string) *watcher.Watcher {
 		return watcher.New(watcher.Config{
-			AccountID:    id,
-			Backend:      platformtest.New(),
-			Session:      platform.Session{AccessToken: "x"},
-			Notifier:     silentNotifier{},
-			TickInterval: 5 * time.Millisecond,
-			AllowGame:    allowMock,
+			AccountID:         id,
+			Backend:           platformtest.New(),
+			Session:           platform.Session{AccessToken: "x"},
+			Notifier:          silentNotifier{},
+			TickInterval:      5 * time.Millisecond,
+			HeartbeatInterval: 5 * time.Millisecond,
+			AllowGame:         allowMock,
 		})
 	}
 
@@ -84,12 +85,13 @@ func TestDiscoverySnapshot_SourceVsEligible(t *testing.T) {
 
 	mkWatcher := func(id string, allow func(string) bool) *watcher.Watcher {
 		return watcher.New(watcher.Config{
-			AccountID:    id,
-			Backend:      platformtest.New(),
-			Session:      platform.Session{AccessToken: "x"},
-			Notifier:     silentNotifier{},
-			TickInterval: 5 * time.Millisecond,
-			AllowGame:    allow,
+			AccountID:         id,
+			Backend:           platformtest.New(),
+			Session:           platform.Session{AccessToken: "x"},
+			Notifier:          silentNotifier{},
+			TickInterval:      5 * time.Millisecond,
+			HeartbeatInterval: 5 * time.Millisecond,
+			AllowGame:         allow,
 		})
 	}
 
@@ -120,12 +122,13 @@ func TestDiscoverySnapshot_HidesNonWhitelisted(t *testing.T) {
 	allowNone := func(g string) bool { return g == "DoesNotExist" }
 
 	w := watcher.New(watcher.Config{
-		AccountID:    "acc-a",
-		Backend:      platformtest.New(),
-		Session:      platform.Session{AccessToken: "x"},
-		Notifier:     silentNotifier{},
-		TickInterval: 5 * time.Millisecond,
-		AllowGame:    allowNone,
+		AccountID:         "acc-a",
+		Backend:           platformtest.New(),
+		Session:           platform.Session{AccessToken: "x"},
+		Notifier:          silentNotifier{},
+		TickInterval:      5 * time.Millisecond,
+		HeartbeatInterval: 5 * time.Millisecond,
+		AllowGame:         allowNone,
 	})
 	s.AddEntry(NewEntry("acc-a", w))
 
@@ -144,12 +147,13 @@ func TestFindDiscoveredCampaign_ByID(t *testing.T) {
 
 	s := New(Options{Notifier: silentNotifier{}})
 	w := watcher.New(watcher.Config{
-		AccountID:    "acc-a",
-		Backend:      platformtest.New(),
-		Session:      platform.Session{AccessToken: "x"},
-		Notifier:     silentNotifier{},
-		TickInterval: 5 * time.Millisecond,
-		AllowGame:    func(g string) bool { return g == "Mock" },
+		AccountID:         "acc-a",
+		Backend:           platformtest.New(),
+		Session:           platform.Session{AccessToken: "x"},
+		Notifier:          silentNotifier{},
+		TickInterval:      5 * time.Millisecond,
+		HeartbeatInterval: 5 * time.Millisecond,
+		AllowGame:         func(g string) bool { return g == "Mock" },
 	})
 	s.AddEntry(NewEntry("acc-a", w))
 

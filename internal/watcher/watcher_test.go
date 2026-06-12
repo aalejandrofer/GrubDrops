@@ -94,11 +94,12 @@ func TestWatcher_MinesUntilClaim(t *testing.T) {
 	require.NoError(t, err)
 
 	w := New(Config{
-		AccountID:    "acc1",
-		Backend:      backend,
-		Session:      sess,
-		Notifier:     notif,
-		TickInterval: 5 * time.Millisecond,
+		AccountID:         "acc1",
+		Backend:           backend,
+		Session:           sess,
+		Notifier:          notif,
+		TickInterval:      5 * time.Millisecond,
+		HeartbeatInterval: 5 * time.Millisecond,
 	})
 
 	// Sleeping is no longer terminal — after claiming the only benefit the
@@ -293,11 +294,12 @@ func TestWatcher_VanishDetect(t *testing.T) {
 
 	notif := &recordingNotifier{}
 	w := New(Config{
-		AccountID:    "acc-vanish",
-		Backend:      backend,
-		Session:      platform.Session{AccessToken: "tok"},
-		Notifier:     notif,
-		TickInterval: 2 * time.Millisecond,
+		AccountID:         "acc-vanish",
+		Backend:           backend,
+		Session:           platform.Session{AccessToken: "tok"},
+		Notifier:          notif,
+		TickInterval:      2 * time.Millisecond,
+		HeartbeatInterval: 2 * time.Millisecond,
 	})
 
 	go func() { _ = w.Run(ctx) }()

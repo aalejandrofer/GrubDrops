@@ -208,7 +208,7 @@ func TestSettingsTabs_SubnavHasFiveLinks(t *testing.T) {
 
 func TestSettingsTabs_GeneralSectionOnly(t *testing.T) {
 	out := renderSettingsTab(t, "settings", settingsPageData{})
-	if !strings.Contains(out, `name="tick_interval_ms"`) {
+	if !strings.Contains(out, `name="tick_interval_sec"`) {
 		t.Errorf("general tab should show interval fields")
 	}
 	if strings.Contains(out, `action="/settings/global-games"`) {

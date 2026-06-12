@@ -301,8 +301,8 @@ func run() error {
 
 		// Runtime cadence + progress-notify granularity — read per build (per
 		// Reload) so saving on /settings + reloading takes effect.
-		tickMs, _ := settingsStore.TickIntervalMs(ctx)
-		heartbeatsPerMin, _ := settingsStore.HeartbeatsPerMin(ctx)
+		tickSec, _ := settingsStore.TickIntervalSec(ctx)
+		heartbeatSec, _ := settingsStore.HeartbeatIntervalSec(ctx)
 		progressStep, _ := settingsStore.ProgressNotifyStepPct(ctx)
 
 		// Manual "I've linked it" overrides — campaign ids the user asserted
@@ -314,8 +314,8 @@ func run() error {
 		w := watcher.New(watcher.Config{
 			AccountID: a.ID, AccountLabel: acctLabel, Platform: a.Platform,
 			Backend: b, Session: sess,
-			Notifier: notifier, TickInterval: time.Duration(tickMs) * time.Millisecond,
-			HeartbeatsPerMin:      heartbeatsPerMin,
+			Notifier: notifier, TickInterval: time.Duration(tickSec) * time.Second,
+			HeartbeatInterval:     time.Duration(heartbeatSec) * time.Second,
 			ProgressNotifyStepPct: progressStep,
 			AllowGame:             allow, GameRank: rank,
 			PriorityMode:  priorityMode,
@@ -375,7 +375,10 @@ func run() error {
 	// enabled account's — so we don't multiply the gql cost across the
 	// account roster. Whitelist is the union of every enabled account's
 	// game opt-ins; non-whitelisted games are never scraped.
-	discoveryInterval := parseDuration(os.Getenv("GRUB_DISCOVERY_INTERVAL"), 5*time.Minute)
+	// Cadence comes from the /settings DB value (minutes); the env var,
+	// when set, overrides it (ops escape hatch).
+	discMin, _ := settingsStore.DiscoveryIntervalMin(ctx)
+	discoveryInterval := parseDuration(os.Getenv("GRUB_DISCOVERY_INTERVAL"), time.Duration(discMin)*time.Minute)
 	startDiscovery(ctx, logger, q, sessions, registry, campaignPersister, discoveryInterval)
 
 	// Auth-health sweep: probe each account's auth (Twitch token / Kick

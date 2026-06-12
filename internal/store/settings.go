@@ -14,9 +14,12 @@ const (
 	keyNotifyAvatarURL  = "settings:notify_avatar_url"
 	keyLogRetention     = "settings:log_retention_days"
 	keyLogLevel         = "settings:log_level"
-	keyTickIntervalMs   = "settings:tick_interval_ms"
-	keyDiscoveryIntvSec = "settings:discovery_interval_sec"
-	keyHeartbeatsPerMin = "settings:heartbeats_per_min"
+	keyTickIntervalSec  = "settings:tick_interval_sec"
+	keyTickIntervalMs   = "settings:tick_interval_ms" // legacy; migrated to tick_interval_sec
+	keyDiscoveryIntvMin = "settings:discovery_interval_min"
+	keyDiscoveryIntvSec = "settings:discovery_interval_sec" // legacy; migrated to discovery_interval_min
+	keyHeartbeatIntvSec = "settings:heartbeat_interval_sec"
+	keyHeartbeatsPerMin = "settings:heartbeats_per_min" // legacy; migrated to heartbeat_interval_sec
 	keyNotifyClaim      = "settings:notify_claim"
 	keyNotifyProgress   = "settings:notify_progress"
 	keyNotifyAuth       = "settings:notify_auth"
@@ -108,58 +111,92 @@ func (s *Settings) SetLogLevel(ctx context.Context, level string) error {
 	return s.setString(ctx, keyLogLevel, level)
 }
 
-func (s *Settings) TickIntervalMs(ctx context.Context) (int, error) {
-	raw, err := s.getString(ctx, keyTickIntervalMs)
+// TickIntervalSec is the watcher state-machine pulse in seconds (default 5).
+// Pure loop granularity — no network call rides on the tick itself; the
+// heartbeat/livecheck cadences are wall-clock and derived independently.
+// Falls back to the legacy ms key when unset. Clamped to [1s, 5m].
+func (s *Settings) TickIntervalSec(ctx context.Context) (int, error) {
+	raw, err := s.getString(ctx, keyTickIntervalSec)
 	if err != nil || raw == "" {
-		return 500, err
+		// Legacy migration: tick_interval_ms, rounded up to a whole second.
+		if legacy, lerr := s.getString(ctx, keyTickIntervalMs); lerr == nil && legacy != "" {
+			if ms, _ := strconv.Atoi(legacy); ms > 0 {
+				return clampInt((ms+999)/1000, 1, 300), nil
+			}
+		}
+		return 5, err
 	}
 	n, _ := strconv.Atoi(raw)
 	if n <= 0 {
-		return 500, nil
+		return 5, nil
 	}
-	return n, nil
+	return clampInt(n, 1, 300), nil
 }
 
-func (s *Settings) SetTickIntervalMs(ctx context.Context, ms int) error {
-	return s.setString(ctx, keyTickIntervalMs, strconv.Itoa(ms))
+func (s *Settings) SetTickIntervalSec(ctx context.Context, sec int) error {
+	return s.setString(ctx, keyTickIntervalSec, strconv.Itoa(sec))
 }
 
-func (s *Settings) DiscoveryIntervalSec(ctx context.Context) (int, error) {
-	raw, err := s.getString(ctx, keyDiscoveryIntvSec)
+// DiscoveryIntervalMin is the campaign-catalog re-scan cadence in minutes
+// (default 60). Falls back to the legacy seconds key when unset. Clamped to
+// [1m, 24h].
+func (s *Settings) DiscoveryIntervalMin(ctx context.Context) (int, error) {
+	raw, err := s.getString(ctx, keyDiscoveryIntvMin)
 	if err != nil || raw == "" {
-		return 300, err
+		// Legacy migration: discovery_interval_sec, rounded up to a minute.
+		if legacy, lerr := s.getString(ctx, keyDiscoveryIntvSec); lerr == nil && legacy != "" {
+			if sec, _ := strconv.Atoi(legacy); sec > 0 {
+				return clampInt((sec+59)/60, 1, 1440), nil
+			}
+		}
+		return 60, err
 	}
 	n, _ := strconv.Atoi(raw)
 	if n <= 0 {
-		return 300, nil
-	}
-	return n, nil
-}
-
-func (s *Settings) SetDiscoveryIntervalSec(ctx context.Context, sec int) error {
-	return s.setString(ctx, keyDiscoveryIntvSec, strconv.Itoa(sec))
-}
-
-// HeartbeatsPerMin is how many watch-ping + progress-poll cycles the watcher
-// runs per minute (default 1 = every 60s). Higher = more frequent pings,
-// useful for experimenting with Kick accrual. Clamped to a sane range.
-func (s *Settings) HeartbeatsPerMin(ctx context.Context) (int, error) {
-	raw, err := s.getString(ctx, keyHeartbeatsPerMin)
-	if err != nil || raw == "" {
-		return 1, err
-	}
-	n, _ := strconv.Atoi(raw)
-	if n < 1 {
-		return 1, nil
-	}
-	if n > 60 {
 		return 60, nil
 	}
-	return n, nil
+	return clampInt(n, 1, 1440), nil
 }
 
-func (s *Settings) SetHeartbeatsPerMin(ctx context.Context, n int) error {
-	return s.setString(ctx, keyHeartbeatsPerMin, strconv.Itoa(n))
+func (s *Settings) SetDiscoveryIntervalMin(ctx context.Context, min int) error {
+	return s.setString(ctx, keyDiscoveryIntvMin, strconv.Itoa(min))
+}
+
+// HeartbeatIntervalSec is how often (seconds) the watcher runs a watch-ping +
+// progress-poll cycle. Default 60. Can exceed 60 to slow the API request rate
+// (Kick accrues via the presence WS, so polling slower only delays progress
+// display). Falls back to the legacy heartbeats_per_min key when unset.
+// Clamped to [10s, 1h].
+func (s *Settings) HeartbeatIntervalSec(ctx context.Context) (int, error) {
+	raw, err := s.getString(ctx, keyHeartbeatIntvSec)
+	if err != nil || raw == "" {
+		// Legacy migration: heartbeats_per_min N => 60/N seconds.
+		if legacy, lerr := s.getString(ctx, keyHeartbeatsPerMin); lerr == nil && legacy != "" {
+			if n, _ := strconv.Atoi(legacy); n >= 1 {
+				return clampInt(60/n, 10, 3600), nil
+			}
+		}
+		return 60, err
+	}
+	n, _ := strconv.Atoi(raw)
+	if n <= 0 {
+		return 60, nil
+	}
+	return clampInt(n, 10, 3600), nil
+}
+
+func (s *Settings) SetHeartbeatIntervalSec(ctx context.Context, sec int) error {
+	return s.setString(ctx, keyHeartbeatIntvSec, strconv.Itoa(sec))
+}
+
+func clampInt(n, lo, hi int) int {
+	if n < lo {
+		return lo
+	}
+	if n > hi {
+		return hi
+	}
+	return n
 }
 
 // ProgressNotifyStepPct is the milestone granularity for Discord progress

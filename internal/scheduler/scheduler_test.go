@@ -35,11 +35,12 @@ func TestScheduler_RunsMultipleAccountsConcurrently(t *testing.T) {
 		backend := platformtest.New()
 		sess := platform.Session{AccessToken: "x"}
 		w := watcher.New(watcher.Config{
-			AccountID:    fmt.Sprintf("acc%d", i),
-			Backend:      backend,
-			Session:      sess,
-			Notifier:     notif,
-			TickInterval: 5 * time.Millisecond,
+			AccountID:         fmt.Sprintf("acc%d", i),
+			Backend:           backend,
+			Session:           sess,
+			Notifier:          notif,
+			TickInterval:      5 * time.Millisecond,
+			HeartbeatInterval: 5 * time.Millisecond,
 		})
 		s.Add(fmt.Sprintf("acc%d", i), w)
 	}

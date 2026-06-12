@@ -194,18 +194,18 @@
         <div class="kvedit">
           <div class="row">
             <span class="k">tick interval</span>
-            <span class="d">how often it <b>thinks</b> — the watcher loop pulse</span>
-            <span class="v"><input type="number" name="tick_interval_ms" value="{{.TickIntervalMs}}" min="100" max="60000"><span class="u">ms</span></span>
+            <span class="d">how often it <b>thinks</b> — the watcher loop pulse (no network)</span>
+            <span class="v"><input type="number" name="tick_interval_sec" value="{{.TickIntervalSec}}" min="1" max="300"><span class="u">s</span></span>
           </div>
           <div class="row">
-            <span class="k">heartbeats / min</span>
-            <span class="d">how often it <b>pings the platform</b> — watch-ping + progress poll · 1=60s 2=30s 4=15s</span>
-            <span class="v"><input type="number" name="heartbeats_per_min" value="{{.HeartbeatsPerMin}}" min="1" max="60"><span class="u">/min</span></span>
+            <span class="k">heartbeat interval</span>
+            <span class="d">how often it <b>pings the platform</b> — watch-ping + progress poll per account</span>
+            <span class="v"><input type="number" name="heartbeat_interval_sec" value="{{.HeartbeatIntervalSec}}" min="10" max="3600"><span class="u">s</span></span>
           </div>
           <div class="row">
             <span class="k">discovery interval</span>
             <span class="d">how often it <b>looks for new drops</b> — re-scans the campaign catalog</span>
-            <span class="v"><input type="number" name="discovery_interval_sec" value="{{.DiscoveryIntervalSec}}" min="30" max="3600"><span class="u">s</span></span>
+            <span class="v"><input type="number" name="discovery_interval_min" value="{{.DiscoveryIntervalMin}}" min="1" max="1440"><span class="u">min</span></span>
           </div>
           <div class="row">
             <span class="k">log level</span>

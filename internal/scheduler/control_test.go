@@ -32,11 +32,12 @@ func TestScheduler_StopThenReloadAddsAccount(t *testing.T) {
 	mkBuilder := func(id string) EntryBuilder {
 		return func() Entry {
 			w := watcher.New(watcher.Config{
-				AccountID:    id,
-				Backend:      platformtest.New(),
-				Session:      platform.Session{AccessToken: "x"},
-				Notifier:     notif,
-				TickInterval: 5 * time.Millisecond,
+				AccountID:         id,
+				Backend:           platformtest.New(),
+				Session:           platform.Session{AccessToken: "x"},
+				Notifier:          notif,
+				TickInterval:      5 * time.Millisecond,
+				HeartbeatInterval: 5 * time.Millisecond,
 			})
 			return NewEntry(id, w)
 		}

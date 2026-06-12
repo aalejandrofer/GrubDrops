@@ -72,9 +72,9 @@ type settingsPageData struct {
 	LogRetentionDays     int
 	LogLevel             string // empty = use env default
 	LogLevelEnv          string
-	TickIntervalMs       int
-	DiscoveryIntervalSec int
-	HeartbeatsPerMin     int
+	TickIntervalSec      int
+	DiscoveryIntervalMin int
+	HeartbeatIntervalSec int
 	PriorityMode         string // "ordered" | "ending_soonest"
 	NotifyClaim          bool
 	NotifyProgress       bool
@@ -104,9 +104,9 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 	avatarURL, _ := d.s.NotifyAvatarURL(ctx)
 	days, _ := d.s.LogRetentionDays(ctx)
 	level, _ := d.s.LogLevel(ctx)
-	tick, _ := d.s.TickIntervalMs(ctx)
-	discIv, _ := d.s.DiscoveryIntervalSec(ctx)
-	hbPerMin, _ := d.s.HeartbeatsPerMin(ctx)
+	tick, _ := d.s.TickIntervalSec(ctx)
+	discIv, _ := d.s.DiscoveryIntervalMin(ctx)
+	hbSec, _ := d.s.HeartbeatIntervalSec(ctx)
 	prio, _ := d.s.PriorityMode(ctx)
 	nc, np, na, ne := d.s.NotifyKinds(ctx)
 	progStep, _ := d.s.ProgressNotifyStepPct(ctx)
@@ -153,9 +153,9 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 			LogRetentionDays:     days,
 			LogLevel:             level,
 			LogLevelEnv:          d.logLevelEnv,
-			TickIntervalMs:       tick,
-			DiscoveryIntervalSec: discIv,
-			HeartbeatsPerMin:     hbPerMin,
+			TickIntervalSec:      tick,
+			DiscoveryIntervalMin: discIv,
+			HeartbeatIntervalSec: hbSec,
 			PriorityMode:         prio,
 			GlobalGames:          globalGames,
 			AllGames:             allGames,
@@ -198,28 +198,28 @@ func (d *settingsDeps) postGeneral(w http.ResponseWriter, r *http.Request) {
 	_ = d.s.SetLogLevel(ctx, r.FormValue("log_level"))
 
 	intervalsChanged := false
-	if v := r.FormValue("tick_interval_ms"); v != "" {
+	if v := r.FormValue("tick_interval_sec"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			if cur, _ := d.s.TickIntervalMs(ctx); cur != n {
+			if cur, _ := d.s.TickIntervalSec(ctx); cur != n {
 				intervalsChanged = true
 			}
-			_ = d.s.SetTickIntervalMs(ctx, n)
+			_ = d.s.SetTickIntervalSec(ctx, n)
 		}
 	}
-	if v := r.FormValue("discovery_interval_sec"); v != "" {
+	if v := r.FormValue("discovery_interval_min"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			if cur, _ := d.s.DiscoveryIntervalSec(ctx); cur != n {
+			if cur, _ := d.s.DiscoveryIntervalMin(ctx); cur != n {
 				intervalsChanged = true
 			}
-			_ = d.s.SetDiscoveryIntervalSec(ctx, n)
+			_ = d.s.SetDiscoveryIntervalMin(ctx, n)
 		}
 	}
-	if v := r.FormValue("heartbeats_per_min"); v != "" {
+	if v := r.FormValue("heartbeat_interval_sec"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			if cur, _ := d.s.HeartbeatsPerMin(ctx); cur != n {
+			if cur, _ := d.s.HeartbeatIntervalSec(ctx); cur != n {
 				intervalsChanged = true
 			}
-			_ = d.s.SetHeartbeatsPerMin(ctx, n)
+			_ = d.s.SetHeartbeatIntervalSec(ctx, n)
 		}
 	}
 	if d.onUpdate != nil {

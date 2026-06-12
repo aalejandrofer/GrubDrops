@@ -43,10 +43,12 @@ type Config struct {
 	Notifier     Notifier
 	TickInterval time.Duration
 
-	// HeartbeatsPerMin is how many watch-ping + progress-poll cycles run per
-	// minute. <1 is treated as 1 (every 60s, the default). The beacon and
-	// inventory cadence derive from this and TickInterval.
-	HeartbeatsPerMin int
+	// HeartbeatInterval is how often a watch-ping + progress-poll cycle
+	// runs. <=0 defaults to 60s. Can exceed a minute to slow the request
+	// rate (e.g. Kick accrues via the presence WS, so a slower poll only
+	// delays progress display, not earning). The beacon and inventory
+	// cadence derive from this and TickInterval.
+	HeartbeatInterval time.Duration
 
 	// ProgressNotifyStepPct is the milestone granularity for "progress"
 	// Discord notifications: fire at 0% (start), each N%, and 100%. 0 disables
@@ -582,7 +584,7 @@ var errIdle = errors.New("idle; recheck later")
 const recheckInterval = 5 * time.Minute
 
 // Watch-loop network cadences are derived per-watcher from TickInterval and
-// HeartbeatsPerMin — the beacon (watch ping) and inventory poll both run on
+// HeartbeatInterval — the beacon (watch ping) and inventory poll both run on
 // heartbeatEveryTicks() (default once a minute, configurable), and the
 // stream-liveness backstop on liveCheckEveryTicks() (~5min). Throttled to
 // roughly match DevilXD/TwitchDropsMiner so we don't flood gql.twitch.tv.
@@ -1314,29 +1316,38 @@ func (w *Watcher) shouldNotifyProgress(curMin, reqMin int) bool {
 	return false
 }
 
-// baseHeartbeatTicks is one heartbeat per minute at the default 500ms tick
-// (120 × 500ms = 60s — the historical beacon/inventory cadence). The actual
-// cadence scales this by HeartbeatsPerMin.
-const baseHeartbeatTicks = 120
+// liveCheckEvery is the backstop stream-liveness re-probe cadence.
+const liveCheckEvery = 5 * time.Minute
 
 // heartbeatEveryTicks is the tick cadence for the watch-ping beacon and the
-// progress poll, scaled from HeartbeatsPerMin (default 1 = once a minute;
-// 2 = every 30s; 4 = every 15s, at the default 500ms tick).
+// progress poll: HeartbeatInterval expressed in ticks of TickInterval,
+// floored at 1 (a tick interval longer than the heartbeat interval polls
+// every tick).
 func (w *Watcher) heartbeatEveryTicks() int {
-	h := w.cfg.HeartbeatsPerMin
-	if h < 1 {
-		h = 1
+	return everyTicks(w.cfg.HeartbeatInterval, w.cfg.TickInterval, time.Minute)
+}
+
+// liveCheckEveryTicks is the backstop stream-liveness re-probe cadence
+// (~5min) expressed in ticks of TickInterval.
+func (w *Watcher) liveCheckEveryTicks() int {
+	return everyTicks(liveCheckEvery, w.cfg.TickInterval, liveCheckEvery)
+}
+
+// everyTicks converts a wall-clock cadence into a tick count for the Run
+// loop's TickInterval. <=0 cadences fall back to def; result floors at 1.
+func everyTicks(every, tick, def time.Duration) int {
+	if every <= 0 {
+		every = def
 	}
-	n := baseHeartbeatTicks / h
+	if tick <= 0 {
+		tick = time.Minute // New() default
+	}
+	n := int(every / tick)
 	if n < 1 {
 		n = 1
 	}
 	return n
 }
-
-// liveCheckEveryTicks is the backstop stream-liveness re-probe cadence (~5min
-// at the default 500ms tick).
-func (w *Watcher) liveCheckEveryTicks() int { return 600 }
 
 func (w *Watcher) claim(ctx context.Context) error {
 	w.mu.Lock()
