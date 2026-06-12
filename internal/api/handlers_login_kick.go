@@ -42,6 +42,13 @@ type loginKickDeps struct {
 	browser   kickBrowserClient
 	registrar kickChannelRegistrar
 	reload    func(context.Context) error
+	// rootCtx is the long-lived process context. The scheduler reload after
+	// a successful login MUST run under it, never under the HTTP request
+	// context: the request context is cancelled the moment this handler
+	// returns its redirect, which (before this) cancelled every freshly
+	// rebuilt watcher and stalled all mining until a container restart
+	// (v1.0.1 prod incident). The Twitch login handler already does this.
+	rootCtx context.Context
 }
 
 type loginKickPageData struct {
@@ -162,7 +169,15 @@ func (d *loginKickDeps) persistKickSession(ctx context.Context, id string, f kic
 	}
 
 	if d.reload != nil {
-		if err := d.reload(ctx); err != nil {
+		// Reload under the long-lived root context, NOT the request ctx —
+		// the latter dies when this handler returns its redirect and would
+		// cancel every rebuilt watcher (v1.0.1 stall). Fall back to the
+		// passed ctx only if rootCtx was never wired (e.g. in unit tests).
+		reloadCtx := d.rootCtx
+		if reloadCtx == nil {
+			reloadCtx = ctx
+		}
+		if err := d.reload(reloadCtx); err != nil {
 			slog.Error("scheduler reload after kick login failed", "account", id, "err", err)
 		} else {
 			slog.Info("scheduler reloaded after kick login", "account", id)

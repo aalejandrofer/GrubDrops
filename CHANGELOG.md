@@ -28,6 +28,20 @@ All notable changes to GrubDrops.
   instructions, environment variable reference).
 - `cmd/kick-encrypt` one-shot ops tool deleted (superseded by cookies.txt form).
 
+### Fixed
+
+- **Reload stall after Kick re-login (P0)** — every watcher (Twitch + Kick)
+  tore down and never resumed `watching` after a Kick re-login, requiring a
+  container restart to recover. Root cause: the scheduler ran watchers under
+  whatever context triggered a `Reload`, and the Kick login handler reloaded
+  with the HTTP **request** context — cancelled the instant the handler
+  returned its redirect, which cancelled every freshly-rebuilt watcher. The
+  scheduler now runs watchers under a long-lived base context captured on the
+  first start, so a reload triggered by a request context (Kick login, the
+  /accounts apply button, link-override, settings reload) can never tear the
+  roster down. The Kick login handler also now reloads under the root context,
+  matching the Twitch handler.
+
 ## [1.0.0] — 2026-06-07
 
 First tagged release.

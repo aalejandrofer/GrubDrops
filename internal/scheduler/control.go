@@ -61,8 +61,25 @@ func (rs *runState) startUnit(s *Scheduler, e entry) {
 	}()
 }
 
-// Stop cancels the in-flight run and waits for goroutines to exit.
+// Stop cancels the in-flight run and waits for goroutines to exit. It also
+// tears down the long-lived base context so a fully-stopped scheduler starts
+// clean: the NEXT Start re-derives baseCtx from its parent. This is the
+// process-shutdown / full-stop path. Reload uses stopRun (below) instead so
+// it preserves baseCtx across the swap.
 func (s *Scheduler) Stop(_ context.Context) {
+	s.stopRun()
+	s.runMu.Lock()
+	if s.baseCancel != nil {
+		s.baseCancel()
+		s.baseCancel = nil
+		s.baseCtx = nil
+	}
+	s.runMu.Unlock()
+}
+
+// stopRun cancels the in-flight run and waits for its goroutines to exit,
+// leaving baseCtx intact so a subsequent Start (e.g. from Reload) reuses it.
+func (s *Scheduler) stopRun() {
 	s.runMu.Lock()
 	r := s.current
 	s.current = nil
@@ -81,7 +98,12 @@ func (s *Scheduler) Reload(parent context.Context, builders []EntryBuilder) erro
 	s.reloadMu.Lock()
 	defer s.reloadMu.Unlock()
 
-	s.Stop(parent)
+	// stopRun (not Stop) so the long-lived base context survives the swap —
+	// the rebuilt watchers must keep running under it. parent is only used to
+	// seed baseCtx on the very first Start; once baseCtx exists it's ignored
+	// for run lifetime, which is what keeps an HTTP-request-context-triggered
+	// reload from tearing the roster down when the request finishes.
+	s.stopRun()
 	s.mu.Lock()
 	s.entries = nil
 	s.mu.Unlock()

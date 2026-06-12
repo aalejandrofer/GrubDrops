@@ -154,6 +154,7 @@ func NewRouter(d Deps) http.Handler {
 		browser:   d.BrowserClient,
 		registrar: d.Registrar,
 		reload:    d.Reload,
+		rootCtx:   d.RootCtx,
 	}
 	// loginTwitchPaste retired: Twitch cookie-paste no longer authenticates
 	// (web-issued token vs Android client_id). Twitch login is device-code
