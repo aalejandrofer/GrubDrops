@@ -37,7 +37,7 @@ var _ platform.AuthChecker = (*Backend)(nil)
 // CurrentUser gql query. The URL is on static-cdn.jtvnw.net (public CDN), so
 // it is embedded directly in the UI. Satisfies platform.AvatarFetcher.
 func (b *Backend) FetchAvatar(ctx context.Context, s platform.Session) (string, error) {
-	const q = `query CurrentUser { currentUser { id login displayName profileImageURL } }`
+	const q = `query CurrentUser { currentUser { id login displayName profileImageURL(width: 300) } }`
 	var resp struct {
 		CurrentUser *struct {
 			ID              string `json:"id"`
