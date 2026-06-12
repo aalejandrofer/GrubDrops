@@ -500,6 +500,92 @@ func TestWatcher_SkipsOfflineCampaignToNextLive(t *testing.T) {
 		"watcher must skip the offline 'dead' campaign and mine the live one")
 }
 
+// restrictedFirstBackend returns an OPEN campaign (no AllowedChannels)
+// ahead of a channel-RESTRICTED one. On Kick the open campaign accrues
+// passively on any participating channel, so the watcher must actively
+// mine the restricted one first.
+type restrictedFirstBackend struct {
+	*platformtest.MockBackend
+	mu     sync.Mutex
+	picked string
+}
+
+func (r *restrictedFirstBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	return []platform.Campaign{
+		{ID: "open", Game: "Rust", Status: "active", AccountLinked: true,
+			Benefits: []platform.DropBenefit{{ID: "d_open", CampaignID: "open", RequiredMinutes: 2}}},
+		{ID: "team", Game: "Rust", Status: "active", AccountLinked: true,
+			AllowedChannels: []string{"teamchan"},
+			Benefits:        []platform.DropBenefit{{ID: "d_team", CampaignID: "team", RequiredMinutes: 2}}},
+	}, nil
+}
+
+func (r *restrictedFirstBackend) ListEligibleChannels(_ context.Context, _ platform.Session, c platform.Campaign) ([]platform.Stream, error) {
+	r.mu.Lock()
+	if r.picked == "" {
+		r.picked = c.ID
+	}
+	r.mu.Unlock()
+	return []platform.Stream{{Channel: "streamer"}}, nil
+}
+
+func (r *restrictedFirstBackend) firstPicked() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.picked
+}
+
+// TestWatcher_KickPicksRestrictedCampaignFirst: on Kick, open campaigns
+// (empty AllowedChannels) accrue watch-time passively while any
+// participating channel is watched, so the watcher must spend its watch
+// slot on channel-restricted (team) campaigns first.
+func TestWatcher_KickPicksRestrictedCampaignFirst(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	backend := &restrictedFirstBackend{MockBackend: platformtest.New()}
+	w := New(Config{
+		AccountID:    "acc_kick_restricted",
+		Platform:     "kick",
+		Backend:      backend,
+		Session:      platform.Session{AccessToken: "tok"},
+		Notifier:     &recordingNotifier{},
+		TickInterval: 2 * time.Millisecond,
+		AllowGame:    func(g string) bool { return g == "Rust" },
+	})
+
+	go func() { _ = w.Run(ctx) }()
+	require.Eventually(t, func() bool { return backend.firstPicked() != "" },
+		time.Second, 5*time.Millisecond, "watcher never picked a campaign")
+	assert.Equal(t, "team", backend.firstPicked(),
+		"kick watcher must mine the channel-restricted campaign first; open ones accrue passively")
+}
+
+// TestWatcher_TwitchKeepsListOrderForRestricted: the restricted-first
+// partition is Kick-specific (Twitch accrues only the watched campaign,
+// so there is nothing to gain by reordering).
+func TestWatcher_TwitchKeepsListOrderForRestricted(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	backend := &restrictedFirstBackend{MockBackend: platformtest.New()}
+	w := New(Config{
+		AccountID:    "acc_twitch_order",
+		Platform:     "twitch",
+		Backend:      backend,
+		Session:      platform.Session{AccessToken: "tok"},
+		Notifier:     &recordingNotifier{},
+		TickInterval: 2 * time.Millisecond,
+		AllowGame:    func(g string) bool { return g == "Rust" },
+	})
+
+	go func() { _ = w.Run(ctx) }()
+	require.Eventually(t, func() bool { return backend.firstPicked() != "" },
+		time.Second, 5*time.Millisecond, "watcher never picked a campaign")
+	assert.Equal(t, "open", backend.firstPicked(),
+		"twitch watcher must keep discovery order; restricted-first is Kick-only")
+}
+
 // pubsubAwareBackend captures hook registration calls so we can verify
 // the watcher registers per-account PubSub hooks at construction time.
 type pubsubAwareBackend struct {
