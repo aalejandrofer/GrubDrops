@@ -1958,6 +1958,17 @@
     font-size: 12px;
     color: var(--accent);
   }
+  /* Instruction links inside the numbered steps — match the app's accent
+     link treatment (no default browser blue); underline only on hover. */
+  .steps li a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+  .steps li a:hover {
+    color: var(--accent-2);
+    border-bottom-color: var(--accent-2);
+  }
 
   /* ---- PAGE SHELLS (non-dashboard pages) ---- */
   .shell {
