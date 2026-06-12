@@ -18,6 +18,21 @@ A commit is **not** a release. Day-to-day work lands on `master` freely.
 
 A broken miner must never ship under a version tag.
 
+### Release notes format
+
+Write the GitHub release notes as grouped sections — never a paragraph wall.
+Lead with a one-line **highlight**, then group the user-facing entries under
+these headers (omit any that are empty, keep this order):
+
+- **✨ Added** — new features
+- **🔧 Changed** — behaviour / UX changes
+- **🐛 Fixed** — bug fixes
+- **🗑️ Removed** — removed features, flags, or paths
+
+Bold the subject of each bullet and write what changed + why it matters in plain
+user-facing language, not commit-speak. The notes are a curated subset of
+`[Unreleased]`, not the raw changelog.
+
 ## Architecture constraints
 
 - **The browser sidecar stack is core, not dead code.** Do not delete
