@@ -51,17 +51,41 @@ type Backend struct {
 
 var _ platform.Backend = (*Backend)(nil)
 
+// Option configures optional Backend behaviour at construction.
+type Option func(*options)
+
+type options struct {
+	sidecarImage   string
+	sidecarNetwork string
+}
+
+// WithSidecarAutoCreate enables auto-create of per-account browser sidecars:
+// the miner pulls image and creates+removes labelled containers over the
+// docker socket so the default compose needs no hand-defined browser services.
+// network (may be "") overrides network self-detection.
+func WithSidecarAutoCreate(image, network string) Option {
+	return func(o *options) { o.sidecarImage, o.sidecarNetwork = image, network }
+}
+
 // New builds the Kick backend. c is the login client (data flows over the utls
 // HTTP client; c is kept for the interactive-login path). ctl controls the
 // per-account chromedp sidecar containers on demand (nil = degrade to
 // always-on). template/port derive each account's container name + gRPC port;
 // idleGrace is how long an account may go without watch activity before its
 // sidecar is reaped.
-func New(c *browser.Client, ctl dockerctl.Controller, template string, port int, idleGrace time.Duration) *Backend {
+func New(c *browser.Client, ctl dockerctl.Controller, template string, port int, idleGrace time.Duration, opts ...Option) *Backend {
+	var o options
+	for _, fn := range opts {
+		fn(&o)
+	}
+	reg := newSidecarRegistry(ctl, template, port, idleGrace)
+	if o.sidecarImage != "" {
+		reg.withCreate(o.sidecarImage, o.sidecarNetwork)
+	}
 	b := &Backend{
 		c:                c,
 		api:              newAPI(),
-		sidecars:         newSidecarRegistry(ctl, template, port, idleGrace),
+		sidecars:         reg,
 		clientByName:     map[string]*browser.Client{},
 		sidecarPort:      port,
 		handleByAcc:      map[string]string{},
@@ -79,6 +103,13 @@ func New(c *browser.Client, ctl dockerctl.Controller, template string, port int,
 // startup (per-account build loop) and on login.
 func (b *Backend) RegisterSidecar(accountID, username string) {
 	b.sidecars.register(accountID, username)
+}
+
+// SweepSidecars removes auto-created sidecars whose account is no longer in the
+// live roster. Call once after the initial account Reload (the periodic reaper
+// covers it thereafter). Safe no-op when there is no docker controller.
+func (b *Backend) SweepSidecars(ctx context.Context) {
+	b.sidecars.sweepOrphans(ctx)
 }
 
 // watchClientForName returns (dialing once) the gRPC client for a container
