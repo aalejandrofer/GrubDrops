@@ -23,25 +23,13 @@
         <a class="btn-linear" href="/accounts/{{.ID}}/login">Authenticate with device code →</a>
         <span class="hint">Twitch login is <strong>device-code only</strong>. You get a short code, open <code>twitch.tv/activate</code> on any browser signed into the Twitch account for <strong>{{.DisplayName}}</strong>, and approve it. No password or cookies pass through GrubDrops; a new session replaces the old one.</span>
       </div>
-      <details class="reauth-cli">
-        <summary>Authorize from another machine (helper CLI / app)</summary>
-        <p class="hint">Runs the same device-code flow from a friend's machine — they approve with their own Twitch login, the token is pushed back to this miner. No cookies, no DevTools.</p>
-        <pre class="cli-code">go run ./cmd/grubdrops-helper twitch {{.ID}}</pre>
-        <p class="hint">Add <code>--miner URL</code> for a remote deployment. Prebuilt <code>.exe</code> / <code>.app</code> / <code>AppImage</code> ship from the same entry point.</p>
-      </details>
     </div>
     {{else if eq .Platform "kick"}}
     <div class="reauth-row">
       <div class="reauth-actions">
         <a class="btn-linear" href="/accounts/{{.ID}}/login">Re-authenticate →</a>
-        <span class="hint">Kick auth needs real browser cookies (the API rejects automated logins). Use the helper below to snapshot them. Existing session is overwritten.</span>
+        <span class="hint">Kick auth needs real browser cookies (the API rejects automated logins). Re-authenticate opens the cookie form. Existing session is overwritten.</span>
       </div>
-      <details class="reauth-cli">
-        <summary>Authorize via helper CLI / pre-built app</summary>
-        <p class="hint">Snapshots your logged-in Kick browser cookies and pushes them to the miner — no DevTools or paste forms.</p>
-        <pre class="cli-code">go run ./cmd/grubdrops-helper kick {{.ID}} --channel STREAMER</pre>
-        <p class="hint">Add <code>--miner URL</code> for a remote deployment. Prebuilt <code>.exe</code> / <code>.app</code> / <code>AppImage</code> ship from the same entry point.</p>
-      </details>
     </div>
     {{end}}
 

@@ -20,28 +20,7 @@
   <div class="settings-stack">
 
     <section class="settings-card">
-      <header class="section-h"><h3>Download the helper</h3><span class="meta rec">recommended</span></header>
-      <p class="lede sm">A tiny app that reads your local browser's kick.com cookies and pushes them here — no DevTools, no copy-paste. Grab the build for your OS:</p>
-      <div class="dl-row">
-        <a class="btn sm" href="/download/helper?os=macos">⬇ macOS (Apple Silicon)</a>
-        <a class="btn sm" href="/download/helper?os=macos-intel">⬇ macOS (Intel)</a>
-        <a class="btn sm" href="/download/helper?os=windows">⬇ Windows</a>
-        <a class="btn sm" href="/download/helper?os=linux">⬇ Linux</a>
-      </div>
-      <ol class="steps">
-        <li>Make sure you're signed in to <code>kick.com</code> in your everyday browser.</li>
-        <li><b>Double-click</b> the downloaded helper. It opens a console and walks you through it.<br><span class="step-hint">macOS / Linux: first <code>chmod +x</code> the file. macOS Gatekeeper blocks unsigned downloads — right-click → Open → Open Anyway, or run <code>xattr -d com.apple.quarantine &lt;file&gt;</code> once.</span></li>
-        <li>When prompted, paste this <b>Account ID</b> (then just press Enter through the rest):</li>
-      </ol>
-      <div class="cli-box">
-        <div class="cli-label">account id</div>
-        <pre class="cli-code">{{.AccountID}}</pre>
-        <div class="cli-hint">No password needed — your Account ID is the only credential. Miner URL defaults to this deployment; channels auto-discover from each campaign's game.</div>
-      </div>
-    </section>
-
-    <section class="settings-card">
-      <header class="section-h"><h3>Manual cookie paste</h3><span class="meta">fallback</span></header>
+      <header class="section-h"><h3>Manual cookie paste</h3></header>
       <ol class="steps">
         <li>Open <code>kick.com</code> in any browser and sign in.</li>
         <li>DevTools → Application → Cookies → <code>kick.com</code>.</li>
@@ -58,16 +37,6 @@
           <button class="btn-linear" type="submit">Authorize →</button>
         </div>
       </form>
-    </section>
-
-    <section class="settings-card">
-      <header class="section-h"><h3>Run from source</h3><span class="meta">developers</span></header>
-      <p class="lede sm">Have Go installed? Skip the download and run the helper straight from the repo:</p>
-      <div class="cli-box">
-        <div class="cli-label">one-liner</div>
-        <pre class="cli-code">go run ./cmd/grubdrops-helper kick {{.AccountID}}</pre>
-        <div class="cli-hint">No password needed. Channels auto-discover from each campaign's game. Add <code>--miner URL</code> for a self-hosted deployment. (Optional: <code>--channel STREAMER</code> to pin specific channels.)</div>
-      </div>
     </section>
 
   </div>
