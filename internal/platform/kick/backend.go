@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/auth/browser"
+	"github.com/aalejandrofer/grubdrops/internal/dockerctl"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
@@ -23,18 +24,13 @@ type Backend struct {
 	c   *browser.Client
 	api *api
 
-	// watchPool is the set of chromedp sidecars available for the
-	// credit-earning IVS watch path. Each Kick account is pinned to ONE
-	// sidecar (clientByAcc) so two logged-in accounts never share a single
-	// Chrome — sharing collides on the browser-profile kick.com
-	// session_token cookie and saturates one Chrome with tabs, knocking
-	// every account's player offline (see project_kick_drops_progress_re).
-	// With one account per sidecar each Chrome runs the proven, durable
-	// single-account watch. Falls back to [c] when only one sidecar is
-	// configured.
-	watchPool   []*browser.Client
-	clientByAcc map[string]*browser.Client
-	nextClient  int
+	// sidecars manages on-demand start/stop + per-account client pinning for
+	// the IVS watch path. clientByName dials one gRPC client per derived
+	// container name (lazy connect, survives container restarts).
+	sidecars     *sidecarRegistry
+	clientByName map[string]*browser.Client
+	clientMu     sync.Mutex
+	sidecarPort  int
 
 	// browserWatch, when true AND c != nil, routes StartWatch/Heartbeat/
 	// StopWatch to the chromedp sidecar so a real IVS <video> session
@@ -55,52 +51,54 @@ type Backend struct {
 
 var _ platform.Backend = (*Backend)(nil)
 
-// New builds the Kick backend. The browser.Client may be nil (data flows over
-// the utls HTTP client); it's kept for the interactive-login path and, when
-// EnableBrowserWatch is set, for the credit-earning IVS watch path.
-// New builds the Kick backend. c is the login client (also used as the sole
-// watch sidecar when no extra watch clients are passed). watchClients, when
-// non-empty, is the pool of sidecars across which accounts are sharded for
-// the IVS watch path (one account per sidecar).
-func New(c *browser.Client, watchClients ...*browser.Client) *Backend {
-	pool := make([]*browser.Client, 0, len(watchClients))
-	for _, w := range watchClients {
-		if w != nil {
-			pool = append(pool, w)
-		}
-	}
-	if len(pool) == 0 && c != nil {
-		pool = []*browser.Client{c}
-	}
-	return &Backend{
+// New builds the Kick backend. c is the login client (data flows over the utls
+// HTTP client; c is kept for the interactive-login path). ctl controls the
+// per-account chromedp sidecar containers on demand (nil = degrade to
+// always-on). template/port derive each account's container name + gRPC port;
+// idleGrace is how long an account may go without watch activity before its
+// sidecar is reaped.
+func New(c *browser.Client, ctl dockerctl.Controller, template string, port int, idleGrace time.Duration) *Backend {
+	b := &Backend{
 		c:                c,
 		api:              newAPI(),
-		watchPool:        pool,
-		clientByAcc:      map[string]*browser.Client{},
+		sidecars:         newSidecarRegistry(ctl, template, port, idleGrace),
+		clientByName:     map[string]*browser.Client{},
+		sidecarPort:      port,
 		handleByAcc:      map[string]string{},
 		channelsByAcc:    map[string][]string{},
 		campaignChannels: map[string][]kickChannel{},
 		categoryChannels: map[string][]kickChannel{},
 	}
+	if ctl != nil {
+		go b.sidecars.runReaper(context.Background())
+	}
+	return b
 }
 
-// watchClientFor pins an account to one sidecar from the pool (sticky,
-// round-robin on first use) so re-picks reuse the same Chrome and two
-// accounts land on different sidecars. Returns nil when no sidecar is
-// configured (caller falls back to the non-accruing WS path).
-func (b *Backend) watchClientFor(accountID string) *browser.Client {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if cl, ok := b.clientByAcc[accountID]; ok {
-		return cl
+// RegisterSidecar maps an account to its username-derived sidecar. Called at
+// startup (per-account build loop) and on login.
+func (b *Backend) RegisterSidecar(accountID, username string) {
+	b.sidecars.register(accountID, username)
+}
+
+// watchClientForName returns (dialing once) the gRPC client for a container
+// name. Lazy connect means a stopped container is fine until first RPC.
+func (b *Backend) watchClientForName(name string) (*browser.Client, error) {
+	b.clientMu.Lock()
+	defer b.clientMu.Unlock()
+	if cl, ok := b.clientByName[name]; ok {
+		return cl, nil
 	}
-	if len(b.watchPool) == 0 {
-		return nil
+	target := name
+	if b.sidecarPort > 0 {
+		target = fmt.Sprintf("%s:%d", name, b.sidecarPort)
 	}
-	cl := b.watchPool[b.nextClient%len(b.watchPool)]
-	b.nextClient++
-	b.clientByAcc[accountID] = cl
-	return cl
+	cl, err := browser.Dial(target)
+	if err != nil {
+		return nil, err
+	}
+	b.clientByName[name] = cl
+	return cl, nil
 }
 
 // EnableBrowserWatch switches StartWatch/Heartbeat/StopWatch onto the
@@ -131,6 +129,9 @@ type kickBrowserWatch struct {
 	// client is the specific sidecar this watch's tab lives in, so
 	// Heartbeat/StopWatch target the same Chrome that opened it.
 	client *browser.Client
+	// accountID lets Heartbeat bump the registry's lastActive so the
+	// reaper keeps this account's sidecar up while it's actively watching.
+	accountID string
 }
 
 func (b *Backend) Name() string { return "kick" }
@@ -469,7 +470,22 @@ func (b *Backend) StartWatch(ctx context.Context, s platform.Session, stream pla
 	// — the ONLY path that accrues Kick drop watch-time. The sidecar needs
 	// the channel SLUG (it navigates kick.com/<slug>) plus the session
 	// cookies, which it injects before navigation.
-	if cl := b.watchClientFor(s.AccountID); b.browserWatch && cl != nil {
+	if b.browserWatch && b.c != nil {
+		name := b.sidecars.nameFor(s.AccountID)
+		if name == "" {
+			return platform.WatchHandle{}, fmt.Errorf("kick start watch: no sidecar for account %s", s.AccountID)
+		}
+		cl, err := b.watchClientForName(name)
+		if err != nil {
+			return platform.WatchHandle{}, fmt.Errorf("kick start watch: dial sidecar %s: %w", name, err)
+		}
+		// Start the container on demand + wait for readiness.
+		if err := b.sidecars.ensureUp(ctx, s.AccountID, func(c context.Context) error {
+			_, e := cl.Heartbeat(c, "") // nil error == gRPC server reachable
+			return e
+		}); err != nil {
+			return platform.WatchHandle{}, fmt.Errorf("kick start watch: sidecar up %s: %w", name, err)
+		}
 		ks, err := decodeSession(s)
 		if err != nil {
 			return platform.WatchHandle{}, fmt.Errorf("kick start watch: decode session: %w", err)
@@ -478,7 +494,8 @@ func (b *Backend) StartWatch(ctx context.Context, s platform.Session, stream pla
 		if err != nil {
 			return platform.WatchHandle{}, fmt.Errorf("kick start watch (browser) %s: %w", stream.Channel, err)
 		}
-		return platform.WatchHandle{Channel: stream.Channel, Internal: kickBrowserWatch{handle: handle, client: cl}}, nil
+		b.sidecars.touch(s.AccountID)
+		return platform.WatchHandle{Channel: stream.Channel, Internal: kickBrowserWatch{handle: handle, client: cl, accountID: s.AccountID}}, nil
 	}
 
 	// Legacy viewer-WS presence path (NON-ACCRUING — kept only as a
@@ -505,6 +522,7 @@ func (b *Backend) Heartbeat(ctx context.Context, h platform.WatchHandle) error {
 		if !alive {
 			return fmt.Errorf("kick: browser watch not playing for %q", h.Channel)
 		}
+		b.sidecars.touch(w.accountID)
 		return nil
 	case kickWatch:
 		// The viewer-WS writer goroutine sends channel_handshake + ping on its

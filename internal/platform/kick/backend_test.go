@@ -3,6 +3,7 @@ package kick
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,7 +46,7 @@ func (f *fakeDoer) getRaw(_ context.Context, rawURL string) ([]byte, string, int
 }
 
 func withFake(f *fakeDoer) *Backend {
-	b := New(nil)
+	b := New(nil, nil, "grubdrops-browser-{slug}", 9090, 10*time.Minute)
 	b.api = &api{d: f}
 	return b
 }
@@ -220,7 +221,7 @@ func TestKickBackend_RejectsWrongCategoryChannel(t *testing.T) {
 }
 
 func TestKickBackend_DeviceLoginRejected(t *testing.T) {
-	b := New(nil)
+	b := New(nil, nil, "grubdrops-browser-{slug}", 9090, 10*time.Minute)
 	_, err := b.StartDeviceLogin(context.Background())
 	require.Error(t, err)
 }
@@ -228,7 +229,7 @@ func TestKickBackend_DeviceLoginRejected(t *testing.T) {
 // --- channel registration (manual fallback) — pure, no transport ----------
 
 func TestKickBackend_RegisterChannelExposesInList(t *testing.T) {
-	b := New(nil)
+	b := New(nil, nil, "grubdrops-browser-{slug}", 9090, 10*time.Minute)
 	b.RegisterChannel("acc1", "fakestreamer")
 	// Empty campaign so the live-discovery paths skip and we hit the manual
 	// fallback (no cookies in the session anyway).
@@ -239,7 +240,7 @@ func TestKickBackend_RegisterChannelExposesInList(t *testing.T) {
 }
 
 func TestKickBackend_RegisterChannelsMulti(t *testing.T) {
-	b := New(nil)
+	b := New(nil, nil, "grubdrops-browser-{slug}", 9090, 10*time.Minute)
 	b.RegisterChannels("acc1", []string{"alice", "bob", "carol"})
 	out, err := b.ListEligibleChannels(context.Background(), platform.Session{AccountID: "acc1"}, platform.Campaign{})
 	require.NoError(t, err)
@@ -252,7 +253,7 @@ func TestKickBackend_RegisterChannelsMulti(t *testing.T) {
 }
 
 func TestKickBackend_ListEligibleChannelsScopedToAccount(t *testing.T) {
-	b := New(nil)
+	b := New(nil, nil, "grubdrops-browser-{slug}", 9090, 10*time.Minute)
 	b.RegisterChannels("acc1", []string{"alice", "bob"})
 	b.RegisterChannels("acc2", []string{"carol"})
 
@@ -271,13 +272,13 @@ func TestKickBackend_ListEligibleChannelsScopedToAccount(t *testing.T) {
 }
 
 func TestKickBackend_RegisterChannels_DedupesAndTrims(t *testing.T) {
-	b := New(nil)
+	b := New(nil, nil, "grubdrops-browser-{slug}", 9090, 10*time.Minute)
 	b.RegisterChannels("acc1", []string{" alice ", "Alice", "bob", "", " bob ", "carol"})
 	assert.Equal(t, []string{"alice", "bob", "carol"}, b.Channels("acc1"))
 }
 
 func TestKickBackend_AllowedChannelCountDistinct(t *testing.T) {
-	b := New(nil)
+	b := New(nil, nil, "grubdrops-browser-{slug}", 9090, 10*time.Minute)
 	assert.Equal(t, 0, b.AllowedChannelCount("anything"))
 	b.RegisterChannel("acc1", "alice")
 	b.RegisterChannel("acc2", "bob")
@@ -289,7 +290,7 @@ func TestKickBackend_AllowedChannelCountDistinct(t *testing.T) {
 // backend has no sidecar client — otherwise StartWatch would dereference a
 // nil client. With no sidecar the backend stays on the viewer-WS path.
 func TestKickBackend_EnableBrowserWatch_NilClientNoOp(t *testing.T) {
-	b := New(nil)
+	b := New(nil, nil, "grubdrops-browser-{slug}", 9090, 10*time.Minute)
 	b.EnableBrowserWatch()
 	assert.False(t, b.browserWatch, "browser-watch must stay off without a sidecar client")
 }
@@ -298,7 +299,7 @@ func TestKickBackend_EnableBrowserWatch_NilClientNoOp(t *testing.T) {
 // type. An unknown/zero handle is an error for Heartbeat (so the watcher
 // re-picks) and a benign no-op for StopWatch (idempotent teardown).
 func TestKickBackend_WatchHandleDispatch(t *testing.T) {
-	b := New(nil)
+	b := New(nil, nil, "grubdrops-browser-{slug}", 9090, 10*time.Minute)
 
 	// Unknown handle type -> Heartbeat errors, StopWatch is a no-op.
 	bad := platform.WatchHandle{Channel: "x", Internal: struct{}{}}
@@ -314,7 +315,7 @@ func TestKickBackend_WatchHandleDispatch(t *testing.T) {
 // A WS watch handle whose connection has been closed reports a heartbeat
 // error so the watcher swaps channels. StopWatch on it is safe.
 func TestKickBackend_WSWatchHandle_DeadConn(t *testing.T) {
-	b := New(nil)
+	b := New(nil, nil, "grubdrops-browser-{slug}", 9090, 10*time.Minute)
 	wc := &watchConn{}
 	wc.alive.Store(false)
 	h := platform.WatchHandle{Channel: "x", Internal: kickWatch{conn: wc}}

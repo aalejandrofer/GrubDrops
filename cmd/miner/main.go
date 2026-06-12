@@ -22,6 +22,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/authcheck"
 	"github.com/aalejandrofer/grubdrops/internal/config"
 	"github.com/aalejandrofer/grubdrops/internal/discovery"
+	"github.com/aalejandrofer/grubdrops/internal/dockerctl"
 	mlog "github.com/aalejandrofer/grubdrops/internal/log"
 	"github.com/aalejandrofer/grubdrops/internal/notify"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
@@ -111,27 +112,34 @@ func run() error {
 	registry := platform.NewRegistry()
 
 	var browserClient *browser.Client
-	var watchClients []*browser.Client
 	var kickBackend *kick.Backend
 	twitchBrowserEnabled := os.Getenv("GRUB_TWITCH_BROWSER") == "1"
-	for _, url := range cfg.BrowserURLs {
-		bc, err := browser.Dial(url)
+	if len(cfg.BrowserURLs) > 0 {
+		bc, err := browser.Dial(cfg.BrowserURLs[0])
 		if err != nil {
-			return fmt.Errorf("dial browser sidecar %q: %w", url, err)
+			return fmt.Errorf("dial browser sidecar %q: %w", cfg.BrowserURLs[0], err)
 		}
 		defer bc.Close()
-		watchClients = append(watchClients, bc)
+		browserClient = bc // login / Twitch / display client
 	}
-	if len(watchClients) > 0 {
-		browserClient = watchClients[0] // login / Twitch / display client
+	logger.Info("browser login client dialed", "configured", browserClient != nil, "urls", cfg.BrowserURLs)
+	// On-demand Kick sidecars: control per-account chromedp containers over the
+	// host docker socket so each account's Chrome only runs when actively
+	// watching. Degrade to always-on if the socket is unreachable.
+	var dockerCtl dockerctl.Controller
+	if cfg.KickBrowserWatch {
+		if dc, err := dockerctl.New(); err != nil {
+			logger.Warn("docker control unavailable; kick sidecars stay always-on", "err", err)
+		} else {
+			dockerCtl = dc
+			logger.Info("docker control enabled for on-demand kick sidecars")
+		}
 	}
-	logger.Info("browser sidecars dialed", "count", len(watchClients), "urls", cfg.BrowserURLs)
 	// Kick runs over the pure-HTTP utls transport (Chrome TLS fingerprint) and
 	// no longer needs the chromedp sidecar for data — Kick's API 403s any
-	// CDP browser but accepts utls. Register it regardless of GRUB_BROWSER_URL;
-	// the browser client (may be nil) is kept only for the legacy login path.
-	// Pass the full sidecar pool so Kick shards accounts one-per-Chrome.
-	kickBackend = kick.New(browserClient, watchClients...)
+	// CDP browser but accepts utls. The browser client (may be nil) is kept
+	// only for the legacy login path; watch sidecars are derived per-account.
+	kickBackend = kick.New(browserClient, dockerCtl, cfg.KickSidecarTemplate, cfg.KickSidecarPort, 10*time.Minute)
 	// Browser-watch: route Kick watch-time accrual through the sidecar's
 	// real IVS <video> session (the only path Kick credits). Requires a
 	// sidecar; EnableBrowserWatch no-ops + warns if browserClient is nil.
@@ -290,6 +298,10 @@ func run() error {
 		// browser login handler also calls this, but boot-time reload
 		// is required because the map is purely in-memory.
 		if a.Platform == "kick" && kickBackend != nil {
+			// Map the account to its username-derived sidecar so StartWatch
+			// can start the right container on demand. Runs every Reload, so
+			// a freshly-added account is registered without a daemon restart.
+			kickBackend.RegisterSidecar(a.ID, a.DisplayName)
 			if chs := decodeKickChannels(sess); len(chs) > 0 {
 				kickBackend.RegisterChannels(a.ID, chs)
 				logger.Info("kick channels restored from session", "account", a.ID, "channels", chs)

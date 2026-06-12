@@ -70,6 +70,17 @@ func (r *sidecarRegistry) register(accountID, username string) {
 	r.byAcc[accountID] = &sidecar{containerName: name}
 }
 
+// nameFor returns the derived container name for an account, or "" if the
+// account is unregistered or has no controllable sidecar (empty slug).
+func (r *sidecarRegistry) nameFor(accountID string) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if s, ok := r.byAcc[accountID]; ok {
+		return s.containerName
+	}
+	return ""
+}
+
 func (r *sidecarRegistry) touch(accountID string)              { r.touchAt(accountID, time.Now()) }
 func (r *sidecarRegistry) touchAt(accountID string, t time.Time) {
 	r.mu.Lock()

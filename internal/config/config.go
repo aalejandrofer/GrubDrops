@@ -22,6 +22,11 @@ type Config struct {
 	BrowserURLs []string
 	LogLevel    string
 
+	// KickSidecarTemplate names each Kick account's sidecar container from its
+	// username slug ("{slug}" placeholder). Default "grubdrops-browser-{slug}".
+	KickSidecarTemplate string
+	KickSidecarPort     int
+
 	// KickBrowserWatch routes Kick watch-time accrual through the chromedp
 	// sidecar (a real, playing IVS <video>), the only path Kick credits.
 	// Requires GRUB_BROWSER_URL to be set too. When false (default) Kick
@@ -57,6 +62,13 @@ func Load() (Config, error) {
 	}
 	if cfg.BrowserURL == "" && len(cfg.BrowserURLs) > 0 {
 		cfg.BrowserURL = cfg.BrowserURLs[0]
+	}
+	cfg.KickSidecarTemplate = getenv("GRUB_KICK_SIDECAR_TEMPLATE", "grubdrops-browser-{slug}")
+	cfg.KickSidecarPort = 9090
+	if v := os.Getenv("GRUB_KICK_SIDECAR_PORT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.KickSidecarPort = n
+		}
 	}
 	cfg.OIDCIssuer = os.Getenv("GRUB_OIDC_ISSUER")
 	cfg.OIDCClientID = os.Getenv("GRUB_OIDC_CLIENT_ID")
