@@ -26,6 +26,12 @@ type Config struct {
 	// username slug ("{slug}" placeholder). Default "grubdrops-browser-{slug}".
 	KickSidecarTemplate string
 	KickSidecarPort     int
+	// KickSidecarImage is the browser image the miner auto-creates per-account
+	// sidecars from. Default ghcr.io/aalejandrofer/grubdrops-browser:latest.
+	KickSidecarImage string
+	// KickSidecarNetwork overrides network self-detection. When empty the miner
+	// inspects its own container to find the network it shares with sidecars.
+	KickSidecarNetwork string
 
 	// KickBrowserWatch routes Kick watch-time accrual through the chromedp
 	// sidecar (a real, playing IVS <video>), the only path Kick credits.
@@ -70,6 +76,8 @@ func Load() (Config, error) {
 			cfg.KickSidecarPort = n
 		}
 	}
+	cfg.KickSidecarImage = getenv("GRUB_KICK_SIDECAR_IMAGE", "ghcr.io/aalejandrofer/grubdrops-browser:latest")
+	cfg.KickSidecarNetwork = os.Getenv("GRUB_KICK_SIDECAR_NETWORK")
 	cfg.OIDCIssuer = os.Getenv("GRUB_OIDC_ISSUER")
 	cfg.OIDCClientID = os.Getenv("GRUB_OIDC_CLIENT_ID")
 	cfg.OIDCClientSecret = os.Getenv("GRUB_OIDC_CLIENT_SECRET")

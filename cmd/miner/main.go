@@ -139,7 +139,17 @@ func run() error {
 	// no longer needs the chromedp sidecar for data — Kick's API 403s any
 	// CDP browser but accepts utls. The browser client (may be nil) is kept
 	// only for the legacy login path; watch sidecars are derived per-account.
-	kickBackend = kick.New(browserClient, dockerCtl, cfg.KickSidecarTemplate, cfg.KickSidecarPort, 10*time.Minute)
+	// When the docker socket is reachable, auto-create per-account browser
+	// sidecars (pull + create + start, labelled, on the miner's network) so the
+	// default compose can be JUST the miner + docker.sock — no hand-defined
+	// browser services. Degrades to start-only of existing containers when the
+	// controller is nil (socket unreachable).
+	var kickOpts []kick.Option
+	if dockerCtl != nil {
+		kickOpts = append(kickOpts, kick.WithSidecarAutoCreate(cfg.KickSidecarImage, cfg.KickSidecarNetwork))
+		logger.Info("kick sidecar auto-create enabled", "image", cfg.KickSidecarImage, "network", cfg.KickSidecarNetwork)
+	}
+	kickBackend = kick.New(browserClient, dockerCtl, cfg.KickSidecarTemplate, cfg.KickSidecarPort, 10*time.Minute, kickOpts...)
 	// Browser-watch: route Kick watch-time accrual through the sidecar's
 	// real IVS <video> session (the only path Kick credits). Requires a
 	// sidecar; EnableBrowserWatch no-ops + warns if browserClient is nil.
@@ -395,6 +405,15 @@ func run() error {
 
 	if err := loadAndStart(ctx); err != nil {
 		return fmt.Errorf("initial scheduler boot: %w", err)
+	}
+
+	// Now that the initial Reload has registered every enabled Kick account's
+	// sidecar, sweep away any auto-created (grubdrops.managed=true) browser
+	// container whose account is gone. Unlabeled hand-defined sidecars are
+	// never listed by the sweep, so they survive untouched. The periodic
+	// reaper repeats this every minute (covers account deletions at runtime).
+	if kickBackend != nil {
+		kickBackend.SweepSidecars(ctx)
 	}
 
 	// Anonymous active-drops scraper: keeps the /drops page populated

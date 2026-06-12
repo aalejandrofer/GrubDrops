@@ -40,6 +40,7 @@ func sidecarName(template, username string) string {
 
 type sidecar struct {
 	containerName string // "" = no controllable container (empty slug)
+	slug          string // username slug (for the create label)
 	lastActive    time.Time
 }
 
@@ -49,6 +50,16 @@ type sidecarRegistry struct {
 	port      int
 	idleGrace time.Duration
 
+	// image is the browser image auto-created sidecars are built from.
+	image string
+	// netOverride forces the sidecar network; "" means self-detect once.
+	netOverride string
+
+	// netOnce guards lazy network self-detection (inspect the miner's own
+	// container) so we only inspect once and cache the result.
+	netOnce sync.Once
+	nets    []string
+
 	mu    sync.Mutex
 	byAcc map[string]*sidecar
 }
@@ -57,17 +68,48 @@ func newSidecarRegistry(ctl dockerctl.Controller, template string, port int, idl
 	return &sidecarRegistry{ctl: ctl, template: template, port: port, idleGrace: idleGrace, byAcc: map[string]*sidecar{}}
 }
 
+// withCreate enables auto-create: the image to pull/create from and an optional
+// network override. Returns r for chaining at construction.
+func (r *sidecarRegistry) withCreate(image, netOverride string) *sidecarRegistry {
+	r.image = image
+	r.netOverride = netOverride
+	return r
+}
+
 // register derives the account's sidecar from its username. Safe to call again
 // (e.g. on Reload) — updates the name, preserves lastActive.
 func (r *sidecarRegistry) register(accountID, username string) {
 	name := sidecarName(r.template, username)
+	slug := slugify(username)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if s, ok := r.byAcc[accountID]; ok {
 		s.containerName = name
+		s.slug = slug
 		return
 	}
-	r.byAcc[accountID] = &sidecar{containerName: name}
+	r.byAcc[accountID] = &sidecar{containerName: name, slug: slug}
+}
+
+// networks resolves the network(s) to attach auto-created sidecars to. Uses the
+// override when set, else self-detects (cached). Empty result means attach to
+// none (the default bridge) — fine when the miner runs on the default network.
+func (r *sidecarRegistry) networks(ctx context.Context) []string {
+	if r.netOverride != "" {
+		return []string{r.netOverride}
+	}
+	r.netOnce.Do(func() {
+		if r.ctl == nil {
+			return
+		}
+		nets, err := r.ctl.SelfNetworks(ctx)
+		if err != nil {
+			slog.Warn("kick sidecar network self-detect failed; sidecars use default network", "err", err)
+			return
+		}
+		r.nets = nets
+	})
+	return r.nets
 }
 
 // nameFor returns the derived container name for an account, or "" if the
@@ -97,9 +139,48 @@ func (r *sidecarRegistry) ensureUp(ctx context.Context, accountID string, ready 
 	r.mu.Lock()
 	s := r.byAcc[accountID]
 	ctl := r.ctl
+	slug := ""
+	if s != nil {
+		slug = s.slug
+	}
 	r.mu.Unlock()
 	if ctl == nil || s == nil || s.containerName == "" {
 		return nil
+	}
+	// Auto-create path: if the container does not exist at all, pull + create
+	// it (labelled, on the miner's network) before starting. A pre-existing
+	// container (hand-defined or already auto-created) is just started — we
+	// never recreate it. ContainerInspect via Running reports not-found as an
+	// error, so probe existence explicitly first.
+	exists, err := ctl.Exists(ctx, s.containerName)
+	if err != nil {
+		slog.Warn("kick sidecar existence probe failed; assuming up", "container", s.containerName, "err", err)
+		r.touch(accountID)
+		return nil
+	}
+	if !exists {
+		if r.image == "" {
+			slog.Warn("kick sidecar missing and auto-create disabled (no image); needs a hand-defined container", "container", s.containerName, "account", accountID)
+			r.touch(accountID)
+			return nil
+		}
+		slog.Info("kick sidecar absent, auto-creating", "container", s.containerName, "account", accountID, "image", r.image)
+		if err := ctl.EnsureImage(ctx, r.image); err != nil {
+			return err
+		}
+		if err := ctl.Create(ctx, dockerctl.CreateSpec{
+			Name:     s.containerName,
+			Image:    r.image,
+			Port:     r.port,
+			Networks: r.networks(ctx),
+			Labels: map[string]string{
+				dockerctl.LabelManaged: "true",
+				dockerctl.LabelAccount: accountID,
+				dockerctl.LabelSlug:    slug,
+			},
+		}); err != nil {
+			return err
+		}
 	}
 	running, err := ctl.Running(ctx, s.containerName)
 	if err != nil {
@@ -162,7 +243,60 @@ func (r *sidecarRegistry) reapOnce(ctx context.Context) {
 	}
 }
 
-// runReaper ticks reapOnce every minute until ctx is done.
+// activeAccounts snapshots the account ids currently registered (i.e. the live
+// Kick roster). The orphan sweep removes managed containers whose account is
+// NOT in this set.
+func (r *sidecarRegistry) activeAccounts() map[string]struct{} {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make(map[string]struct{}, len(r.byAcc))
+	for acc := range r.byAcc {
+		out[acc] = struct{}{}
+	}
+	return out
+}
+
+// sweepOrphans removes every auto-created sidecar (carrying grubdrops.managed=
+// true) whose grubdrops.account label is NOT in the live account set.
+//
+// SAFETY: it lists ONLY containers matching grubdrops.managed=true, so an
+// unlabeled hand-defined sidecar (the current prod containers) is never even
+// returned, let alone removed. A managed container whose account is still
+// active is spared. A managed container with no account label is treated as an
+// orphan (it cannot map to any live account) and removed.
+func (r *sidecarRegistry) sweepOrphans(ctx context.Context) {
+	if r.ctl == nil {
+		return
+	}
+	managed, err := r.ctl.List(ctx, map[string]string{dockerctl.LabelManaged: "true"})
+	if err != nil {
+		slog.Warn("kick sidecar orphan sweep: list failed", "err", err)
+		return
+	}
+	active := r.activeAccounts()
+	for _, c := range managed {
+		// Defensive re-check: never act on a container that does not carry
+		// the managed label (the filter should already guarantee this).
+		if c.Labels[dockerctl.LabelManaged] != "true" {
+			continue
+		}
+		acc := c.Labels[dockerctl.LabelAccount]
+		if acc != "" {
+			if _, ok := active[acc]; ok {
+				continue // account still live — keep
+			}
+		}
+		slog.Info("kick sidecar orphan, removing", "container", c.Name, "account", acc)
+		if err := r.ctl.Remove(ctx, c.Name); err != nil {
+			slog.Warn("kick sidecar orphan remove failed", "container", c.Name, "err", err)
+		}
+	}
+}
+
+// runReaper ticks reapOnce + sweepOrphans every minute until ctx is done. The
+// startup sweep is NOT run here (the account roster isn't registered yet when
+// New spins this up) — main triggers it via Backend.SweepSidecars after the
+// initial Reload, when activeAccounts is populated.
 func (r *sidecarRegistry) runReaper(ctx context.Context) {
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()
@@ -172,6 +306,7 @@ func (r *sidecarRegistry) runReaper(ctx context.Context) {
 			return
 		case <-t.C:
 			r.reapOnce(ctx)
+			r.sweepOrphans(ctx)
 		}
 	}
 }
