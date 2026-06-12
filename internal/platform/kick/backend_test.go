@@ -288,7 +288,8 @@ func TestKickBackend_AllowedChannelCountDistinct(t *testing.T) {
 
 // EnableBrowserWatch is a no-op (and must NOT flip browserWatch) when the
 // backend has no sidecar client — otherwise StartWatch would dereference a
-// nil client. With no sidecar the backend stays on the viewer-WS path.
+// nil client. With no sidecar, Kick watch is unavailable (StartWatch errors;
+// there is no non-accruing fallback).
 func TestKickBackend_EnableBrowserWatch_NilClientNoOp(t *testing.T) {
 	b := New(nil, nil, "grubdrops-browser-{slug}", 9090, 10*time.Minute)
 	b.EnableBrowserWatch()
@@ -310,17 +311,6 @@ func TestKickBackend_WatchHandleDispatch(t *testing.T) {
 	zero := platform.WatchHandle{Channel: "x"}
 	assert.Error(t, b.Heartbeat(context.Background(), zero))
 	assert.NoError(t, b.StopWatch(context.Background(), zero))
-}
-
-// A WS watch handle whose connection has been closed reports a heartbeat
-// error so the watcher swaps channels. StopWatch on it is safe.
-func TestKickBackend_WSWatchHandle_DeadConn(t *testing.T) {
-	b := New(nil, nil, "grubdrops-browser-{slug}", 9090, 10*time.Minute)
-	wc := &watchConn{}
-	wc.alive.Store(false)
-	h := platform.WatchHandle{Channel: "x", Internal: kickWatch{conn: wc}}
-	assert.Error(t, b.Heartbeat(context.Background(), h), "dead WS conn -> heartbeat error")
-	assert.NoError(t, b.StopWatch(context.Background(), h))
 }
 
 // preferReliableChannels moves a known always-live broadcaster (oilrats) to

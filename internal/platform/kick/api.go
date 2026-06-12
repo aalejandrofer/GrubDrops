@@ -115,8 +115,8 @@ type kickCampaign struct {
 	ConnectURL string        // external account-link URL; non-empty = needs linking
 }
 
-// kickChannel is an eligible channel for a campaign. ID is the numeric channel
-// id used by the viewer-WS channel_handshake (NOT the livestream id).
+// kickChannel is an eligible channel for a campaign. ID is the numeric
+// channel id (NOT the livestream id).
 type kickChannel struct {
 	Slug string
 	ID   string

@@ -34,12 +34,12 @@ type Backend struct {
 
 	// browserWatch, when true AND c != nil, routes StartWatch/Heartbeat/
 	// StopWatch to the chromedp sidecar so a real IVS <video> session
-	// accrues drop watch-time. The pure-HTTP viewer-WS (openWatch) does
-	// NOT accrue (proven 2026-06-12), so this is the only credit-earning
-	// watch path. All other calls (campaigns/progress/claim/discovery)
-	// stay on the utls HTTP transport regardless. When false, the
-	// non-accruing WS path is used (kept as a fallback / for envs with no
-	// sidecar).
+	// accrues drop watch-time. Real video playback is the ONLY path that
+	// accrues Kick drop watch-time (the pure-HTTP viewer-WS presence does
+	// NOT accrue — proven 2026-06-12), so this is mandatory: when false,
+	// StartWatch errors rather than silently running a non-accruing watch.
+	// All other calls (campaigns/progress/claim/discovery) stay on the
+	// utls HTTP transport regardless.
 	browserWatch bool
 
 	mu               sync.Mutex
@@ -104,21 +104,15 @@ func (b *Backend) watchClientForName(name string) (*browser.Client, error) {
 // EnableBrowserWatch switches StartWatch/Heartbeat/StopWatch onto the
 // chromedp sidecar (a real, playing IVS <video> per watch — the only path
 // that accrues Kick drop watch-time). No-op without a sidecar client: the
-// backend logs and stays on the (non-accruing) viewer-WS path so it never
-// silently drops to a broken watch. Call once at construction, before the
-// watcher starts.
+// backend logs and leaves browser-watch off, in which case StartWatch
+// errors (there is no non-accruing fallback). Call once at construction,
+// before the watcher starts.
 func (b *Backend) EnableBrowserWatch() {
 	if b.c == nil {
-		slog.Warn("kick: browser-watch requested but no sidecar client configured; staying on (non-accruing) viewer-WS")
+		slog.Warn("kick: browser-watch requested but no sidecar client configured; Kick watch will be unavailable")
 		return
 	}
 	b.browserWatch = true
-}
-
-// kickWatch is stored in WatchHandle.Internal for the (legacy, non-accruing)
-// viewer-WS presence path.
-type kickWatch struct {
-	conn *watchConn
 }
 
 // kickBrowserWatch is stored in WatchHandle.Internal for the sidecar
@@ -498,18 +492,11 @@ func (b *Backend) StartWatch(ctx context.Context, s platform.Session, stream pla
 		return platform.WatchHandle{Channel: stream.Channel, Internal: kickBrowserWatch{handle: handle, client: cl, accountID: s.AccountID}}, nil
 	}
 
-	// Legacy viewer-WS presence path (NON-ACCRUING — kept only as a
-	// fallback when no sidecar is configured). stream.ChannelID is the
-	// CHANNEL id used in the channel_handshake.
-	cookieHeader := cookieHeaderForSession(s)
-	if cookieHeader == "" {
-		return platform.WatchHandle{}, fmt.Errorf("kick: session has no cookies")
-	}
-	wc, err := openWatch(ctx, cookieHeader, stream.ChannelID)
-	if err != nil {
-		return platform.WatchHandle{}, fmt.Errorf("kick start watch %s: %w", stream.Channel, err)
-	}
-	return platform.WatchHandle{Channel: stream.Channel, Internal: kickWatch{conn: wc}}, nil
+	// No browser sidecar: Kick watch is unavailable. Real IVS video
+	// playback is the only path that accrues drop watch-time, so there is
+	// no non-browser fallback — fail loudly rather than run a watch that
+	// earns nothing.
+	return platform.WatchHandle{}, fmt.Errorf("kick start watch %s: browser sidecar required (no accruing watch path without it)", stream.Channel)
 }
 
 func (b *Backend) Heartbeat(ctx context.Context, h platform.WatchHandle) error {
@@ -524,14 +511,6 @@ func (b *Backend) Heartbeat(ctx context.Context, h platform.WatchHandle) error {
 		}
 		b.sidecars.touch(w.accountID)
 		return nil
-	case kickWatch:
-		// The viewer-WS writer goroutine sends channel_handshake + ping on its
-		// own schedule; Heartbeat just confirms the presence is still alive so
-		// the watcher swaps channels if it dropped.
-		if !w.conn.Alive() {
-			return fmt.Errorf("kick: viewer websocket closed for %q", h.Channel)
-		}
-		return nil
 	default:
 		return fmt.Errorf("kick: invalid watch handle")
 	}
@@ -543,9 +522,6 @@ func (b *Backend) StopWatch(ctx context.Context, h platform.WatchHandle) error {
 		if err := w.client.StopWatch(ctx, w.handle); err != nil {
 			return fmt.Errorf("kick stop watch (browser) %q: %w", h.Channel, err)
 		}
-		return nil
-	case kickWatch:
-		w.conn.Close()
 		return nil
 	default:
 		return nil
