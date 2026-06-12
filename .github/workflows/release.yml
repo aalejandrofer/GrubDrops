@@ -1,0 +1,49 @@
+name: Release images
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build + push miner
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.miner
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/aalejandrofer/grubdrops:${{ github.ref_name }}
+            ghcr.io/aalejandrofer/grubdrops:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build + push browser sidecar
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.browser
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/aalejandrofer/grubdrops-browser:${{ github.ref_name }}
+            ghcr.io/aalejandrofer/grubdrops-browser:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
