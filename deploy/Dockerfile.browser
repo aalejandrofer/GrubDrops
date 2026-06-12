@@ -10,10 +10,16 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/browser-sidecar ./cmd/browse
 # Runtime: full google-chrome-stable on a Debian base.
 #
 # We CANNOT use chromedp/headless-shell: that build is compiled WITHOUT the
-# proprietary H.264/AAC codecs, so it cannot decode Kick's IVS HLS stream —
-# the <video> element stays at readyState 0 and never advances, so Kick
-# credits ZERO drop watch-time. google-chrome-stable ships the proprietary
-# codecs and decodes the stream, which is the whole point of this sidecar.
+# proprietary H.264/AAC codecs, so it cannot decode Kick's IVS HLS stream.
+# google-chrome-stable ships the proprietary codecs and decodes the stream,
+# which is the whole point of this sidecar.
+#
+# (Aside on a past red herring: the <video> staying at readyState 0 in
+# headless was NOT a codec problem. It was a navigator.plugins spoof in the
+# sidecar StealthScript that broke the AWS IVS player's environment probe so
+# it never attached a MediaSource. Fixed in browser.go; verified headless
+# Chrome plays oilrats with currentTime advancing. Codecs are still required
+# for the actual decode, hence google-chrome-stable over headless-shell.)
 FROM debian:bookworm-slim AS runtime
 
 # Install Chrome + the runtime libs a headless GPU-less Chrome needs.

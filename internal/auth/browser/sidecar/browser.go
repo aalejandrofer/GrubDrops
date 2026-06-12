@@ -162,10 +162,16 @@ const StealthScript = `
     };
   }
 
-  // Patch navigator.plugins to look like a real browser
-  try {
-    Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
-  } catch(e) {}
+  // NOTE: do NOT override navigator.plugins. Chrome's "new" headless mode
+  // already exposes a genuine 5-entry PluginArray (the PDF-viewer set:
+  // "PDF Viewer", "Chrome PDF Viewer", ...) that is indistinguishable from
+  // headed Chrome — spoofing it is both unnecessary AND actively harmful.
+  // A previous override returned a plain Array [1,2,3,4,5] (wrong prototype,
+  // fake names): that made the browser MORE bot-detectable than the real
+  // value, and — the load-bearing bug — it broke Kick's AWS IVS web player
+  // environment probe, so the <video> never attached a MediaSource
+  // (readyState stuck at 0, currentTime never advanced, zero watch-credit).
+  // Leaving the real PluginArray in place fixes IVS playback in headless.
 
   // Patch navigator.languages
   try {
