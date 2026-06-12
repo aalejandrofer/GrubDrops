@@ -2,8 +2,8 @@
   <img src="internal/web/static/img/logo.png" width="160" alt="GrubDrops">
 </p>
 
-<p align="center"><b>Self-hosted Twitch &amp; Kick drops miner.</b><br>
-You pick the games. It watches the right streams, racks up the watch-time, and claims the drops for you.</p>
+<p align="center"><b>Self-hosted, set-and-forget Twitch &amp; Kick drops miner.</b><br>
+Pick your games across as many accounts as you like. It finds the right streams, banks the watch-time, and claims the drops for you.</p>
 
 <p align="center">
   <img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white">
