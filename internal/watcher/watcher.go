@@ -138,6 +138,26 @@ type Watcher struct {
 	// against a ghost benefit (B2.5).
 	noProgressTicks int
 
+	// noAdvanceTicks counts consecutive inventory polls where the
+	// current benefit IS present in dropCampaignsInProgress but its
+	// MinutesWatched did NOT advance over the prior poll. This is a
+	// DIFFERENT failure than noProgressTicks (benefit absent): the
+	// watch looks alive (benefit present, sidecar video playing) yet
+	// Kick's server-side minutes are frozen (channel stall / anti-AFK /
+	// account-specific), so it would otherwise sit forever earning
+	// nothing. Reset to 0 whenever MinutesWatched advances and whenever
+	// a fresh watch starts (pickStream / New). When it reaches
+	// freezeThreshold the watcher rotates to another channel/campaign.
+	noAdvanceTicks int
+
+	// stalledChannels maps a channel slug -> the time until which it is
+	// on freeze cooldown. Populated when a watch on that channel is
+	// detected frozen (noAdvanceTicks >= freezeThreshold); pickStream
+	// filters out any candidate still within its cooldown so the
+	// watcher doesn't immediately re-pick the same stalled channel.
+	// Expired entries are dropped lazily in pickStream.
+	stalledChannels map[string]time.Time
+
 	// skippedBenefits collects benefit IDs the watcher has given up
 	// on for the lifetime of the Run. Synth scrape entries (no real
 	// Twitch UUID, contain "|" or "_default") can land here when no
@@ -203,6 +223,11 @@ func (w *Watcher) handlePubSubDropProgress(dropID string, curMin, _ int64) {
 	defer w.mu.Unlock()
 	if w.currentBenefit == nil || w.currentBenefit.ID != dropID {
 		return
+	}
+	// A push that advances minutes is a fresh-progress signal, so clear
+	// the freeze counter alongside the vanish counter.
+	if int(curMin) > w.lastProgressMin {
+		w.noAdvanceTicks = 0
 	}
 	w.lastProgressMin = int(curMin)
 	w.noProgressTicks = 0
@@ -602,6 +627,25 @@ const vanishThreshold = 3
 // enough that a code-only drop the user already finished doesn't pin
 // the watcher forever.
 const synthSkipThreshold = 6
+
+// freezeThreshold is how many consecutive inventory polls may report the
+// current benefit PRESENT but with a NON-advancing MinutesWatched before
+// the watcher concludes the watch is frozen and rotates off it. At the
+// locked 60s heartbeat/poll cadence that's ~5 minutes of zero accrual.
+// Kick's normal accrual is choppy (~0.8 min/min, so an occasional single
+// flat poll is expected); requiring 5 consecutive flat polls avoids
+// false-positives on that jitter while still catching a real multi-hour
+// server-side stall promptly. (The prod incident sat frozen for hours and
+// only a container restart recovered it — this is the detector for that.)
+const freezeThreshold = 5
+
+// stalledChannelCooldown is how long a channel that was detected frozen
+// stays out of pickStream's candidate set. Long enough that the watcher
+// genuinely moves to a different broadcaster/campaign rather than
+// immediately re-picking the same stalled channel and re-freezing, short
+// enough that the channel becomes eligible again once whatever caused the
+// stall (channel-side hiccup) has likely cleared.
+const stalledChannelCooldown = 30 * time.Minute
 
 func (w *Watcher) step(ctx context.Context) error {
 	switch w.State() {
@@ -1007,6 +1051,28 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 		slog.Error("watcher list channels failed", "kind", "error", "account", w.cfg.AccountID, "campaign", camp.Name, "err", err)
 		return fmt.Errorf("list channels: %w", err)
 	}
+	// Drop any candidate channel still on freeze cooldown (detected
+	// frozen recently in tickWatch). Expired cooldowns are pruned here
+	// so the map doesn't grow unbounded. If filtering removes every
+	// candidate we behave exactly like "no eligible streams live".
+	w.mu.Lock()
+	now := time.Now()
+	for ch, until := range w.stalledChannels {
+		if now.After(until) {
+			delete(w.stalledChannels, ch)
+		}
+	}
+	if len(w.stalledChannels) > 0 {
+		filtered := streams[:0]
+		for _, s := range streams {
+			if until, stalled := w.stalledChannels[s.Channel]; stalled && now.Before(until) {
+				continue
+			}
+			filtered = append(filtered, s)
+		}
+		streams = filtered
+	}
+	w.mu.Unlock()
 	if len(streams) == 0 {
 		// No live broadcaster for THIS campaign right now. Mark it so
 		// pickCampaign skips it and advances to the next eligible
@@ -1090,6 +1156,7 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 	w.lastProgressMin = 0
 	w.lastNotifiedMilestone = -1
 	w.noProgressTicks = 0
+	w.noAdvanceTicks = 0
 	// Reset the tick counter so the beacon/inventory cadence (tickN==1
 	// fires immediately) aligns with the start of each watch session.
 	w.tickCount = 0
@@ -1204,6 +1271,17 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 			matched = true
 			slog.Info("watcher progress", "kind", "progress", "account", w.cfg.AccountID, "benefit", benefit.ID, "min_watched", p.MinutesWatched, "required", benefit.RequiredMinutes, "claimed", p.Claimed)
 			w.mu.Lock()
+			// Freeze-detect: the benefit is present, but if its
+			// MinutesWatched didn't advance over the prior poll the
+			// watch may be server-side frozen (alive but earning
+			// nothing). Bump noAdvanceTicks on a flat/regressing poll;
+			// reset it the moment minutes advance.
+			if p.MinutesWatched > w.lastProgressMin {
+				w.noAdvanceTicks = 0
+			} else {
+				w.noAdvanceTicks++
+			}
+			noAdvance := w.noAdvanceTicks
 			w.lastProgressMin = p.MinutesWatched
 			w.noProgressTicks = 0
 			// Capture the per-account drop-instance ID at progress
@@ -1219,6 +1297,50 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 				w.maybeNotifyProgress(ctx, p.MinutesWatched, benefit.RequiredMinutes)
 				slog.Info("watcher benefit complete, claiming", "kind", "claim", "account", w.cfg.AccountID, "benefit", benefit.ID, "benefit_name", benefit.Name, "instance", p.InstanceID, "channel", handle.Channel)
 				w.setState(ctx, StateClaiming)
+				return nil
+			}
+			// Freeze rotation: not yet complete, but minutes have been
+			// flat for freezeThreshold consecutive polls — the watch is
+			// alive (benefit present) yet not accruing. Rotate off this
+			// channel: stop the watch, drop the PubSub sub, put the
+			// channel on cooldown so pickStream won't immediately
+			// re-pick it, clear the per-watch stream/handle, and
+			// re-enter PickStream to find ANOTHER live channel for the
+			// same campaign+benefit (pickStream falls through to
+			// PickCampaign when no live channel remains). currentBenefit
+			// + currentCampaign are intentionally KEPT so the same drop
+			// keeps mining on the new channel; pickStream's StartWatch
+			// path dereferences them, so clearing the benefit here would
+			// panic the next tick.
+			if noAdvance >= freezeThreshold {
+				w.mu.Lock()
+				stalledChannel := ""
+				if w.currentStream != nil {
+					stalledChannel = w.currentStream.Channel
+				}
+				w.mu.Unlock()
+				slog.Info("watcher benefit frozen (minutes not advancing); rotating channel",
+					"kind", "state",
+					"account", w.cfg.AccountID,
+					"benefit", benefit.ID,
+					"benefit_name", benefit.Name,
+					"channel", handle.Channel,
+					"stalled_min", p.MinutesWatched,
+					"flat_polls", noAdvance)
+				_ = w.cfg.Backend.StopWatch(ctx, handle)
+				w.unsubscribeCurrentChannel()
+				w.mu.Lock()
+				if stalledChannel != "" {
+					if w.stalledChannels == nil {
+						w.stalledChannels = map[string]time.Time{}
+					}
+					w.stalledChannels[stalledChannel] = time.Now().Add(stalledChannelCooldown)
+				}
+				w.currentStream = nil
+				w.handle = nil
+				w.noAdvanceTicks = 0
+				w.mu.Unlock()
+				w.setState(ctx, StatePickStream)
 				return nil
 			}
 		}

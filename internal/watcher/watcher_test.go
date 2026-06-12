@@ -695,6 +695,120 @@ func TestWatcher_RewardReaperFires(t *testing.T) {
 	assert.Contains(t, backend.games, "Minecraft", "reaper must scope claim to whitelisted game")
 }
 
+// freezeBackend simulates a server-side stall: the current benefit is
+// ALWAYS present in inventory (so the vanish-detect path never fires) but
+// its MinutesWatched is controllable. When held flat it must trip the
+// freeze detector; when advancing it must not. RequiredMinutes is high so
+// the watcher never reaches the claim path on its own.
+type freezeBackend struct {
+	*platformtest.MockBackend
+	mu         sync.Mutex
+	minutes    int
+	advance    bool // when true, each InventoryProgress poll bumps minutes
+	stopCalled int
+}
+
+func (f *freezeBackend) InventoryProgress(_ context.Context, _ platform.Session) ([]platform.Progress, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.advance {
+		f.minutes++
+	}
+	return []platform.Progress{{BenefitID: "drop1", MinutesWatched: f.minutes}}, nil
+}
+
+func (f *freezeBackend) StopWatch(_ context.Context, _ platform.WatchHandle) error {
+	f.mu.Lock()
+	f.stopCalled++
+	f.mu.Unlock()
+	return nil
+}
+
+func (f *freezeBackend) stops() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.stopCalled
+}
+
+func (f *freezeBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	return []platform.Campaign{{
+		ID: "camp1", Game: "Rust", Name: "Rust Camp", Status: "active", AccountLinked: true,
+		Benefits: []platform.DropBenefit{{ID: "drop1", CampaignID: "camp1", Name: "Drop", RequiredMinutes: 9999}},
+	}}, nil
+}
+
+// TestWatcher_FreezeDetect_RotatesOnStalledMinutes: the benefit stays
+// present in inventory but its MinutesWatched never advances. After
+// freezeThreshold consecutive flat polls the watcher must rotate off the
+// channel — StopWatch is called and the state leaves StateWatching — even
+// though the vanish-detect path (benefit absent) never triggers.
+func TestWatcher_FreezeDetect_RotatesOnStalledMinutes(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	backend := &freezeBackend{MockBackend: platformtest.New(), minutes: 5}
+
+	notif := &recordingNotifier{}
+	w := New(Config{
+		AccountID:         "acc-freeze",
+		Backend:           backend,
+		Session:           platform.Session{AccessToken: "tok"},
+		Notifier:          notif,
+		TickInterval:      2 * time.Millisecond,
+		HeartbeatInterval: 2 * time.Millisecond,
+	})
+
+	go func() { _ = w.Run(ctx) }()
+
+	// Watcher reaches watching and observes the (flat) progress.
+	require.Eventually(t, func() bool {
+		return w.Snapshot().MinutesWatched >= 5
+	}, time.Second, 2*time.Millisecond, "watcher never observed progress")
+
+	// With minutes held flat, the freeze detector must rotate off the
+	// channel within freezeThreshold polls.
+	require.Eventually(t, func() bool {
+		return backend.stops() >= 1
+	}, 2*time.Second, 2*time.Millisecond, "watcher did not StopWatch on a frozen (non-advancing) benefit")
+
+	// And it must not be sitting in StateWatching against the stalled
+	// channel (the only channel is on cooldown, so it parks elsewhere).
+	require.Eventually(t, func() bool {
+		return w.State() != StateWatching
+	}, time.Second, 2*time.Millisecond, "watcher stayed in StateWatching after freeze")
+}
+
+// TestWatcher_FreezeDetect_NoRotateWhenAdvancing: when MinutesWatched
+// advances by 1 every poll the watch is healthy and must NOT rotate —
+// guards against the freeze detector false-positiving on normal accrual.
+func TestWatcher_FreezeDetect_NoRotateWhenAdvancing(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+
+	backend := &freezeBackend{MockBackend: platformtest.New(), advance: true}
+
+	w := New(Config{
+		AccountID:         "acc-advance",
+		Backend:           backend,
+		Session:           platform.Session{AccessToken: "tok"},
+		Notifier:          &recordingNotifier{},
+		TickInterval:      2 * time.Millisecond,
+		HeartbeatInterval: 2 * time.Millisecond,
+	})
+
+	go func() { _ = w.Run(ctx) }()
+
+	// Let many polls accrue (well past freezeThreshold) with minutes
+	// advancing each time.
+	require.Eventually(t, func() bool {
+		return w.Snapshot().MinutesWatched >= freezeThreshold+5
+	}, time.Second, 2*time.Millisecond, "watcher never accrued advancing progress")
+
+	// A healthy, advancing watch must never have rotated.
+	assert.Equal(t, 0, backend.stops(), "advancing watch must not trip the freeze detector")
+	assert.Equal(t, StateWatching, w.State(), "advancing watch must stay in StateWatching")
+}
+
 func TestFirstUnmetPrecondition(t *testing.T) {
 	claimed := map[string]bool{"dropA": true}
 	// No preconditions -> always met.
