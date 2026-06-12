@@ -9,6 +9,23 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
+// ProbeClaim POSTs a real /drops/claim for the given reward+campaign and dumps
+// the raw status + body, so we can verify the claim endpoint/payload live
+// (Kick appears to auto-grant at 100%, so claiming an already-granted reward is
+// the safe way to confirm the endpoint exists + the body parses without
+// changing inventory). One-shot ops tool.
+func ProbeClaim(ctx context.Context, sess platform.Session, rewardID, campaignID string) {
+	d := newHTTPDoer()
+	payload := []byte(fmt.Sprintf(`{"reward_id":%q,"campaign_id":%q}`, rewardID, campaignID))
+	fmt.Printf("POST %s/api/v1/drops/claim  body=%s\n", dropsBase, payload)
+	body, status, err := d.do(ctx, sess, http.MethodPost, dropsBase+"/api/v1/drops/claim", payload)
+	if err != nil {
+		fmt.Printf("ERR: %v\n", err)
+		return
+	}
+	fmt.Printf("status: %d  body: %s\n", status, string(body))
+}
+
 // Probe is a one-shot diagnostic that hits the live Kick endpoints with a real
 // authed session and dumps raw status + body for each, so we can verify the
 // authed response shapes (campaigns/progress field names, the connect_url, the

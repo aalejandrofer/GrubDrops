@@ -57,6 +57,14 @@ func main() {
 	}
 	sess.AccountID = accountID
 
+	// Optional claim test: `kick-probe <acc> claim <reward_id> <campaign_id>`
+	// POSTs a real /drops/claim and dumps the status/body so we can verify the
+	// claim endpoint live. Otherwise run the read-only diagnostic dump.
+	if category == "claim" && len(os.Args) >= 5 {
+		kick.ProbeClaim(ctx, sess, os.Args[3], os.Args[4])
+		return
+	}
+
 	kick.Probe(ctx, sess, category)
 }
 
