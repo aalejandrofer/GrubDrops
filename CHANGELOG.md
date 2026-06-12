@@ -2,6 +2,31 @@
 
 All notable changes to GrubDrops.
 
+## [Unreleased]
+
+### Breaking
+
+- **Helper CLI/GUI removed** — `cmd/grubdrops-helper` and `cmd/grubdrops-helper-gui`
+  binaries, `internal/helper` package, `POST /helper/accounts/{id}/kick`,
+  `GET /download/helper`, and the `GRUB_HELPER_DIR` env var are all gone.
+  Kick cookie ingestion is now done via the **cookies.txt** flow: export with
+  the EditThisCookie / Get cookies.txt browser extension and paste or upload on
+  the Kick authorize page. Remote users sign in via SSO first.
+
+### Added
+
+- **Release workflow** — `.github/workflows/release.yml` publishes
+  `ghcr.io/aalejandrofer/grubdrops` and `ghcr.io/aalejandrofer/grubdrops-browser`
+  multi-arch images on `v*` tags.
+- **cookies.txt Kick login** — parser, upload handler, and authorize-page template
+  replacing the helper-binary path.
+
+### Changed
+
+- README rewritten deployment-first (Docker Compose quickstart, cookie-export
+  instructions, environment variable reference).
+- `cmd/kick-encrypt` one-shot ops tool deleted (superseded by cookies.txt form).
+
 ## [1.0.0] — 2026-06-07
 
 First tagged release.
