@@ -99,37 +99,36 @@ type sidecar struct {
   client is still dialed once at startup and reused (gRPC reconnects across
   container restarts on its own).
 
-### 3. On-demand lifecycle hook
-The backend gains two methods the watcher path calls:
+### 3. On-demand lifecycle (no watcher changes)
+Activity is inferred from existing watch traffic — no new watcher hooks:
 
-- `EnsureSidecarUp(ctx, accountID) error` — called by `StartWatch` BEFORE the
-  gRPC `StartWatch`. If a controllable sidecar is configured: `dockerctl.Start`,
-  then poll for gRPC readiness (a cheap `Heartbeat("")` or a dedicated health
-  ping) up to `startTimeout` (~30s). Clears `idleSince`. No-op (returns nil) when
-  on-demand is not enabled.
-- `MarkIdle(accountID)` / `MarkActive(accountID)` — the watcher reports, each
-  discovery tick, whether the account currently has something watchable. Backend
-  stamps/clears `idleSince`.
+- Each `sidecar` tracks `lastActive time.Time`, bumped on every `StartWatch`
+  AND `Heartbeat` for that account. A watching account heartbeats ~every 60s,
+  so `lastActive` stays fresh; an account with nothing watchable idles in
+  `pick_campaign` (no StartWatch/Heartbeat) so `lastActive` goes stale.
+- `EnsureSidecarUp(accountID)` — called inside `StartWatch` BEFORE the gRPC
+  call. If a controllable sidecar is configured: `dockerctl.Start` (idempotent),
+  then poll readiness via `client.Heartbeat(ctx, "")` (nil error = server up;
+  the sidecar returns `Alive:false` with no transport error) up to
+  `startTimeout` (~30s). No-op when on-demand disabled.
+- A single reaper goroutine (started in `New` when on-demand enabled) ticks
+  every minute: for each sidecar where `now - lastActive > idleGrace` (10 min)
+  AND the container is `Running`, call `dockerctl.Stop`. A churning account
+  (retrying StartWatch every few sec) keeps `lastActive` fresh and is never
+  stopped — only genuinely idle accounts are reaped.
 
-A single background reaper goroutine (started in `New` when on-demand enabled)
-ticks every minute: for each sidecar with `idleSince` older than `idleGrace`
-(10 min) and currently running, call `dockerctl.Stop` and log it.
-
-### 4. Watcher integration
-Minimal: the watcher already knows per-account whether it found a watchable
-campaign+channel (it transitions to `pick_stream`/`watching`) versus nothing
-(it idles in `pick_campaign`). On each discovery outcome it calls the backend's
-`MarkActive`/`MarkIdle`. `StartWatch` internally calls `EnsureSidecarUp`. No
-new watcher state machine.
+This is a deliberate simplification of the spec's earlier `MarkActive/MarkIdle`
+idea: the heartbeat timestamp already encodes "is this account watching," so no
+watcher edits are needed.
 
 ## Data flow
 
 ```
-watcher discovery (HTTP) ── watchable? ──► MarkActive ──► StartWatch
-                                                          └─► EnsureSidecarUp: docker start + readiness ─► gRPC StartWatch ─► IVS plays
-                          └─ nothing ────► MarkIdle (stamp idleSince)
+watcher discovery (HTTP) ── watchable? ──► StartWatch ─► EnsureSidecarUp: docker start + readiness ─► gRPC StartWatch ─► IVS plays
+                                           Heartbeat (~60s) ─► bump lastActive
+                          └─ nothing ────► idle in pick_campaign (no Start/Heartbeat) ─► lastActive goes stale
 
-reaper (1/min): idleSince > 10min && running ──► docker stop ──► RAM freed
+reaper (1/min): now-lastActive > 10min && container running ──► docker stop ──► RAM freed
 ```
 
 ## Error handling / graceful degrade
@@ -165,9 +164,10 @@ reaper (1/min): idleSince > 10min && running ──► docker stop ──► RAM
   idempotent, Running parses state, errors propagate).
 - Kick registry: slugify usernames (mixed case, spaces/symbols, empty →
   fallback), derived URL/container name correct, `watchClientFor` pins correctly.
-- Lifecycle: with a fake `dockerctl`, assert `EnsureSidecarUp` starts + waits;
-  `MarkIdle` then reaper after grace calls Stop; `MarkActive` clears idle and
-  reaper does NOT stop; degrade path when dockerctl is nil.
+- Lifecycle: with a fake `dockerctl`, assert `EnsureSidecarUp` starts + waits
+  for readiness; reaper stops a container whose `lastActive` is older than grace
+  AND running; reaper does NOT stop one with fresh `lastActive` or already
+  stopped; degrade path when dockerctl is nil (no stop/start, never errors).
 - Live (manual, prod): expire/lull → both containers `docker stop` after 10
   min; a live channel reappears → container starts, player plays, progress
   advances; RAM drops to ~daemon-only between events.
