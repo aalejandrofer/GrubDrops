@@ -11,7 +11,16 @@ services:
       GRUB_MASTER_KEY: ${GRUB_MASTER_KEY:?GRUB_MASTER_KEY required}
       GRUB_DB_PATH: /data/miner.db
       GRUB_HTTP_ADDR: 0.0.0.0:8080
+      # Browser sidecar gRPC endpoint. Empty = no sidecar. Point at the
+      # compose `browser` service with GRUB_BROWSER_URL=browser:9090 (and
+      # start the `browser` profile) to enable the codec-enabled IVS watch.
       GRUB_BROWSER_URL: ${GRUB_BROWSER_URL:-}
+      # Kick watch-time accrual path. Kick credits drop minutes ONLY for a
+      # real, actively-playing IVS <video> with periodic viewer activity, so
+      # set this to 1 to route Kick StartWatch through the codec-enabled
+      # browser sidecar (requires GRUB_BROWSER_URL + the `browser` profile).
+      # When 0/unset, Kick falls back to the non-accruing viewer-WS path.
+      GRUB_KICK_BROWSER_WATCH: ${GRUB_KICK_BROWSER_WATCH:-0}
       # Secure cookies: ON behind Traefik/HTTPS. The OIDC SameSite=Lax state
       # cookie and the session cookie both need this to work over real HTTPS.
       # Turn off only for plain-HTTP localhost.

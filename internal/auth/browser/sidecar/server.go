@@ -51,7 +51,9 @@ func (s *Server) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.H
 }
 
 func (s *Server) StopWatch(ctx context.Context, req *pb.StopWatchRequest) (*pb.StopWatchResponse, error) {
-	s.b.CloseTab(req.WatchHandle)
+	// Route through Kick so it closes the tab AND drops the per-handle
+	// liveness/stall state registered by OpenStreamWatch.
+	s.kick.StopWatch(req.WatchHandle)
 	return &pb.StopWatchResponse{}, nil
 }
 

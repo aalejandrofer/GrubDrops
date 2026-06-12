@@ -21,7 +21,8 @@ type Kick struct {
 	b *Browser
 
 	mu       sync.Mutex
-	authTabs map[string]string // account_id -> persistent tab handle
+	authTabs map[string]string      // account_id -> persistent tab handle
+	watches  map[string]*watchState // watch handle -> liveness/stall state
 }
 
 func NewKick(b *Browser) *Kick {

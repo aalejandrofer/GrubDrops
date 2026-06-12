@@ -91,6 +91,23 @@ func New(ctx context.Context) *Browser {
 
 		chromedp.Flag("lang", "en-US,en;q=0.9"),
 		chromedp.UserAgent(stealthUA),
+
+		// Video playback for the Kick IVS watch path. Without an explicit
+		// autoplay grant, Chrome's autoplay policy blocks <video>.play() in a
+		// headless tab that has no user gesture, so the player never advances
+		// and Kick credits no watch-time. Muting the audio both satisfies the
+		// "muted autoplay is always allowed" rule and keeps the tab cheap.
+		chromedp.Flag("autoplay-policy", "no-user-gesture-required"),
+		chromedp.Flag("mute-audio", true),
+	}
+
+	// In the container the runtime image sets CHROME_BIN to the
+	// google-chrome-stable path (the codec-enabled build). Pass it explicitly
+	// so chromedp launches that binary rather than probing PATH and possibly
+	// finding a codec-less chromium. Outside the container CHROME_BIN is
+	// unset and chromedp falls back to its normal PATH probe.
+	if bin := os.Getenv("CHROME_BIN"); bin != "" {
+		opts = append(opts, chromedp.ExecPath(bin))
 	}
 	allocCtx, cancel := chromedp.NewExecAllocator(ctx, opts...)
 	return &Browser{

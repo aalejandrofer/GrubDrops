@@ -7,15 +7,61 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/browser-sidecar ./cmd/browser-sidecar
 
-# chromedp/headless-shell ships Chrome at /headless-shell/headless-shell.
-# Use it as runtime so chromedp.NewExecAllocator finds Chrome on PATH.
-FROM chromedp/headless-shell:latest
-# Copy the CA bundle from the alpine build stage so Go's TLS layer
-# can verify gql.twitch.tv etc when we POST from the sidecar
-# directly (Twitch gql Go-HTTP bypass path).
+# Runtime: full google-chrome-stable on a Debian base.
+#
+# We CANNOT use chromedp/headless-shell: that build is compiled WITHOUT the
+# proprietary H.264/AAC codecs, so it cannot decode Kick's IVS HLS stream —
+# the <video> element stays at readyState 0 and never advances, so Kick
+# credits ZERO drop watch-time. google-chrome-stable ships the proprietary
+# codecs and decodes the stream, which is the whole point of this sidecar.
+FROM debian:bookworm-slim AS runtime
+
+# Install Chrome + the runtime libs a headless GPU-less Chrome needs.
+# The google-chrome-stable .deb pulls most deps; we add fonts and a few libs
+# explicitly so headless rendering doesn't crash on a fresh slim image.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        wget \
+        gnupg \
+        fonts-liberation \
+        fonts-noto-color-emoji \
+        libasound2 \
+        libatk-bridge2.0-0 \
+        libatk1.0-0 \
+        libcups2 \
+        libdrm2 \
+        libgbm1 \
+        libgtk-3-0 \
+        libnspr4 \
+        libnss3 \
+        libx11-6 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxext6 \
+        libxfixes3 \
+        libxkbcommon0 \
+        libxrandr2 \
+        xdg-utils \
+    && wget -q -O /tmp/google-chrome.deb \
+        https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+    && apt-get install -y --no-install-recommends /tmp/google-chrome.deb \
+    && rm -f /tmp/google-chrome.deb \
+    && rm -rf /var/lib/apt/lists/*
+
+# Make Chrome discoverable by chromedp's ExecAllocator (it probes a list of
+# well-known binary names on PATH). google-chrome-stable installs both
+# `google-chrome` and `google-chrome-stable` in /usr/bin (on PATH). We also
+# export CHROME_BIN as a belt-and-braces hint and the sidecar passes the
+# explicit path via chromedp.ExecPath when CHROME_BIN is set.
+ENV CHROME_BIN="/usr/bin/google-chrome-stable" \
+    SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
+
+# Copy the CA bundle from the build stage so Go's TLS layer can verify
+# gql.twitch.tv etc when we POST from the sidecar directly (Twitch gql
+# Go-HTTP bypass path).
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /out/browser-sidecar /browser-sidecar
-ENV PATH="/headless-shell:${PATH}" \
-    SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
+
 EXPOSE 9090
 ENTRYPOINT ["/browser-sidecar"]

@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math/rand"
+	"sync"
 	"time"
 
+	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 
@@ -14,9 +17,12 @@ import (
 )
 
 // Kick credits drop watch-time ONLY for a real, actively-playing IVS
-// video session (proven: a CDP-driven Chrome playing kick.com/<channel>
-// accrued progress; the pure-HTTP utls viewer-WS does NOT). This file
-// drives a headless Chrome tab through the player so watch-time accrues.
+// video session WITH periodic viewer activity (proven: a CDP-driven
+// Chrome playing kick.com/<channel> with synthetic mouse activity accrued
+// ~real-time; the same player with NO activity went flat — anti-AFK; the
+// pure-HTTP utls viewer-WS does NOT accrue at all). This file drives a
+// headless Chrome tab through the player AND simulates a viewer moving the
+// mouse over it so watch-time accrues.
 //
 // Resource notes: one video-playing tab per active watch. We mute it and
 // pin the lowest available quality to keep CPU/bandwidth down. Because
@@ -30,9 +36,25 @@ const (
 	kickWatchSettleWait = 8 * time.Second
 	// kickWatchKeepAliveEvery is the cadence of the background nudge that
 	// un-pauses / re-mutes the player if Kick's UI or an ad break paused
-	// it. Kick accrues per-minute, so a sub-minute nudge is plenty.
-	kickWatchKeepAliveEvery = 20 * time.Second
+	// it, AND dispatches a trusted mouse-move to defeat the anti-AFK
+	// gate. Kick accrues per-minute, so a sub-minute cadence is plenty;
+	// ~15-20s keeps us comfortably inside any idle window.
+	kickWatchKeepAliveEvery = 17 * time.Second
 )
+
+// watchState tracks the last observed <video> currentTime per handle so
+// WatchAlive can tell "playing and advancing" from "claims playing but
+// stalled/looping a buffer" (e.g. the stream went offline mid-watch and
+// the player froze on the last frame without flipping paused/ended).
+type watchState struct {
+	mu       sync.Mutex
+	lastTime float64
+	lastSeen time.Time
+	// stalls counts consecutive liveness probes where currentTime did not
+	// advance. One stalled probe can be a transient buffer hiccup; several
+	// in a row means the video is genuinely not advancing.
+	stalls int
+}
 
 // kickPlayerDriveScript locates the IVS <video>, mutes it, sets the
 // lowest quality if a quality menu is reachable, and calls play(). It is
@@ -74,8 +96,9 @@ const kickPlayerDriveScript = `(() => {
 // OpenStreamWatch opens kick.com/<channel> in a fresh tab with the
 // account's cookies injected, settles past Cloudflare, drives the IVS
 // player to muted/playing, and starts a keep-alive goroutine that nudges
-// the player every kickWatchKeepAliveEvery. Returns the tab handle (used
-// as the watch id) so Heartbeat/StopWatch can target it.
+// the player AND simulates viewer mouse activity every
+// kickWatchKeepAliveEvery. Returns the tab handle (used as the watch id)
+// so Heartbeat/StopWatch can target it.
 //
 // This supersedes the fire-and-forget OpenStream for the browser-watch
 // path. OpenStream is retained for callers that only need a passive tab.
@@ -122,14 +145,26 @@ func (k *Kick) OpenStreamWatch(channel string, session *pb.KickSession) (string,
 	}
 	slog.Info("kick watch opened", "channel", channel, "handle", handle, "player", status)
 
-	// Keep-alive: re-drive the player on an interval so an ad break, a
-	// stall, or Kick's UI pausing on tab-blur doesn't silently stop
-	// accrual. Bound to the tab context so it exits when the tab closes.
+	// Register liveness state for this handle so WatchAlive can detect a
+	// stalled (non-advancing) <video>.
+	k.mu.Lock()
+	if k.watches == nil {
+		k.watches = map[string]*watchState{}
+	}
+	k.watches[handle] = &watchState{lastSeen: time.Now()}
+	k.mu.Unlock()
+
+	// Keep-alive: re-drive the player + simulate viewer activity on an
+	// interval so (a) an ad break, a stall, or Kick's UI pausing on
+	// tab-blur doesn't silently stop accrual, and (b) the anti-AFK gate
+	// keeps crediting. Bound to the tab context so it exits when the tab
+	// closes.
 	go k.watchKeepAlive(ctx, channel, handle)
 	return handle, nil
 }
 
-// watchKeepAlive periodically re-runs the player drive script for an open
+// watchKeepAlive periodically re-runs the player drive script AND
+// dispatches a trusted CDP mouse-move over the player area for an open
 // watch tab. Exits when the tab context is cancelled (StopWatch / browser
 // close) or when the tab can no longer be driven.
 func (k *Kick) watchKeepAlive(ctx context.Context, channel, handle string) {
@@ -146,7 +181,10 @@ func (k *Kick) watchKeepAlive(ctx context.Context, channel, handle string) {
 			}
 			var status string
 			driveCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			err := chromedp.Run(driveCtx, chromedp.Evaluate(kickPlayerDriveScript, &status))
+			err := chromedp.Run(driveCtx,
+				chromedp.Evaluate(kickPlayerDriveScript, &status),
+				kickSimulateActivity(),
+			)
 			cancel()
 			if err != nil {
 				slog.Debug("kick watch keepalive drive failed", "channel", channel, "handle", handle, "err", err)
@@ -157,10 +195,47 @@ func (k *Kick) watchKeepAlive(ctx context.Context, channel, handle string) {
 	}
 }
 
+// kickSimulateActivity dispatches a couple of TRUSTED mouse-move events
+// over the player region via CDP Input.dispatchMouseEvent. These are
+// browser-level trusted events (event.isTrusted === true), unlike
+// JS-synthetic dispatchEvent, so Kick's anti-AFK detection treats them as
+// genuine viewer activity. Coordinates jitter within the top-left video
+// area (the player fills the upper portion of the viewport on a channel
+// page) to look organic.
+func kickSimulateActivity() chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		// Two small moves a beat apart — a single point can be ignored as
+		// noise; a short path reads as a real cursor nudge.
+		x1 := 200 + rand.Float64()*400
+		y1 := 150 + rand.Float64()*250
+		x2 := x1 + (rand.Float64()*60 - 30)
+		y2 := y1 + (rand.Float64()*60 - 30)
+		if err := input.DispatchMouseEvent(input.MouseMoved, x1, y1).Do(ctx); err != nil {
+			return err
+		}
+		select {
+		case <-time.After(120 * time.Millisecond):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		return input.DispatchMouseEvent(input.MouseMoved, x2, y2).Do(ctx)
+	})
+}
+
+// StopWatch closes the watch tab and drops its liveness state.
+func (k *Kick) StopWatch(handle string) {
+	k.b.CloseTab(handle)
+	k.mu.Lock()
+	delete(k.watches, handle)
+	k.mu.Unlock()
+}
+
 // WatchAlive reports whether the watch tab still exists AND its <video>
-// element is actually playing (not merely that the tab is open). Used by
-// the Heartbeat RPC so the watcher swaps channels when playback dies
-// (stream ended, player errored) rather than holding a dead tab.
+// element is actually PLAYING AND ADVANCING (not merely that the tab is
+// open or that the player claims to be playing while frozen on a stale
+// buffer). Used by the Heartbeat RPC so the watcher swaps channels when
+// playback dies (stream ended, player errored, channel went offline)
+// rather than holding a dead tab that accrues nothing.
 func (k *Kick) WatchAlive(handle string) bool {
 	ctx, ok := k.b.Tab(handle)
 	if !ok {
@@ -176,36 +251,100 @@ func (k *Kick) WatchAlive(handle string) bool {
 		slog.Debug("kick watch probe failed", "handle", handle, "err", err)
 		return false
 	}
-	return parseWatchAlive(status)
+	return k.evalWatchAlive(handle, status)
 }
 
 // kickPlayerProbeScript reports whether the IVS <video> is currently
-// playing. Read-only (no play()/mute side effects) so Heartbeat stays a
-// pure check; the keep-alive goroutine owns the corrective nudges.
+// playing plus its currentTime so the caller can detect a stalled player.
+// Read-only (no play()/mute side effects) so Heartbeat stays a pure
+// check; the keep-alive goroutine owns the corrective nudges.
 const kickPlayerProbeScript = `(() => {
   try {
     const v = document.querySelector('video');
-    if (!v) return JSON.stringify({video: false, playing: false});
+    if (!v) return JSON.stringify({video: false, playing: false, currentTime: 0});
     const playing = !v.paused && !v.ended && v.readyState >= 2;
-    return JSON.stringify({video: true, playing: playing, readyState: v.readyState});
+    return JSON.stringify({video: true, playing: playing, readyState: v.readyState, currentTime: v.currentTime || 0});
   } catch (e) {
-    return JSON.stringify({video: false, playing: false, err: String(e)});
+    return JSON.stringify({video: false, playing: false, currentTime: 0, err: String(e)});
   }
 })()`
 
-// parseWatchAlive interprets the probe script's JSON. "Alive" means the
-// <video> exists and is playing. A missing video or a paused/errored
-// player counts as not-alive so the watcher re-picks a channel.
-func parseWatchAlive(status string) bool {
-	if status == "" {
+// maxWatchStalls is how many consecutive non-advancing probes we tolerate
+// before declaring the watch dead. One stall can be a normal buffer
+// hiccup; a few in a row (over ~Heartbeat cadence, ~1/min) means the video
+// is genuinely frozen — re-pick a channel.
+const maxWatchStalls = 2
+
+// evalWatchAlive interprets the probe JSON AND folds in per-handle
+// progression: a player that reports playing but whose currentTime hasn't
+// advanced across maxWatchStalls consecutive probes is treated as dead.
+func (k *Kick) evalWatchAlive(handle, status string) bool {
+	s := parseWatchProbe(status)
+	if !s.Video || !s.Playing {
 		return false
 	}
-	var s struct {
-		Video   bool `json:"video"`
-		Playing bool `json:"playing"`
+
+	k.mu.Lock()
+	if k.watches == nil {
+		k.watches = map[string]*watchState{}
+	}
+	ws := k.watches[handle]
+	if ws == nil {
+		ws = &watchState{}
+		k.watches[handle] = ws
+	}
+	k.mu.Unlock()
+
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+	// First probe for this handle: seed the baseline, treat as alive.
+	if ws.lastSeen.IsZero() {
+		ws.lastTime = s.CurrentTime
+		ws.lastSeen = time.Now()
+		ws.stalls = 0
+		return true
+	}
+	// currentTime advanced (allowing for tiny float noise) => healthy.
+	if s.CurrentTime > ws.lastTime+0.05 {
+		ws.lastTime = s.CurrentTime
+		ws.lastSeen = time.Now()
+		ws.stalls = 0
+		return true
+	}
+	// Not advancing. Tolerate a few transient stalls; beyond that, dead.
+	ws.stalls++
+	ws.lastTime = s.CurrentTime
+	ws.lastSeen = time.Now()
+	if ws.stalls > maxWatchStalls {
+		slog.Debug("kick watch stalled (currentTime not advancing)", "handle", handle, "stalls", ws.stalls, "currentTime", s.CurrentTime)
+		return false
+	}
+	return true
+}
+
+type watchProbe struct {
+	Video       bool    `json:"video"`
+	Playing     bool    `json:"playing"`
+	CurrentTime float64 `json:"currentTime"`
+}
+
+// parseWatchProbe decodes the probe script's JSON. A malformed/empty body
+// yields a zero value (not video, not playing).
+func parseWatchProbe(status string) watchProbe {
+	var s watchProbe
+	if status == "" {
+		return s
 	}
 	if err := json.Unmarshal([]byte(status), &s); err != nil {
-		return false
+		return watchProbe{}
 	}
+	return s
+}
+
+// parseWatchAlive is the stateless interpretation used by tests and any
+// caller that only cares whether the player reports video+playing (no
+// progression check). "Alive" means the <video> exists and is playing.
+func parseWatchAlive(status string) bool {
+	s := parseWatchProbe(status)
 	return s.Video && s.Playing
 }
