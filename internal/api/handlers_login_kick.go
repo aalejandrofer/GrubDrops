@@ -70,13 +70,17 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	verified, err := d.persistKickSession(r.Context(), id, kickCookieForm{
-		KickSession:  r.FormValue("kick_session"),
-		XSRF:         r.FormValue("xsrf_token"),
-		CFClearance:  r.FormValue("cf_clearance"),
-		SessionToken: r.FormValue("session_token"),
-		Channels:     parseKickChannels(r.FormValue("channel")),
-	})
+	// cookies.txt is a few KiB; cap the body well below anything abusive.
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
+	form, err := kickCookiesFromNetscape(r.FormValue("cookies_txt"))
+	if err != nil {
+		d.renderError(w, r, id, acc.DisplayName, err.Error())
+		return
+	}
+	form.Channels = parseKickChannels(r.FormValue("channel"))
+
+	verified, err := d.persistKickSession(r.Context(), id, form)
 	if err != nil {
 		d.renderError(w, r, id, acc.DisplayName, "failed to persist session: "+err.Error())
 		return
@@ -90,42 +94,7 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
 
-// helperIngest is the no-auth cookie upload used by grubdrops-helper. It is
-// NOT behind the admin session or CSRF: the unguessable acc_<24hex> ID in the
-// path is the only credential (404 on an unknown ID). The helper runs on a
-// friend's machine and can't carry an admin cookie, so the random account ID
-// is the bearer secret — security by obscurity on 96 bits.
-func (d *loginKickDeps) helperIngest(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	acc, err := d.q.GetAccount(r.Context(), id)
-	if err != nil {
-		http.NotFound(w, r) // unknown ID — don't reveal whether it could exist
-		return
-	}
-	if acc.Platform != "kick" {
-		http.Error(w, "account is not a kick account", http.StatusBadRequest)
-		return
-	}
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "parse form: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if _, err := d.persistKickSession(r.Context(), id, kickCookieForm{
-		KickSession:  r.FormValue("kick_session"),
-		XSRF:         r.FormValue("xsrf_token"),
-		CFClearance:  r.FormValue("cf_clearance"),
-		SessionToken: r.FormValue("session_token"),
-		Channels:     parseKickChannels(r.FormValue("channel")),
-	}); err != nil {
-		http.Error(w, "persist session: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok\n"))
-}
-
-// kickCookieForm carries the cookie/channel fields a Kick login submits,
-// shared by the authed HTML handler and the no-auth helper endpoint.
+// kickCookieForm carries the cookie/channel fields a Kick login submits.
 type kickCookieForm struct {
 	KickSession  string
 	XSRF         string

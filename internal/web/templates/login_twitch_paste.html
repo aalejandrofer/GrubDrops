@@ -8,7 +8,7 @@
   <div class="auth-card">
     <div class="kicker">// twitch · authorize</div>
     <h1>Authorize {{.DisplayName}}</h1>
-    <p class="intro">Twitch's integrity gate rejects web-issued auth-tokens — gql returns <code>dropCampaigns: null</code>, PubSub LISTEN returns <code>ERR_BADAUTH</code>. Only Android-issued OAuth tokens pass. Three paths below; first one is the only one that fully unlocks drops.</p>
+    <p class="intro">Twitch's integrity gate rejects web-issued auth-tokens — gql returns <code>dropCampaigns: null</code>, PubSub LISTEN returns <code>ERR_BADAUTH</code>. Only Android-issued OAuth tokens pass. Two paths below; the first is the only one that fully unlocks drops.</p>
   </div>
 
   <div class="auth-card method preferred">
@@ -25,19 +25,6 @@
 
   <div class="auth-card method">
     <div class="method-head">
-      <span class="method-tag muted">alt</span>
-      <h2>Helper CLI / pre-built app</h2>
-    </div>
-    <p><strong>Note:</strong> cookies snapshotted from your browser are web-issued, so they DO NOT pass integrity (same outcome as the manual paste below). Useful for legacy accounts or debugging only.</p>
-    <div class="cli-box">
-      <div class="cli-label">one-liner</div>
-      <pre class="cli-code">go run ./cmd/grubdrops-helper twitch {{.AccountID}}</pre>
-      <div class="cli-hint">From the repo root. Add <code>--miner URL</code> for a remote deployment.</div>
-    </div>
-  </div>
-
-  <div class="auth-card method">
-    <div class="method-head">
       <span class="method-tag muted">fallback</span>
       <h2>Manual cookie paste</h2>
     </div>
@@ -45,7 +32,7 @@
       <li>Open <code>twitch.tv</code> in any browser and sign in.</li>
       <li>DevTools → Application → Cookies → <code>https://www.twitch.tv</code>.</li>
       <li>Copy at minimum <code>auth-token</code>.</li>
-      <li>Paste below. Same integrity caveat as the helper CLI.</li>
+      <li>Paste below. Web-issued tokens do not pass integrity — device-code is preferred.</li>
     </ol>
   </div>
   {{end}}

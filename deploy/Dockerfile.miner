@@ -17,23 +17,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/grubdrops ./cmd/miner
 
-# Cross-compile the downloadable Kick/Twitch cookie helper for the common
-# desktop targets, baked into the image and served at /download/helper.
-# Shares the same caches, so unchanged helpers relink from cached objects.
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    set -eux; \
-    for spec in darwin/arm64/grubdrops-helper-macos-arm64 \
-                darwin/amd64/grubdrops-helper-macos-intel \
-                windows/amd64/grubdrops-helper-windows.exe \
-                linux/amd64/grubdrops-helper-linux; do \
-      os=$(echo "$spec" | cut -d/ -f1); arch=$(echo "$spec" | cut -d/ -f2); name=$(echo "$spec" | cut -d/ -f3); \
-      CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -ldflags="-s -w" -o "/helpers/$name" ./cmd/grubdrops-helper; \
-    done
-
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/grubdrops /grubdrops
-COPY --from=build /helpers /helpers
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 USER nonroot:nonroot
 EXPOSE 8080

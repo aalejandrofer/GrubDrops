@@ -1892,39 +1892,6 @@
     font-size: 12px;
     color: var(--accent);
   }
-  .cli-box {
-    background: var(--bg);
-    border: 1px dashed var(--line);
-    padding: 14px 16px;
-    margin: 6px 0 12px;
-  }
-  .cli-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 9.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
-    color: var(--muted);
-    margin-bottom: 8px;
-  }
-  .cli-code {
-    margin: 0 0 10px;
-    padding: 10px 12px;
-    background: #0a0b0d;
-    border: 1px solid var(--line);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12.5px;
-    color: var(--text);
-    overflow-x: auto;
-    line-height: 1.4;
-    border-radius: 2px;
-  }
-  .cli-hint {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10.5px;
-    color: var(--muted);
-    line-height: 1.55;
-  }
-  .cli-hint code { background: transparent; padding: 0; color: var(--text); }
   .auth-card.method .hint {
     color: var(--muted);
     font-family: 'JetBrains Mono', monospace;
@@ -2181,40 +2148,6 @@
     align-items: center;
     flex-wrap: wrap;
   }
-  .reauth-cli {
-    border-top: 1px dashed var(--line);
-    padding-top: 10px;
-  }
-  .reauth-cli summary {
-    cursor: pointer;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--accent);
-    list-style: none;
-  }
-  .reauth-cli summary::-webkit-details-marker { display: none; }
-  .reauth-cli summary::marker { display: none; }
-  .reauth-cli summary::before {
-    content: "▶ ";
-    display: inline-block;
-    color: var(--accent);
-    transition: transform 0.12s;
-    font-size: 9px;
-    margin-right: 4px;
-  }
-  .reauth-cli[open] summary::before { transform: rotate(90deg); }
-  .reauth-cli p { margin: 10px 0; }
-  .reauth-cli .cli-code { margin: 8px 0; }
-  .reauth-cli code {
-    background: var(--surface-2);
-    padding: 1px 5px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11.5px;
-    color: var(--accent);
-  }
-
   /* Section header used inside settings + future config pages.
      Mirrors the .drops-pane-h pattern but lives outside the
      two-column drops grid so the page can have multiple sections
@@ -2546,7 +2479,8 @@
   .settings-card input[type="url"],
   .settings-card input[type="password"],
   .settings-card input[type="number"],
-  .settings-card select {
+  .settings-card select,
+  .settings-card textarea {
     display: block;
     width: 100%;
     margin-top: 8px;
@@ -2562,7 +2496,9 @@
     transition: border-color .15s, background .15s;
   }
   .form-card input:focus, .form-card select:focus,
-  .settings-card input:focus, .settings-card select:focus { border-bottom-color: var(--accent); background: var(--surface-2); }
+  .settings-card input:focus, .settings-card select:focus,
+  .settings-card textarea:focus { border-bottom-color: var(--accent); background: var(--surface-2); }
+  .settings-card textarea { min-height: 120px; resize: vertical; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
   /* Numeric inputs hold a handful of digits — don't stretch them to the full
      column like text/URL fields. Keep them compact + left-aligned. */
   .form-card input[type="number"],

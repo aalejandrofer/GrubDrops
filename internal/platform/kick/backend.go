@@ -131,9 +131,7 @@ type kickBrowserWatch struct {
 func (b *Backend) Name() string { return "kick" }
 
 // RegisterChannel stores a SINGLE channel for an account, replacing any
-// existing list. Retained for backward compatibility with the
-// grubdrops-helper CLI's one-channel flow; new code should call
-// RegisterChannels.
+// existing list. Convenience wrapper; new code should call RegisterChannels.
 func (b *Backend) RegisterChannel(accountID, channel string) {
 	if channel == "" {
 		b.RegisterChannels(accountID, nil)
