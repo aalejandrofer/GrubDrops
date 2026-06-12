@@ -120,6 +120,13 @@ Two tiers — pick by placement, never invent a third:
 Never inline `padding`/`font`/`border` on a button — adjust the class.
 Never put a filled `.btn` box inside a flat section.
 
+- **Destructive linear**: `.btn-linear.red` (Delete account). Lives in a
+  `.danger-zone` strip — dashed top rule, red uppercase `.danger-label`
+  left, the action right. No red boxes.
+- **Alert CTAs** (console needs-auth banners): `.alert` is a flat row
+  (3px accent left tick + soft tint, no box border); its `.alert-cta`
+  renders linear via CSS override — keep the `.btn sm alert-cta` markup.
+
 ## Key-value rows (settings, status, read-outs)
 
 STATUS-style dashed-leader rows are the canonical "table" for settings and

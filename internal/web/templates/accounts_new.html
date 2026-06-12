@@ -13,24 +13,30 @@
 
   {{if .Flash}}<div class="flash-ok" style="color:var(--red);border-left-color:var(--red);background:rgba(198,74,60,.06);">{{.Flash}}</div>{{end}}
 
-  <div class="form-card">
+  <section class="settings-card">
+    <header class="section-h"><h3>Account</h3><span class="meta">Platform + label</span></header>
     <form method="post" action="/accounts/new">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-      <label>Platform
-        <select name="platform">
-          <option value="twitch">Twitch (drops)</option>
-          <option value="kick">Kick (drops)</option>
-        </select>
-      </label>
-      <label>Display name
-        <input type="text" name="display_name" required placeholder="e.g. TTik3r">
-        <span class="field-hint">A friendly label shown across the GrubDrops UI. For Twitch the real account is whoever approves the device code on the next screen — no username needed here.</span>
-      </label>
-      <div class="row">
+      <div class="kvedit">
+        <div class="row">
+          <span class="k">platform</span>
+          <span class="d"></span>
+          <span class="v"><select name="platform">
+            <option value="twitch">Twitch (drops)</option>
+            <option value="kick">Kick (drops)</option>
+          </select></span>
+        </div>
+        <div class="row">
+          <span class="k">display name</span>
+          <span class="d">a friendly label shown across the UI — for Twitch the real account is whoever approves the device code on the next screen</span>
+          <span class="v grow"><input type="text" name="display_name" required placeholder="e.g. TTik3r"></span>
+        </div>
+      </div>
+      <div class="row" style="margin-top:18px;">
         <a class="back-link" href="/accounts">← back</a>
-        <button class="btn primary" type="submit">Create →</button>
+        <button class="btn-linear" type="submit" style="margin-left:auto;">Create →</button>
       </div>
     </form>
-  </div>
+  </section>
 </div>
 {{end}}

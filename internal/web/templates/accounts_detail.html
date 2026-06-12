@@ -13,17 +13,14 @@
     </div>
   </div>
 
-  <div class="form-card">
-    <div class="platrow">
-      <span>platform: <code>{{.Platform}}</code></span>
-      <span>name: <code>{{.DisplayName}}</code></span>
-      <span>id: <code>{{.ID}}</code></span>
-    </div>
+  <div class="settings-stack">
+  <section class="settings-card">
+    <header class="section-h"><h3>Account</h3><span class="meta">{{.Platform}} · {{.ID}}</span></header>
 
     {{if eq .Platform "twitch"}}
     <div class="reauth-row">
       <div class="reauth-actions">
-        <a class="btn" href="/accounts/{{.ID}}/login">Authenticate with device code →</a>
+        <a class="btn-linear" href="/accounts/{{.ID}}/login">Authenticate with device code →</a>
         <span class="hint">Twitch login is <strong>device-code only</strong>. You get a short code, open <code>twitch.tv/activate</code> on any browser signed into the Twitch account for <strong>{{.DisplayName}}</strong>, and approve it. No password or cookies pass through GrubDrops; a new session replaces the old one.</span>
       </div>
       <details class="reauth-cli">
@@ -36,7 +33,7 @@
     {{else if eq .Platform "kick"}}
     <div class="reauth-row">
       <div class="reauth-actions">
-        <a class="btn" href="/accounts/{{.ID}}/login">Re-authenticate →</a>
+        <a class="btn-linear" href="/accounts/{{.ID}}/login">Re-authenticate →</a>
         <span class="hint">Kick auth needs real browser cookies (the API rejects automated logins). Use the helper below to snapshot them. Existing session is overwritten.</span>
       </div>
       <details class="reauth-cli">
@@ -50,93 +47,104 @@
 
     <form method="post" action="/accounts/{{.ID}}/update">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-      <label>Display name<input type="text" name="display_name" value="{{.DisplayName}}"></label>
-      <label class="cb">
-        <input type="checkbox" name="enabled" value="1" {{if eq .Enabled 1}}checked{{end}}>
-        Enabled
-      </label>
-      <label>Discord webhook URL <span style="text-transform:none;font-family:'IBM Plex Sans',sans-serif;letter-spacing:0;color:var(--muted);font-size:11px;">(overrides global)</span>
-        <input type="url" name="webhook_url" value="{{.WebhookUrl.String}}" placeholder="https://discord.com/api/webhooks/…">
-      </label>
-      <div class="row">
+      <div class="kvedit">
+        <div class="row">
+          <span class="k">display name</span>
+          <span class="v grow"><input type="text" name="display_name" value="{{.DisplayName}}"></span>
+        </div>
+        <div class="row">
+          <span class="k">enabled</span>
+          <span class="d">account participates in mining</span>
+          <span class="v"><label class="cb"><input type="checkbox" name="enabled" value="1" {{if eq .Enabled 1}}checked{{end}}> on</label></span>
+        </div>
+        <div class="row">
+          <span class="k">discord webhook</span>
+          <span class="d">overrides global</span>
+          <span class="v grow"><input type="url" name="webhook_url" value="{{.WebhookUrl.String}}" placeholder="https://discord.com/api/webhooks/…"></span>
+        </div>
+      </div>
+      <div class="row" style="margin-top:18px;">
         <a class="back-link" href="/accounts">← back</a>
-        <button class="btn primary" type="submit">Save →</button>
+        <button class="btn-linear" type="submit" style="margin-left:auto;">Save →</button>
       </div>
     </form>
 
-    <div class="danger">
-      <h3>Danger zone</h3>
+    <div class="danger-zone">
+      <span class="danger-label">danger zone</span>
       <form method="post" action="/accounts/{{.ID}}/delete" onsubmit="return confirm('Delete this account permanently?');">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-        <button type="submit">Delete account</button>
+        <button class="btn-linear red" type="submit">Delete account →</button>
       </form>
     </div>
-  </div>
+  </section>
 {{end}}{{/* .Account */}}
 
-  <div class="form-card" style="margin-top: 18px;">
-    <h2 style="margin: 0 0 6px;">Games</h2>
-    <p style="color: var(--muted); font-size: 12px; margin: 0 0 14px;">
-      The watcher only mines campaigns whose game appears here. Order = priority (top = mined first). Account with empty selection idles.
-    </p>
+  <section class="settings-card">
+    <header class="section-h"><h3>Games</h3><span class="meta">Order = priority · empty selection idles</span></header>
+    <p class="hint" style="margin:0 0 14px;">The watcher only mines campaigns whose game appears here. Top of the list is mined first.</p>
     <form method="post" action="/accounts/{{.Account.ID}}/games" id="games-form">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px;">
+      <div class="settings-grid-2">
         <div>
-          <div class="kicker" style="margin-bottom: 8px;">Selected · drag to reorder</div>
-          <ul id="selected-list" style="list-style:none;margin:0;padding:0;border:1px dashed var(--line);min-height:200px;">
+          <div class="kicker">Selected · drag to reorder</div>
+          <ul id="selected-list" class="rank-list">
             {{range .SelectedGames}}
-            <li draggable="true" data-game-id="{{.ID}}" style="padding:8px 12px;border-bottom:1px solid var(--line);cursor:grab;display:flex;align-items:center;justify-content:space-between;background:var(--bg-soft, #14151a);">
+            <li draggable="true" data-game-id="{{.ID}}">
               <span>{{.Name}}</span>
-              <button type="button" class="alt" onclick="removeGame('{{.ID}}')" style="border:none;background:transparent;color:var(--muted);cursor:pointer;">remove ×</button>
+              <button type="button" class="rank-rm" onclick="removeGame('{{.ID}}')">remove ×</button>
             </li>
             {{end}}
             {{if not .SelectedGames}}
-            <li style="padding:12px;color:var(--muted);font-size:12px;text-align:center;">No games selected — pick from the right →</li>
+            <li class="rank-empty">No games selected — pick from the right →</li>
             {{end}}
           </ul>
         </div>
         <div>
-          <div class="kicker" style="margin-bottom: 8px;">Available</div>
-          <ul id="available-list" style="list-style:none;margin:0;padding:0;border:1px dashed var(--line);max-height:300px;overflow-y:auto;">
+          <div class="kicker">Available</div>
+          <ul id="available-list" class="rank-list rank-available">
             {{range .AllGames}}
             {{if not .Selected}}
-            <li data-game-id="{{.ID}}" style="padding:8px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;">
+            <li data-game-id="{{.ID}}">
               <span>{{.Name}}</span>
-              <button type="button" class="alt" onclick="addGame('{{.ID}}','{{.Name}}')" style="border:none;background:transparent;color:var(--accent);cursor:pointer;">add +</button>
+              <button type="button" class="rank-add" onclick="addGame('{{.ID}}','{{.Name}}')">add +</button>
             </li>
             {{end}}
             {{end}}
           </ul>
         </div>
       </div>
-      <div class="row" style="margin-top: 16px;">
-        <span style="color:var(--muted);font-size:11px;">Order in the left column = mining priority.</span>
-        <button class="btn primary" type="submit">Save games →</button>
+      <div class="row">
+        <span class="hint">Order in the left column = mining priority.</span>
+        <button class="btn-linear" type="submit">Save games →</button>
       </div>
     </form>
 
-    <form method="post" action="/accounts/{{.Account.ID}}/games/add" style="margin-top:18px;padding-top:14px;border-top:1px dashed var(--line);display:flex;gap:8px;align-items:center;">
+    <form method="post" action="/accounts/{{.Account.ID}}/games/add" class="add-by-name">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-      <span class="kicker" style="margin:0;">Add by name:</span>
-      <input type="text" name="name" placeholder="e.g. Marvel Rivals" required style="flex:1;max-width:280px;padding:6px 10px;background:var(--surface);border:1px solid var(--line);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:13px;">
-      <button class="btn" type="submit">Add →</button>
-      <span style="color:var(--muted);font-size:11px;">Whitelist a game before discovery surfaces it.</span>
+      <div class="kvedit">
+        <div class="row">
+          <span class="k">add by name</span>
+          <span class="d">whitelist a game before discovery surfaces it</span>
+          <span class="v grow"><input type="text" name="name" placeholder="e.g. Marvel Rivals" required></span>
+          <button class="btn-linear" type="submit">Add →</button>
+        </div>
+      </div>
     </form>
 
-    <form method="post" action="/accounts/{{.Account.ID}}/games/use-global" style="margin-top:12px;display:flex;gap:8px;align-items:center;" onsubmit="return confirm('Clear this account whitelist and follow the global priority list?');">
+    <form method="post" action="/accounts/{{.Account.ID}}/games/use-global" onsubmit="return confirm('Clear this account whitelist and follow the global priority list?');">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-      <button class="btn" type="submit">Use global priority list</button>
-      <span style="color:var(--muted);font-size:11px;">Clears the account override. Watcher reads Settings → Global priority.</span>
+      <div class="kvedit">
+        <div class="row">
+          <span class="k">use global list</span>
+          <span class="d">clears the account override — watcher reads Settings → Global priority</span>
+          <button class="btn-linear" type="submit" style="color:var(--muted);">Use global →</button>
+        </div>
+      </div>
     </form>
-  </div>
+  </section>
+  </div>{{/* .settings-stack */}}
 </div>
 
-<style>
-  #selected-list li.drag-over-top { box-shadow: inset 0 2px 0 0 var(--accent, #7cf); }
-  #selected-list li.drag-over-bot { box-shadow: inset 0 -2px 0 0 var(--accent, #7cf); }
-  #selected-list li.dragging { opacity: 0.4; }
-</style>
 <script>
 (function() {
   const sel = document.getElementById('selected-list');
@@ -163,13 +171,12 @@
 
   window.addGame = function(id, name) {
     if (sel.querySelector('li[data-game-id="'+id+'"]')) return;
-    const placeholder = sel.querySelector('li:not([data-game-id])');
+    const placeholder = sel.querySelector('li.rank-empty');
     if (placeholder) placeholder.remove();
     const li = document.createElement('li');
     li.dataset.gameId = id;
     li.draggable = true;
-    li.style.cssText = 'padding:8px 12px;border-bottom:1px solid var(--line);cursor:grab;display:flex;align-items:center;justify-content:space-between;background:var(--bg-soft,#14151a);';
-    li.innerHTML = '<span>' + name + '</span><button type="button" class="alt" onclick="removeGame(\''+id+'\')" style="border:none;background:transparent;color:var(--muted);cursor:pointer;">remove ×</button>';
+    li.innerHTML = '<span>' + name + '</span><button type="button" class="rank-rm" onclick="removeGame(\''+id+'\')">remove ×</button>';
     bindDrag(li);
     sel.appendChild(li);
     // also remove from available
@@ -184,8 +191,7 @@
     li.remove();
     const a = document.createElement('li');
     a.dataset.gameId = id;
-    a.style.cssText = 'padding:8px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;';
-    a.innerHTML = '<span>' + name + '</span><button type="button" class="alt" onclick="addGame(\''+id+'\',\''+name+'\')" style="border:none;background:transparent;color:var(--accent);cursor:pointer;">add +</button>';
+    a.innerHTML = '<span>' + name + '</span><button type="button" class="rank-add" onclick="addGame(\''+id+'\',\''+name+'\')">add +</button>';
     avail.appendChild(a);
   };
 

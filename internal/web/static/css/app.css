@@ -199,14 +199,15 @@
     gap: 8px;
     margin-bottom: 16px;
   }
+  /* Flat alert row — accent left tick + soft tint, no full box border
+     (matches the kind-colored row accent used everywhere else). */
   .alert {
     display: flex;
     align-items: center;
     gap: 12px;
     padding: 10px 14px;
-    border: 1px solid var(--accent);
-    background: rgba(212, 99, 30, 0.08);
-    border-radius: 2px;
+    box-shadow: inset 3px 0 0 var(--accent);
+    background: rgba(212, 99, 30, 0.06);
   }
   .alert-tag {
     font-family: 'JetBrains Mono', monospace;
@@ -221,10 +222,16 @@
     flex: 1;
     line-height: 1.45;
   }
+  /* CTA reads as a line action, not a box (the .btn classes on the
+     element are overridden here so the template stays platform-agnostic). */
   .alert-cta {
-    border-color: var(--accent);
+    border: none;
+    background: none;
+    padding: 4px 2px;
+    letter-spacing: 0.16em;
     color: var(--accent);
   }
+  .alert-cta:hover { color: var(--text); background: none; border: none; }
 
   /* TELEMETRY STRIP — 6 stats */
   /* Flat stat strip — no boxed grid; cards separated by space, the strip
@@ -2388,6 +2395,8 @@
   .btn-linear {
     background: none;
     border: none;
+    text-decoration: none;
+    display: inline-block;
     padding: 4px 2px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
@@ -2398,6 +2407,28 @@
     transition: color .12s;
   }
   .btn-linear:hover { color: var(--text); }
+  /* Destructive linear action (Delete account). */
+  .btn-linear.red { color: var(--red); }
+  .btn-linear.red:hover { color: var(--text); }
+
+  /* Flat danger zone — dashed-rule strip, red mono label + linear action,
+     replaces the boxed .form-card .danger. */
+  .danger-zone {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--line);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .danger-zone .danger-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--red);
+  }
+  .danger-zone form { margin-left: auto; }
 
   /* Drag-reorder rank picker. Shared by per-account whitelist editor
      + Settings global priority list. */
