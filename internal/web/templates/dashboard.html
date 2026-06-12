@@ -40,11 +40,11 @@
   <div class="stat"><div class="label">Active campaigns</div><div class="value">{{.Tele.ActiveCamps}}<sup>campaigns</sup></div><div class="delta flat">discovered</div></div>
   <div class="stat"><div class="label">Completed</div><div class="value">{{.Tele.Completed}} / {{.Tele.TotalDrops}}<sup>drops</sup></div><div class="delta flat">collected</div></div>
   <div class="stat"><div class="label">Next claim</div><div class="value" style="color:var(--accent)">{{.Tele.NextClaimETA}}<sup>h:m</sup></div><div class="delta">{{.Tele.NextClaimName}}</div></div>
-  <div class="stat"><div class="label">Next poll</div><div class="value"><span id="next-poll-count" data-next-poll-secs="{{.Tele.NextPollSecs}}">{{.Tele.NextPoll}}</span><sup>countdown</sup></div><div class="delta flat"></div></div>
+  <div class="stat"><div class="label">Progress check</div><div class="value"><span id="next-poll-count" data-next-poll-secs="{{.Tele.NextPollSecs}}">{{.Tele.NextPoll}}</span><sup>countdown</sup></div><div class="delta flat"></div></div>
 </section>
 <script>
 (function() {
-  // Live client-side countdown for the "Next poll" tile. The telemetry
+  // Live client-side countdown for the "Progress check" tile. The telemetry
   // section is only re-rendered on a full page load (it is not in any
   // HTMX-polled container), so without this the value would sit static.
   // We seed from data-next-poll-secs (server: soonest LastPollAt+60s
