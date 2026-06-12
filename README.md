@@ -42,14 +42,15 @@ single SQLite file.
 ### Prerequisites
 
 - **Docker** + **Docker Compose** (quick path), or **Go 1.26+** to build from source.
-- For Kick watch-time: a host that can run the Chrome sidecar plus a mounted
-  docker socket. Twitch-only setups need neither.
+- For Kick watch-time: a mounted docker socket so the miner can auto-spin
+  per-account Chrome sidecars on demand. Twitch-only setups need neither.
 
 ### Run it
 
-Docker Compose with the published images is the fastest path. You need two:
-the **miner** itself, and a codec-enabled Chrome **sidecar** that earns the
-Kick watch-time. (Twitch-only? Skip the sidecar, see below.)
+Docker Compose with the published images is the fastest path — just the
+**miner**. For Kick watch-time it auto-creates a codec-enabled Chrome
+**sidecar** per account on demand (over the mounted docker socket), so you
+don't define any sidecar services yourself. (Twitch-only? See below.)
 
 ```yaml
 # compose.yml
@@ -65,15 +66,8 @@ services:
       GRUB_SECURE_COOKIES: "0"   # plain-HTTP localhost; set 1 behind HTTPS
     volumes:
       - ./data:/data
-      # lets the miner start/stop browser sidecars on demand
+      # lets the miner create/start/stop per-account browser sidecars on demand
       - /var/run/docker.sock:/var/run/docker.sock
-
-  # one per Kick account; name must be grubdrops-browser-<display-name-slug>
-  grubdrops-browser-myuser:
-    image: ghcr.io/aalejandrofer/grubdrops-browser:latest
-    container_name: grubdrops-browser-myuser
-    restart: unless-stopped
-    expose: ["9090"]
 ```
 
 Bring it up. `GRUB_MASTER_KEY` encrypts the stored sessions, so generate a real one:
@@ -84,8 +78,8 @@ GRUB_MASTER_KEY=$(head -c32 /dev/urandom | base64) docker compose up -d
 
 Open **http://localhost:8080**. The first visit asks you to create an admin login.
 
-**Twitch only?** The miner image alone is enough. Drop the sidecar service, the
-docker-socket mount, and `GRUB_KICK_BROWSER_WATCH`.
+**Twitch only?** Set `GRUB_KICK_BROWSER_WATCH=0` and drop the docker-socket
+mount — no sidecars are ever created.
 
 **Want every knob?** The full reference compose (sidecar profiles, OIDC, each
 setting commented) lives in
@@ -123,8 +117,10 @@ errors), re-export and paste again.
 - **Kick:** detection and claims ride a Chrome-TLS-fingerprinted HTTP client
   (`utls`), so there's no Cloudflare dance and no browser to babysit. The
   watch-time itself needs a real player, so it runs in an on-demand, per-account
-  Chrome sidecar that plays the IVS stream. The miner starts and stops that
-  container over the docker socket, so Chrome only runs while watching.
+  Chrome sidecar that plays the IVS stream. The miner auto-creates, starts, and
+  stops that container over the docker socket (pulling the sidecar image as
+  needed), so Chrome only runs while watching and you define no sidecar services.
+  A periodic sweep removes the containers of deleted accounts.
 - **Discovery** sweeps both catalogs into SQLite every few minutes so the
   dashboard always reflects what's live.
 
@@ -159,7 +155,9 @@ default shown.
 | `GRUB_MASTER_KEY` | **required** | Key for the age-encrypted session store. |
 | `GRUB_HTTP_ADDR` | `:8080` | Listen address. |
 | `GRUB_DB_PATH` | `/data/miner.db` | SQLite path (use e.g. `./miner.db` outside Docker). |
-| `GRUB_KICK_BROWSER_WATCH` | `0` | `1` = credit-earning browser watch for Kick (needs the sidecar image + socket). |
+| `GRUB_KICK_BROWSER_WATCH` | `0` | `1` = credit-earning browser watch for Kick (needs the docker socket; sidecars are auto-created). |
+| `GRUB_KICK_SIDECAR_IMAGE` | `ghcr.io/aalejandrofer/grubdrops-browser:latest` | Image the miner pulls + runs for each auto-created sidecar. |
+| `GRUB_KICK_SIDECAR_NETWORK` | auto-detected | Docker network to attach sidecars to. Defaults to the miner's own network (self-detected); set to override. |
 | `GRUB_KICK_SIDECAR_TEMPLATE` | `grubdrops-browser-{slug}` | Per-account sidecar container-name template. |
 | `GRUB_KICK_SIDECAR_PORT` | `9090` | Sidecar gRPC port. |
 | `GRUB_BROWSER_URL` | none | Fixed sidecar address (legacy always-on mode). |
