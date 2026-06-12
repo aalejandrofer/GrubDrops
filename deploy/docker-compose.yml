@@ -21,6 +21,15 @@ services:
       # browser sidecar (requires GRUB_BROWSER_URL + the `browser` profile).
       # When 0/unset, Kick falls back to the non-accruing viewer-WS path.
       GRUB_KICK_BROWSER_WATCH: ${GRUB_KICK_BROWSER_WATCH:-0}
+      # On-demand sidecars: each Kick account's watch container is named from
+      # its username slug via this template ("{slug}" placeholder). The daemon
+      # starts/stops these containers over the mounted docker socket so a
+      # Chrome only runs while that account is actively watching. The service
+      # name below MUST match the derived name (e.g. user "TTik3r" ->
+      # grubdrops-browser-ttik3r). Degrades to always-on if the socket is
+      # unreachable.
+      GRUB_KICK_SIDECAR_TEMPLATE: ${GRUB_KICK_SIDECAR_TEMPLATE:-grubdrops-browser-{slug}}
+      GRUB_KICK_SIDECAR_PORT: ${GRUB_KICK_SIDECAR_PORT:-9090}
       # Secure cookies: ON behind Traefik/HTTPS. The OIDC SameSite=Lax state
       # cookie and the session cookie both need this to work over real HTTPS.
       # Turn off only for plain-HTTP localhost.
