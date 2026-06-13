@@ -141,13 +141,13 @@
      on page load and re-fetched every 10s via #telemetry-swap so NEXT CLAIM
      reflects the current closest-to-finish drop across all accounts. */}}
 {{define "dashboard_telemetry"}}
-  {{/* Grouped lifetime → now. Watch time + Drops claimed are all-time totals;
-       Watching / Live campaigns / Drops collected / Next claim describe the
-       current run, with explicit scope labels so campaigns-vs-drops is clear. */}}
+  {{/* Watch time + Drops claimed are all-time totals (Claimed today sits next
+       to its lifetime sibling); Active campaigns / Drops collected / Next claim
+       describe the current run, with explicit scope labels. */}}
   <div class="stat"><div class="label">Watch time</div><div class="value">{{.WatchTimeTotal}}<sup>h:m</sup></div><div class="delta flat">lifetime</div></div>
   <div class="stat"><div class="label">Drops claimed</div><div class="value">{{.ClaimsTotal}}<sup>items</sup></div><div class="delta flat">lifetime</div></div>
-  <div class="stat"><div class="label">Watching</div><div class="value">{{.Watching}} / {{.WatchingTotal}}<sup>accts</sup></div><div class="delta flat">live now</div></div>
-  <div class="stat"><div class="label">Live campaigns</div><div class="value">{{.ActiveCamps}}<sup>live</sup></div><div class="delta flat">on your whitelist</div></div>
+  <div class="stat"><div class="label">Claimed today</div><div class="value">{{.ClaimsToday}}<sup>items</sup></div><div class="delta flat">since midnight</div></div>
+  <div class="stat"><div class="label">Active campaigns</div><div class="value">{{.ActiveCamps}}<sup>live</sup></div><div class="delta flat">on your whitelist</div></div>
   <div class="stat"><div class="label">Drops collected</div><div class="value">{{.Completed}} / {{.TotalDrops}}<sup>drops</sup></div><div class="delta flat">whitelist total</div></div>
   <div class="stat"><div class="label">Next claim</div><div class="value" style="color:var(--accent)">{{.NextClaimETA}}<sup>h:m</sup></div><div class="delta">{{.NextClaimName}}</div></div>
 {{end}}

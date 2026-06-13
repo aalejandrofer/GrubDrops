@@ -56,6 +56,18 @@ func (q *Queries) CountClaimsFor(ctx context.Context, arg CountClaimsForParams) 
 	return count, err
 }
 
+const countClaimsSince = `-- name: CountClaimsSince :one
+SELECT COUNT(*) FROM claims WHERE claimed_at >= ?
+`
+
+// Drops claimed at or after a unix cutoff such as start-of-today.
+func (q *Queries) CountClaimsSince(ctx context.Context, claimedAt int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countClaimsSince, claimedAt)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getProgress = `-- name: GetProgress :one
 SELECT account_id, benefit_id, minutes_watched, claimed_at, updated_at FROM progress WHERE account_id = ? AND benefit_id = ?
 `

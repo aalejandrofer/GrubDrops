@@ -70,8 +70,7 @@ type dashboardDeps struct {
 type dashTelemetry struct {
 	WatchTimeTotal string // lifetime watch time, "h:m" (sum of progress minutes)
 	ClaimsTotal    int    // lifetime drops claimed (claims table count)
-	Watching       int    // accounts currently in the "watching" state (live now)
-	WatchingTotal  int    // total scheduled watchers (denominator for Watching)
+	ClaimsToday    int    // drops claimed since start of today (local midnight)
 	ActiveCamps    int    // whitelisted campaigns broadcasting right now
 	Completed      int    // discovered drops already claimed/completed (X in "X / Y")
 	TotalDrops     int    // total discovered drops across active campaigns (Y in "X / Y")
@@ -729,6 +728,12 @@ func telemetryWithClaims(base dashTelemetry, q *gen.Queries, ctx context.Context
 		if n, err := q.CountClaims(ctx); err == nil {
 			base.ClaimsTotal = int(n)
 		}
+		// Drops claimed today = claims since local midnight.
+		now := time.Now()
+		midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		if n, err := q.CountClaimsSince(ctx, midnight.Unix()); err == nil {
+			base.ClaimsToday = int(n)
+		}
 	}
 
 	// ACTIVE CAMPAIGNS = whitelisted campaigns currently live (same set
@@ -769,11 +774,7 @@ func telemetryWithClaims(base dashTelemetry, q *gen.Queries, ctx context.Context
 func telemetryFrom(snaps []watcher.Snapshot) dashTelemetry {
 	var nextETA time.Duration = -1
 	var nextName string
-	watching := 0
 	for _, s := range snaps {
-		if s.State == "watching" {
-			watching++
-		}
 		if s.State != "watching" || s.RequiredMinutes <= 0 {
 			continue
 		}
@@ -785,8 +786,6 @@ func telemetryFrom(snaps []watcher.Snapshot) dashTelemetry {
 	}
 	tele := dashTelemetry{
 		ActiveCamps:   distinctCampaigns(snaps),
-		Watching:      watching,
-		WatchingTotal: len(snaps),
 		NextClaimName: nextName,
 	}
 	if nextETA >= 0 {

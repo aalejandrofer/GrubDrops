@@ -43,6 +43,10 @@ WHERE b.campaign_id = ?;
 -- Lifetime total drops claimed (every row in the claims table).
 SELECT COUNT(*) FROM claims;
 
+-- name: CountClaimsSince :one
+-- Drops claimed at or after a unix cutoff such as start-of-today.
+SELECT COUNT(*) FROM claims WHERE claimed_at >= ?;
+
 -- name: SumWatchMinutes :one
 -- Lifetime watch minutes: sum of per-benefit progress. Persistent, so it
 -- survives restarts (unlike the heartbeat log ring used for today's count).

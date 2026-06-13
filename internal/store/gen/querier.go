@@ -24,6 +24,8 @@ type Querier interface {
 	// Claim rows for one account+benefit. Zero means none. Keeps the
 	// inventory-ownership reconcile idempotent.
 	CountClaimsFor(ctx context.Context, arg CountClaimsForParams) (int64, error)
+	// Drops claimed at or after a unix cutoff such as start-of-today.
+	CountClaimsSince(ctx context.Context, claimedAt int64) (int64, error)
 	CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error)
 	DeleteAccount(ctx context.Context, id string) error
 	DeleteAccountCampaignLinks(ctx context.Context, accountID string) error
