@@ -163,14 +163,19 @@ func run() error {
 	// active watch per account). EnableBrowserWatch no-ops + warns if no sidecar
 	// client is configured.
 	kickWatchMode, _ := settingsStore.KickWatchMode(ctx)
-	if kickWatchMode != store.KickWatchModeWS {
+	switch kickWatchMode {
+	case store.KickWatchModeWS:
+		// pure WebSocket, no browser — nothing to enable.
+	case store.KickWatchModeAuto:
+		kickBackend.EnableAutoWatch() // WS first, Chrome fallback on WS death
+	default:
 		kickBackend.EnableBrowserWatch()
 	}
 	registry.Register(kickBackend)
 	logger.Info("kick backend enabled (utls HTTP transport)",
 		"sidecar", browserClient != nil,
 		"watch_mode", kickWatchMode,
-		"browser_watch", kickWatchMode != store.KickWatchModeWS && browserClient != nil)
+		"browser_watch", kickWatchMode == store.KickWatchModeBrowser && browserClient != nil)
 
 	if twitchBrowserEnabled && browserClient != nil {
 		registry.Register(twitch.NewBrowserBackend(browserClient))

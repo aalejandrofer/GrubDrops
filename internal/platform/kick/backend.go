@@ -42,7 +42,14 @@ type Backend struct {
 	// utls HTTP transport regardless.
 	browserWatch bool
 
+	// autoWatch (kick_watch_mode = "auto"): try the WS path first, and on a WS
+	// connection death (Heartbeat reports the loop dead) mark the account in
+	// wsFailed so the next StartWatch falls back to the Chrome sidecar. Requires
+	// a sidecar client; without one it degrades to pure WS.
+	autoWatch bool
+
 	mu               sync.Mutex
+	wsFailed         map[string]bool   // accountID -> WS died, use Chrome fallback (auto mode)
 	handleByAcc      map[string]string // accountID -> watch handle
 	channelsByAcc    map[string][]string
 	campaignChannels map[string][]kickChannel // campaignID -> eligible channels (slug+id)
@@ -88,6 +95,7 @@ func New(c *browser.Client, ctl dockerctl.Controller, template string, port int,
 		sidecars:         reg,
 		clientByName:     map[string]*browser.Client{},
 		sidecarPort:      port,
+		wsFailed:         map[string]bool{},
 		handleByAcc:      map[string]string{},
 		channelsByAcc:    map[string][]string{},
 		campaignChannels: map[string][]kickChannel{},
@@ -144,6 +152,27 @@ func (b *Backend) EnableBrowserWatch() {
 		return
 	}
 	b.browserWatch = true
+}
+
+// EnableAutoWatch selects the "auto" path: StartWatch tries the pure-WebSocket
+// watch first, and if the WS connection dies (Heartbeat reports the loop dead),
+// the account is marked so the next StartWatch falls back to the Chrome sidecar.
+// Needs a sidecar client for the fallback; without one it degrades to pure WS
+// (same as not calling this at all). Call once at construction.
+func (b *Backend) EnableAutoWatch() {
+	if b.c == nil {
+		slog.Warn("kick: auto watch requested but no sidecar client configured; running pure WebSocket with no Chrome fallback")
+		return
+	}
+	b.autoWatch = true
+}
+
+// markWSFailed flags an account so the next StartWatch in auto mode uses the
+// Chrome sidecar instead of the WS path.
+func (b *Backend) markWSFailed(accountID string) {
+	b.mu.Lock()
+	b.wsFailed[accountID] = true
+	b.mu.Unlock()
 }
 
 // kickBrowserWatch is stored in WatchHandle.Internal for the sidecar
@@ -490,35 +519,36 @@ func (b *Backend) InventoryProgress(ctx context.Context, s platform.Session) ([]
 
 func (b *Backend) StartWatch(ctx context.Context, s platform.Session, stream platform.Stream) (platform.WatchHandle, error) {
 	// Browser-watch path: drive a real, playing IVS <video> in the sidecar
-	// — the ONLY path that accrues Kick drop watch-time. The sidecar needs
-	// the channel SLUG (it navigates kick.com/<slug>) plus the session
-	// cookies, which it injects before navigation.
+	// — accrues Kick drop watch-time via real playback.
 	if b.browserWatch && b.c != nil {
-		name := b.sidecars.nameFor(s.AccountID)
-		if name == "" {
-			return platform.WatchHandle{}, fmt.Errorf("kick start watch: no sidecar for account %s", s.AccountID)
-		}
-		cl, err := b.watchClientForName(name)
-		if err != nil {
-			return platform.WatchHandle{}, fmt.Errorf("kick start watch: dial sidecar %s: %w", name, err)
-		}
-		// Start the container on demand + wait for readiness.
-		if err := b.sidecars.ensureUp(ctx, s.AccountID, func(c context.Context) error {
-			_, e := cl.Heartbeat(c, "") // nil error == gRPC server reachable
-			return e
-		}); err != nil {
-			return platform.WatchHandle{}, fmt.Errorf("kick start watch: sidecar up %s: %w", name, err)
+		return b.startBrowserWatch(ctx, s, stream)
+	}
+
+	// Auto path (kick_watch_mode = "auto"): WS first, fall back to the Chrome
+	// sidecar once this account's WS connection has died (flagged in wsFailed by
+	// Heartbeat). The watcher rotates off a dead watch and re-calls StartWatch,
+	// so the fallback takes effect on that next call.
+	if b.autoWatch && b.c != nil {
+		b.mu.Lock()
+		failed := b.wsFailed[s.AccountID]
+		b.mu.Unlock()
+		if failed {
+			return b.startBrowserWatch(ctx, s, stream)
 		}
 		ks, err := decodeSession(s)
 		if err != nil {
 			return platform.WatchHandle{}, fmt.Errorf("kick start watch: decode session: %w", err)
 		}
-		handle, err := cl.StartWatch(ctx, toProto(ks), stream.Channel)
+		h, err := b.startWSWatch(ctx, ks, s, stream)
 		if err != nil {
-			return platform.WatchHandle{}, fmt.Errorf("kick start watch (browser) %s: %w", stream.Channel, err)
+			// WS couldn't even start (token/connect/offline) — fall back to
+			// Chrome immediately and remember it for subsequent watches.
+			slog.Warn("kick auto: WS start failed, falling back to Chrome sidecar",
+				"account", s.AccountID, "channel", stream.Channel, "err", err)
+			b.markWSFailed(s.AccountID)
+			return b.startBrowserWatch(ctx, s, stream)
 		}
-		b.sidecars.touch(s.AccountID)
-		return platform.WatchHandle{Channel: stream.Channel, Internal: kickBrowserWatch{handle: handle, client: cl, accountID: s.AccountID}}, nil
+		return h, nil
 	}
 
 	// Browser-watch off (kick_watch_mode = "ws"): use the pure-WebSocket
@@ -530,6 +560,38 @@ func (b *Backend) StartWatch(ctx context.Context, s platform.Session, stream pla
 		return platform.WatchHandle{}, fmt.Errorf("kick start watch: decode session: %w", err)
 	}
 	return b.startWSWatch(ctx, ks, s, stream)
+}
+
+// startBrowserWatch drives a real, playing IVS <video> in the per-account
+// chromedp sidecar — the verified accruing path. The sidecar needs the channel
+// SLUG (it navigates kick.com/<slug>) plus the session cookies, which it injects
+// before navigation.
+func (b *Backend) startBrowserWatch(ctx context.Context, s platform.Session, stream platform.Stream) (platform.WatchHandle, error) {
+	name := b.sidecars.nameFor(s.AccountID)
+	if name == "" {
+		return platform.WatchHandle{}, fmt.Errorf("kick start watch: no sidecar for account %s", s.AccountID)
+	}
+	cl, err := b.watchClientForName(name)
+	if err != nil {
+		return platform.WatchHandle{}, fmt.Errorf("kick start watch: dial sidecar %s: %w", name, err)
+	}
+	// Start the container on demand + wait for readiness.
+	if err := b.sidecars.ensureUp(ctx, s.AccountID, func(c context.Context) error {
+		_, e := cl.Heartbeat(c, "") // nil error == gRPC server reachable
+		return e
+	}); err != nil {
+		return platform.WatchHandle{}, fmt.Errorf("kick start watch: sidecar up %s: %w", name, err)
+	}
+	ks, err := decodeSession(s)
+	if err != nil {
+		return platform.WatchHandle{}, fmt.Errorf("kick start watch: decode session: %w", err)
+	}
+	handle, err := cl.StartWatch(ctx, toProto(ks), stream.Channel)
+	if err != nil {
+		return platform.WatchHandle{}, fmt.Errorf("kick start watch (browser) %s: %w", stream.Channel, err)
+	}
+	b.sidecars.touch(s.AccountID)
+	return platform.WatchHandle{Channel: stream.Channel, AccountID: s.AccountID, Internal: kickBrowserWatch{handle: handle, client: cl, accountID: s.AccountID}}, nil
 }
 
 func (b *Backend) Heartbeat(ctx context.Context, h platform.WatchHandle) error {
@@ -547,12 +609,20 @@ func (b *Backend) Heartbeat(ctx context.Context, h platform.WatchHandle) error {
 	case *kickWSWatch:
 		// The WS loop accrues on its own; Heartbeat is liveness-only. A
 		// recorded error (loop exhausted its reconnects, or exited) surfaces
-		// here so the watcher rotates off this channel.
+		// here so the watcher rotates off this channel. In auto mode a dead WS
+		// connection also flags the account so the next StartWatch falls back
+		// to the Chrome sidecar.
 		if err := w.getErr(); err != nil {
+			if b.autoWatch {
+				b.markWSFailed(h.AccountID)
+			}
 			return fmt.Errorf("kick heartbeat (ws) %q: %w", h.Channel, err)
 		}
 		select {
 		case <-w.done:
+			if b.autoWatch {
+				b.markWSFailed(h.AccountID)
+			}
 			return fmt.Errorf("kick: ws watch loop ended for %q", h.Channel)
 		default:
 			return nil

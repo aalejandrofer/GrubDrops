@@ -34,9 +34,12 @@ const (
 //     Live-verified to accrue (see internal/platform/kick/wswatch.go). Mutually
 //     exclusive with the sidecar — the server credits one active watch per
 //     account.
+//   - "auto" (EXPERIMENTAL): try the WS path first; if the WS connection dies
+//     (exhausts reconnects), fall back to the Chrome sidecar for that account.
 const (
 	KickWatchModeBrowser = "browser"
 	KickWatchModeWS      = "ws"
+	KickWatchModeAuto    = "auto"
 )
 
 // PriorityMode controls campaign pick ordering when multiple
@@ -249,14 +252,14 @@ func (s *Settings) KickWatchMode(ctx context.Context) (string, error) {
 	if err != nil || v == "" {
 		return KickWatchModeBrowser, err
 	}
-	if v != KickWatchModeBrowser && v != KickWatchModeWS {
+	if v != KickWatchModeBrowser && v != KickWatchModeWS && v != KickWatchModeAuto {
 		return KickWatchModeBrowser, nil
 	}
 	return v, nil
 }
 
 func (s *Settings) SetKickWatchMode(ctx context.Context, mode string) error {
-	if mode != KickWatchModeBrowser && mode != KickWatchModeWS {
+	if mode != KickWatchModeBrowser && mode != KickWatchModeWS && mode != KickWatchModeAuto {
 		mode = KickWatchModeBrowser
 	}
 	return s.setString(ctx, keyKickWatchMode, mode)

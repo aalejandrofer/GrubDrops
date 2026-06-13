@@ -2360,7 +2360,7 @@
     padding: 9px 0;
   }
   .kvedit .row:last-child { border-bottom: none; }
-  .kvedit .k { color: var(--muted); white-space: nowrap; }
+  .kvedit .k { color: var(--text); font-weight: 600; white-space: nowrap; }
   .kvedit .d {
     flex: 1;
     font-family: 'IBM Plex Sans', sans-serif;

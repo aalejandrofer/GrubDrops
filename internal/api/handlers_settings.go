@@ -186,6 +186,9 @@ func (d *settingsDeps) getNotifications(w http.ResponseWriter, r *http.Request) 
 func (d *settingsDeps) getSecurity(w http.ResponseWriter, r *http.Request) {
 	d.renderTab(w, r, "security")
 }
+func (d *settingsDeps) getExperimental(w http.ResponseWriter, r *http.Request) {
+	d.renderTab(w, r, "experimental")
+}
 
 // postGeneral saves the General tab: tick/discovery intervals + logging.
 func (d *settingsDeps) postGeneral(w http.ResponseWriter, r *http.Request) {
@@ -276,8 +279,11 @@ func (d *settingsDeps) postPriorityMode(w http.ResponseWriter, r *http.Request) 
 func (d *settingsDeps) postExperimental(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	mode := store.KickWatchModeBrowser
-	if r.FormValue("kick_watch_mode") == store.KickWatchModeWS {
+	switch r.FormValue("kick_watch_mode") {
+	case store.KickWatchModeWS:
 		mode = store.KickWatchModeWS
+	case store.KickWatchModeAuto:
+		mode = store.KickWatchModeAuto
 	}
 	changed := false
 	if cur, _ := d.s.KickWatchMode(ctx); cur != mode {
@@ -292,7 +298,7 @@ func (d *settingsDeps) postExperimental(w http.ResponseWriter, r *http.Request) 
 		msg = "Kick watch mode saved — reload watchers (or restart) to switch paths"
 	}
 	d.sm.Put(ctx, "flash", msg)
-	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+	http.Redirect(w, r, "/settings/experimental", http.StatusSeeOther)
 }
 
 // notifyTest fires one representative sample event through the live notifier

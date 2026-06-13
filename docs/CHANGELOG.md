@@ -4,7 +4,24 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
-_No unreleased changes._
+### Added
+
+- **Experimental settings tab** — the Kick watch-path toggle moved out of General
+  into its own "Experimental" tab (after Accounts) at `/settings/experimental`.
+- **Kick watch mode "WS, fall back to Chrome"** — a third option that runs the
+  WebSocket path first and, if the WS connection dies (exhausts reconnects),
+  falls back to the Chrome sidecar for that account on the next watch. The
+  dashboard KICK header shows a `WS→Chrome` bubble for this mode.
+
+### Changed
+
+- **More legible settings row labels** — the key labels (tick interval, discovery
+  interval, …) are now full-contrast and semibold instead of dim grey.
+
+### Removed
+
+- Redundant helper text on the settings pages ("Applies live to all accounts.",
+  "Fallback when account list empty").
 
 ## [1.0.3-ws] — 2026-06-13
 

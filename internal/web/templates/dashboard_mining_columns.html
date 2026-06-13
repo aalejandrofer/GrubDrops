@@ -24,6 +24,8 @@
       <h3>KICK</h3>
       {{if eq .KickWatchMode "ws"}}
       <span class="watch-mode ws" title="Kick accrual path: pure WebSocket (experimental, no browser)">WS</span>
+      {{else if eq .KickWatchMode "auto"}}
+      <span class="watch-mode ws" title="Kick accrual path: WebSocket first, falls back to Chrome sidecar on WS failure (experimental)">WS→Chrome</span>
       {{else}}
       <span class="watch-mode chrome" title="Kick accrual path: Chrome sidecar (IVS video playback)">Chrome</span>
       {{end}}

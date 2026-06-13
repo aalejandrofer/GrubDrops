@@ -19,6 +19,7 @@
     <a href="/settings/notifications" class="subnav-link {{if eq .Active "notifications"}}on{{end}}">Notifications</a>
     <a href="/settings/security" class="subnav-link {{if eq .Active "security"}}on{{end}}">Security</a>
     <a href="/accounts" class="subnav-link {{if eq .Active "accounts"}}on{{end}}">Accounts</a>
+    <a href="/settings/experimental" class="subnav-link {{if eq .Active "experimental"}}on{{end}}">Experimental</a>
   </nav>
 
   {{if .Flash}}<div class="flash-ok">{{.Flash}}</div>{{end}}
@@ -28,7 +29,7 @@
 
     {{if eq $.Active "priority"}}
     <section class="settings-card">
-      <header class="section-h"><h3>Global priority list</h3><span class="meta">Fallback when account list empty</span></header>
+      <header class="section-h"><h3>Global priority list</h3></header>
       <form method="post" action="/settings/global-games" id="global-games-form">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
         <div class="settings-grid-2">
@@ -92,8 +93,7 @@
             </select></span>
           </div>
         </div>
-        <div class="row" style="margin-top:18px;">
-          <span class="hint">Applies live to all accounts.</span>
+        <div class="row" style="margin-top:18px;justify-content:flex-end;">
           <button class="btn-linear" type="submit">Save →</button>
         </div>
       </form>
@@ -237,26 +237,6 @@
     </section>
 
     <section class="settings-card">
-      <header class="section-h"><h3>Experimental</h3><span class="meta">Unstable — may not accrue</span></header>
-      <form method="post" action="/settings/experimental">
-        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-        <div class="kvedit">
-          <div class="row">
-            <span class="k">Kick watch path</span>
-            <span class="d">how Kick accrues watch-time · <b>Chrome</b> = IVS video in the sidecar (verified) · <b>WS</b> = pure WebSocket, no browser (experimental — may earn nothing until the WS path is proven) · applies on reload</span>
-            <span class="v"><select name="kick_watch_mode">
-              <option value="browser" {{if ne .KickWatchMode "ws"}}selected{{end}}>Chrome sidecar (default)</option>
-              <option value="ws" {{if eq .KickWatchMode "ws"}}selected{{end}}>WebSocket only (experimental)</option>
-            </select></span>
-          </div>
-        </div>
-        <div class="row" style="margin-top:18px;justify-content:flex-end;">
-          <button class="btn-linear" type="submit">Save →</button>
-        </div>
-      </form>
-    </section>
-
-    <section class="settings-card">
       <header class="section-h"><h3>Status</h3><span class="meta">Read-only</span></header>
       <div class="kvlist">
         <div class="kvrow"><span class="k">uptime</span><span class="v">{{if .Uptime}}{{.Uptime}}{{else}}—{{end}}</span></div>
@@ -266,6 +246,29 @@
         {{if .GitCommit}}<div class="kvrow"><span class="k">commit</span><span class="v">{{.GitCommit}}</span></div>{{end}}
         {{if .Version}}<div class="kvrow"><span class="k">version</span><span class="v">{{.Version}}</span></div>{{end}}
       </div>
+    </section>
+    {{end}}
+
+    {{if eq $.Active "experimental"}}
+    <section class="settings-card">
+      <header class="section-h"><h3>Experimental</h3><span class="meta">Unstable — may not accrue</span></header>
+      <form method="post" action="/settings/experimental">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <div class="kvedit">
+          <div class="row">
+            <span class="k">Kick watch path</span>
+            <span class="d">how Kick accrues watch-time · <b>Chrome</b> = IVS video in the sidecar (verified) · <b>WS</b> = pure WebSocket, no browser (experimental — may earn nothing until the WS path is proven) · <b>WS, fall back to Chrome</b> = try WS, switch to Chrome if it stops accruing · applies on reload</span>
+            <span class="v"><select name="kick_watch_mode">
+              <option value="browser" {{if eq .KickWatchMode "browser"}}selected{{end}}>Chrome sidecar (default)</option>
+              <option value="ws" {{if eq .KickWatchMode "ws"}}selected{{end}}>WebSocket only (experimental)</option>
+              <option value="auto" {{if eq .KickWatchMode "auto"}}selected{{end}}>WS, fall back to Chrome (experimental)</option>
+            </select></span>
+          </div>
+        </div>
+        <div class="row" style="margin-top:18px;justify-content:flex-end;">
+          <button class="btn-linear" type="submit">Save →</button>
+        </div>
+      </form>
     </section>
     {{end}}
 
