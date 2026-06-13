@@ -100,9 +100,12 @@ func TestScheduler_ReloadAccountLeavesOthersRunning(t *testing.T) {
 	require.Eventually(t, func() bool { return fresh.ticks.Load() > 0 },
 		time.Second, 2*time.Millisecond, "reloaded target should restart under the base context")
 
-	// …and the OTHER runner must have kept ticking the whole time — its
-	// context was never cancelled by the targeted reload.
-	require.Greater(t, other.ticks.Load(), otherTicksBefore,
+	// …and the OTHER runner must keep ticking the whole time — its context was
+	// never cancelled by the targeted reload. Poll rather than read once: the
+	// other runner ticks on its own cadence, so an instantaneous compare right
+	// after the reload races its tick interval (flaky "1 is not greater than 1").
+	require.Eventually(t, func() bool { return other.ticks.Load() > otherTicksBefore },
+		time.Second, 2*time.Millisecond,
 		"other account's watcher must keep running uninterrupted across a per-account reload")
 	require.True(t, other.running(40*time.Millisecond),
 		"other account's watcher must still be live after the per-account reload")
