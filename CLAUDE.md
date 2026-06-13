@@ -4,13 +4,13 @@
 
 A commit is **not** a release. Day-to-day work lands on `master` freely.
 
-1. **Log every change to `CHANGELOG.md`** under `## [Unreleased]`
+1. **Log every change to `docs/CHANGELOG.md`** under `## [Unreleased]`
    (Added / Changed / Fixed / Removed) as you commit — every bug fix, addition,
    removal, and change, no matter how small. This is the complete running record.
 2. **Cut a version only after verifying drop-mining works.** A green build and
    passing tests are not enough — confirm the miner actually accrues watch-time
    and claims a drop (Twitch and/or Kick, whichever the change touches).
-3. Once verified: move `[Unreleased]` to the new version in `CHANGELOG.md`, push
+3. Once verified: move `[Unreleased]` to the new version in `docs/CHANGELOG.md`, push
    the `v*` tag (this triggers the ghcr image build), and write the patch notes
    in the GitHub **Releases** tab — **cherry-pick** the user-facing highlights
    from `[Unreleased]`. The release notes are a curated subset, not the whole
