@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -34,6 +35,12 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/watcher"
 	"github.com/aalejandrofer/grubdrops/internal/web"
 )
+
+// version is the release tag, injected at build time via
+// -ldflags "-X main.version=<tag>" (see deploy/Dockerfile.miner + release.yml).
+// It auto-tracks the git tag of each released image; the GRUB_VERSION env var
+// is only a fallback for source/dev builds where no ldflag is set.
+var version string
 
 func main() {
 	if err := run(); err != nil {
@@ -472,7 +479,7 @@ func run() error {
 		LogLevelEnv:       cfg.LogLevel,
 		BrowserURLDisplay: cfg.BrowserURL,
 		GitCommit:         os.Getenv("GIT_COMMIT"),
-		Version:           os.Getenv("GRUB_VERSION"),
+		Version:           cmp.Or(version, os.Getenv("GRUB_VERSION")),
 		OIDC:              oidcProvider,
 		SecureCookies:     cfg.SecureCookies,
 	}

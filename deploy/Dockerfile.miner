@@ -10,12 +10,17 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY . .
 
+# Release tag, injected into the binary so Settings shows the running version.
+# release.yml passes VERSION=${github.ref_name}; left empty for plain builds
+# (the miner then falls back to the GRUB_VERSION env var).
+ARG VERSION=""
+
 # Build the miner. The Go build cache + module cache are persisted via
 # BuildKit cache mounts, so incremental rebuilds only recompile changed
 # packages (template/CSS-only changes relink in seconds instead of minutes).
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/grubdrops ./cmd/miner
+    CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o /out/grubdrops ./cmd/miner
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/grubdrops /grubdrops

@@ -27,6 +27,10 @@ jobs:
         with:
           context: .
           file: deploy/Dockerfile.miner
+          # Inject the release tag so Settings shows the running version
+          # (auto-tracks every tag instead of a hand-maintained GRUB_VERSION env).
+          build-args: |
+            VERSION=${{ github.ref_name }}
           # Multi-arch: the miner is pure-Go (CGO_ENABLED=0, modernc.org/sqlite)
           # on distroless static, so buildx cross-compiles arm64 from the
           # platform tag with no toolchain changes. arm64 lets Raspberry Pi /

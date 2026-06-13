@@ -8,6 +8,15 @@ _No unreleased changes._
 
 ## [1.0.3-ws] — 2026-06-13
 
+### Changed
+
+- **Version shown in Settings now auto-tracks the release tag.** The displayed
+  version was a hand-maintained `GRUB_VERSION` env var that nobody bumped, so
+  Settings still read `1.0.0` after 1.0.1/1.0.2/1.0.3 shipped. The release build
+  now injects the git tag into the binary at build time (`-ldflags -X
+  main.version`), so every tagged image reports its own version; `GRUB_VERSION`
+  remains a fallback for plain source/dev builds.
+
 ### Added
 
 - **Kick pure-WebSocket watch path (experimental)** — Kick drop watch-time can
