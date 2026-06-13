@@ -45,6 +45,11 @@ services:
       GRUB_OIDC_ALLOWED_EMAILS: ${GRUB_OIDC_ALLOWED_EMAILS:-}
       GRUB_OIDC_ALLOWED_GROUPS: ${GRUB_OIDC_ALLOWED_GROUPS:-}
     volumes:
+      # The miner runs as distroless nonroot (UID 65532). A host-owned bind
+      # mount leaves SQLite unable to write miner.db, so sessions don't persist
+      # and login fails with "failed to persist session". Make it writable
+      # first: `mkdir -p data && sudo chown 65532:65532 data` (or use a named
+      # volume, which Docker creates already writable by the container).
       - ./data:/data
 
   browser:

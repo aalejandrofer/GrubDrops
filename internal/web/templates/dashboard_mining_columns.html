@@ -83,6 +83,16 @@
       <span class="fill" style="width: {{.DropPercent}}%"></span>
     </span>
     {{end}}
+    {{/* Per-account reload: restarts ONLY this account's watcher (the rest
+         of the roster keeps running). Posts to /accounts/{id}/reload with
+         the CSRF token. onclick stops the click from toggling the parent
+         <details> open/closed. */}}
+    <button type="button" class="btn sm icon row-reload" title="Reload this account"
+            aria-label="Reload this account"
+            hx-post="/accounts/{{.ID}}/reload"
+            hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'
+            hx-confirm="Reload this account's watcher?"
+            onclick="event.stopPropagation();">↻</button>
   </summary>
 
   <div class="account-row-expand">

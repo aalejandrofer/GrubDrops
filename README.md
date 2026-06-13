@@ -1,3 +1,5 @@
+<p align="center"><sub><strong>English</strong> · <a href="docs/translations/README.zh-CN.md">简体中文</a> · <a href="docs/translations/README.es.md">Español</a></sub></p>
+
 <p align="center">
   <img src="internal/web/static/img/logo.png" width="160" alt="GrubDrops">
 </p>
@@ -41,9 +43,37 @@ single SQLite file.
 
 ### Prerequisites
 
-- **Docker** + **Docker Compose** (quick path), or **Go 1.26+** to build from source.
-- For Kick watch-time: a mounted docker socket so the miner can auto-spin
-  per-account Chrome sidecars on demand. Twitch-only setups need neither.
+**Docker + Docker Compose** (quick path) or **Go 1.26+** (build from source).
+What you need depends on which platform you're mining:
+
+| | Twitch | Kick |
+|---|---|---|
+| **Login** | device-code (`twitch.tv/activate`) | `cookies.txt` export |
+| **How it watches** | direct HTTP — no browser | Chrome **sidecar** (real IVS playback) |
+| **Docker** | optional | **required** — the miner spawns the sidecar over the docker socket |
+| **Run from source, no Docker** | ✅ a plain `go build` binary works | ❌ needs Docker for the sidecar |
+| **CPU arch** | any — `amd64` + `arm64` | `amd64` + `arm64` (arm64 is heavy — see note) |
+
+Twitch runs over direct HTTP, so a plain Go binary mines it anywhere — Raspberry Pi included, no Docker. **Kick watch-time needs a real player**, so the miner runs a Chrome/Chromium sidecar over the docker socket — which makes **Docker required for Kick**.
+
+> **Raspberry Pi / ARM:** both the miner *and* the Kick sidecar ship for
+> `linux/amd64` **and** `linux/arm64`. The sidecar picks its browser per arch:
+> amd64 uses Google Chrome, arm64 uses Debian's **Chromium** — which is built
+> against system FFmpeg and so still carries the proprietary **H.264/AAC
+> codecs** that decode Kick's IVS stream. Kick-on-ARM is **confirmed working**,
+> but the arm64 sidecar is **resource heavy** (~4 GB RAM per live sidecar,
+> roughly 2 concurrent on a small box), so a low-RAM Pi will struggle to watch
+> more than a couple of Kick accounts at once.
+
+### Supported platforms
+
+| Host | Twitch | Kick |
+|---|---|---|
+| Linux `x86-64` | ✅ | ✅ |
+| Linux `arm64` / Raspberry Pi | ✅ | ✅ — Chromium sidecar, ~4 GB RAM each |
+| macOS / Windows · Docker Desktop (Intel) | ✅ | ✅ |
+| macOS / Windows · Apple Silicon | ✅ | ✅ — arm64 Chromium sidecar |
+| `go build` from source (any OS) | ✅ | needs Docker for the sidecar |
 
 ### Run it
 
@@ -64,10 +94,25 @@ services:
       GRUB_DB_PATH: /data/miner.db
       GRUB_SECURE_COOKIES: "0"   # plain-HTTP localhost; set 1 behind HTTPS
     volumes:
+      # The container runs as nonroot (UID 65532); make ./data writable by it
+      # first (see below) or use a named volume instead of a bind mount.
       - ./data:/data
       # lets the miner create/start/stop per-account browser sidecars on demand
       - /var/run/docker.sock:/var/run/docker.sock
 ```
+
+**Make the data dir writable first.** The miner image runs as the distroless
+`nonroot` user (**UID 65532**). A fresh bind-mounted `./data` is owned by your
+host user, so the container can't write `miner.db` — sessions never persist and
+login fails with *"failed to persist session"* right after a successful verify.
+Give the dir to the container user before bringing it up:
+
+```bash
+mkdir -p data && sudo chown 65532:65532 data
+```
+
+(Or skip the bind mount entirely and use a named Docker volume — Docker creates
+those already writable by the container.)
 
 Bring it up. `GRUB_MASTER_KEY` encrypts the stored sessions, so generate a real one:
 

@@ -27,7 +27,11 @@ jobs:
         with:
           context: .
           file: deploy/Dockerfile.miner
-          platforms: linux/amd64
+          # Multi-arch: the miner is pure-Go (CGO_ENABLED=0, modernc.org/sqlite)
+          # on distroless static, so buildx cross-compiles arm64 from the
+          # platform tag with no toolchain changes. arm64 lets Raspberry Pi /
+          # ARM self-hosters pull a prebuilt image instead of building from source.
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ghcr.io/aalejandrofer/grubdrops:${{ github.ref_name }}
@@ -40,7 +44,14 @@ jobs:
         with:
           context: .
           file: deploy/Dockerfile.browser
-          platforms: linux/amd64
+          # Multi-arch. The Dockerfile branches on TARGETARCH: amd64 installs
+          # google-chrome-stable (the verified-in-prod path; Google ships no
+          # arm64 Linux Chrome), arm64 installs Debian's `chromium`, which is
+          # built against system FFmpeg and DOES carry the H.264/AAC decoders
+          # needed for Kick's IVS HLS stream (headless-shell lacks them). The
+          # arm64 sidecar is user-confirmed working but resource heavy
+          # (~4 GB RAM per live sidecar), so small ARM boxes run few in parallel.
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ghcr.io/aalejandrofer/grubdrops-browser:${{ github.ref_name }}

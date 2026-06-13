@@ -89,7 +89,7 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 
 	verified, err := d.persistKickSession(r.Context(), id, form)
 	if err != nil {
-		d.renderError(w, r, id, acc.DisplayName, "failed to persist session: "+err.Error())
+		d.renderError(w, r, id, acc.DisplayName, "failed to persist session: "+err.Error()+persistErrorHint(err))
 		return
 	}
 
@@ -99,6 +99,33 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 	}
 	d.sm.Put(r.Context(), "flash", flash)
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
+}
+
+// persistErrorHint returns a self-host troubleshooting suffix when a persist
+// failure looks like the bind-mounted data dir being unwritable by the
+// container user. The miner image runs as distroless nonroot (UID 65532), so a
+// host-owned ./data leaves SQLite unable to open/write miner.db — which surfaces
+// to the operator as a confusing "login failed after verification". Matching the
+// usual SQLite/OS readonly+permission signatures, we append a chown hint.
+// Returns "" (no change) for any other error.
+func persistErrorHint(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := strings.ToLower(err.Error())
+	for _, needle := range []string{
+		"permission denied",
+		"readonly",
+		"read-only",
+		"unable to open database",
+		"sqlite_",
+		"disk i/o",
+	} {
+		if strings.Contains(msg, needle) {
+			return " — the data directory may not be writable by the container user (chown it to 65532:65532). See README."
+		}
+	}
+	return ""
 }
 
 // kickCookieForm carries the cookie/channel fields a Kick login submits.

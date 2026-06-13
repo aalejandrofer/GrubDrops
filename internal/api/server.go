@@ -145,7 +145,7 @@ func NewRouter(d Deps) http.Handler {
 		start:           startedAt,
 		channelCounters: channelCountersFromRegistry(d.Registry),
 	}
-	accs := accountsDeps{q: d.Q, db: d.DB, t: d.Templates, sm: d.Session, sch: d.Scheduler, reload: d.Reload, authCheck: d.AuthCheck, reloadAccount: d.ReloadAccount}
+	accs := accountsDeps{q: d.Q, db: d.DB, t: d.Templates, sm: d.Session, sch: d.Scheduler, reload: d.Reload, authCheck: d.AuthCheck, reloadAccount: d.ReloadAccount, rootCtx: d.RootCtx}
 	loginTwitch := newLoginTwitchDeps(d, d.RootCtx)
 	loginKick := &loginKickDeps{
 		q:         d.Q,
@@ -233,6 +233,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/accounts/{id}/games", accs.games)
 	authed.Post("/accounts/{id}/games/add", accs.addGame)
 	authed.Post("/accounts/{id}/games/use-global", accs.useGlobal)
+	authed.Post("/accounts/{id}/reload", accs.reloadOne)
 	authed.Post("/accounts/{id}/delete", accs.delete)
 	authed.Post("/accounts/apply", func(w http.ResponseWriter, r *http.Request) {
 		if err := d.Reload(r.Context()); err != nil {

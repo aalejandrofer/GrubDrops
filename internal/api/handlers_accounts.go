@@ -28,6 +28,12 @@ type accountsDeps struct {
 	reload        func(context.Context) error
 	authCheck     func(context.Context)         // auth-health sweep (manual trigger)
 	reloadAccount func(context.Context, string) // targeted single-account reload
+	// rootCtx is the process root context. The per-account reload button
+	// hands this (NOT the request context) to reloadAccount so the rebuilt
+	// watcher is rooted in a long-lived context — a request context is
+	// cancelled the instant the handler returns, which previously tore the
+	// freshly-rebuilt watcher down (the v1.0.1 Kick re-login stall).
+	rootCtx context.Context
 }
 
 // applyReload calls the scheduler reload hook if wired, swallowing
@@ -349,8 +355,16 @@ func (d accountsDeps) update(w http.ResponseWriter, r *http.Request) {
 	// Targeted reload: an account edit (enable/disable, label, webhook)
 	// restarts ONLY this account's watcher — the rest of the roster keeps
 	// running. (Whitelist/priority saves still defer to the manual Apply.)
+	// Must run under the long-lived root context, NOT r.Context(): the
+	// request context cancels the instant we redirect below, and a reload
+	// kicked off on a dying context tears the watcher down without rebuilding
+	// it — leaving a just-disabled account still mining until a manual reload.
 	if d.reloadAccount != nil {
-		d.reloadAccount(r.Context(), id)
+		ctx := d.rootCtx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		d.reloadAccount(ctx, id)
 	}
 	d.sm.Put(r.Context(), "flash", "saved — this account reloaded")
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
@@ -407,6 +421,51 @@ func (d accountsDeps) delete(w http.ResponseWriter, r *http.Request) {
 	// Avoids tearing down + respinning every watcher on each small save.
 	d.sm.Put(r.Context(), "flash", "deleted")
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
+}
+
+// reload restarts a SINGLE account's watcher on demand (the per-account
+// reload arrow on the dashboard "Currently mining" cards). It hands the
+// process ROOT context to reloadAccount — never r.Context() — because the
+// request context is cancelled the instant this handler returns, and the
+// scheduler roots the rebuilt watcher in the long-lived base context derived
+// from this root. Using the request context here would tear the freshly-spun
+// watcher down on handler return (the v1.0.1 Kick re-login stall). The rest
+// of the roster keeps running untouched.
+func (d accountsDeps) reloadOne(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	acc, err := d.q.GetAccount(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if d.reloadAccount == nil {
+		http.Error(w, "per-account reload not available", http.StatusServiceUnavailable)
+		return
+	}
+	ctx := d.rootCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	d.reloadAccount(ctx, id)
+
+	name := acc.DisplayName
+	if name == "" {
+		name = acc.ID
+	}
+	d.sm.Put(r.Context(), "flash", "reloaded "+name)
+	// Mirror /accounts/apply: land the user back where they clicked from
+	// (dashboard or /accounts) rather than always bouncing to /accounts.
+	target := applyRedirectTarget(r)
+	// The button is an HTMX hx-post; HTMX swallows a 303 (it follows the
+	// redirect and swaps the body into the target element). Emit HX-Redirect
+	// so the browser does a full navigation instead — the flash renders on
+	// the freshly-loaded page, matching the global Reload form's UX.
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Redirect", target)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 func genID() string {

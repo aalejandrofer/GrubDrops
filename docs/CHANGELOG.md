@@ -4,15 +4,99 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
-### Breaking
+_No unreleased changes._
 
-- **Helper CLI/GUI removed** — `cmd/grubdrops-helper` and `cmd/grubdrops-helper-gui`
-  binaries, `internal/helper` package, `POST /helper/accounts/{id}/kick`,
-  `GET /download/helper`, and the `GRUB_HELPER_DIR` env var are all gone.
-  Kick cookie ingestion is now done via the **cookies.txt** flow: export with
-  the "Get cookies.txt LOCALLY" (Chrome) or "cookies.txt" (Firefox) extension
-  and paste or upload on the Kick authorize page. Remote users sign in via SSO
-  first.
+## [1.0.3-ws] — 2026-06-13
+
+### Added
+
+- **Kick pure-WebSocket watch path (experimental)** — Kick drop watch-time can
+  now accrue over a pure-WebSocket viewer presence with **no browser / no IVS
+  video** (`internal/platform/kick/wswatch.go`): a utls Chrome-fingerprinted wss
+  connection that sends a periodic `channel_handshake` (~12s) plus a
+  `tracking.user.watch.livestream` `user_event` (~60s). Live-verified to accrue
+  (+8 watch-minutes over 10 min, zero browser, 2026-06-13). Selected via the new
+  **Experimental** card under Settings → General — **Chrome sidecar** (default,
+  IVS `<video>`) or **WebSocket only** — stored in `settings:kick_watch_mode`,
+  read by the miner at startup (reload to switch). The two are mutually
+  exclusive (the server credits one active watch per account). The dashboard
+  KICK column header shows a **WS / Chrome** bubble for the active path. The
+  Chrome sidecar remains the default and the only verified-stable path; the WS
+  mode is opt-in. Gotcha baked in: `livestream_id` must be sent as a JSON
+  **number** — the server silently doesn't credit a stringified id.
+
+## [1.0.3] — 2026-06-13
+
+### Changed
+
+- **Lower-bandwidth Kick playback (#15)** — the browser sidecar now caps the
+  watch tab's bandwidth and pins the IVS player to its lowest rendition. Drop
+  watch-time only needs the stream alive, not a clean picture, so this cuts the
+  per-sidecar network + CPU/decode load (and on a small ARM box, lets more
+  sidecars run at once).
+
+### Added
+
+- **Per-account reload** — each row in the dashboard "Currently mining" cards
+  now has a subtle reload arrow (↻) that restarts ONLY that account's watcher,
+  leaving every other account running uninterrupted. New
+  `POST /accounts/{id}/reload` endpoint (authed + CSRF) backed by the scheduler's
+  targeted `ReloadAccount`, which cancels just that entry's per-account context,
+  waits for it to exit, and respawns it under the long-lived base context — never
+  the request context — so a finished HTTP request can't tear the rebuilt watcher
+  down. The global "Reload all" button is unchanged.
+- **arm64 images — miner _and_ Kick browser sidecar** — both images now publish
+  for `linux/arm64` as well as `linux/amd64`. The miner is pure-Go
+  (`modernc.org/sqlite`, no CGO) so it cross-compiles cleanly. The browser
+  sidecar's Dockerfile now picks its browser per arch: amd64 keeps
+  google-chrome-stable (the verified path; Google ships no arm64 Linux Chrome),
+  arm64 installs Debian's `chromium`, which is built against system FFmpeg and so
+  still carries the H.264/AAC codecs that decode Kick's IVS stream. This means
+  **Kick browser-watch now runs on Raspberry Pi / ARM** — user-confirmed working,
+  though the arm64 sidecar is resource heavy (~4 GB RAM per live sidecar, ~2
+  concurrent on a small box). README + release.yml document the arch split.
+- **Data-dir permission docs** — README and the example compose now explain that
+  the miner runs as distroless nonroot (UID 65532) and a host-owned bind-mounted
+  `./data` must be `chown`ed to `65532:65532` (or use a named volume), or SQLite
+  can't write `miner.db` and login fails with "failed to persist session".
+
+### Fixed
+
+- **Account edit now takes effect immediately** — editing an account
+  (enable/disable, label, webhook) already kicked a per-account reload, but ran
+  it on the request context, which cancels the moment the handler redirects — so
+  the reload tore the watcher down without rebuilding it, and a just-disabled
+  account kept mining until a manual reload. The edit handler now reloads under
+  the long-lived root context (matching the per-account reload button), so the
+  change applies at once.
+- **Accounts list layout after avatars** — adding the avatar cell pushed the
+  display name into the 10px bullet column, where it overflowed and floated in
+  the middle of the row. The accounts list now has its own grid track
+  (avatar · name · ● · platform/links · state); the shared event-row grid is
+  untouched.
+- **README i18n** — added full Simplified Chinese (`README.zh-CN.md`) and
+  Spanish (`README.es.md`) translations with a language switcher atop all three
+  (addresses #15's localisation ask).
+- **Friendlier "failed to persist session" hint (#15)** — when a Kick login's
+  DB write fails with a permission/readonly/disk signature (the common
+  host-owned `./data` on a nonroot container), the error shown now appends a
+  hint to chown the data dir to `65532:65532` and points at the README, instead
+  of just surfacing the raw SQLite error. The verify flow is unchanged.
+- **"Invalid CSRF token" on plain-HTTP self-hosts (#15)** — every form POST
+  failed on a plain-HTTP deployment (e.g. a Raspberry Pi at `http://pi:8080`).
+  Root cause: `nosurf` v1.2 defaults its same-origin check to assume HTTPS
+  (`isTLS` always true), so it built a `https://host` self-origin that never
+  matched the browser-sent `http://host` Origin/Referer. The CSRF middleware
+  now derives the request scheme from the actual transport — honoring
+  `X-Forwarded-Proto` only when `GRUB_SECURE_COOKIES=1` (a declared HTTPS
+  deployment behind a TLS-terminating proxy) and reporting plain HTTP
+  otherwise. The same-origin requirement and the masked token cookie/form
+  comparison are unchanged, so protection is not weakened. A failed check now
+  logs a `csrf check failed` diagnostic and returns a hint naming the likely
+  secure-cookie/scheme mismatch. README documents the `GRUB_SECURE_COOKIES`
+  guidance.
+
+## [1.0.2] — 2026-06-13
 
 ### Added
 
@@ -27,24 +111,6 @@ All notable changes to GrubDrops.
   mining rows, the account modal head, and the accounts list, each falling back
   to the existing letter circle when no avatar is set or the image fails to
   load (`onerror`).
-- **Release workflow** — `.github/workflows/release.yml` publishes
-  `ghcr.io/aalejandrofer/grubdrops` and `ghcr.io/aalejandrofer/grubdrops-browser`
-  `linux/amd64` images on `v*` tags.
-- **cookies.txt Kick login** — parser, upload handler, and authorize-page template
-  replacing the helper-binary path.
-- **Kick pure-WebSocket watch path** — Kick drop watch-time can now accrue over
-  a pure-WebSocket viewer presence with **no browser / no IVS video**
-  (`internal/platform/kick/wswatch.go`): a utls Chrome-fingerprinted wss
-  connection that sends a periodic `channel_handshake` (~12s) plus a
-  `tracking.user.watch.livestream` `user_event` (~60s). Live-verified to accrue
-  (+8 watch-minutes over 10 min, zero browser, 2026-06-13). Selected via the new
-  **Experimental** card under Settings → General — **Chrome sidecar** (default,
-  IVS `<video>`) or **WebSocket only** — stored in `settings:kick_watch_mode`,
-  read by the miner at startup (reload to switch). The two are mutually
-  exclusive (the server credits one active watch per account). The dashboard
-  KICK column header shows a **WS / Chrome** bubble for the active path.
-  Gotcha baked in: `livestream_id` must be sent as a JSON **number** — the
-  server silently doesn't credit a stringified id.
 
 ### Changed
 
@@ -56,25 +122,9 @@ All notable changes to GrubDrops.
   Wider mono tracking (0.14em), tactile `:active`, and a visible accent
   `:focus-visible` ring on both. Applies to all `.btn`/`.btn.sm`/`.btn.ghost`
   usages (page-head actions, account pages, alert CTAs, nav). CSS-only.
-- README rewritten deployment-first (Docker Compose quickstart, cookie-export
-  instructions, environment variable reference).
-- `cmd/kick-encrypt` one-shot ops tool deleted (superseded by cookies.txt form).
 
 ### Fixed
 
-- **"Invalid CSRF token" on plain-HTTP self-hosts (#15)** — every form POST
-  failed on a plain-HTTP deployment (e.g. a Raspberry Pi at `http://pi:8080`).
-  Root cause: `nosurf` v1.2 defaults its same-origin check to assume HTTPS
-  (`isTLS` always true), so it built a `https://host` self-origin that never
-  matched the browser-sent `http://host` Origin/Referer. The CSRF middleware
-  now derives the request scheme from the actual transport — honoring
-  `X-Forwarded-Proto` only when `GRUB_SECURE_COOKIES=1` (a declared HTTPS
-  deployment behind a TLS-terminating proxy) and reporting plain HTTP
-  otherwise. The same-origin requirement and the masked token cookie/form
-  comparison are unchanged, so protection is not weakened. A failed check now
-  logs a `csrf check failed` diagnostic and returns a hint naming the likely
-  secure-cookie/scheme mismatch. README documents the `GRUB_SECURE_COOKIES`
-  guidance.
 - **Reload stall after Kick re-login (P0)** — every watcher (Twitch + Kick)
   tore down and never resumed `watching` after a Kick re-login, requiring a
   container restart to recover. Root cause: the scheduler ran watchers under
@@ -86,6 +136,32 @@ All notable changes to GrubDrops.
   /accounts apply button, link-override, settings reload) can never tear the
   roster down. The Kick login handler also now reloads under the root context,
   matching the Twitch handler.
+
+## [1.0.1] — 2026-06-12
+
+### Breaking
+
+- **Helper CLI/GUI removed** — `cmd/grubdrops-helper` and `cmd/grubdrops-helper-gui`
+  binaries, `internal/helper` package, `POST /helper/accounts/{id}/kick`,
+  `GET /download/helper`, and the `GRUB_HELPER_DIR` env var are all gone.
+  Kick cookie ingestion is now done via the **cookies.txt** flow: export with
+  the "Get cookies.txt LOCALLY" (Chrome) or "cookies.txt" (Firefox) extension
+  and paste or upload on the Kick authorize page. Remote users sign in via SSO
+  first.
+
+### Added
+
+- **Release workflow** — `.github/workflows/release.yml` publishes
+  `ghcr.io/aalejandrofer/grubdrops` and `ghcr.io/aalejandrofer/grubdrops-browser`
+  images on `v*` tags.
+- **cookies.txt Kick login** — parser, upload handler, and authorize-page template
+  replacing the helper-binary path.
+
+### Changed
+
+- README rewritten deployment-first (Docker Compose quickstart, cookie-export
+  instructions, environment variable reference).
+- `cmd/kick-encrypt` one-shot ops tool deleted (superseded by cookies.txt form).
 
 ## [1.0.0] — 2026-06-07
 

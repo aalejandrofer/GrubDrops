@@ -68,3 +68,82 @@ func TestScheduler_StopThenReloadAddsAccount(t *testing.T) {
 
 	s.Stop(ctx)
 }
+
+// TestScheduler_ReloadAccountLeavesOthersRunning asserts the core per-account
+// reload guarantee: restarting ONE account's watcher must not cancel or
+// disturb any other account's watcher. The "other" runner keeps ticking
+// continuously across the reload (its context is never cancelled), while the
+// target runner is observably torn down and respun.
+func TestScheduler_ReloadAccountLeavesOthersRunning(t *testing.T) {
+	root, rootCancel := context.WithCancel(context.Background())
+	defer rootCancel()
+
+	s := New(Options{Notifier: &counterNotifier{}})
+
+	target := &liveRunner{}
+	other := &liveRunner{}
+	buildTarget := func() Entry { return NewEntry("target", target) }
+	buildOther := func() Entry { return NewEntry("other", other) }
+
+	require.NoError(t, s.Reload(root, []EntryBuilder{buildTarget, buildOther}))
+	require.Eventually(t, func() bool {
+		return target.ticks.Load() > 0 && other.ticks.Load() > 0
+	}, time.Second, 2*time.Millisecond, "both runners should start")
+
+	// Replace the target's runner with a brand-new instance and reload only it.
+	fresh := &liveRunner{}
+	otherTicksBefore := other.ticks.Load()
+	s.ReloadAccount(root, "target", func() Entry { return NewEntry("target", fresh) })
+
+	// The fresh runner for the target must start ticking (proving the old one
+	// was stopped and a new entry was spun up under the base context)…
+	require.Eventually(t, func() bool { return fresh.ticks.Load() > 0 },
+		time.Second, 2*time.Millisecond, "reloaded target should restart under the base context")
+
+	// …and the OTHER runner must have kept ticking the whole time — its
+	// context was never cancelled by the targeted reload.
+	require.Greater(t, other.ticks.Load(), otherTicksBefore,
+		"other account's watcher must keep running uninterrupted across a per-account reload")
+	require.True(t, other.running(40*time.Millisecond),
+		"other account's watcher must still be live after the per-account reload")
+
+	s.Stop(root)
+}
+
+// TestScheduler_ReloadAccountSurvivesTriggerContextCancel mirrors the global
+// reload-ctx test for the per-account path: a per-account reload triggered by
+// a short-lived (e.g. HTTP request) context must keep running after that
+// trigger context is cancelled, because the watcher is rooted in the long-lived
+// base context — never the caller's parent.
+func TestScheduler_ReloadAccountSurvivesTriggerContextCancel(t *testing.T) {
+	root, rootCancel := context.WithCancel(context.Background())
+	defer rootCancel()
+
+	s := New(Options{Notifier: &counterNotifier{}})
+
+	r := &liveRunner{}
+	build := func() Entry { return NewEntry("acc1", r) }
+
+	require.NoError(t, s.Reload(root, []EntryBuilder{build}))
+	require.Eventually(t, func() bool { return r.ticks.Load() > 0 },
+		time.Second, 2*time.Millisecond, "runner should start")
+
+	// Per-account reload under a request-scoped context that we then cancel.
+	fresh := &liveRunner{}
+	triggerCtx, triggerCancel := context.WithCancel(root)
+	s.ReloadAccount(triggerCtx, "acc1", func() Entry { return NewEntry("acc1", fresh) })
+	require.Eventually(t, func() bool { return fresh.ticks.Load() > 0 },
+		time.Second, 2*time.Millisecond, "reloaded runner should start")
+	ticksAfterReload := fresh.ticks.Load()
+	triggerCancel() // request finished → its context dies
+
+	time.Sleep(80 * time.Millisecond)
+	require.True(t, fresh.running(40*time.Millisecond),
+		"per-account-reloaded watcher must survive its trigger context being cancelled")
+	require.Greater(t, fresh.ticks.Load(), ticksAfterReload,
+		"per-account-reloaded watcher must keep progressing after the trigger context dies")
+
+	rootCancel()
+	require.Eventually(t, func() bool { return !fresh.running(20 * time.Millisecond) },
+		time.Second, 2*time.Millisecond, "watcher should stop when the root context is cancelled")
+}
