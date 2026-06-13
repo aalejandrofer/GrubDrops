@@ -4,15 +4,9 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
-### Breaking
+_No unreleased changes._
 
-- **Helper CLI/GUI removed** — `cmd/grubdrops-helper` and `cmd/grubdrops-helper-gui`
-  binaries, `internal/helper` package, `POST /helper/accounts/{id}/kick`,
-  `GET /download/helper`, and the `GRUB_HELPER_DIR` env var are all gone.
-  Kick cookie ingestion is now done via the **cookies.txt** flow: export with
-  the "Get cookies.txt LOCALLY" (Chrome) or "cookies.txt" (Firefox) extension
-  and paste or upload on the Kick authorize page. Remote users sign in via SSO
-  first.
+## [1.0.3] — 2026-06-13
 
 ### Added
 
@@ -24,20 +18,6 @@ All notable changes to GrubDrops.
   waits for it to exit, and respawns it under the long-lived base context — never
   the request context — so a finished HTTP request can't tear the rebuilt watcher
   down. The global "Reload all" button is unchanged.
-- **Account profile pictures** — each account now shows its real platform
-  avatar (Twitch via `currentUser.profileImageURL` on `static-cdn.jtvnw.net`,
-  embedded directly; Kick via the authed `/api/v1/user` `profile_pic`, served
-  through the existing `/img/kick` proxy so Cloudflare doesn't 403 the
-  hotlink). New `avatar_url` column on `accounts` (migration `0012`),
-  `UpdateAccountAvatar` query, and a `platform.AvatarFetcher` backend
-  capability. Avatars are backfilled on login and refreshed by the ~12h
-  auth-health sweep — never on the per-tick hot path. Rendered in the dashboard
-  mining rows, the account modal head, and the accounts list, each falling back
-  to the existing letter circle when no avatar is set or the image fails to
-  load (`onerror`).
-- **Release workflow** — `.github/workflows/release.yml` publishes
-  `ghcr.io/aalejandrofer/grubdrops` and `ghcr.io/aalejandrofer/grubdrops-browser`
-  images on `v*` tags.
 - **arm64 miner image** — the miner is now published for `linux/arm64` as well
   as `linux/amd64`, so Raspberry Pi / ARM self-hosters pull a prebuilt image
   instead of building from source (pure-Go `modernc.org/sqlite`, no CGO, so it
@@ -49,22 +29,6 @@ All notable changes to GrubDrops.
   the miner runs as distroless nonroot (UID 65532) and a host-owned bind-mounted
   `./data` must be `chown`ed to `65532:65532` (or use a named volume), or SQLite
   can't write `miner.db` and login fails with "failed to persist session".
-- **cookies.txt Kick login** — parser, upload handler, and authorize-page template
-  replacing the helper-binary path.
-
-### Changed
-
-- **Button system redesign** — global refresh of the `.btn` (secondary) and
-  `.btn.primary` pair for a cohesive, restrained hierarchy: secondary is now a
-  quiet ghost (transparent, muted mono label, soft border) that lifts to full
-  text + warmed accent border + faint tint on hover; primary keeps the accent
-  fill with a hairline top highlight and lightens to `--accent-2` on hover.
-  Wider mono tracking (0.14em), tactile `:active`, and a visible accent
-  `:focus-visible` ring on both. Applies to all `.btn`/`.btn.sm`/`.btn.ghost`
-  usages (page-head actions, account pages, alert CTAs, nav). CSS-only.
-- README rewritten deployment-first (Docker Compose quickstart, cookie-export
-  instructions, environment variable reference).
-- `cmd/kick-encrypt` one-shot ops tool deleted (superseded by cookies.txt form).
 
 ### Fixed
 
@@ -86,6 +50,36 @@ All notable changes to GrubDrops.
   logs a `csrf check failed` diagnostic and returns a hint naming the likely
   secure-cookie/scheme mismatch. README documents the `GRUB_SECURE_COOKIES`
   guidance.
+
+## [1.0.2] — 2026-06-13
+
+### Added
+
+- **Account profile pictures** — each account now shows its real platform
+  avatar (Twitch via `currentUser.profileImageURL` on `static-cdn.jtvnw.net`,
+  embedded directly; Kick via the authed `/api/v1/user` `profile_pic`, served
+  through the existing `/img/kick` proxy so Cloudflare doesn't 403 the
+  hotlink). New `avatar_url` column on `accounts` (migration `0012`),
+  `UpdateAccountAvatar` query, and a `platform.AvatarFetcher` backend
+  capability. Avatars are backfilled on login and refreshed by the ~12h
+  auth-health sweep — never on the per-tick hot path. Rendered in the dashboard
+  mining rows, the account modal head, and the accounts list, each falling back
+  to the existing letter circle when no avatar is set or the image fails to
+  load (`onerror`).
+
+### Changed
+
+- **Button system redesign** — global refresh of the `.btn` (secondary) and
+  `.btn.primary` pair for a cohesive, restrained hierarchy: secondary is now a
+  quiet ghost (transparent, muted mono label, soft border) that lifts to full
+  text + warmed accent border + faint tint on hover; primary keeps the accent
+  fill with a hairline top highlight and lightens to `--accent-2` on hover.
+  Wider mono tracking (0.14em), tactile `:active`, and a visible accent
+  `:focus-visible` ring on both. Applies to all `.btn`/`.btn.sm`/`.btn.ghost`
+  usages (page-head actions, account pages, alert CTAs, nav). CSS-only.
+
+### Fixed
+
 - **Reload stall after Kick re-login (P0)** — every watcher (Twitch + Kick)
   tore down and never resumed `watching` after a Kick re-login, requiring a
   container restart to recover. Root cause: the scheduler ran watchers under
@@ -97,6 +91,32 @@ All notable changes to GrubDrops.
   /accounts apply button, link-override, settings reload) can never tear the
   roster down. The Kick login handler also now reloads under the root context,
   matching the Twitch handler.
+
+## [1.0.1] — 2026-06-12
+
+### Breaking
+
+- **Helper CLI/GUI removed** — `cmd/grubdrops-helper` and `cmd/grubdrops-helper-gui`
+  binaries, `internal/helper` package, `POST /helper/accounts/{id}/kick`,
+  `GET /download/helper`, and the `GRUB_HELPER_DIR` env var are all gone.
+  Kick cookie ingestion is now done via the **cookies.txt** flow: export with
+  the "Get cookies.txt LOCALLY" (Chrome) or "cookies.txt" (Firefox) extension
+  and paste or upload on the Kick authorize page. Remote users sign in via SSO
+  first.
+
+### Added
+
+- **Release workflow** — `.github/workflows/release.yml` publishes
+  `ghcr.io/aalejandrofer/grubdrops` and `ghcr.io/aalejandrofer/grubdrops-browser`
+  images on `v*` tags.
+- **cookies.txt Kick login** — parser, upload handler, and authorize-page template
+  replacing the helper-binary path.
+
+### Changed
+
+- README rewritten deployment-first (Docker Compose quickstart, cookie-export
+  instructions, environment variable reference).
+- `cmd/kick-encrypt` one-shot ops tool deleted (superseded by cookies.txt form).
 
 ## [1.0.0] — 2026-06-07
 
