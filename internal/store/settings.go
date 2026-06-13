@@ -24,6 +24,19 @@ const (
 	keyNotifyError      = "settings:notify_error"
 	keyNotifyProgStep   = "settings:notify_progress_step_pct"
 	keyPriorityMode     = "settings:priority_mode"
+	keyKickWatchMode    = "settings:kick_watch_mode"
+)
+
+// KickWatchMode selects how Kick watch-time is accrued.
+//   - "browser" (default): drive a real IVS <video> in the chromedp sidecar.
+//     The verified-working path; needs a per-account sidecar.
+//   - "ws" (EXPERIMENTAL): pure-WebSocket viewer presence, no browser/video.
+//     Live-verified to accrue (see internal/platform/kick/wswatch.go). Mutually
+//     exclusive with the sidecar — the server credits one active watch per
+//     account.
+const (
+	KickWatchModeBrowser = "browser"
+	KickWatchModeWS      = "ws"
 )
 
 // PriorityMode controls campaign pick ordering when multiple
@@ -226,6 +239,27 @@ func (s *Settings) SetPriorityMode(ctx context.Context, mode string) error {
 		mode = PriorityModeOrdered
 	}
 	return s.setString(ctx, keyPriorityMode, mode)
+}
+
+// KickWatchMode returns the configured Kick watch path ("browser" default,
+// or "ws"). Read at miner startup (reload required to apply) and surfaced on
+// the dashboard so the operator can see which path is active.
+func (s *Settings) KickWatchMode(ctx context.Context) (string, error) {
+	v, err := s.getString(ctx, keyKickWatchMode)
+	if err != nil || v == "" {
+		return KickWatchModeBrowser, err
+	}
+	if v != KickWatchModeBrowser && v != KickWatchModeWS {
+		return KickWatchModeBrowser, nil
+	}
+	return v, nil
+}
+
+func (s *Settings) SetKickWatchMode(ctx context.Context, mode string) error {
+	if mode != KickWatchModeBrowser && mode != KickWatchModeWS {
+		mode = KickWatchModeBrowser
+	}
+	return s.setString(ctx, keyKickWatchMode, mode)
 }
 
 func (s *Settings) SetNotifyKinds(ctx context.Context, claim, progress, auth, errors bool) error {

@@ -148,15 +148,22 @@ func run() error {
 		logger.Info("kick sidecar auto-create enabled", "image", cfg.KickSidecarImage, "network", cfg.KickSidecarNetwork)
 	}
 	kickBackend = kick.New(browserClient, dockerCtl, cfg.KickSidecarTemplate, cfg.KickSidecarPort, 10*time.Minute, kickOpts...)
-	// Browser-watch is the only path that accrues Kick drop time (real IVS
-	// <video> in the sidecar), so always enable it. EnableBrowserWatch no-ops
-	// + warns if no sidecar client is configured, in which case StartWatch
-	// errors loudly rather than running a watch that earns nothing.
-	kickBackend.EnableBrowserWatch()
+	// Watch path is operator-selectable (Settings → Experimental). "browser"
+	// (default) drives a real IVS <video> in the sidecar. "ws" is the
+	// experimental pure-WebSocket path (no browser): leaving browser-watch OFF
+	// routes StartWatch to the WebSocket watch (live-verified to accrue — see
+	// internal/platform/kick/wswatch.go). The two are mutually exclusive (one
+	// active watch per account). EnableBrowserWatch no-ops + warns if no sidecar
+	// client is configured.
+	kickWatchMode, _ := settingsStore.KickWatchMode(ctx)
+	if kickWatchMode != store.KickWatchModeWS {
+		kickBackend.EnableBrowserWatch()
+	}
 	registry.Register(kickBackend)
 	logger.Info("kick backend enabled (utls HTTP transport)",
 		"sidecar", browserClient != nil,
-		"browser_watch", browserClient != nil)
+		"watch_mode", kickWatchMode,
+		"browser_watch", kickWatchMode != store.KickWatchModeWS && browserClient != nil)
 
 	if twitchBrowserEnabled && browserClient != nil {
 		registry.Register(twitch.NewBrowserBackend(browserClient))

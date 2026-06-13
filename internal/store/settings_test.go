@@ -44,3 +44,29 @@ func TestSettings_LogRetentionDays(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 30, days)
 }
+
+func TestSettings_KickWatchMode(t *testing.T) {
+	db, err := Open(context.Background(), filepath.Join(t.TempDir(), "t.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	s := NewSettings(gen.New(db))
+	ctx := context.Background()
+
+	// Default is the verified browser path.
+	mode, err := s.KickWatchMode(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, KickWatchModeBrowser, mode)
+
+	// Round-trips the experimental WS path.
+	require.NoError(t, s.SetKickWatchMode(ctx, KickWatchModeWS))
+	mode, err = s.KickWatchMode(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, KickWatchModeWS, mode)
+
+	// Unknown values are coerced back to the safe default on both write…
+	require.NoError(t, s.SetKickWatchMode(ctx, "garbage"))
+	mode, err = s.KickWatchMode(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, KickWatchModeBrowser, mode)
+}

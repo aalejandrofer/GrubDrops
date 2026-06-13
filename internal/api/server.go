@@ -141,6 +141,7 @@ func NewRouter(d Deps) http.Handler {
 		sm:              d.Session,
 		sch:             d.Scheduler,
 		ring:            d.LogRing,
+		s:               d.SettingsStore,
 		start:           startedAt,
 		channelCounters: channelCountersFromRegistry(d.Registry),
 	}
@@ -280,6 +281,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/settings/security", settingsH.getSecurity)
 	authed.Post("/settings", settingsH.postGeneral)
 	authed.Post("/settings/priority-mode", settingsH.postPriorityMode)
+	authed.Post("/settings/experimental", settingsH.postExperimental)
 	authed.Post("/settings/notifications", settingsH.postNotifications)
 	authed.Post("/settings/global-games", settingsH.globalGamesPost)
 	authed.Post("/settings/global-games/add", settingsH.globalGamesAdd)

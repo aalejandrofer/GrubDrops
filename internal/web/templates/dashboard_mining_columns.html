@@ -22,6 +22,11 @@
     <header class="mining-col-head">
       <span class="pip kick"></span>
       <h3>KICK</h3>
+      {{if eq .KickWatchMode "ws"}}
+      <span class="watch-mode ws" title="Kick accrual path: pure WebSocket (experimental, no browser)">WS</span>
+      {{else}}
+      <span class="watch-mode chrome" title="Kick accrual path: Chrome sidecar (IVS video playback)">Chrome</span>
+      {{end}}
       <span class="count">{{len .Kick}}</span>
     </header>
     {{if not .Kick}}

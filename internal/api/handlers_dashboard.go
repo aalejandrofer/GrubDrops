@@ -15,6 +15,7 @@ import (
 	mlog "github.com/aalejandrofer/grubdrops/internal/log"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/scheduler"
+	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 	"github.com/aalejandrofer/grubdrops/internal/watcher"
 )
@@ -55,6 +56,7 @@ type dashboardDeps struct {
 	sm    *scs.SessionManager
 	sch   *scheduler.Scheduler
 	ring  *mlog.Ring
+	s     *store.Settings
 	start time.Time
 	// channelCounters is keyed by platform name ("twitch", "kick"). Nil
 	// or missing entries make the dashboard fall back to zero for that
@@ -174,6 +176,10 @@ type dashCampaignBenefit struct {
 type dashMiningColumns struct {
 	Twitch []dashMineCard
 	Kick   []dashMineCard
+	// KickWatchMode is the configured Kick accrual path ("browser" | "ws"),
+	// shown as a bubble next to the KICK column header so the operator can
+	// see which path is active at a glance.
+	KickWatchMode string
 }
 
 // dashLiveChannel is one card in the full-width "Live channels — eligible
@@ -312,10 +318,15 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 
 	camps := activeCampsFromDiscovery(r.Context(), d.sch, d.channelCounters, d.q)
 
+	mining := bucketMiningByPlatform(cards)
+	if d.s != nil {
+		mining.KickWatchMode, _ = d.s.KickWatchMode(r.Context())
+	}
+
 	page := dashPage{
 		Tele:          telemetryWithClaims(telemetryFrom(snapshots), d.q, r.Context()),
 		Alerts:        alerts,
-		Mining:        bucketMiningByPlatform(cards),
+		Mining:        mining,
 		NextClaims:    nextClaimsFrom(cards),
 		ActiveCamps:   camps,
 		LiveChannels:  liveChannelsFor(accs, snapshots, allowed),

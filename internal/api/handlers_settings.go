@@ -75,6 +75,7 @@ type settingsPageData struct {
 	TickIntervalSec      int
 	DiscoveryIntervalMin int
 	PriorityMode         string // "ordered" | "ending_soonest"
+	KickWatchMode        string // "browser" | "ws" (experimental)
 	NotifyClaim          bool
 	NotifyProgress       bool
 	NotifyAuth           bool
@@ -106,6 +107,7 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 	tick, _ := d.s.TickIntervalSec(ctx)
 	discIv, _ := d.s.DiscoveryIntervalMin(ctx)
 	prio, _ := d.s.PriorityMode(ctx)
+	kickWatch, _ := d.s.KickWatchMode(ctx)
 	nc, np, na, ne := d.s.NotifyKinds(ctx)
 	progStep, _ := d.s.ProgressNotifyStepPct(ctx)
 
@@ -154,6 +156,7 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 			TickIntervalSec:      tick,
 			DiscoveryIntervalMin: discIv,
 			PriorityMode:         prio,
+			KickWatchMode:        kickWatch,
 			GlobalGames:          globalGames,
 			AllGames:             allGames,
 			NotifyClaim:          nc,
@@ -265,6 +268,31 @@ func (d *settingsDeps) postPriorityMode(w http.ResponseWriter, r *http.Request) 
 	}
 	d.sm.Put(ctx, "flash", "priority mode saved")
 	http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
+}
+
+// postExperimental saves the Experimental tab: the Kick watch path toggle.
+// The mode is read by the miner at startup, so it applies on the next
+// scheduler reload / restart, not live.
+func (d *settingsDeps) postExperimental(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	mode := store.KickWatchModeBrowser
+	if r.FormValue("kick_watch_mode") == store.KickWatchModeWS {
+		mode = store.KickWatchModeWS
+	}
+	changed := false
+	if cur, _ := d.s.KickWatchMode(ctx); cur != mode {
+		changed = true
+	}
+	_ = d.s.SetKickWatchMode(ctx, mode)
+	if d.onUpdate != nil {
+		d.onUpdate()
+	}
+	msg := "experimental settings saved"
+	if changed {
+		msg = "Kick watch mode saved — reload watchers (or restart) to switch paths"
+	}
+	d.sm.Put(ctx, "flash", msg)
+	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
 
 // notifyTest fires one representative sample event through the live notifier
