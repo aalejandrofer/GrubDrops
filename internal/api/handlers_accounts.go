@@ -237,7 +237,11 @@ func (d accountsDeps) addGame(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 		return
 	}
-	gameID := "g_" + slug
+	// Use the canonical id scheme (gameslug.ID, '-'→'_') so this matches the
+	// row discovery already inserted for the same game. Building "g_"+slug here
+	// keeps hyphens, producing a different id for multi-word games — the upsert
+	// then misses ON CONFLICT(id) and trips the UNIQUE slug constraint.
+	gameID := gameslug.ID(name)
 	if err := d.q.UpsertGame(r.Context(), gen.UpsertGameParams{
 		ID: gameID, Name: name, Slug: slug, Priority: 0,
 	}); err != nil {

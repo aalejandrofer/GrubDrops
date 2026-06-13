@@ -702,7 +702,10 @@ func (d *dropsDeps) addWhitelist(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/drops", http.StatusSeeOther)
 		return
 	}
-	gameID := "g_" + slug
+	// Canonical id (gameslug.ID, '-'→'_') so it matches discovery's row for the
+	// same game; "g_"+slug keeps hyphens and collides on the UNIQUE slug for
+	// multi-word games.
+	gameID := gameslug.ID(name)
 	if err := d.q.UpsertGame(r.Context(), gen.UpsertGameParams{
 		ID: gameID, Name: name, Slug: slug, Priority: 0,
 	}); err != nil {

@@ -397,7 +397,9 @@ func (d *settingsDeps) globalGamesAdd(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
 		return
 	}
-	gameID := "g_" + slug
+	// Canonical id (gameslug.ID, '-'→'_') so it matches discovery's row; plain
+	// "g_"+slug keeps hyphens and collides on the UNIQUE slug for multi-word games.
+	gameID := gameslug.ID(name)
 	if err := d.q.UpsertGame(ctx, gen.UpsertGameParams{
 		ID: gameID, Name: name, Slug: slug, Priority: 0,
 	}); err != nil {
