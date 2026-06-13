@@ -49,6 +49,19 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- **"Invalid CSRF token" on plain-HTTP self-hosts (#15)** — every form POST
+  failed on a plain-HTTP deployment (e.g. a Raspberry Pi at `http://pi:8080`).
+  Root cause: `nosurf` v1.2 defaults its same-origin check to assume HTTPS
+  (`isTLS` always true), so it built a `https://host` self-origin that never
+  matched the browser-sent `http://host` Origin/Referer. The CSRF middleware
+  now derives the request scheme from the actual transport — honoring
+  `X-Forwarded-Proto` only when `GRUB_SECURE_COOKIES=1` (a declared HTTPS
+  deployment behind a TLS-terminating proxy) and reporting plain HTTP
+  otherwise. The same-origin requirement and the masked token cookie/form
+  comparison are unchanged, so protection is not weakened. A failed check now
+  logs a `csrf check failed` diagnostic and returns a hint naming the likely
+  secure-cookie/scheme mismatch. README documents the `GRUB_SECURE_COOKIES`
+  guidance.
 - **Reload stall after Kick re-login (P0)** — every watcher (Twitch + Kick)
   tore down and never resumed `watching` after a Kick re-login, requiring a
   container restart to recover. Root cause: the scheduler ran watchers under

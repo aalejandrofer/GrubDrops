@@ -164,8 +164,17 @@ default shown.
 | `GRUB_DISCOVERY_INTERVAL` | `60m` | Catalog-scrape cadence (e.g. `30m`, `2h`); also editable in Settings. |
 | `GRUB_AUTHCHECK_INTERVAL` | `12h` | Auth-health sweep cadence. |
 | `GRUB_DISCORD_WEBHOOK` | none | Optional global Discord webhook. |
-| `GRUB_SECURE_COOKIES` | `0` | Secure session cookies; turn on behind HTTPS. |
+| `GRUB_SECURE_COOKIES` | `0` | Secure session cookies + CSRF same-origin scheme. Leave `0` for plain HTTP (`http://pi:8080`); set `1` only when reached over HTTPS (directly or behind a TLS-terminating proxy that sets `X-Forwarded-Proto: https`). See note below. |
 | `GRUB_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
+
+> **Self-host / "invalid CSRF token":** `GRUB_SECURE_COOKIES` must match how you
+> reach the app. Over **plain HTTP** (the default, e.g. a Raspberry Pi at
+> `http://pi:8080`) keep it `0` — `1` makes the browser mark the session/CSRF
+> cookie `Secure`, so it is silently dropped over HTTP and every form POST then
+> fails the CSRF check. Behind a **reverse proxy that terminates TLS**, set `1`
+> and have the proxy forward `X-Forwarded-Proto: https`. A failed check now logs
+> a `csrf check failed` line and returns a hint pointing at the likely
+> mismatch.
 
 ### Single sign-on (OIDC)
 

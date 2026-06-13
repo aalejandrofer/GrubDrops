@@ -161,12 +161,13 @@ func NewRouter(d Deps) http.Handler {
 	// only; the /twitch/paste routes redirect to /twitch/device.
 
 	withSession := func(h http.Handler) http.Handler { return d.Session.LoadAndSave(h) }
+	csrf := CSRF(d.SecureCookies)
 
 	// Public (no auth required, but still session + CSRF)
-	r.Method(http.MethodGet, "/setup", withSession(CSRF(http.HandlerFunc(setup.get))))
-	r.Method(http.MethodPost, "/setup", withSession(CSRF(http.HandlerFunc(setup.post))))
-	r.Method(http.MethodGet, "/login", withSession(CSRF(http.HandlerFunc(authH.loginGet))))
-	r.Method(http.MethodPost, "/login", withSession(CSRF(http.HandlerFunc(authH.loginPost))))
+	r.Method(http.MethodGet, "/setup", withSession(csrf(http.HandlerFunc(setup.get))))
+	r.Method(http.MethodPost, "/setup", withSession(csrf(http.HandlerFunc(setup.post))))
+	r.Method(http.MethodGet, "/login", withSession(csrf(http.HandlerFunc(authH.loginGet))))
+	r.Method(http.MethodPost, "/login", withSession(csrf(http.HandlerFunc(authH.loginPost))))
 	r.Method(http.MethodGet, "/auth/oidc/login", withSession(http.HandlerFunc(oidcH.loginRedirect)))
 	r.Method(http.MethodGet, "/auth/oidc/callback", withSession(http.HandlerFunc(oidcH.callback)))
 
@@ -291,7 +292,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/img/kick", imgH.kick)
 	authed.Get("/history", historyH.get)
 
-	r.Mount("/", withSession(CSRF(authed)))
+	r.Mount("/", withSession(csrf(authed)))
 	return r
 }
 
