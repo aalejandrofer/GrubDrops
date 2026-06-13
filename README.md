@@ -45,6 +45,12 @@ single SQLite file.
 - For Kick watch-time: a mounted docker socket so the miner can auto-spin
   per-account Chrome sidecars on demand. Twitch-only setups need neither.
 
+> **Raspberry Pi / ARM:** the miner image is published for both `linux/amd64`
+> and `linux/arm64`, so `docker compose up` pulls a prebuilt image on a Pi — no
+> building from source. The Kick browser **sidecar** is amd64-only (it bundles
+> Chrome, which has no arm64 Linux build), so on ARM hosts Twitch drops run
+> natively while Kick watch-time needs an amd64 host for the sidecar.
+
 ### Run it
 
 Docker Compose with the published images is the fastest path — just the
@@ -64,10 +70,25 @@ services:
       GRUB_DB_PATH: /data/miner.db
       GRUB_SECURE_COOKIES: "0"   # plain-HTTP localhost; set 1 behind HTTPS
     volumes:
+      # The container runs as nonroot (UID 65532); make ./data writable by it
+      # first (see below) or use a named volume instead of a bind mount.
       - ./data:/data
       # lets the miner create/start/stop per-account browser sidecars on demand
       - /var/run/docker.sock:/var/run/docker.sock
 ```
+
+**Make the data dir writable first.** The miner image runs as the distroless
+`nonroot` user (**UID 65532**). A fresh bind-mounted `./data` is owned by your
+host user, so the container can't write `miner.db` — sessions never persist and
+login fails with *"failed to persist session"* right after a successful verify.
+Give the dir to the container user before bringing it up:
+
+```bash
+mkdir -p data && sudo chown 65532:65532 data
+```
+
+(Or skip the bind mount entirely and use a named Docker volume — Docker creates
+those already writable by the container.)
 
 Bring it up. `GRUB_MASTER_KEY` encrypts the stored sessions, so generate a real one:
 

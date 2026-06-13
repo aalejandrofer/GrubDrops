@@ -29,7 +29,18 @@ All notable changes to GrubDrops.
   load (`onerror`).
 - **Release workflow** — `.github/workflows/release.yml` publishes
   `ghcr.io/aalejandrofer/grubdrops` and `ghcr.io/aalejandrofer/grubdrops-browser`
-  `linux/amd64` images on `v*` tags.
+  images on `v*` tags.
+- **arm64 miner image** — the miner is now published for `linux/arm64` as well
+  as `linux/amd64`, so Raspberry Pi / ARM self-hosters pull a prebuilt image
+  instead of building from source (pure-Go `modernc.org/sqlite`, no CGO, so it
+  cross-compiles cleanly). The browser sidecar stays amd64-only: it bundles
+  google-chrome-stable for the IVS codecs and Google ships no arm64 Linux Chrome,
+  so Kick browser-watch still needs an amd64 host (Twitch drops run natively on
+  ARM). README + release.yml document this.
+- **Data-dir permission docs** — README and the example compose now explain that
+  the miner runs as distroless nonroot (UID 65532) and a host-owned bind-mounted
+  `./data` must be `chown`ed to `65532:65532` (or use a named volume), or SQLite
+  can't write `miner.db` and login fails with "failed to persist session".
 - **cookies.txt Kick login** — parser, upload handler, and authorize-page template
   replacing the helper-binary path.
 
@@ -49,6 +60,11 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- **Friendlier "failed to persist session" hint (#15)** — when a Kick login's
+  DB write fails with a permission/readonly/disk signature (the common
+  host-owned `./data` on a nonroot container), the error shown now appends a
+  hint to chown the data dir to `65532:65532` and points at the README, instead
+  of just surfacing the raw SQLite error. The verify flow is unchanged.
 - **"Invalid CSRF token" on plain-HTTP self-hosts (#15)** — every form POST
   failed on a plain-HTTP deployment (e.g. a Raspberry Pi at `http://pi:8080`).
   Root cause: `nosurf` v1.2 defaults its same-origin check to assume HTTPS

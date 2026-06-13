@@ -27,7 +27,11 @@ jobs:
         with:
           context: .
           file: deploy/Dockerfile.miner
-          platforms: linux/amd64
+          # Multi-arch: the miner is pure-Go (CGO_ENABLED=0, modernc.org/sqlite)
+          # on distroless static, so buildx cross-compiles arm64 from the
+          # platform tag with no toolchain changes. arm64 lets Raspberry Pi /
+          # ARM self-hosters pull a prebuilt image instead of building from source.
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ghcr.io/aalejandrofer/grubdrops:${{ github.ref_name }}
@@ -40,6 +44,13 @@ jobs:
         with:
           context: .
           file: deploy/Dockerfile.browser
+          # amd64 ONLY — intentional. The sidecar installs google-chrome-stable
+          # from the official .deb, which Google publishes for x86-64 only (no
+          # arm64 Linux build of Chrome exists), and we need its proprietary
+          # H.264/AAC codecs to decode Kick's IVS HLS stream (headless-shell
+          # lacks them). So ARM/RPi users get the arm64 miner above and run
+          # Twitch drops natively; Kick browser-watch needs an amd64 host for
+          # the sidecar (or fall back to running it on a separate amd64 box).
           platforms: linux/amd64
           push: true
           tags: |

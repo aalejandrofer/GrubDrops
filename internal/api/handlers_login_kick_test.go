@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -69,6 +70,35 @@ func TestLoginKickPost_CookiesTxtPersistsSession(t *testing.T) {
 	}
 	if _, ok, err := ss.Get(context.Background(), id); err != nil || !ok {
 		t.Fatalf("session not persisted: ok=%v err=%v", ok, err)
+	}
+}
+
+// persistErrorHint must append the chown hint for permission/readonly/disk
+// signatures and leave every other error untouched.
+func TestPersistErrorHint(t *testing.T) {
+	cases := []struct {
+		name     string
+		err      error
+		wantHint bool
+	}{
+		{"nil", nil, false},
+		{"permission denied", errors.New("open /data/miner.db: permission denied"), true},
+		{"readonly", errors.New("attempt to write a readonly database"), true},
+		{"read-only fs", errors.New("mkdir /data: read-only file system"), true},
+		{"unable to open", errors.New("unable to open database file"), true},
+		{"sqlite code", errors.New("SQLITE_CANTOPEN: unable to open"), true},
+		{"disk io", errors.New("disk I/O error"), true},
+		{"unrelated", errors.New("context deadline exceeded"), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := persistErrorHint(tc.err)
+			if tc.wantHint {
+				assert.Contains(t, got, "65532:65532")
+			} else {
+				assert.Empty(t, got)
+			}
+		})
 	}
 }
 
