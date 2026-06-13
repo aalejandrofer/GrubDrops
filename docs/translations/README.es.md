@@ -1,7 +1,7 @@
-<p align="center"><sub><a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <strong>Español</strong></sub></p>
+<p align="center"><sub><a href="../../README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <strong>Español</strong></sub></p>
 
 <p align="center">
-  <img src="internal/web/static/img/logo.png" width="160" alt="GrubDrops">
+  <img src="../../internal/web/static/img/logo.png" width="160" alt="GrubDrops">
 </p>
 
 <h3 align="center">Minero de drops de Twitch y Kick autoalojado y de configurar y olvidar.</h3>
@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/console.png" width="900" alt="GrubDrops console: watch-time stats, per-account mining across Twitch and Kick, and a live event feed">
+  <img src="../screenshots/console.png" width="900" alt="GrubDrops console: watch-time stats, per-account mining across Twitch and Kick, and a live event feed">
 </p>
 
 ---
@@ -129,7 +129,7 @@ de visualización sin uno).
 
 **¿Quieres cada ajuste?** El compose de referencia completo (perfiles del sidecar, OIDC, cada
 ajuste comentado) está en
-[`deploy/docker-compose.yml`](deploy/docker-compose.yml).
+[`deploy/docker-compose.yml`](../../deploy/docker-compose.yml).
 
 **¿Compilarlo tú mismo?** `docker build -f deploy/Dockerfile.miner .`, o un simple
 `go build ./cmd/miner` para un binario local.
@@ -278,7 +278,7 @@ existiría sin su trabajo de base. Gracias.
 
 ## Licencia
 
-Publicado bajo la [Licencia MIT](LICENSE).
+Publicado bajo la [Licencia MIT](../../LICENSE).
 
 ## Una nota sobre el uso responsable
 
