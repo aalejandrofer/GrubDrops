@@ -41,15 +41,36 @@ single SQLite file.
 
 ### Prerequisites
 
-- **Docker** + **Docker Compose** (quick path), or **Go 1.26+** to build from source.
-- For Kick watch-time: a mounted docker socket so the miner can auto-spin
-  per-account Chrome sidecars on demand. Twitch-only setups need neither.
+**Docker + Docker Compose** (quick path) or **Go 1.26+** (build from source).
+What you need depends on which platform you're mining:
 
-> **Raspberry Pi / ARM:** the miner image is published for both `linux/amd64`
-> and `linux/arm64`, so `docker compose up` pulls a prebuilt image on a Pi — no
-> building from source. The Kick browser **sidecar** is amd64-only (it bundles
-> Chrome, which has no arm64 Linux build), so on ARM hosts Twitch drops run
-> natively while Kick watch-time needs an amd64 host for the sidecar.
+| | Twitch | Kick |
+|---|---|---|
+| **Login** | device-code (`twitch.tv/activate`) | `cookies.txt` export |
+| **How it watches** | direct HTTP — no browser | Chrome **sidecar** (real IVS playback) |
+| **Docker** | optional | **required** — the miner spawns the sidecar over the docker socket |
+| **Run from source, no Docker** | ✅ a plain `go build` binary works | ❌ needs Docker for the sidecar |
+| **CPU arch** | any — `amd64` + `arm64` | `amd64` host (see ARM note) |
+
+Twitch runs over direct HTTP, so a plain Go binary mines it anywhere — Raspberry Pi included, no Docker. **Kick watch-time needs a real player**, so the miner runs a Chrome sidecar over the docker socket — which makes **Docker required for Kick**.
+
+> **Raspberry Pi / ARM:** the miner image ships for `linux/amd64` *and*
+> `linux/arm64`, so Twitch drops run natively on a Pi. The Kick sidecar is
+> **amd64-only** today: Google Chrome for Linux is x86-64 only, and the sidecar
+> bundles it specifically for the proprietary **H.264/AAC codecs** that decode
+> Kick's IVS stream — open-source Chromium on arm64 ships without them. So
+> Kick-on-ARM currently needs an amd64 host; a browser-free Kick path (which
+> would lift this) is being explored.
+
+### Supported platforms
+
+| Host | Twitch | Kick |
+|---|---|---|
+| Linux `x86-64` | ✅ | ✅ |
+| Linux `arm64` / Raspberry Pi | ✅ | ❌ — sidecar is amd64-only |
+| macOS / Windows · Docker Desktop (Intel) | ✅ | ✅ |
+| macOS / Windows · Apple Silicon | ✅ | ❌ — amd64 sidecar |
+| `go build` from source (any OS) | ✅ | needs Docker + an amd64 host |
 
 ### Run it
 
