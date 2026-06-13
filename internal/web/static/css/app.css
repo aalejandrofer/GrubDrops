@@ -416,7 +416,7 @@
      its text instead of stretching to the column width. */
   .watch-mode {
     align-self: flex-start;
-    margin-top: 2px;
+    margin-top: 6px; /* gap under the name; lands the pill near the avatar's bottom edge */
     font-family: 'JetBrains Mono', monospace;
     font-size: 7px;
     font-weight: 700;
