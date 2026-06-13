@@ -37,6 +37,7 @@ single SQLite file.
 - 🔗 **It knows about account links** (Krafton, Embark, …) with a per-account "I've linked it" override.
 - 🖥️ **A live console**: lifetime stats, current mining, drops catalog, claim history.
 - 🔔 **Discord notifications**, toggle per event type.
+- 🧪 **Experimental browserless Kick** (Settings → Experimental): a WebSocket-only watch mode that drops the Chrome sidecar entirely — no Docker-for-Kick, light enough for any Pi. Opt-in; may stop accruing.
 - 🔒 **Your credentials stay yours**: Twitch uses the official device-code login, Kick uses a session you export. No passwords sent to GrubDrops.
 
 ## Getting started
@@ -54,16 +55,11 @@ What you need depends on which platform you're mining:
 | **Run from source, no Docker** | ✅ a plain `go build` binary works | ❌ needs Docker for the sidecar |
 | **CPU arch** | any — `amd64` + `arm64` | `amd64` + `arm64` (arm64 is heavy — see note) |
 
-Twitch runs over direct HTTP, so a plain Go binary mines it anywhere — Raspberry Pi included, no Docker. **Kick watch-time needs a real player**, so the miner runs a Chrome/Chromium sidecar over the docker socket — which makes **Docker required for Kick**.
+Twitch runs over direct HTTP — a plain Go binary mines it anywhere (Raspberry Pi included, no Docker). Kick watch-time normally needs a real player, so the miner runs a Chrome/Chromium sidecar over the docker socket (**Docker required for Kick**).
 
-> **Raspberry Pi / ARM:** both the miner *and* the Kick sidecar ship for
-> `linux/amd64` **and** `linux/arm64`. The sidecar picks its browser per arch:
-> amd64 uses Google Chrome, arm64 uses Debian's **Chromium** — which is built
-> against system FFmpeg and so still carries the proprietary **H.264/AAC
-> codecs** that decode Kick's IVS stream. Kick-on-ARM is **confirmed working**,
-> but the arm64 sidecar is **resource heavy** (~4 GB RAM per live sidecar,
-> roughly 2 concurrent on a small box), so a low-RAM Pi will struggle to watch
-> more than a couple of Kick accounts at once.
+> **Raspberry Pi / ARM:** both images ship for `arm64`; the sidecar uses Debian Chromium there (keeps the H.264/AAC codecs for Kick's IVS stream). Works, but heavy — ~4 GB RAM per sidecar, so low-RAM Pis manage only a couple of Kick accounts.
+>
+> **Browserless Kick (experimental):** Settings → Experimental → *WebSocket only* watches Kick with no browser — no Chrome, no Docker-for-Kick, light enough for any Pi. Experimental: it may stop accruing.
 
 ### Supported platforms
 

@@ -37,6 +37,7 @@ imagen de Docker y lo guarda todo en un único archivo SQLite.
 - 🔗 **Conoce los enlaces de cuenta** (Krafton, Embark, …) con una anulación manual por cuenta del tipo "ya lo he enlazado".
 - 🖥️ **Una consola en vivo**: estadísticas totales, minado actual, catálogo de drops, historial de reclamos.
 - 🔔 **Notificaciones de Discord**, activables por tipo de evento.
+- 🧪 **Kick sin navegador (experimental)** (Ajustes → Experimental): un modo de observación solo por WebSocket que elimina el sidecar de Chrome —sin Docker para Kick, ligero para cualquier Pi. Opcional; puede dejar de acumular.
 - 🔒 **Tus credenciales siguen siendo tuyas**: Twitch usa el inicio de sesión oficial por código de dispositivo, Kick usa una sesión que tú exportas. No se envía ninguna contraseña a GrubDrops.
 
 ## Primeros pasos
@@ -56,15 +57,9 @@ Lo que necesites depende de qué plataforma estés minando:
 
 Twitch funciona sobre HTTP directo, así que un binario de Go normal lo mina en cualquier sitio —Raspberry Pi incluida, sin Docker. **El tiempo de visualización de Kick necesita un reproductor real**, así que el minero ejecuta un sidecar de Chrome/Chromium a través del socket de Docker, lo que hace que **Docker sea obligatorio para Kick**.
 
-> **Raspberry Pi / ARM:** tanto el minero **como** el sidecar de Kick se publican
-> para `linux/amd64` **y** `linux/arm64`. El sidecar elige su navegador según la
-> arquitectura: amd64 usa Google Chrome, arm64 usa **Chromium** de Debian —que
-> está compilado contra el FFmpeg del sistema y por tanto sí lleva los **códecs
-> propietarios H.264/AAC** que decodifican el stream IVS de Kick. Kick-en-ARM
-> está **confirmado que funciona**, pero el sidecar arm64 **consume muchos
-> recursos** (~4 GB de RAM por sidecar activo, unos 2 a la vez en una máquina
-> pequeña), así que una Pi con poca RAM tendrá dificultades para ver más de un
-> par de cuentas de Kick a la vez.
+> **Raspberry Pi / ARM:** ambas imágenes se publican para `arm64`; en arm64 el sidecar usa Chromium de Debian (conserva los códecs H.264/AAC que decodifican el stream IVS de Kick). Funciona, pero es pesado —~4 GB de RAM por sidecar, así que una Pi con poca RAM solo gestiona un par de cuentas de Kick.
+>
+> **Kick sin navegador (experimental):** Ajustes → Experimental → *WebSocket only* observa Kick sin navegador —sin Chrome, sin Docker para Kick, ligero para cualquier Pi. Experimental: puede dejar de acumular.
 
 ### Plataformas compatibles
 
