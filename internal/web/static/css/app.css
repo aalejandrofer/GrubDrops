@@ -1440,6 +1440,17 @@
     align-items: center;
     padding: 8px 16px 8px 20px;
   }
+  /* Accounts list reuses the .ev.static row chrome but prepends an avatar
+     cell, so it needs its own 5-column track (avatar · name · ● · body ·
+     state). Without this the avatar lands in the name column and the name
+     gets shoved into the 10px ● column, where it overflows and appears to
+     float mid-row. Scoped to .accounts-rows so the shared .ev.static grid
+     (live-channels etc.) is untouched. */
+  .accounts-rows .ev.static .ev-row {
+    grid-template-columns: auto minmax(120px, 1fr) 10px minmax(0, 2fr) auto;
+  }
+  .accounts-rows .ev.static .list-av { justify-self: start; }
+
   .ev.static .row-link {
     margin-left: 10px;
     color: var(--accent);

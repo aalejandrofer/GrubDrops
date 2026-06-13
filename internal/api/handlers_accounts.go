@@ -355,8 +355,16 @@ func (d accountsDeps) update(w http.ResponseWriter, r *http.Request) {
 	// Targeted reload: an account edit (enable/disable, label, webhook)
 	// restarts ONLY this account's watcher — the rest of the roster keeps
 	// running. (Whitelist/priority saves still defer to the manual Apply.)
+	// Must run under the long-lived root context, NOT r.Context(): the
+	// request context cancels the instant we redirect below, and a reload
+	// kicked off on a dying context tears the watcher down without rebuilding
+	// it — leaving a just-disabled account still mining until a manual reload.
 	if d.reloadAccount != nil {
-		d.reloadAccount(r.Context(), id)
+		ctx := d.rootCtx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		d.reloadAccount(ctx, id)
 	}
 	d.sm.Put(r.Context(), "flash", "saved — this account reloaded")
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
