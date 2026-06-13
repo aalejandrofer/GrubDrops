@@ -16,6 +16,14 @@ All notable changes to GrubDrops.
 
 ### Added
 
+- **Per-account reload** — each row in the dashboard "Currently mining" cards
+  now has a subtle reload arrow (↻) that restarts ONLY that account's watcher,
+  leaving every other account running uninterrupted. New
+  `POST /accounts/{id}/reload` endpoint (authed + CSRF) backed by the scheduler's
+  targeted `ReloadAccount`, which cancels just that entry's per-account context,
+  waits for it to exit, and respawns it under the long-lived base context — never
+  the request context — so a finished HTTP request can't tear the rebuilt watcher
+  down. The global "Reload all" button is unchanged.
 - **Account profile pictures** — each account now shows its real platform
   avatar (Twitch via `currentUser.profileImageURL` on `static-cdn.jtvnw.net`,
   embedded directly; Kick via the authed `/api/v1/user` `profile_pic`, served

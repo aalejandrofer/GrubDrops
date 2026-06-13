@@ -416,8 +416,8 @@
      is in the watching state — keeps the column rhythm consistent. */
   .account-row {
     display: grid;
-    grid-template-columns: 28px minmax(140px, 1fr) minmax(180px, 2fr) auto;
-    grid-template-areas: "av who activity pill";
+    grid-template-columns: 28px minmax(140px, 1fr) minmax(180px, 2fr) auto auto;
+    grid-template-areas: "av who activity pill reload";
     gap: 12px;
     align-items: center;
     padding: 9px 14px;
@@ -443,6 +443,31 @@
     grid-column: 1 / -1;
     grid-row: 2;
     margin-top: 6px;
+  }
+
+  /* Per-account reload arrow — a subtle icon button at the end of each row.
+     Reuses .btn.sm sizing but renders as a borderless glyph until hovered,
+     so it reads as a quiet line action (like the global Reload, but scoped
+     to one account). gap:8px between it and the pill is via the grid. */
+  .account-row .row-reload {
+    grid-area: reload;
+    justify-self: end;
+    padding: 2px 6px;
+    min-width: 0;
+    line-height: 1;
+    font-size: 13px;
+    letter-spacing: 0;
+    background: transparent;
+    border-color: transparent;
+    color: var(--muted);
+    opacity: 0.55;
+    transition: opacity 0.12s, color 0.12s, border-color 0.12s, background 0.12s;
+  }
+  .account-row-d:hover .row-reload { opacity: 1; }
+  .account-row .row-reload:hover {
+    color: var(--text);
+    border-color: var(--line);
+    background: var(--surface);
   }
 
   /* <details> wrapper around each row — click-to-expand inline. */

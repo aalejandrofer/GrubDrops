@@ -107,6 +107,12 @@ type dashMineCard struct {
 	// Footer
 	WatchToday  string // "watch 4h17m / 24h"
 	ClaimsToday int
+
+	// CSRFToken backs the inline per-account reload form on each row. The
+	// row partial is rendered with just the card (.) as its data, so it has
+	// no access to the page-level $.CSRFToken — the token has to ride on the
+	// card itself.
+	CSRFToken string
 }
 
 type dashQueueItem struct {
@@ -263,13 +269,19 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 		})
 	}
 
+	// CSRF token for the inline per-account reload form on each row. Stamped
+	// onto every card because the row partial only sees the card (.), not the
+	// page-level $.CSRFToken.
+	csrf := csrfToken(r)
 	cards := make([]dashMineCard, 0, len(accs))
 	for _, a := range accs {
 		snap, ok := snapByID[a.ID]
 		if !ok {
 			snap = watcher.Snapshot{AccountID: a.ID, State: "stopped"}
 		}
-		cards = append(cards, mineCardFromSnap(a, snap))
+		c := mineCardFromSnap(a, snap)
+		c.CSRFToken = csrf
+		cards = append(cards, c)
 	}
 
 	allowed := allowedLoginsFor(r, d.q, accs)
