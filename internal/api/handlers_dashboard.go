@@ -899,6 +899,12 @@ func (d dashboardDeps) cards(w http.ResponseWriter, r *http.Request) {
 	renderPartial(w, d.t, "dashboard_mining_columns", d.collectPage(r).Mining)
 }
 
+func (d dashboardDeps) telemetry(w http.ResponseWriter, r *http.Request) {
+	// HTMX partial — refreshes the telemetry tiles so NEXT CLAIM (and the
+	// live counts) track the watchers instead of freezing at page-load state.
+	renderPartial(w, d.t, "dashboard_telemetry", d.collectPage(r).Tele)
+}
+
 func (d dashboardDeps) events(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("filter")
 	account := r.URL.Query().Get("account")

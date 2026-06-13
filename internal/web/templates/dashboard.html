@@ -34,12 +34,12 @@
 </section>
 {{end}}
 
-<section class="telemetry">
-  <div class="stat"><div class="label">Watch time</div><div class="value">{{.Tele.WatchTimeTotal}}<sup>h:m</sup></div><div class="delta flat">lifetime</div></div>
-  <div class="stat"><div class="label">Drops claimed</div><div class="value">{{.Tele.ClaimsTotal}}<sup>items</sup></div><div class="delta flat">lifetime</div></div>
-  <div class="stat"><div class="label">Active campaigns</div><div class="value">{{.Tele.ActiveCamps}}<sup>campaigns</sup></div><div class="delta flat">discovered</div></div>
-  <div class="stat"><div class="label">Completed</div><div class="value">{{.Tele.Completed}} / {{.Tele.TotalDrops}}<sup>drops</sup></div><div class="delta flat">collected</div></div>
-  <div class="stat"><div class="label">Next claim</div><div class="value" style="color:var(--accent)">{{.Tele.NextClaimETA}}<sup>h:m</sup></div><div class="delta">{{.Tele.NextClaimName}}</div></div>
+{{/* Telemetry band polls /dashboard/telemetry every 10s so the live tiles
+     (esp. NEXT CLAIM's closest-to-finish ETA) track the watchers instead of
+     freezing at whatever was closest on page load. */}}
+<section class="telemetry" id="telemetry-swap"
+         hx-get="/dashboard/telemetry" hx-trigger="every 10s" hx-swap="innerHTML">
+  {{template "dashboard_telemetry" .Tele}}
 </section>
 
 {{/* Next-claim ETAs section removed — the Currently Mining band below

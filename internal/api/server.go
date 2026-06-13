@@ -184,6 +184,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Use(RequireAdmin(d.Session))
 	authed.Get("/", dash.page)
 	authed.Get("/dashboard/cards", dash.cards)
+	authed.Get("/dashboard/telemetry", dash.telemetry)
 	authed.Get("/dashboard/events", dash.events)
 	authed.Get("/dashboard/campaign/{id}", dash.campaignDetail)
 	authed.Get("/dashboard/account/{id}", dash.accountDetail)

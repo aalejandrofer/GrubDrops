@@ -136,3 +136,14 @@
   </div>
 </details>
 {{end}}
+
+{{/* Telemetry tiles — data is the dashTelemetry (.Tele on the page). Rendered
+     on page load and re-fetched every 10s via #telemetry-swap so NEXT CLAIM
+     reflects the current closest-to-finish drop across all accounts. */}}
+{{define "dashboard_telemetry"}}
+  <div class="stat"><div class="label">Watch time</div><div class="value">{{.WatchTimeTotal}}<sup>h:m</sup></div><div class="delta flat">lifetime</div></div>
+  <div class="stat"><div class="label">Drops claimed</div><div class="value">{{.ClaimsTotal}}<sup>items</sup></div><div class="delta flat">lifetime</div></div>
+  <div class="stat"><div class="label">Active campaigns</div><div class="value">{{.ActiveCamps}}<sup>campaigns</sup></div><div class="delta flat">discovered</div></div>
+  <div class="stat"><div class="label">Completed</div><div class="value">{{.Completed}} / {{.TotalDrops}}<sup>drops</sup></div><div class="delta flat">collected</div></div>
+  <div class="stat"><div class="label">Next claim</div><div class="value" style="color:var(--accent)">{{.NextClaimETA}}<sup>h:m</sup></div><div class="delta">{{.NextClaimName}}</div></div>
+{{end}}
