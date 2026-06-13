@@ -448,8 +448,19 @@
     grid-area: activity;
     text-align: right;
     min-width: 0;
+    overflow: hidden; /* clip long meta so it can't run under the pill */
     margin-right: auto; /* keep text pushed left of the pill */
     margin-left: auto;
+  }
+  /* Truncate the drop/meta lines with an ellipsis instead of letting a long
+     campaign name ("scanning channels · Team …") overlap the state pill. */
+  .account-row .activity .drop,
+  .account-row .activity .meta {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .account-row .state-pill {
     grid-area: pill;
