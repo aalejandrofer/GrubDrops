@@ -193,12 +193,13 @@ func renderSettingsTab(t *testing.T, active string, page settingsPageData) strin
 	return buf.String()
 }
 
-func TestSettingsTabs_SubnavHasFiveLinks(t *testing.T) {
+func TestSettingsTabs_SubnavHasAllLinks(t *testing.T) {
 	out := renderSettingsTab(t, "settings", settingsPageData{})
 	for _, want := range []string{
 		`href="/settings"`, `href="/settings/priority"`,
-		`href="/settings/notifications"`, `href="/settings/security"`, `href="/accounts"`,
-		"General", "Drop Priority", "Notifications", "Security", "Accounts",
+		`href="/settings/notifications"`, `href="/settings/security"`,
+		`href="/settings/accounts"`, `href="/settings/experimental"`,
+		"General", "Drop Priority", "Notifications", "Security", "Accounts", "Experimental",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("subnav missing %q", want)
