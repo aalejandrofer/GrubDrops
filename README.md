@@ -20,6 +20,8 @@
   <img src="docs/screenshots/console.png" width="900" alt="GrubDrops console: watch-time stats, per-account mining across Twitch and Kick, and a live event feed">
 </p>
 
+**English** · [简体中文](README.zh-CN.md) · [Español](README.es.md)
+
 ---
 
 GrubDrops watches the right Twitch and Kick streams for you, banks the
