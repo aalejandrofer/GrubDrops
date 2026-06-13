@@ -19,6 +19,12 @@ All notable changes to GrubDrops.
   interval, …) are now full-contrast and semibold instead of dim grey.
 - **Settings → Status lists all Kick sidecars** — the single "sidecar" row is now
   "sidecars" and lists every per-account sidecar address, not just one.
+- **Per-account Kick watch-path tag** — each Kick row on the dashboard now shows
+  its *live* accrual path (WS or Chrome) instead of a single column-header pill,
+  so auto-mode fallback is visible per account. The header pill was removed.
+- **Accounts moved under Settings** — the accounts page is now `/settings/accounts`
+  (with `/accounts` kept as an alias) and shares the unified settings subnav, so
+  the Experimental tab shows there too.
 
 ### Removed
 

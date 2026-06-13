@@ -111,6 +111,25 @@ func New(c *browser.Client, ctl dockerctl.Controller, template string, port int,
 // ("container:port"), sorted, for the read-only Status panel on /settings.
 func (b *Backend) SidecarAddrs() []string { return b.sidecars.names() }
 
+// ActiveWatchPath reports the watch path an account is using right now:
+// "chrome" (IVS sidecar) or "ws" (pure WebSocket). In auto mode it reflects the
+// live fallback state — "chrome" once the account's WS connection has died,
+// "ws" otherwise. Used by the dashboard to tag each Kick row with its real path.
+func (b *Backend) ActiveWatchPath(accountID string) string {
+	if b.browserWatch {
+		return "chrome"
+	}
+	if b.autoWatch {
+		b.mu.Lock()
+		failed := b.wsFailed[accountID]
+		b.mu.Unlock()
+		if failed {
+			return "chrome"
+		}
+	}
+	return "ws"
+}
+
 // RegisterSidecar maps an account to its username-derived sidecar. Called at
 // startup (per-account build loop) and on login.
 func (b *Backend) RegisterSidecar(accountID, username string) {

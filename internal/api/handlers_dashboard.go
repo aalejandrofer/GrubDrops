@@ -62,6 +62,9 @@ type dashboardDeps struct {
 	// or missing entries make the dashboard fall back to zero for that
 	// platform — safer than panicking when a backend isn't wired up.
 	channelCounters map[string]ChannelCounter
+	// kickPath reports an account's live Kick watch path ("ws"|"chrome").
+	// Nil when no Kick backend is wired.
+	kickPath func(accountID string) string
 }
 
 type dashTelemetry struct {
@@ -81,6 +84,7 @@ type dashMineCard struct {
 	AccountInitial string // first letter of display name, "?" fallback
 	AvatarURL      string // resolved <img> src (direct for Twitch, proxied for Kick); "" -> letter circle
 	Platform       string // "twitch" | "kick"
+	WatchPath      string // kick only: live accrual path "ws" | "chrome" (per-account, reflects auto-mode fallback)
 	State          string // "watching" | "claiming" | "pick_stream" | "sleeping" | "idle" | "stopped"
 	StateSub       string // free-text aside
 	Uptime         string // "17m on stream" or "—"
@@ -287,6 +291,9 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 		}
 		c := mineCardFromSnap(a, snap)
 		c.CSRFToken = csrf
+		if c.Platform == "kick" && d.kickPath != nil {
+			c.WatchPath = d.kickPath(a.ID)
+		}
 		cards = append(cards, c)
 	}
 

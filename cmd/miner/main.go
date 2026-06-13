@@ -484,6 +484,7 @@ func run() error {
 		LogLevelEnv:       cfg.LogLevel,
 		BrowserURLDisplay: cfg.BrowserURL,
 		KickSidecars:      kickSidecarLister(kickBackend),
+		KickActivePath:    kickActivePathFn(kickBackend),
 		GitCommit:         os.Getenv("GIT_COMMIT"),
 		Version:           cmp.Or(version, os.Getenv("GRUB_VERSION")),
 		OIDC:              oidcProvider,
@@ -725,4 +726,13 @@ func kickSidecarLister(b *kick.Backend) func() []string {
 		return nil
 	}
 	return b.SidecarAddrs
+}
+
+// kickActivePathFn returns a closure the dashboard calls to tag each Kick row
+// with its live watch path ("ws"|"chrome"), or nil when no Kick backend exists.
+func kickActivePathFn(b *kick.Backend) func(string) string {
+	if b == nil {
+		return nil
+	}
+	return b.ActiveWatchPath
 }

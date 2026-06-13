@@ -100,6 +100,9 @@ type Deps struct {
 	// KickSidecars lists the per-account Kick sidecar addresses for the
 	// read-only Status panel. Nil when no Kick backend is configured.
 	KickSidecars func() []string
+	// KickActivePath reports an account's live Kick watch path ("ws"|"chrome")
+	// so the dashboard can tag each row. Nil when no Kick backend is configured.
+	KickActivePath func(accountID string) string
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -147,6 +150,7 @@ func NewRouter(d Deps) http.Handler {
 		s:               d.SettingsStore,
 		start:           startedAt,
 		channelCounters: channelCountersFromRegistry(d.Registry),
+		kickPath:        d.KickActivePath,
 	}
 	accs := accountsDeps{q: d.Q, db: d.DB, t: d.Templates, sm: d.Session, sch: d.Scheduler, reload: d.Reload, authCheck: d.AuthCheck, reloadAccount: d.ReloadAccount, rootCtx: d.RootCtx}
 	loginTwitch := newLoginTwitchDeps(d, d.RootCtx)
