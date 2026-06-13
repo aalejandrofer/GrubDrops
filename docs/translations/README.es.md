@@ -1,8 +1,8 @@
-<p align="center"><sub><a href="../../README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <strong>Español</strong></sub></p>
-
 <p align="center">
   <img src="../../internal/web/static/img/logo.png" width="160" alt="GrubDrops">
 </p>
+
+<p align="center"><sub><a href="../../README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <strong>Español</strong></sub></p>
 
 <h3 align="center">Minero de drops de Twitch y Kick autoalojado y de configurar y olvidar.</h3>
 

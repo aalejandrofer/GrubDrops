@@ -1,8 +1,8 @@
-<p align="center"><sub><strong>English</strong> · <a href="docs/translations/README.zh-CN.md">简体中文</a> · <a href="docs/translations/README.es.md">Español</a></sub></p>
-
 <p align="center">
   <img src="internal/web/static/img/logo.png" width="160" alt="GrubDrops">
 </p>
+
+<p align="center"><sub><strong>English</strong> · <a href="docs/translations/README.zh-CN.md">简体中文</a> · <a href="docs/translations/README.es.md">Español</a></sub></p>
 
 <h3 align="center">Self-hosted, set-and-forget Twitch &amp; Kick drops miner.</h3>
 

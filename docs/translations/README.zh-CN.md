@@ -1,8 +1,8 @@
-<p align="center"><sub><a href="../../README.md">English</a> · <strong>简体中文</strong> · <a href="README.es.md">Español</a></sub></p>
-
 <p align="center">
   <img src="../../internal/web/static/img/logo.png" width="160" alt="GrubDrops">
 </p>
+
+<p align="center"><sub><a href="../../README.md">English</a> · <strong>简体中文</strong> · <a href="README.es.md">Español</a></sub></p>
 
 <h3 align="center">自托管、配置后即可放手不管的 Twitch 与 Kick 掉宝挖矿工具。</h3>
 
