@@ -410,6 +410,22 @@
     border-radius: 999px;
     font-variant-numeric: tabular-nums;
   }
+  /* Bubble next to the KICK header showing the active accrual path. */
+  .mining-col-head .watch-mode {
+    grid-column: 3;
+    justify-self: start;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 1px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    cursor: help;
+  }
+  .mining-col-head .watch-mode.ws     { color: var(--kick); border-color: var(--kick); }
+  .mining-col-head .watch-mode.chrome { color: var(--muted); }
   /* Each account-row is an <a> so the whole row is a click-target into
      the account detail page. Grid lays out: avatar · who · state pill ·
      activity · progress bar. Progress bar slot is empty unless the row

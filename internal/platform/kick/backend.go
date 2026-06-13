@@ -133,14 +133,14 @@ func (b *Backend) watchClientForName(name string) (*browser.Client, error) {
 }
 
 // EnableBrowserWatch switches StartWatch/Heartbeat/StopWatch onto the
-// chromedp sidecar (a real, playing IVS <video> per watch — the only path
-// that accrues Kick drop watch-time). No-op without a sidecar client: the
-// backend logs and leaves browser-watch off, in which case StartWatch
-// errors (there is no non-accruing fallback). Call once at construction,
-// before the watcher starts.
+// chromedp sidecar (a real, playing IVS <video> per watch). No-op without a
+// sidecar client: the backend logs and leaves browser-watch off, in which case
+// StartWatch uses the pure-WebSocket path instead (see startWSWatch). Call once
+// at construction, before the watcher starts; the kick_watch_mode setting
+// decides whether this is called.
 func (b *Backend) EnableBrowserWatch() {
 	if b.c == nil {
-		slog.Warn("kick: browser-watch requested but no sidecar client configured; Kick watch will be unavailable")
+		slog.Warn("kick: browser-watch requested but no sidecar client configured; falling back to the WebSocket watch path")
 		return
 	}
 	b.browserWatch = true
@@ -521,11 +521,15 @@ func (b *Backend) StartWatch(ctx context.Context, s platform.Session, stream pla
 		return platform.WatchHandle{Channel: stream.Channel, Internal: kickBrowserWatch{handle: handle, client: cl, accountID: s.AccountID}}, nil
 	}
 
-	// No browser sidecar: Kick watch is unavailable. Real IVS video
-	// playback is the only path that accrues drop watch-time, so there is
-	// no non-browser fallback — fail loudly rather than run a watch that
-	// earns nothing.
-	return platform.WatchHandle{}, fmt.Errorf("kick start watch %s: browser sidecar required (no accruing watch path without it)", stream.Channel)
+	// Browser-watch off (kick_watch_mode = "ws"): use the pure-WebSocket
+	// presence path — no browser/IVS. Verified to accrue (2026-06-13). The
+	// server credits one active watch per account, so this and the sidecar
+	// are mutually exclusive; the mode toggle enforces that at startup.
+	ks, err := decodeSession(s)
+	if err != nil {
+		return platform.WatchHandle{}, fmt.Errorf("kick start watch: decode session: %w", err)
+	}
+	return b.startWSWatch(ctx, ks, s, stream)
 }
 
 func (b *Backend) Heartbeat(ctx context.Context, h platform.WatchHandle) error {
@@ -540,6 +544,19 @@ func (b *Backend) Heartbeat(ctx context.Context, h platform.WatchHandle) error {
 		}
 		b.sidecars.touch(w.accountID)
 		return nil
+	case *kickWSWatch:
+		// The WS loop accrues on its own; Heartbeat is liveness-only. A
+		// recorded error (loop exhausted its reconnects, or exited) surfaces
+		// here so the watcher rotates off this channel.
+		if err := w.getErr(); err != nil {
+			return fmt.Errorf("kick heartbeat (ws) %q: %w", h.Channel, err)
+		}
+		select {
+		case <-w.done:
+			return fmt.Errorf("kick: ws watch loop ended for %q", h.Channel)
+		default:
+			return nil
+		}
 	default:
 		return fmt.Errorf("kick: invalid watch handle")
 	}
@@ -550,6 +567,13 @@ func (b *Backend) StopWatch(ctx context.Context, h platform.WatchHandle) error {
 	case kickBrowserWatch:
 		if err := w.client.StopWatch(ctx, w.handle); err != nil {
 			return fmt.Errorf("kick stop watch (browser) %q: %w", h.Channel, err)
+		}
+		return nil
+	case *kickWSWatch:
+		w.cancel()
+		select {
+		case <-w.done:
+		case <-time.After(5 * time.Second):
 		}
 		return nil
 	default:

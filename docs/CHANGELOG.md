@@ -32,6 +32,19 @@ All notable changes to GrubDrops.
   `linux/amd64` images on `v*` tags.
 - **cookies.txt Kick login** — parser, upload handler, and authorize-page template
   replacing the helper-binary path.
+- **Kick pure-WebSocket watch path** — Kick drop watch-time can now accrue over
+  a pure-WebSocket viewer presence with **no browser / no IVS video**
+  (`internal/platform/kick/wswatch.go`): a utls Chrome-fingerprinted wss
+  connection that sends a periodic `channel_handshake` (~12s) plus a
+  `tracking.user.watch.livestream` `user_event` (~60s). Live-verified to accrue
+  (+8 watch-minutes over 10 min, zero browser, 2026-06-13). Selected via the new
+  **Experimental** card under Settings → General — **Chrome sidecar** (default,
+  IVS `<video>`) or **WebSocket only** — stored in `settings:kick_watch_mode`,
+  read by the miner at startup (reload to switch). The two are mutually
+  exclusive (the server credits one active watch per account). The dashboard
+  KICK column header shows a **WS / Chrome** bubble for the active path.
+  Gotcha baked in: `livestream_id` must be sent as a JSON **number** — the
+  server silently doesn't credit a stringified id.
 
 ### Changed
 

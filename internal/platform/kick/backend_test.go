@@ -288,8 +288,8 @@ func TestKickBackend_AllowedChannelCountDistinct(t *testing.T) {
 
 // EnableBrowserWatch is a no-op (and must NOT flip browserWatch) when the
 // backend has no sidecar client — otherwise StartWatch would dereference a
-// nil client. With no sidecar, Kick watch is unavailable (StartWatch errors;
-// there is no non-accruing fallback).
+// nil client. With no sidecar / browser-watch off, StartWatch takes the
+// pure-WebSocket watch path instead (kick_watch_mode = "ws").
 func TestKickBackend_EnableBrowserWatch_NilClientNoOp(t *testing.T) {
 	b := New(nil, nil, "grubdrops-browser-{slug}", 9090, 10*time.Minute)
 	b.EnableBrowserWatch()

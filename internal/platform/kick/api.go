@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
@@ -253,6 +254,54 @@ func (a *api) ChannelLivestream(ctx context.Context, sess platform.Session, slug
 		cat = r.Data.Category.Name
 	}
 	return true, fmt.Sprintf("%d", r.Data.ID), r.Data.ViewerCount, cat, nil
+}
+
+// channelAndLivestream fetches a channel's numeric id and (if live) its current
+// livestream id from /api/v2/channels/<slug> — both needed by the viewer-WS
+// watch path (channel_handshake uses channelId; user_event uses livestream_id).
+// Returns live=false with an empty livestreamID when the channel is offline.
+func (a *api) channelAndLivestream(ctx context.Context, sess platform.Session, slug string) (channelID, livestreamID int64, live bool, err error) {
+	// Cloudflare on kick.com throws sporadic 403s even at a valid Chrome
+	// fingerprint; a quick retry clears them (the same call succeeds moments
+	// later). Retry transient non-200s a few times before giving up.
+	var body []byte
+	var status int
+	for attempt := 0; attempt < 4; attempt++ {
+		body, status, err = a.d.do(ctx, sess, http.MethodGet, discoveryBase+"/api/v2/channels/"+slug, nil)
+		if err == nil && status == 200 {
+			break
+		}
+		if attempt < 3 {
+			select {
+			case <-ctx.Done():
+				return 0, 0, false, ctx.Err()
+			case <-time.After(time.Duration(attempt+1) * time.Second):
+			}
+		}
+	}
+	if err != nil {
+		return 0, 0, false, err
+	}
+	if status != 200 {
+		return 0, 0, false, fmt.Errorf("channel %s: status %d", slug, status)
+	}
+	var r struct {
+		ID         int64 `json:"id"`
+		Livestream *struct {
+			ID     int64 `json:"id"`
+			IsLive bool  `json:"is_live"`
+		} `json:"livestream"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return 0, 0, false, fmt.Errorf("decode channel %s: %w", slug, err)
+	}
+	if r.ID == 0 {
+		return 0, 0, false, fmt.Errorf("channel %s not found", slug)
+	}
+	if r.Livestream == nil || !r.Livestream.IsLive {
+		return r.ID, 0, false, nil
+	}
+	return r.ID, r.Livestream.ID, true, nil
 }
 
 // Progress returns drop progress for the authed account. AUTHED — requires the
