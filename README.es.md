@@ -52,27 +52,29 @@ Lo que necesites depende de qué plataforma estés minando:
 | **Cómo mira** | HTTP directo — sin navegador | **sidecar** de Chrome (reproducción IVS real) |
 | **Docker** | opcional | **obligatorio** — el minero genera el sidecar a través del socket de Docker |
 | **Ejecutar desde el código fuente, sin Docker** | ✅ basta un binario `go build` normal | ❌ necesita Docker para el sidecar |
-| **Arquitectura de CPU** | cualquiera — `amd64` + `arm64` | host `amd64` (ver nota sobre ARM) |
+| **Arquitectura de CPU** | cualquiera — `amd64` + `arm64` | `amd64` + `arm64` (arm64 consume mucho — ver nota) |
 
-Twitch funciona sobre HTTP directo, así que un binario de Go normal lo mina en cualquier sitio —Raspberry Pi incluida, sin Docker. **El tiempo de visualización de Kick necesita un reproductor real**, así que el minero ejecuta un sidecar de Chrome a través del socket de Docker, lo que hace que **Docker sea obligatorio para Kick**.
+Twitch funciona sobre HTTP directo, así que un binario de Go normal lo mina en cualquier sitio —Raspberry Pi incluida, sin Docker. **El tiempo de visualización de Kick necesita un reproductor real**, así que el minero ejecuta un sidecar de Chrome/Chromium a través del socket de Docker, lo que hace que **Docker sea obligatorio para Kick**.
 
-> **Raspberry Pi / ARM:** la imagen del minero se publica para `linux/amd64` *y*
-> `linux/arm64`, así que los drops de Twitch se ejecutan de forma nativa en una Pi. El sidecar de Kick es
-> **solo amd64** hoy en día: Google Chrome para Linux es exclusivamente x86-64, y el sidecar
-> lo incluye específicamente por los **códecs propietarios H.264/AAC** que decodifican
-> el stream IVS de Kick —el Chromium de código abierto para arm64 se distribuye sin ellos. Así que
-> Kick-en-ARM necesita actualmente un host amd64; se está explorando una vía para Kick sin navegador (que
-> levantaría esta limitación).
+> **Raspberry Pi / ARM:** tanto el minero **como** el sidecar de Kick se publican
+> para `linux/amd64` **y** `linux/arm64`. El sidecar elige su navegador según la
+> arquitectura: amd64 usa Google Chrome, arm64 usa **Chromium** de Debian —que
+> está compilado contra el FFmpeg del sistema y por tanto sí lleva los **códecs
+> propietarios H.264/AAC** que decodifican el stream IVS de Kick. Kick-en-ARM
+> está **confirmado que funciona**, pero el sidecar arm64 **consume muchos
+> recursos** (~4 GB de RAM por sidecar activo, unos 2 a la vez en una máquina
+> pequeña), así que una Pi con poca RAM tendrá dificultades para ver más de un
+> par de cuentas de Kick a la vez.
 
 ### Plataformas compatibles
 
 | Host | Twitch | Kick |
 |---|---|---|
 | Linux `x86-64` | ✅ | ✅ |
-| Linux `arm64` / Raspberry Pi | ✅ | ❌ — el sidecar es solo amd64 |
+| Linux `arm64` / Raspberry Pi | ✅ | ✅ — sidecar Chromium, ~4 GB RAM cada uno |
 | macOS / Windows · Docker Desktop (Intel) | ✅ | ✅ |
-| macOS / Windows · Apple Silicon | ✅ | ❌ — sidecar amd64 |
-| `go build` desde el código fuente (cualquier SO) | ✅ | necesita Docker + un host amd64 |
+| macOS / Windows · Apple Silicon | ✅ | ✅ — sidecar Chromium arm64 |
+| `go build` desde el código fuente (cualquier SO) | ✅ | necesita Docker para el sidecar |
 
 ### Ejecutarlo
 

@@ -7,24 +7,36 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/browser-sidecar ./cmd/browser-sidecar
 
-# Runtime: full google-chrome-stable on a Debian base.
+# Runtime: a full Chrome/Chromium that ships the proprietary H.264/AAC codecs,
+# on a Debian base. The codecs are non-negotiable — Kick streams over Amazon
+# IVS (HLS, H.264 video / AAC audio), and the whole point of this sidecar is to
+# actually decode that stream so watch-time accrues. chromedp/headless-shell is
+# built WITHOUT those codecs and cannot decode IVS, so it is not an option.
 #
-# We CANNOT use chromedp/headless-shell: that build is compiled WITHOUT the
-# proprietary H.264/AAC codecs, so it cannot decode Kick's IVS HLS stream.
-# google-chrome-stable ships the proprietary codecs and decodes the stream,
-# which is the whole point of this sidecar.
+# We pick the browser per target architecture:
+#
+#   amd64  → google-chrome-stable (.deb from dl.google.com). This is the
+#            verified-in-prod path; Google publishes no arm64 Linux build.
+#   arm64  → Debian's `chromium` package. Debian builds Chromium against the
+#            system FFmpeg, which DOES include the H.264/AAC decoders, so it
+#            decodes IVS too. User-confirmed working on arm64; it is resource
+#            heavy (~4 GB RAM per live sidecar, ~2 concurrent on a small box).
+#
+# Whichever browser is installed is symlinked to /usr/bin/grub-chrome so the
+# CHROME_BIN env below (and the sidecar's chromedp.ExecPath) stays static.
 #
 # (Aside on a past red herring: the <video> staying at readyState 0 in
 # headless was NOT a codec problem. It was a navigator.plugins spoof in the
 # sidecar StealthScript that broke the AWS IVS player's environment probe so
 # it never attached a MediaSource. Fixed in browser.go; verified headless
-# Chrome plays oilrats with currentTime advancing. Codecs are still required
-# for the actual decode, hence google-chrome-stable over headless-shell.)
+# Chrome plays the stream with currentTime advancing. Codecs are still
+# required for the actual decode, hence a full Chrome/Chromium build.)
 FROM debian:bookworm-slim AS runtime
+ARG TARGETARCH
 
-# Install Chrome + the runtime libs a headless GPU-less Chrome needs.
-# The google-chrome-stable .deb pulls most deps; we add fonts and a few libs
-# explicitly so headless rendering doesn't crash on a fresh slim image.
+# Shared runtime libs a headless GPU-less Chrome/Chromium needs. The browser
+# package itself pulls most deps; we add fonts and a few libs explicitly so
+# headless rendering doesn't crash on a fresh slim image.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -49,23 +61,28 @@ RUN apt-get update \
         libxkbcommon0 \
         libxrandr2 \
         xdg-utils \
-    && wget -q -O /tmp/google-chrome.deb \
-        https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
-    && apt-get install -y --no-install-recommends /tmp/google-chrome.deb \
-    && rm -f /tmp/google-chrome.deb \
+    && case "$TARGETARCH" in \
+        amd64) \
+            wget -q -O /tmp/google-chrome.deb \
+                https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+            && apt-get install -y --no-install-recommends /tmp/google-chrome.deb \
+            && rm -f /tmp/google-chrome.deb \
+            && ln -sf /usr/bin/google-chrome-stable /usr/bin/grub-chrome \
+            ;; \
+        arm64) \
+            apt-get install -y --no-install-recommends chromium \
+            && ln -sf /usr/bin/chromium /usr/bin/grub-chrome \
+            ;; \
+        *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
+    esac \
     && rm -rf /var/lib/apt/lists/*
 
-# Make Chrome discoverable by chromedp's ExecAllocator (it probes a list of
-# well-known binary names on PATH). google-chrome-stable installs both
-# `google-chrome` and `google-chrome-stable` in /usr/bin (on PATH). We also
-# export CHROME_BIN as a belt-and-braces hint and the sidecar passes the
-# explicit path via chromedp.ExecPath when CHROME_BIN is set.
-ENV CHROME_BIN="/usr/bin/google-chrome-stable" \
+# CHROME_BIN points at the arch-neutral symlink; the sidecar passes it via
+# chromedp.ExecPath when set. SSL_CERT_FILE lets Go's TLS layer verify
+# gql.twitch.tv etc when the sidecar POSTs directly (Twitch gql bypass path).
+ENV CHROME_BIN="/usr/bin/grub-chrome" \
     SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
 
-# Copy the CA bundle from the build stage so Go's TLS layer can verify
-# gql.twitch.tv etc when we POST from the sidecar directly (Twitch gql
-# Go-HTTP bypass path).
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /out/browser-sidecar /browser-sidecar
 

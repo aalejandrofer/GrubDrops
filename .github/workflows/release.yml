@@ -44,14 +44,14 @@ jobs:
         with:
           context: .
           file: deploy/Dockerfile.browser
-          # amd64 ONLY — intentional. The sidecar installs google-chrome-stable
-          # from the official .deb, which Google publishes for x86-64 only (no
-          # arm64 Linux build of Chrome exists), and we need its proprietary
-          # H.264/AAC codecs to decode Kick's IVS HLS stream (headless-shell
-          # lacks them). So ARM/RPi users get the arm64 miner above and run
-          # Twitch drops natively; Kick browser-watch needs an amd64 host for
-          # the sidecar (or fall back to running it on a separate amd64 box).
-          platforms: linux/amd64
+          # Multi-arch. The Dockerfile branches on TARGETARCH: amd64 installs
+          # google-chrome-stable (the verified-in-prod path; Google ships no
+          # arm64 Linux Chrome), arm64 installs Debian's `chromium`, which is
+          # built against system FFmpeg and DOES carry the H.264/AAC decoders
+          # needed for Kick's IVS HLS stream (headless-shell lacks them). The
+          # arm64 sidecar is user-confirmed working but resource heavy
+          # (~4 GB RAM per live sidecar), so small ARM boxes run few in parallel.
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ghcr.io/aalejandrofer/grubdrops-browser:${{ github.ref_name }}

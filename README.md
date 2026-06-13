@@ -52,27 +52,28 @@ What you need depends on which platform you're mining:
 | **How it watches** | direct HTTP — no browser | Chrome **sidecar** (real IVS playback) |
 | **Docker** | optional | **required** — the miner spawns the sidecar over the docker socket |
 | **Run from source, no Docker** | ✅ a plain `go build` binary works | ❌ needs Docker for the sidecar |
-| **CPU arch** | any — `amd64` + `arm64` | `amd64` host (see ARM note) |
+| **CPU arch** | any — `amd64` + `arm64` | `amd64` + `arm64` (arm64 is heavy — see note) |
 
-Twitch runs over direct HTTP, so a plain Go binary mines it anywhere — Raspberry Pi included, no Docker. **Kick watch-time needs a real player**, so the miner runs a Chrome sidecar over the docker socket — which makes **Docker required for Kick**.
+Twitch runs over direct HTTP, so a plain Go binary mines it anywhere — Raspberry Pi included, no Docker. **Kick watch-time needs a real player**, so the miner runs a Chrome/Chromium sidecar over the docker socket — which makes **Docker required for Kick**.
 
-> **Raspberry Pi / ARM:** the miner image ships for `linux/amd64` *and*
-> `linux/arm64`, so Twitch drops run natively on a Pi. The Kick sidecar is
-> **amd64-only** today: Google Chrome for Linux is x86-64 only, and the sidecar
-> bundles it specifically for the proprietary **H.264/AAC codecs** that decode
-> Kick's IVS stream — open-source Chromium on arm64 ships without them. So
-> Kick-on-ARM currently needs an amd64 host; a browser-free Kick path (which
-> would lift this) is being explored.
+> **Raspberry Pi / ARM:** both the miner *and* the Kick sidecar ship for
+> `linux/amd64` **and** `linux/arm64`. The sidecar picks its browser per arch:
+> amd64 uses Google Chrome, arm64 uses Debian's **Chromium** — which is built
+> against system FFmpeg and so still carries the proprietary **H.264/AAC
+> codecs** that decode Kick's IVS stream. Kick-on-ARM is **confirmed working**,
+> but the arm64 sidecar is **resource heavy** (~4 GB RAM per live sidecar,
+> roughly 2 concurrent on a small box), so a low-RAM Pi will struggle to watch
+> more than a couple of Kick accounts at once.
 
 ### Supported platforms
 
 | Host | Twitch | Kick |
 |---|---|---|
 | Linux `x86-64` | ✅ | ✅ |
-| Linux `arm64` / Raspberry Pi | ✅ | ❌ — sidecar is amd64-only |
+| Linux `arm64` / Raspberry Pi | ✅ | ✅ — Chromium sidecar, ~4 GB RAM each |
 | macOS / Windows · Docker Desktop (Intel) | ✅ | ✅ |
-| macOS / Windows · Apple Silicon | ✅ | ❌ — amd64 sidecar |
-| `go build` from source (any OS) | ✅ | needs Docker + an amd64 host |
+| macOS / Windows · Apple Silicon | ✅ | ✅ — arm64 Chromium sidecar |
+| `go build` from source (any OS) | ✅ | needs Docker for the sidecar |
 
 ### Run it
 

@@ -18,13 +18,16 @@ _No unreleased changes._
   waits for it to exit, and respawns it under the long-lived base context — never
   the request context — so a finished HTTP request can't tear the rebuilt watcher
   down. The global "Reload all" button is unchanged.
-- **arm64 miner image** — the miner is now published for `linux/arm64` as well
-  as `linux/amd64`, so Raspberry Pi / ARM self-hosters pull a prebuilt image
-  instead of building from source (pure-Go `modernc.org/sqlite`, no CGO, so it
-  cross-compiles cleanly). The browser sidecar stays amd64-only: it bundles
-  google-chrome-stable for the IVS codecs and Google ships no arm64 Linux Chrome,
-  so Kick browser-watch still needs an amd64 host (Twitch drops run natively on
-  ARM). README + release.yml document this.
+- **arm64 images — miner _and_ Kick browser sidecar** — both images now publish
+  for `linux/arm64` as well as `linux/amd64`. The miner is pure-Go
+  (`modernc.org/sqlite`, no CGO) so it cross-compiles cleanly. The browser
+  sidecar's Dockerfile now picks its browser per arch: amd64 keeps
+  google-chrome-stable (the verified path; Google ships no arm64 Linux Chrome),
+  arm64 installs Debian's `chromium`, which is built against system FFmpeg and so
+  still carries the H.264/AAC codecs that decode Kick's IVS stream. This means
+  **Kick browser-watch now runs on Raspberry Pi / ARM** — user-confirmed working,
+  though the arm64 sidecar is resource heavy (~4 GB RAM per live sidecar, ~2
+  concurrent on a small box). README + release.yml document the arch split.
 - **Data-dir permission docs** — README and the example compose now explain that
   the miner runs as distroless nonroot (UID 65532) and a host-owned bind-mounted
   `./data` must be `chown`ed to `65532:65532` (or use a named volume), or SQLite
@@ -32,6 +35,21 @@ _No unreleased changes._
 
 ### Fixed
 
+- **Account edit now takes effect immediately** — editing an account
+  (enable/disable, label, webhook) already kicked a per-account reload, but ran
+  it on the request context, which cancels the moment the handler redirects — so
+  the reload tore the watcher down without rebuilding it, and a just-disabled
+  account kept mining until a manual reload. The edit handler now reloads under
+  the long-lived root context (matching the per-account reload button), so the
+  change applies at once.
+- **Accounts list layout after avatars** — adding the avatar cell pushed the
+  display name into the 10px bullet column, where it overflowed and floated in
+  the middle of the row. The accounts list now has its own grid track
+  (avatar · name · ● · platform/links · state); the shared event-row grid is
+  untouched.
+- **README i18n** — added full Simplified Chinese (`README.zh-CN.md`) and
+  Spanish (`README.es.md`) translations with a language switcher atop all three
+  (addresses #15's localisation ask).
 - **Friendlier "failed to persist session" hint (#15)** — when a Kick login's
   DB write fails with a permission/readonly/disk signature (the common
   host-owned `./data` on a nonroot container), the error shown now appends a
