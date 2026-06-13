@@ -33,6 +33,28 @@ func TestParseWatchAlive(t *testing.T) {
 	}
 }
 
+// TestWatchDownloadCap guards the bandwidth cap (issue #15): it must stay
+// in the band that pushes IVS's adaptive-bitrate ladder DOWN to a low
+// rendition (below typical source/high renditions, ~3.5+ Mbps) while
+// leaving enough headroom ABOVE the low renditions (~0.2-0.8 Mbps) that
+// the player can keep its buffer filled and currentTime keeps advancing —
+// a too-low cap would stall playback and trip the freeze detector.
+func TestWatchDownloadCap(t *testing.T) {
+	const (
+		mbps          = 125000 // 1 Mbps in bytes/sec
+		lowRenditionH = 0.8 * mbps
+		highRendition = 3.5 * mbps
+	)
+	// Comfortably above the low renditions (no stall) ...
+	assert.Greater(t, float64(kickWatchDownloadCapBytesPerSec), float64(lowRenditionH),
+		"download cap must leave re-buffer headroom above low IVS renditions or accrual stalls")
+	// ... and below the high/source renditions (so ABR is pushed down).
+	assert.Less(t, float64(kickWatchDownloadCapBytesPerSec), float64(highRendition),
+		"download cap must stay below high renditions or ABR won't drop")
+	// Upload cap is non-zero (a zero cap would mean disabled, not bounded).
+	assert.Positive(t, kickWatchUploadCapBytesPerSec)
+}
+
 // evalWatchAlive must fold currentTime progression into the liveness
 // verdict: a player reporting playing but whose currentTime never advances
 // (stream went offline / froze) is dead after maxWatchStalls probes so the

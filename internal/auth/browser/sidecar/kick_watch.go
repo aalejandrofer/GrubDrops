@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/input"
+	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 
@@ -44,6 +45,29 @@ const (
 	// gate. Kick accrues per-minute, so a sub-minute cadence is plenty;
 	// ~15-20s keeps us comfortably inside any idle window.
 	kickWatchKeepAliveEvery = 17 * time.Second
+
+	// kickWatchDownloadCapBytesPerSec caps the watch tab's aggregated
+	// download throughput via CDP network throttling. We only need
+	// watch-time to accrue, not video fidelity, so we cap bandwidth low
+	// enough that Amazon IVS's adaptive-bitrate ladder auto-selects a LOW
+	// rendition (lighter CPU decode + far less bandwidth — the headline
+	// ask from the Raspberry-Pi user in issue #15).
+	//
+	// Sizing — MUST NOT stall accrual: if the player can't keep its buffer
+	// filled, currentTime stops advancing and our freeze detector
+	// (evalWatchAlive) declares the watch dead, so we deliberately err
+	// HIGH. Lowest IVS renditions run ~0.2-0.8 Mbps; even a low-mid
+	// rendition stays under ~1.5 Mbps. A 2.5 Mbps cap (= 312500 bytes/sec)
+	// sits comfortably ABOVE the low renditions (generous re-buffer
+	// headroom, no stalls) while still well BELOW the source/high
+	// renditions (typically 3.5-6+ Mbps), so ABR is pushed down to a low
+	// rung and total bandwidth is bounded. Bytes/sec, per the CDP
+	// downloadThroughput contract.
+	kickWatchDownloadCapBytesPerSec = 312500 // 2.5 Mbps
+	// kickWatchUploadCapBytesPerSec caps upload; a viewer barely uploads,
+	// so a small but non-stalling ceiling is fine (keeps WS pings/keepalive
+	// flowing). 1 Mbps of headroom is plenty.
+	kickWatchUploadCapBytesPerSec = 125000 // 1 Mbps
 )
 
 // watchState tracks the last observed <video> currentTime per handle so
@@ -82,13 +106,54 @@ const kickPlayerDriveScript = `(() => {
       if (p && typeof p.catch === 'function') { p.catch(() => {}); }
     }
     out.playing = !v.paused && !v.ended && v.readyState >= 2;
-    // Best-effort lowest-quality: Kick exposes a settings/quality gear in
-    // its custom player. We can't reliably click it headless, but if the
-    // page wires a global hook we use it. Most builds don't, so this is a
-    // no-op fallback — the muted low-volume tab is already cheap.
+    // Best-effort lowest-quality pin. The hard bandwidth cap (CDP network
+    // throttle, applied from Go) does the heavy lifting — it forces the
+    // IVS adaptive-bitrate ladder DOWN to a low rendition regardless of
+    // any player API. This block is a belt-and-suspenders pin: if we can
+    // reach the Amazon IVS Web player instance we ask it for the lowest
+    // rendition outright (and disable autoswitch so ABR can't climb back).
     try {
+      // 1) Legacy/global hook some Kick builds wire up.
       if (window.__kickPlayer && typeof window.__kickPlayer.setQuality === 'function') {
         window.__kickPlayer.setQuality('lowest');
+        out.qualityPinned = 'hook';
+      }
+    } catch (e) {}
+    try {
+      // 2) Amazon IVS Web player instance. IVS exposes getQualities() /
+      //    setQuality(q) / setAutoQualityMode(bool) on its player object.
+      //    Kick doesn't expose it on a stable global, so probe the usual
+      //    suspects: a known global, or any object on window that quacks
+      //    like an IVS player (has getQualities + setQuality).
+      const looksLikePlayer = (o) =>
+        o && typeof o.getQualities === 'function' && typeof o.setQuality === 'function';
+      let p = null;
+      const globals = [window.player, window.ivsPlayer, window.IVSPlayer,
+                       window.__ivsPlayer, window.__player];
+      for (const g of globals) { if (looksLikePlayer(g)) { p = g; break; } }
+      if (!p) {
+        // Shallow scan of own enumerable window props for a player object.
+        for (const k of Object.keys(window)) {
+          let o;
+          try { o = window[k]; } catch (e) { continue; }
+          if (looksLikePlayer(o)) { p = o; break; }
+        }
+      }
+      if (p) {
+        const qs = p.getQualities() || [];
+        if (qs.length) {
+          // Pick the rendition with the smallest bitrate (fallback: height).
+          let lowest = qs[0];
+          for (const q of qs) {
+            const a = (q && (q.bitrate != null ? q.bitrate : q.height)) || 0;
+            const b = (lowest && (lowest.bitrate != null ? lowest.bitrate : lowest.height)) || 0;
+            if (a && (b === 0 || a < b)) lowest = q;
+          }
+          try { if (typeof p.setAutoQualityMode === 'function') p.setAutoQualityMode(false); } catch (e) {}
+          p.setQuality(lowest, true);
+          out.qualityPinned = 'ivs';
+          out.quality = (lowest && (lowest.name || lowest.height)) || '';
+        }
       }
     } catch (e) {}
   } catch (e) {
@@ -96,6 +161,29 @@ const kickPlayerDriveScript = `(() => {
   }
   return JSON.stringify(out);
 })()`
+
+// kickThrottleBandwidth caps the watch tab's download/upload throughput
+// via CDP so the IVS adaptive-bitrate ladder settles on a LOW rendition
+// and total bandwidth is bounded (issue #15). Network.enable is required
+// before overrideNetworkState takes effect, and is idempotent, so we run
+// it each time. Offline is always false — we are throttling, not
+// disconnecting; disconnecting would freeze the player and trip the
+// freeze detector. Safe to re-run (used at open AND in the keep-alive).
+func kickThrottleBandwidth() chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		if err := network.Enable().Do(ctx); err != nil {
+			return err
+		}
+		// latency 0 = no added RTT (we don't want to slow the handshake,
+		// just bound throughput).
+		return network.OverrideNetworkState(
+			false, // offline
+			0,     // latency ms
+			kickWatchDownloadCapBytesPerSec,
+			kickWatchUploadCapBytesPerSec,
+		).WithConnectionType(network.ConnectionTypeWifi).Do(ctx)
+	})
+}
 
 // OpenStreamWatch opens kick.com/<channel> in a fresh tab with the
 // account's cookies injected, settles past Cloudflare, drives the IVS
@@ -137,6 +225,13 @@ func (k *Kick) OpenStreamWatch(channel string, session *pb.KickSession) (string,
 	}
 	if err := waitCloudflareSettled(ctx, 20*time.Second); err != nil {
 		slog.Warn("kick watch: cloudflare interstitial did not settle", "channel", channel, "err", err.Error())
+	}
+	// Cap bandwidth BEFORE the player fills its buffer so IVS's ABR picks a
+	// low rendition from the first segment instead of starting high and
+	// stepping down. Best-effort: a throttle failure must not abort the
+	// watch (full-quality playback still accrues, just heavier).
+	if err := chromedp.Run(ctx, kickThrottleBandwidth()); err != nil {
+		slog.Warn("kick watch: bandwidth throttle failed (continuing at full quality)", "channel", channel, "err", err.Error())
 	}
 	// Let the SPA mount the player, then drive it — POLLING until the
 	// <video> is actually playing+buffered. CF + SPA + IVS init can take
@@ -208,7 +303,11 @@ func (k *Kick) watchKeepAlive(ctx context.Context, channel, handle string) {
 			}
 			var status string
 			driveCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			// Re-assert the bandwidth cap + low-quality pin each tick: an ad
+			// break or player re-init can reset network conditions and bump
+			// ABR back up. overrideNetworkState/setQuality are idempotent.
 			err := chromedp.Run(driveCtx,
+				kickThrottleBandwidth(),
 				chromedp.Evaluate(kickPlayerDriveScript, &status),
 				kickSimulateActivity(),
 			)
