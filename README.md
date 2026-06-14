@@ -24,10 +24,9 @@
 
 ---
 
-GrubDrops watches the right Twitch and Kick streams for you, banks the
-watch-time, and claims the in-game drops, across several accounts at once. One
-small web app on your own box: ships as a Docker image, keeps everything in a
-single SQLite file.
+Watches the right Twitch and Kick streams, banks the watch-time, and claims the
+drops — across several accounts at once. One small self-hosted web app: a Docker
+image and a single SQLite file.
 
 ## Features
 
@@ -55,11 +54,11 @@ What you need depends on which platform you're mining:
 | **Run from source, no Docker** | ✅ a plain `go build` binary works | ❌ needs Docker for the sidecar |
 | **CPU arch** | any — `amd64` + `arm64` | `amd64` + `arm64` (arm64 is heavy — see note) |
 
-Twitch runs over direct HTTP — a plain Go binary mines it anywhere (Raspberry Pi included, no Docker). Kick watch-time normally needs a real player, so the miner runs a Chrome/Chromium sidecar over the docker socket (**Docker required for Kick**).
+Twitch is direct HTTP — a plain Go binary mines it anywhere, no Docker. Kick watch-time needs a real player, so the miner runs a Chrome/Chromium sidecar over the docker socket (**Docker required for Kick**).
 
-> **Raspberry Pi / ARM:** both images ship for `arm64`; the sidecar uses Debian Chromium there (keeps the H.264/AAC codecs for Kick's IVS stream). Works, but heavy — ~4 GB RAM per sidecar, so low-RAM Pis manage only a couple of Kick accounts.
+> **Raspberry Pi / ARM:** both images ship `arm64`; the sidecar uses Debian Chromium (keeps the H.264/AAC codecs for Kick's IVS stream). Heavy — ~4 GB RAM each.
 >
-> **Browserless Kick (experimental):** Settings → Experimental → *WebSocket only* watches Kick with no browser — no Chrome, no Docker-for-Kick, light enough for any Pi. Experimental: it may stop accruing.
+> **Browserless Kick (experimental):** Settings → Experimental → *WebSocket only* drops the sidecar — no Chrome, no Docker-for-Kick, fine on any Pi. May stop accruing.
 
 ### Supported platforms
 
@@ -73,10 +72,9 @@ Twitch runs over direct HTTP — a plain Go binary mines it anywhere (Raspberry 
 
 ### Run it
 
-Docker Compose with the published images is the fastest path — just the
-**miner**. For Kick watch-time it auto-creates a codec-enabled Chrome
-**sidecar** per account on demand (over the mounted docker socket), so you
-don't define any sidecar services yourself. (Twitch-only? See below.)
+Compose with the published image — just the **miner**. It auto-creates a Chrome
+**sidecar** per Kick account on demand over the mounted docker socket; you define
+no sidecar services.
 
 ```yaml
 # compose.yml
@@ -97,37 +95,20 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 ```
 
-**Make the data dir writable first.** The miner image runs as the distroless
-`nonroot` user (**UID 65532**). A fresh bind-mounted `./data` is owned by your
-host user, so the container can't write `miner.db` — sessions never persist and
-login fails with *"failed to persist session"* right after a successful verify.
-Give the dir to the container user before bringing it up:
+The image runs as distroless `nonroot` (**UID 65532**), so make a bind-mounted
+`./data` writable first — otherwise it can't write `miner.db` and login fails
+with *"failed to persist session"*. (Or use a named volume.)
 
 ```bash
 mkdir -p data && sudo chown 65532:65532 data
-```
-
-(Or skip the bind mount entirely and use a named Docker volume — Docker creates
-those already writable by the container.)
-
-Bring it up. `GRUB_MASTER_KEY` encrypts the stored sessions, so generate a real one:
-
-```bash
 GRUB_MASTER_KEY=$(head -c32 /dev/urandom | base64) docker compose up -d
 ```
 
-Open **http://localhost:8080**. The first visit asks you to create an admin login.
+Open **http://localhost:8080** and create the admin login.
 
-**Twitch only?** Drop the docker-socket mount and leave `GRUB_BROWSER_URL`
-unset — no Kick sidecars are ever created (Kick simply has no accruing watch
-path without one).
-
-**Want every knob?** The full reference compose (sidecar profiles, OIDC, each
-setting commented) lives in
-[`deploy/docker-compose.yml`](deploy/docker-compose.yml).
-
-**Build it yourself?** `docker build -f deploy/Dockerfile.miner .`, or plain
-`go build ./cmd/miner` for a local binary.
+- **Twitch only?** Drop the docker-socket mount — no sidecars get created.
+- **Every knob?** Reference compose: [`deploy/docker-compose.yml`](deploy/docker-compose.yml).
+- **Build it?** `docker build -f deploy/Dockerfile.miner .`, or `go build ./cmd/miner`.
 
 ## Adding accounts
 
@@ -153,17 +134,12 @@ errors), re-export and paste again.
 
 ## How it works
 
-- **Twitch:** device-code login, then GraphQL and PubSub to track progress and
-  fire claims in real time.
-- **Kick:** detection and claims ride a Chrome-TLS-fingerprinted HTTP client
-  (`utls`), so there's no Cloudflare dance and no browser to babysit. The
-  watch-time itself needs a real player, so it runs in an on-demand, per-account
-  Chrome sidecar that plays the IVS stream. The miner auto-creates, starts, and
-  stops that container over the docker socket (pulling the sidecar image as
-  needed), so Chrome only runs while watching and you define no sidecar services.
-  A periodic sweep removes the containers of deleted accounts.
-- **Discovery** sweeps both catalogs into SQLite every few minutes so the
-  dashboard always reflects what's live.
+- **Twitch:** device-code login, then GraphQL + PubSub to track progress and claim.
+- **Kick:** detection/claims ride a Chrome-TLS-fingerprinted HTTP client (`utls`) —
+  no Cloudflare dance, no browser. Watch-time needs a real player, so it runs in an
+  on-demand per-account Chrome sidecar (IVS playback) the miner creates/stops over
+  the docker socket; a sweep removes deleted accounts' containers.
+- **Discovery** scrapes both catalogs into SQLite every few minutes.
 
 ## Priority logic
 
@@ -187,8 +163,7 @@ campaign with no live stream is skipped, not slept on.
 
 ## Configuration
 
-All settings are environment variables. `GRUB_MASTER_KEY` is the only **required**
-one. Every other variable below is **optional**: leave it unset to take the
+Environment variables; only `GRUB_MASTER_KEY` is **required**, the rest take the
 default shown.
 
 | Var | Default | Purpose |
@@ -196,32 +171,27 @@ default shown.
 | `GRUB_MASTER_KEY` | **required** | Key for the age-encrypted session store. |
 | `GRUB_HTTP_ADDR` | `:8080` | Listen address. |
 | `GRUB_DB_PATH` | `/data/miner.db` | SQLite path (use e.g. `./miner.db` outside Docker). |
-| `GRUB_KICK_SIDECAR_IMAGE` | `ghcr.io/aalejandrofer/grubdrops-browser:latest` | Image the miner pulls + runs for each auto-created sidecar. Kick watch always runs through a sidecar (the only accruing path); none configured = Kick can't watch. |
-| `GRUB_KICK_SIDECAR_NETWORK` | auto-detected | Docker network to attach sidecars to. Defaults to the miner's own network (self-detected); set to override. |
-| `GRUB_KICK_SIDECAR_TEMPLATE` | `grubdrops-browser-{slug}` | Per-account sidecar container-name template. |
+| `GRUB_KICK_SIDECAR_IMAGE` | `ghcr.io/aalejandrofer/grubdrops-browser:latest` | Sidecar image the miner pulls per account. |
+| `GRUB_KICK_SIDECAR_NETWORK` | auto-detected | Override the self-detected sidecar network. |
+| `GRUB_KICK_SIDECAR_TEMPLATE` | `grubdrops-browser-{slug}` | Sidecar container-name template. |
 | `GRUB_KICK_SIDECAR_PORT` | `9090` | Sidecar gRPC port. |
-| `GRUB_BROWSER_URL` | none | Fixed sidecar address (legacy always-on mode). |
-| `GRUB_BROWSER_URLS` | none | Comma-separated always-on sidecar pool (one Chrome per Kick account). |
-| `GRUB_DISCOVERY_INTERVAL` | `60m` | Catalog-scrape cadence (e.g. `30m`, `2h`); also editable in Settings. |
-| `GRUB_AUTHCHECK_INTERVAL` | `12h` | Auth-health sweep cadence. |
-| `GRUB_DISCORD_WEBHOOK` | none | Optional global Discord webhook. |
-| `GRUB_SECURE_COOKIES` | `0` | Secure session cookies + CSRF same-origin scheme. Leave `0` for plain HTTP (`http://pi:8080`); set `1` only when reached over HTTPS (directly or behind a TLS-terminating proxy that sets `X-Forwarded-Proto: https`). See note below. |
+| `GRUB_BROWSER_URL` | none | Fixed sidecar address (legacy always-on). |
+| `GRUB_BROWSER_URLS` | none | Always-on sidecar pool, comma-separated. |
+| `GRUB_DISCOVERY_INTERVAL` | `60m` | Catalog-scrape cadence; also in Settings. |
+| `GRUB_AUTHCHECK_INTERVAL` | `1h` | Auth-health sweep cadence. |
+| `GRUB_DISCORD_WEBHOOK` | none | Global Discord webhook. |
+| `GRUB_SECURE_COOKIES` | `0` | `1` marks cookies `Secure` (HTTPS only); keep `0` for plain HTTP — see note. |
 | `GRUB_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
 
-> **Self-host / "invalid CSRF token":** `GRUB_SECURE_COOKIES` must match how you
-> reach the app. Over **plain HTTP** (the default, e.g. a Raspberry Pi at
-> `http://pi:8080`) keep it `0` — `1` makes the browser mark the session/CSRF
-> cookie `Secure`, so it is silently dropped over HTTP and every form POST then
-> fails the CSRF check. Behind a **reverse proxy that terminates TLS**, set `1`
-> and have the proxy forward `X-Forwarded-Proto: https`. A failed check now logs
-> a `csrf check failed` line and returns a hint pointing at the likely
-> mismatch.
+> **"Invalid CSRF token"?** `GRUB_SECURE_COOKIES` must match your scheme: `0`
+> over plain HTTP, `1` over HTTPS (proxy must forward `X-Forwarded-Proto: https`).
+> A mismatch marks cookies `Secure` over HTTP, so they drop and POSTs fail. A
+> failed check logs `csrf check failed` with the likely cause.
 
 ### Single sign-on (OIDC)
 
-Optional; password login stays as a fallback. Works with any OIDC provider
-(authentik, Auth0, Keycloak, Google, Okta, …). SSO switches on once the first
-four variables are set:
+Optional (password login stays as fallback). Any OIDC provider; switches on once
+the first four are set:
 
 | Var | Required | Purpose |
 |-----|----------|---------|
@@ -260,16 +230,12 @@ internal/store          SQLite (sqlc + goose), age-encrypted sessions
 
 ## Credits
 
-GrubDrops stands on the shoulders of the projects that figured out the hard
-parts first:
+Stands on the projects that cracked the hard parts first:
 
-- **[DevilXD/TwitchDropsMiner](https://github.com/DevilXD/TwitchDropsMiner)**:
-  the Twitch device-code flow, GraphQL queries, and watch-time mechanics.
-- **[HyperBeats/KickDropsMiner](https://github.com/HyperBeats/KickDropsMiner)**:
-  mapped out how Kick drops work in the first place.
+- **[DevilXD/TwitchDropsMiner](https://github.com/DevilXD/TwitchDropsMiner)** — Twitch device-code flow, GraphQL, watch-time mechanics.
+- **[HyperBeats/KickDropsMiner](https://github.com/HyperBeats/KickDropsMiner)** — mapped how Kick drops work.
 
-GrubDrops is its own Go rewrite with a web UI and multi-account support, but it
-wouldn't exist without their groundwork. Thank you.
+GrubDrops is its own Go rewrite (web UI, multi-account) but wouldn't exist without their groundwork.
 
 ## License
 
@@ -277,10 +243,9 @@ Released under the [MIT License](LICENSE).
 
 ## A note on responsible use
 
-Self-hosted, single-tenant, actively developed. `/healthz` answers liveness
-checks; keep `/data` across redeploys; put it behind a reverse proxy if you
-expose it. Use it within each platform's Terms of Service, against your own
-accounts, at your own risk.
+Self-hosted, single-tenant. `/healthz` for liveness; keep `/data` across
+redeploys; reverse-proxy it if exposed. Stay within each platform's ToS, on your
+own accounts, at your own risk.
 
 ---
 

@@ -450,7 +450,7 @@ func run() error {
 	// flag before an account silently stops mining. CheckAll is also wired
 	// to a manual button on /accounts.
 	authChecker := authcheck.New(q, sessions, registry)
-	authInterval := parseDuration(os.Getenv("GRUB_AUTHCHECK_INTERVAL"), 12*time.Hour)
+	authInterval := parseDuration(os.Getenv("GRUB_AUTHCHECK_INTERVAL"), time.Hour)
 	go authChecker.Run(ctx, authInterval)
 
 	// Avoid typed-nil-interface trap: only assign if the concrete pointer is non-nil.
