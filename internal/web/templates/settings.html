@@ -247,17 +247,6 @@
       </form>
     </section>
 
-    <section class="settings-card">
-      <header class="section-h"><h3>Status</h3><span class="meta">Read-only</span></header>
-      <div class="kvlist">
-        <div class="kvrow"><span class="k">uptime</span><span class="v">{{if .Uptime}}{{.Uptime}}{{else}}—{{end}}</span></div>
-        <div class="kvrow"><span class="k">go</span><span class="v">{{.GoVersion}}</span></div>
-        <div class="kvrow"><span class="k">goroutines</span><span class="v">{{.Goroutines}}</span></div>
-        <div class="kvrow"><span class="k">sidecars</span><span class="v">{{if .Sidecars}}{{range .Sidecars}}<div>{{.}}</div>{{end}}{{else}}none running{{end}}</span></div>
-        {{if .GitCommit}}<div class="kvrow"><span class="k">commit</span><span class="v">{{.GitCommit}}</span></div>{{end}}
-        {{if .Version}}<div class="kvrow"><span class="k">version</span><span class="v">{{.Version}}</span></div>{{end}}
-      </div>
-    </section>
     {{end}}
 
     {{if eq $.Active "experimental"}}
@@ -288,6 +277,17 @@
   <header class="section-h"><h3>Accrual canary</h3><span class="meta">transport health</span></header>
   <div class="kvlist" id="canary-panel">
     <div class="kvrow"><span class="k">canary</span><span class="v">—</span></div>
+  </div>
+</section>
+<section class="settings-card">
+  <header class="section-h"><h3>Status</h3><span class="meta">Read-only</span></header>
+  <div class="kvlist">
+    <div class="kvrow"><span class="k">uptime</span><span class="v">{{if .Uptime}}{{.Uptime}}{{else}}—{{end}}</span></div>
+    <div class="kvrow"><span class="k">go</span><span class="v">{{.GoVersion}}</span></div>
+    <div class="kvrow"><span class="k">goroutines</span><span class="v">{{.Goroutines}}</span></div>
+    <div class="kvrow"><span class="k">sidecars</span><span class="v">{{if .Sidecars}}{{range .Sidecars}}<div>{{.}}</div>{{end}}{{else}}none running{{end}}</span></div>
+    {{if .GitCommit}}<div class="kvrow"><span class="k">commit</span><span class="v">{{.GitCommit}}</span></div>{{end}}
+    {{if .Version}}<div class="kvrow"><span class="k">version</span><span class="v">{{.Version}}</span></div>{{end}}
   </div>
 </section>
 {{end}}
