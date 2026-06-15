@@ -54,6 +54,10 @@ type Backend struct {
 	channelsByAcc    map[string][]string
 	campaignChannels map[string][]kickChannel // campaignID -> eligible channels (slug+id)
 	categoryChannels map[string][]kickChannel // game/category -> union of participating channels across campaigns
+
+	// probeDeps holds injectable dial/token helpers for ProbeWS. Zero value
+	// means "use the real Kick endpoints". Set by NewKickBackendForTest.
+	probeDeps probeWSDeps
 }
 
 var _ platform.Backend = (*Backend)(nil)

@@ -287,11 +287,20 @@ func (b *Backend) runWSLoop(ctx context.Context, w *kickWSWatch, ks kickSession,
 	}
 }
 
+// wsConn is the minimal WebSocket connection surface that pumpWS and the
+// WS probe require. *websocket.Conn satisfies this interface; test code can
+// substitute a spy/recording wrapper without pulling in the real gorilla conn.
+type wsConn interface {
+	WriteJSON(v any) error
+	ReadMessage() (messageType int, p []byte, err error)
+	Close() error
+}
+
 // pumpWS runs one connection's send loop: an initial handshake, then alternating
 // handshake/ping every ~12s and a user_event every ~60s, draining any inbound
 // frames (Kick only sends pong) with a short read deadline. Returns nil on ctx
 // cancel, or the first write error (dead conn → caller reconnects).
-func pumpWS(ctx context.Context, conn *websocket.Conn, channelID, livestreamID int64, handshakeEvery, userEventEvery time.Duration) error {
+func pumpWS(ctx context.Context, conn wsConn, channelID, livestreamID int64, handshakeEvery, userEventEvery time.Duration) error {
 	// One reader goroutine drains inbound frames (Kick sends pong only) and
 	// reports a dead connection. Only this loop writes, so read+write run
 	// concurrently without violating gorilla's one-writer rule.
