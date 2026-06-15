@@ -199,7 +199,8 @@ func TestSettingsTabs_SubnavHasAllLinks(t *testing.T) {
 		`href="/settings"`, `href="/settings/priority"`,
 		`href="/settings/notifications"`, `href="/settings/security"`,
 		`href="/settings/accounts"`, `href="/settings/experimental"`,
-		"General", "Drop Priority", "Notifications", "Security", "Accounts", "Experimental",
+		`href="/settings/health"`,
+		"General", "Drop Priority", "Notifications", "Security", "Accounts", "Experimental", "Health",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("subnav missing %q", want)

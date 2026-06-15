@@ -290,6 +290,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/settings/notifications", settingsH.getNotifications)
 	authed.Get("/settings/security", settingsH.getSecurity)
 	authed.Get("/settings/experimental", settingsH.getExperimental)
+	authed.Get("/settings/health", settingsH.getHealth)
 	authed.Post("/settings", settingsH.postGeneral)
 	authed.Post("/settings/priority-mode", settingsH.postPriorityMode)
 	authed.Post("/settings/experimental", settingsH.postExperimental)

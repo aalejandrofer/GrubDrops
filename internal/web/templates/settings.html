@@ -15,10 +15,11 @@
   </div>
   <nav class="subnav">
     <a href="/settings" class="subnav-link {{if eq .Active "settings"}}on{{end}}">General</a>
+    <a href="/settings/accounts" class="subnav-link {{if eq .Active "accounts"}}on{{end}}">Accounts</a>
     <a href="/settings/priority" class="subnav-link {{if eq .Active "priority"}}on{{end}}">Drop Priority</a>
     <a href="/settings/notifications" class="subnav-link {{if eq .Active "notifications"}}on{{end}}">Notifications</a>
     <a href="/settings/security" class="subnav-link {{if eq .Active "security"}}on{{end}}">Security</a>
-    <a href="/settings/accounts" class="subnav-link {{if eq .Active "accounts"}}on{{end}}">Accounts</a>
+    <a href="/settings/health" class="subnav-link {{if eq .Active "health"}}on{{end}}">Health</a>
     <a href="/settings/experimental" class="subnav-link {{if eq .Active "experimental"}}on{{end}}">Experimental</a>
   </nav>
 
@@ -281,6 +282,15 @@
       </form>
     </section>
     {{end}}
+
+    {{if eq $.Active "health"}}
+<section class="settings-card">
+  <header class="section-h"><h3>Accrual canary</h3><span class="meta">transport health</span></header>
+  <div class="kvlist" id="canary-panel">
+    <div class="kvrow"><span class="k">canary</span><span class="v">—</span></div>
+  </div>
+</section>
+{{end}}
 
   </div>
   {{end}}

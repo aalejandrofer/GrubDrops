@@ -196,6 +196,9 @@ func (d *settingsDeps) getSecurity(w http.ResponseWriter, r *http.Request) {
 func (d *settingsDeps) getExperimental(w http.ResponseWriter, r *http.Request) {
 	d.renderTab(w, r, "experimental")
 }
+func (d *settingsDeps) getHealth(w http.ResponseWriter, r *http.Request) {
+	d.renderTab(w, r, "health")
+}
 
 // saveErr writes a 500 and reports true when err is non-nil, so a save
 // handler can abort BEFORE flashing "saved". Without this, settings writes
