@@ -19,6 +19,13 @@ All notable changes to GrubDrops.
   (`POST /settings/canary/run`) triggers `canaryRunner.RunOnce` immediately and
   replaces `#canary-panel` in-place with fresh results — no page reload needed.
 
+- **Canary Discord alert on accrual failure.** When the canary transitions from
+  OK → fail for a platform (or fails on its first-ever run), a Discord
+  notification is fired with event kind `canary`, carrying platform and detail
+  fields. fail → fail re-runs are suppressed (one alert per incident, not per
+  tick). A new "accrual canary" checkbox in Settings → Notifications (default
+  off) gates the alert; recovery (fail → OK) does not send a note.
+
 ## [1.1.0] — 2026-06-15
 
 ### Added
