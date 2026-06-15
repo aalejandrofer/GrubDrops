@@ -48,6 +48,12 @@
   </div>
   {{end}}
 </div>
+{{end}}
+
+{{/* The canary settings form is a SEPARATE define rendered once in the full
+     Health tab — NOT part of canary_panel, so the Run-now / auto-refresh swap
+     (which targets #canary-panel) can't duplicate it. */}}
+{{define "canary_form"}}
 <form method="post" action="/settings/canary" style="margin-top:14px;">
   <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
   <div class="kvedit">
@@ -55,12 +61,12 @@
     <div class="row">
       <span class="k">twitch channel</span>
       <span class="d">Twitch channel slug to probe &#x2014; leave empty to skip</span>
-      <span class="v grow"><input type="text" name="canary_twitch_channel" value="{{.CanaryTwitchChannel}}" placeholder="e.g. ninja" class="chan-input"></span>
+      <span class="v grow"><input type="text" name="canary_twitch_channel" value="{{.CanaryTwitchChannel}}" placeholder="e.g. ninja"></span>
     </div>
     <div class="row">
       <span class="k">kick channel</span>
       <span class="d">Kick channel slug to probe &#x2014; leave empty to skip</span>
-      <span class="v grow"><input type="text" name="canary_kick_channel" value="{{.CanaryKickChannel}}" placeholder="e.g. xqc" class="chan-input"></span>
+      <span class="v grow"><input type="text" name="canary_kick_channel" value="{{.CanaryKickChannel}}" placeholder="e.g. xqc"></span>
     </div>
     <div class="row">
       <span class="k">interval</span>

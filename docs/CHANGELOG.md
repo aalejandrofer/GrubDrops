@@ -4,6 +4,15 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.2.3] — 2026-06-16
+
+### Fixed
+
+- **"Run now" no longer duplicates the Heartbeat settings form.** The channel and
+  interval form was part of the panel that gets swapped on Run-now (and the
+  auto-refresh after it), so each run stacked another copy of the form. The form is
+  now rendered once, separate from the results panel.
+
 ## [1.2.2] — 2026-06-16
 
 ### Changed
