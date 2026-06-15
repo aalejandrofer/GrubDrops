@@ -343,7 +343,9 @@ func run() error {
 		if !hasAnyGame(allow) {
 			logger.Info("account has empty game whitelist, idle until games are picked",
 				"account", a.ID)
-			return scheduler.NewEntry(a.ID, nopRunner{}), nil
+			// Authed but nothing to mine yet — surface as "no_games", NOT
+			// the misleading "session expired" auth banner.
+			return scheduler.NewEntry(a.ID, nopRunner{reason: "no_games"}), nil
 		}
 
 		// PriorityMode is a global setting — read once per build (i.e.
@@ -514,9 +516,18 @@ func run() error {
 	return nil
 }
 
-type nopRunner struct{}
+// nopRunner is an idle placeholder entry for an account the scheduler can't
+// actively mine. The reason field tells the dashboard WHY it's idle so a
+// fully-authed account that merely lacks whitelisted games isn't mislabelled
+// "session expired or never authenticated". An empty reason defaults to
+// "needs_auth" (see scheduler.idleState).
+type nopRunner struct{ reason string }
 
 func (nopRunner) Run(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }
+
+// IdleState satisfies scheduler.idleStateReporter so the dashboard surfaces
+// the real idle reason instead of a blanket auth error.
+func (n nopRunner) IdleState() string { return n.reason }
 
 // loadLinkOverrides reads the manual "I've linked it" campaign overrides
 // from kv (keys prefixed store.LinkOverridePrefix) and returns a membership

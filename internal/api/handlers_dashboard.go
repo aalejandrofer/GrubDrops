@@ -321,6 +321,11 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 				Kind: "awaiting_connect", Account: c.Name,
 				URL: "/drops", Action: "Connect account →",
 			})
+		case "no_games":
+			alerts = append(alerts, dashAlert{
+				Kind: "no_games", Account: c.Name,
+				URL: "/accounts/" + c.ID, Action: "Add games →",
+			})
 		}
 	}
 
@@ -710,6 +715,8 @@ func mineCardFromSnap(a gen.Account, s watcher.Snapshot) dashMineCard {
 		c.StateSub = "connect account to mine"
 	case "needs_auth":
 		c.StateSub = "login required"
+	case "no_games":
+		c.StateSub = "no games whitelisted"
 	}
 	c.WatchToday = "—"
 	c.ClaimsToday = 0
@@ -1162,6 +1169,8 @@ func stateLabel(s string) string {
 		return "awaiting connect"
 	case "needs_auth":
 		return "needs login"
+	case "no_games":
+		return "no games yet"
 	case "stopped":
 		return "stopped"
 	}

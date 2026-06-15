@@ -202,6 +202,12 @@ type dropsPage struct {
 	UnlistedRows  []dropsRow     // campaigns whose Game is not on any account whitelist
 	Accounts      []dropsAccount // for the "add to whitelist" dropdown on unlisted rows
 	CSRFToken     string         // mirrors templateData.CSRFToken for inline form
+	// NoWhitelist is true when no game is whitelisted anywhere (per-account or
+	// global). Discovery only crawls whitelisted games, so an empty whitelist
+	// means the page is silently empty — a cold-start trap. The template shows
+	// a bootstrap CTA in this case instead of misleading "discovery populates
+	// this" empty text.
+	NoWhitelist bool
 }
 
 type dropsAccount struct {
@@ -383,6 +389,7 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		UnlistedRows:  unlistedRows,
 		Accounts:      accountsForPick,
 		CSRFToken:     csrfToken(r),
+		NoWhitelist:   !hasWhitelist,
 	}
 	switch tab {
 	case tabPast:

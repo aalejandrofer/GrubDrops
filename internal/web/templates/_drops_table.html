@@ -4,6 +4,19 @@
      together. (Previously only the Whitelisted pane swapped, leaving the
      other two stale across past/current/upcoming.) */}}
 <div id="drops-tabpanel" class="drops-tabpanel" role="tabpanel">
+  {{if .NoWhitelist}}
+  {{/* Cold-start trap: discovery only crawls whitelisted games, so with an
+       empty whitelist the page is silently empty and there's no row to click
+       "whitelist +" on. Point the operator at where to add a game. */}}
+  <div class="alert alert-no_games" style="margin-bottom:16px;">
+    <span class="alert-tag">no games</span>
+    <span class="alert-body">
+      <strong>No games whitelisted yet.</strong>
+      — drops discovery only crawls games you opt into, so nothing shows up until you add one. Add a game to the global priority list, or per account, and discovery will start populating this page.
+    </span>
+    <a class="btn sm alert-cta" href="/settings/priority">Add a game →</a>
+  </div>
+  {{end}}
   <div class="drops-grid">
 
     <section class="drops-pane">

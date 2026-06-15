@@ -32,6 +32,22 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- **No more false "session expired or never authenticated"** — an account that was
+  fully authenticated but simply had no games whitelisted (and several other
+  non-auth idle reasons) was reported by the scheduler as `needs_auth`, so the
+  dashboard showed the alarming "session expired" banner. Idle entries now report
+  their real reason; an authed-but-no-games account surfaces a distinct
+  `no_games` state ("no games yet" / "Add games →") instead of an auth error.
+  This was the headline "WS mode on a Pi looks broken but isn't" complaint.
+- **Cold-start whitelist trap on `/drops`** — discovery only crawls whitelisted
+  games, so a fresh install with an empty whitelist left `/drops` silently empty
+  with no row to click "whitelist +" on. The page now shows a bootstrap CTA
+  ("No games whitelisted yet… Add a game →") linking to the priority list when no
+  game is whitelisted anywhere.
+- **Settings saves no longer report false success** — General, Notifications,
+  Priority-mode and Experimental tabs swallowed DB write errors and always flashed
+  "saved", so a failed write looked successful. These writes are now checked and
+  surface the error instead of a misleading success.
 - **NEXT CLAIM now tracks the closest drop live** — the telemetry band was static
   and only updated on page load; it now polls every 10s, so NEXT CLAIM reflects
   the current nearest ETA across all accounts instead of freezing.
