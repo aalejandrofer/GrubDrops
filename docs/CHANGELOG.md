@@ -4,12 +4,24 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.2.2] — 2026-06-16
+
 ### Changed
 
+- **Settings inputs are bare again and size to their content.** Reverted the boxed
+  look from 1.2.1 back to a transparent field with just the accent underline on
+  focus. Values sit on the right and grow leftward as you type, instead of being
+  full-width lines.
 - **Faster release builds** — each image now builds on a native per-arch runner
   (amd64 + arm64) instead of emulating arm64 with QEMU, and the two images build in
   parallel. The slow part was the sidecar's emulated chromium install; native
   runners cut release build time substantially.
+
+### Fixed
+
+- **The console live log no longer makes the whole page scroll forever.** A change
+  in 1.2.1 let it grow unbounded; it's back to a fixed-height panel that scrolls on
+  its own.
 
 ## [1.2.1] — 2026-06-16
 
