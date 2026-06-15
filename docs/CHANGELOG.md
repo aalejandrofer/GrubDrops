@@ -12,6 +12,13 @@ All notable changes to GrubDrops.
   `internal/platform/twitch` as `(*Backend).ProbeBeacon`; the canary calls it
   without duplicating beacon encoding logic.
 
+- **Settings → Health tab: accrual-canary UI.** The Health tab now shows live
+  canary results (✓ ok / ✗ with detail + "X ago" timestamp, or "not configured"
+  when no channel is set) for both Twitch and Kick. A settings form lets the
+  operator set the canary channels and interval. A "Run now" HTMX button
+  (`POST /settings/canary/run`) triggers `canaryRunner.RunOnce` immediately and
+  replaces `#canary-panel` in-place with fresh results — no page reload needed.
+
 ## [1.1.0] — 2026-06-15
 
 ### Added

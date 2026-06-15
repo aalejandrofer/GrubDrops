@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"runtime"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/aalejandrofer/grubdrops/internal/auth"
 	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
+	"github.com/aalejandrofer/grubdrops/internal/canary"
 	"github.com/aalejandrofer/grubdrops/internal/gameslug"
 	"github.com/aalejandrofer/grubdrops/internal/scheduler"
 	"github.com/aalejandrofer/grubdrops/internal/store"
@@ -31,6 +33,9 @@ type settingsDeps struct {
 	reload func(context.Context) error
 	// notifier is the live Discord notifier, for the "send test" button.
 	notifier Notifier
+	// runCanary triggers an immediate canary RunOnce. Nil disables the
+	// "Run now" button.
+	runCanary func(context.Context) error
 	// status fields surfaced read-only on the settings page
 	startedAt   time.Time
 	logLevelEnv string
@@ -67,6 +72,17 @@ type settingsOIDC struct {
 	AllowedGroups []string
 }
 
+// canaryView carries one platform's last accrual-canary result for the
+// Health tab template. Configured=false means no channel is set for that
+// platform; OK/Detail/When are only meaningful when Configured=true AND a
+// result has been stored (When != "").
+type canaryView struct {
+	Configured bool
+	OK         bool
+	Detail     string
+	When       string // "5m ago" / "" when no result stored yet
+}
+
 type settingsPageData struct {
 	GlobalDiscordWebhook string
 	NotifyAvatarURL      string
@@ -98,6 +114,13 @@ type settingsPageData struct {
 	Version    string
 	// Read-only SSO status
 	OIDC settingsOIDC
+
+	// Accrual-canary results + config (Health tab)
+	CanaryTwitch        canaryView
+	CanaryKick          canaryView
+	CanaryTwitchChannel string
+	CanaryKickChannel   string
+	CanaryIntervalSec   int
 }
 
 func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active string) {
@@ -151,6 +174,14 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 			AllowedGroups: d.oidc.AllowedGroups(),
 		}
 	}
+
+	// Accrual-canary: read channel settings + stored results for the Health tab.
+	canaryTwitchCh, _ := d.s.CanaryTwitchChannel(ctx)
+	canaryKickCh, _ := d.s.CanaryKickChannel(ctx)
+	canaryIntervalSec, _ := d.s.CanaryIntervalSec(ctx)
+	canaryTwitchView := buildCanaryView(ctx, d.q, "twitch", canaryTwitchCh)
+	canaryKickView := buildCanaryView(ctx, d.q, "kick", canaryKickCh)
+
 	render(w, d.t, "settings.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: active,
 		Page: settingsPageData{
@@ -178,6 +209,11 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 			GitCommit:            d.gitCommit,
 			Version:              d.version,
 			OIDC:                 ssoStatus,
+			CanaryTwitch:         canaryTwitchView,
+			CanaryKick:           canaryKickView,
+			CanaryTwitchChannel:  canaryTwitchCh,
+			CanaryKickChannel:    canaryKickCh,
+			CanaryIntervalSec:    canaryIntervalSec,
 		},
 		Flash: flash,
 	})
@@ -547,4 +583,94 @@ func (d *settingsDeps) applyReload(ctx context.Context) {
 	if err := d.reload(ctx); err != nil {
 		slog.Warn("settings: scheduler reload failed after whitelist change", "err", err)
 	}
+}
+
+// buildCanaryView loads a stored canary result and builds the template view
+// for one platform. channel="" → Configured=false; no stored result →
+// Configured=true with empty When.
+func buildCanaryView(ctx context.Context, q *gen.Queries, platform, channel string) canaryView {
+	if channel == "" {
+		return canaryView{Configured: false}
+	}
+	if q == nil {
+		return canaryView{Configured: true}
+	}
+	res, ok, _ := canary.LoadResult(ctx, q, platform)
+	if !ok {
+		return canaryView{Configured: true}
+	}
+	when := ""
+	if !res.CheckedAt.IsZero() {
+		when = formatRelative(time.Since(res.CheckedAt))
+	}
+	return canaryView{
+		Configured: true,
+		OK:         res.OK,
+		Detail:     res.Detail,
+		When:       when,
+	}
+}
+
+// formatRelative returns a human "5m ago" / "2h ago" string for a duration.
+func formatRelative(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds ago", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	}
+}
+
+// canarySave handles POST /settings/canary — saves the three canary settings.
+func (d *settingsDeps) canarySave(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if saveErr(w, d.s.SetCanaryTwitchChannel(ctx, r.FormValue("canary_twitch_channel"))) {
+		return
+	}
+	if saveErr(w, d.s.SetCanaryKickChannel(ctx, r.FormValue("canary_kick_channel"))) {
+		return
+	}
+	if v := r.FormValue("canary_interval_sec"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			http.Error(w, "canary_interval_sec must be a non-negative integer", http.StatusBadRequest)
+			return
+		}
+		if saveErr(w, d.s.SetCanaryIntervalSec(ctx, n)) {
+			return
+		}
+	}
+	d.sm.Put(ctx, "flash", "canary settings saved")
+	http.Redirect(w, r, "/settings/health", http.StatusSeeOther)
+}
+
+// canaryRun handles POST /settings/canary/run — runs the canary immediately
+// then returns a fresh #canary-panel HTMX fragment.
+func (d *settingsDeps) canaryRun(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if d.runCanary != nil {
+		if err := d.runCanary(ctx); err != nil {
+			slog.Warn("canary run-now failed", "err", err)
+		}
+	}
+	// Re-read fresh results and render just the canary panel partial.
+	twitchCh, _ := d.s.CanaryTwitchChannel(ctx)
+	kickCh, _ := d.s.CanaryKickChannel(ctx)
+	intervalSec, _ := d.s.CanaryIntervalSec(ctx)
+	page := settingsPageData{
+		CanaryTwitch:        buildCanaryView(ctx, d.q, "twitch", twitchCh),
+		CanaryKick:          buildCanaryView(ctx, d.q, "kick", kickCh),
+		CanaryTwitchChannel: twitchCh,
+		CanaryKickChannel:   kickCh,
+		CanaryIntervalSec:   intervalSec,
+	}
+	renderPartial(w, d.t, "canary_panel", templateData{
+		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "health",
+		Page: page,
+	})
 }

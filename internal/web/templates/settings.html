@@ -275,9 +275,7 @@
     {{if eq $.Active "health"}}
 <section class="settings-card">
   <header class="section-h"><h3>Accrual canary</h3><span class="meta">transport health</span></header>
-  <div class="kvlist" id="canary-panel">
-    <div class="kvrow"><span class="k">canary</span><span class="v">—</span></div>
-  </div>
+  {{template "canary_panel" $}}
 </section>
 <section class="settings-card">
   <header class="section-h"><h3>Status</h3><span class="meta">Read-only</span></header>
@@ -374,3 +372,4 @@
 </script>
 {{end}}
 {{end}}
+

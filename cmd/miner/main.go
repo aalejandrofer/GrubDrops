@@ -527,6 +527,7 @@ func run() error {
 		OnSettingsUpdate:  onSettingsUpdate,
 		Notifier:          notifier,
 		AuthCheck:         authChecker.CheckAll,
+		RunCanary:         canaryRunner.RunOnce,
 		ReloadAccount:     reloadAccount,
 		TwitchBrowser:     twitchBrowserEnabled && browserClient != nil,
 		LogRing:           ring,

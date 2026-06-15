@@ -253,3 +253,94 @@ func TestSettingsTabs_SecuritySection(t *testing.T) {
 		t.Errorf("security tab should show the password form")
 	}
 }
+
+// TestSettingsTabs_HealthSection verifies the Health tab renders canary
+// results, "not configured" for unconfigured platforms, the settings form,
+// and the Run-now HTMX button.
+func TestSettingsTabs_HealthSection(t *testing.T) {
+	out := renderSettingsTab(t, "health", settingsPageData{
+		CanaryTwitch: canaryView{
+			Configured: true,
+			OK:         true,
+			Detail:     "",
+			When:       "2m ago",
+		},
+		CanaryKick:          canaryView{Configured: false},
+		CanaryTwitchChannel: "somestreamer",
+		CanaryKickChannel:   "",
+		CanaryIntervalSec:   300,
+	})
+
+	// Twitch OK result shows success indicator
+	if !strings.Contains(out, "canary-ok") {
+		t.Errorf("health tab should show canary-ok class for a passing twitch result")
+	}
+	// Twitch "when" is shown
+	if !strings.Contains(out, "2m ago") {
+		t.Errorf("health tab should show the 'when' timestamp for twitch")
+	}
+	// Kick not configured
+	if !strings.Contains(out, "not configured") {
+		t.Errorf("health tab should show 'not configured' for unconfigured kick")
+	}
+	// Settings form fields present
+	if !strings.Contains(out, `name="canary_twitch_channel"`) {
+		t.Errorf("health tab should show canary_twitch_channel input")
+	}
+	if !strings.Contains(out, `name="canary_kick_channel"`) {
+		t.Errorf("health tab should show canary_kick_channel input")
+	}
+	if !strings.Contains(out, `name="canary_interval_sec"`) {
+		t.Errorf("health tab should show canary_interval_sec input")
+	}
+	// Form posts to /settings/canary
+	if !strings.Contains(out, `action="/settings/canary"`) {
+		t.Errorf("health tab canary form should post to /settings/canary")
+	}
+	// Run-now HTMX control
+	if !strings.Contains(out, `hx-post="/settings/canary/run"`) {
+		t.Errorf("health tab should have Run-now hx-post control")
+	}
+	if !strings.Contains(out, `hx-target="#canary-panel"`) {
+		t.Errorf("health tab Run-now should target #canary-panel")
+	}
+	// canary-panel id present for fragment swap target
+	if !strings.Contains(out, `id="canary-panel"`) {
+		t.Errorf("health tab should have id=canary-panel for htmx swap")
+	}
+}
+
+// TestCanaryPanelFragment verifies the canary_panel template can be rendered
+// stand-alone (the fragment path used by canaryRun).
+func TestCanaryPanelFragment(t *testing.T) {
+	t.Helper()
+	tmpl, err := web.Templates()
+	if err != nil {
+		t.Fatalf("load templates: %v", err)
+	}
+	var buf bytes.Buffer
+	err = tmpl.ExecuteTemplate(&buf, "canary_panel", templateData{
+		CSRFToken: "testtoken",
+		Active:    "health",
+		Page: settingsPageData{
+			CanaryTwitch: canaryView{Configured: true, OK: false, Detail: "beacon timeout", When: "1m ago"},
+			CanaryKick:   canaryView{Configured: true, OK: true, When: "30s ago"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("render canary_panel: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "canary-err") {
+		t.Errorf("canary_panel fragment: twitch failure should show canary-err class")
+	}
+	if !strings.Contains(out, "beacon timeout") {
+		t.Errorf("canary_panel fragment: twitch detail should be in output")
+	}
+	if !strings.Contains(out, "canary-ok") {
+		t.Errorf("canary_panel fragment: kick ok should show canary-ok class")
+	}
+	if !strings.Contains(out, `hx-post="/settings/canary/run"`) {
+		t.Errorf("canary_panel fragment: Run-now button missing")
+	}
+}
