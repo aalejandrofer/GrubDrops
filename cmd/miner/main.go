@@ -21,6 +21,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/auth/browser"
 	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
 	"github.com/aalejandrofer/grubdrops/internal/authcheck"
+	"github.com/aalejandrofer/grubdrops/internal/canary"
 	"github.com/aalejandrofer/grubdrops/internal/config"
 	"github.com/aalejandrofer/grubdrops/internal/discovery"
 	"github.com/aalejandrofer/grubdrops/internal/dockerctl"
@@ -177,11 +178,16 @@ func run() error {
 		"watch_mode", kickWatchMode,
 		"browser_watch", kickWatchMode == store.KickWatchModeBrowser && browserClient != nil)
 
+	// twitchBackend is the direct-HTTP backend used for the accrual canary
+	// probe (ProbeBeacon). It is always created even in browser-watch mode
+	// because BrowserBackend does not implement ProbeBeacon and the canary
+	// only needs the beacon transport, not the full watch stack.
+	twitchBackend := twitch.New()
 	if twitchBrowserEnabled && browserClient != nil {
 		registry.Register(twitch.NewBrowserBackend(browserClient))
 		logger.Info("twitch backend: BROWSER (via sidecar)")
 	} else {
-		registry.Register(twitch.New())
+		registry.Register(twitchBackend)
 		logger.Info("twitch backend: direct HTTP (Android device-code, no integrity header)")
 	}
 
@@ -199,12 +205,13 @@ func run() error {
 		// takes effect (previously the filter was hardcoded all-true, so
 		// PROGRESS fired regardless of the checkbox). State events are
 		// never sent to Discord (too noisy).
-		claim, progress, auth, errs := settingsStore.NotifyKinds(ctx)
+		claim, progress, auth, errs, canaryOn := settingsStore.NotifyKinds(ctx)
 		filter := &notify.VerbosityFilter{Allow: map[string]bool{
 			notify.EventClaim:    claim,
 			notify.EventProgress: progress,
 			notify.EventAuth:     auth,
 			notify.EventError:    errs,
+			notify.EventCanary:   canaryOn,
 			notify.EventState:    false,
 			// Manual "send test" always delivers, regardless of toggles.
 			notify.EventTest: true,
@@ -455,6 +462,49 @@ func run() error {
 	authInterval := parseDuration(os.Getenv("GRUB_AUTHCHECK_INTERVAL"), time.Hour)
 	go authChecker.Run(ctx, authInterval)
 
+	// Accrual canary: periodically probes the Twitch beacon and Kick WS
+	// transports so the operator sees a canary result on the dashboard
+	// without waiting for an actual campaign to be live. Borrows ONE shared
+	// session per platform (first enabled account) — the same pattern as
+	// internal/discovery. Channel + interval come from settingsStore; the
+	// GRUB_CANARY_INTERVAL env var overrides the DB value for ops use.
+	canarySource := canary.SessionSource(func(runCtx context.Context, plat string) (platform.Session, bool, error) {
+		accs, err := q.ListEnabledAccounts(runCtx)
+		if err != nil {
+			return platform.Session{}, false, err
+		}
+		for _, a := range accs {
+			if a.Platform != plat {
+				continue
+			}
+			s, ok, err := sessions.Get(runCtx, a.ID)
+			if err != nil {
+				return platform.Session{}, false, err
+			}
+			if !ok {
+				continue
+			}
+			s.AccountID = a.ID
+			return s, true, nil
+		}
+		return platform.Session{}, false, nil
+	})
+	canaryRunner := canary.NewRunnerWithSettingsReader(
+		q,
+		canarySource,
+		canary.NewTwitchProbe(twitchBackend, 5*time.Second),
+		canary.NewKickProbe(kickBackend, 45*time.Second),
+		func(runCtx context.Context) canary.RunnerSettings {
+			twCh, _ := settingsStore.CanaryTwitchChannel(runCtx)
+			kkCh, _ := settingsStore.CanaryKickChannel(runCtx)
+			return canary.RunnerSettings{TwitchChannel: twCh, KickChannel: kkCh}
+		},
+		notifier,
+	)
+	canaryIntervalSec, _ := settingsStore.CanaryIntervalSec(ctx)
+	canaryInterval := parseDuration(os.Getenv("GRUB_CANARY_INTERVAL"), time.Duration(canaryIntervalSec)*time.Second)
+	go canaryRunner.Run(ctx, canaryInterval)
+
 	// Avoid typed-nil-interface trap: only assign if the concrete pointer is non-nil.
 	var bc api.KickBrowserClient
 	if browserClient != nil {
@@ -479,6 +529,7 @@ func run() error {
 		OnSettingsUpdate:  onSettingsUpdate,
 		Notifier:          notifier,
 		AuthCheck:         authChecker.CheckAll,
+		RunCanary:         canaryRunner.RunOnce,
 		ReloadAccount:     reloadAccount,
 		TwitchBrowser:     twitchBrowserEnabled && browserClient != nil,
 		LogRing:           ring,

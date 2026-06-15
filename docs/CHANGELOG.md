@@ -4,6 +4,38 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-06-15
+
+### Added
+
+- **Accrual canary** — verifies watch-time still works without waiting for a live
+  drop. Standalone transport probes (Twitch watch-beacon, Kick WebSocket) run on a
+  schedule (default every 6h) against a configured always-live channel and report
+  whether accrual is healthy. Probes are independent of the watchers, so they never
+  disturb live mining. Note: this proves the transport is *accepted*, not that a
+  drop was *credited*.
+- **Settings → Health tab** — shows live canary results per platform (✓ / ✗ with
+  detail + "X ago", or "not configured"), a form to set the canary channels +
+  interval, and a **Run now** button that re-checks on demand. The read-only
+  **Status** panel (version, uptime, sidecars, …) now lives here too.
+- **Accrual-failure Discord alert** — opt-in "accrual canary" notification
+  (Settings → Notifications, default off) fires once when a platform transitions
+  OK → fail; it does not re-fire while still failing.
+- **CI regression guards** — replay/golden tests pin the Kick WS frame shapes and
+  the Twitch watch-beacon request shape, so a wire-format regression fails CI.
+
+### Changed
+
+- **Settings reorganised** — tabs reordered to General · Accounts · Drop Priority ·
+  Notifications · Security · Health · Experimental. Logging (log level + retention)
+  is now its own section on General, split out of Runtime. Section headers now use
+  the accent colour.
+
+### Fixed
+
+- **Console row alignment** — idle Twitch and Kick account rows now line up at the
+  same height (the per-account WS/Chrome pill no longer makes Kick rows taller).
+
 ## [1.1.0] — 2026-06-15
 
 ### Added

@@ -82,6 +82,9 @@ type Deps struct {
 	// AuthCheck runs the auth-health sweep across all accounts (manual
 	// "check auth now" button on /accounts). Nil disables the button.
 	AuthCheck func(context.Context)
+	// RunCanary triggers an immediate canary RunOnce. Nil means the
+	// Run-now button on the Health tab is still present but does nothing.
+	RunCanary func(context.Context) error
 	// ReloadAccount restarts a single account's watcher (targeted account
 	// edit) without reloading the whole roster.
 	ReloadAccount func(context.Context, string)
@@ -274,6 +277,7 @@ func NewRouter(d Deps) http.Handler {
 		onUpdate:    d.OnSettingsUpdate,
 		reload:      d.Reload,
 		notifier:    d.Notifier,
+		runCanary:   d.RunCanary,
 		startedAt:   startedAt,
 		logLevelEnv: d.LogLevelEnv,
 		browserURL:  d.BrowserURLDisplay,
@@ -290,6 +294,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/settings/notifications", settingsH.getNotifications)
 	authed.Get("/settings/security", settingsH.getSecurity)
 	authed.Get("/settings/experimental", settingsH.getExperimental)
+	authed.Get("/settings/health", settingsH.getHealth)
 	authed.Post("/settings", settingsH.postGeneral)
 	authed.Post("/settings/priority-mode", settingsH.postPriorityMode)
 	authed.Post("/settings/experimental", settingsH.postExperimental)
@@ -298,6 +303,9 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/settings/global-games/add", settingsH.globalGamesAdd)
 	authed.Post("/settings/password", settingsH.changePassword)
 	authed.Post("/settings/notify-test", settingsH.notifyTest)
+	authed.Post("/settings/canary", settingsH.canarySave)
+	authed.Post("/settings/canary/run", settingsH.canaryRun)
+	authed.Get("/settings/health/canary-panel", settingsH.canaryPanel)
 	authed.Get("/drops", dropsH.list)
 	authed.Get("/drops/campaigns/{id}/items", dropsH.items)
 	authed.Post("/drops/whitelist/add", dropsH.addWhitelist)

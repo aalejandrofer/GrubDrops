@@ -1,0 +1,27 @@
+[
+  {
+    "frame": {"type": "pong"},
+    "desc": "server pong — response to client ping",
+    "wantPong": true
+  },
+  {
+    "frame": {"type": "pong"},
+    "desc": "second pong — verifies idempotent detection",
+    "wantPong": true
+  },
+  {
+    "frame": {"type": "connected", "data": {"token": "eyJhbGciOiJIUzI1NiJ9.example"}},
+    "desc": "connection-established acknowledgement from server",
+    "wantPong": true
+  },
+  {
+    "frame": {"type": "channel_handshake_ack", "data": {"channelId": 1727361}},
+    "desc": "server ack of channel_handshake — should be tolerated (any inbound counts)",
+    "wantPong": true
+  },
+  {
+    "frame": {"type": "unknown_future_event", "data": {}},
+    "desc": "future/unknown frame type — must be tolerated without error",
+    "wantPong": true
+  }
+]

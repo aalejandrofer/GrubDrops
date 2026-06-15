@@ -14,6 +14,9 @@ const (
 	// verbosity filter always allows it so a test delivers regardless of
 	// which real kinds are toggled on.
 	EventTest Event = "test"
+	// EventCanary fires when the accrual canary transitions to a failed
+	// state (OK→fail or first-ever fail). fail→fail does NOT re-fire.
+	EventCanary Event = "canary"
 )
 
 type Notifier interface {

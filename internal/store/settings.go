@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
@@ -22,9 +23,13 @@ const (
 	keyNotifyProgress   = "settings:notify_progress"
 	keyNotifyAuth       = "settings:notify_auth"
 	keyNotifyError      = "settings:notify_error"
+	keyNotifyCanary     = "settings:notify_canary"
 	keyNotifyProgStep   = "settings:notify_progress_step_pct"
-	keyPriorityMode     = "settings:priority_mode"
-	keyKickWatchMode    = "settings:kick_watch_mode"
+	keyPriorityMode          = "settings:priority_mode"
+	keyKickWatchMode         = "settings:kick_watch_mode"
+	keyCanaryTwitchChannel   = "settings:canary_twitch_channel"
+	keyCanaryKickChannel     = "settings:canary_kick_channel"
+	keyCanaryIntervalSec     = "settings:canary_interval_sec"
 )
 
 // KickWatchMode selects how Kick watch-time is accrued.
@@ -214,8 +219,8 @@ func (s *Settings) SetProgressNotifyStepPct(ctx context.Context, pct int) error 
 }
 
 // NotifyKinds returns the boolean toggles for each Discord
-// notification category. Defaults: claim+error on, progress+auth off.
-func (s *Settings) NotifyKinds(ctx context.Context) (claim, progress, auth, errors bool) {
+// notification category. Defaults: claim+error on, progress+auth+canary off.
+func (s *Settings) NotifyKinds(ctx context.Context) (claim, progress, auth, errors, canary bool) {
 	get := func(k string, def bool) bool {
 		v, _ := s.getString(ctx, k)
 		if v == "" {
@@ -223,7 +228,7 @@ func (s *Settings) NotifyKinds(ctx context.Context) (claim, progress, auth, erro
 		}
 		return v == "1"
 	}
-	return get(keyNotifyClaim, true), get(keyNotifyProgress, false), get(keyNotifyAuth, false), get(keyNotifyError, true)
+	return get(keyNotifyClaim, true), get(keyNotifyProgress, false), get(keyNotifyAuth, false), get(keyNotifyError, true), get(keyNotifyCanary, false)
 }
 
 func (s *Settings) PriorityMode(ctx context.Context) (string, error) {
@@ -267,7 +272,7 @@ func (s *Settings) SetKickWatchMode(ctx context.Context, mode string) error {
 	return s.setString(ctx, keyKickWatchMode, mode)
 }
 
-func (s *Settings) SetNotifyKinds(ctx context.Context, claim, progress, auth, errors bool) error {
+func (s *Settings) SetNotifyKinds(ctx context.Context, claim, progress, auth, errors, canary bool) error {
 	b := func(v bool) string {
 		if v {
 			return "1"
@@ -283,5 +288,57 @@ func (s *Settings) SetNotifyKinds(ctx context.Context, claim, progress, auth, er
 	if err := s.setString(ctx, keyNotifyAuth, b(auth)); err != nil {
 		return err
 	}
-	return s.setString(ctx, keyNotifyError, b(errors))
+	if err := s.setString(ctx, keyNotifyError, b(errors)); err != nil {
+		return err
+	}
+	return s.setString(ctx, keyNotifyCanary, b(canary))
+}
+
+// CanaryTwitchChannel is the Twitch channel used for accrual canary checks.
+// Default "alveussanctuary" (always-live charity stream).
+func (s *Settings) CanaryTwitchChannel(ctx context.Context) (string, error) {
+	raw, err := s.getString(ctx, keyCanaryTwitchChannel)
+	if err != nil || raw == "" {
+		return "alveussanctuary", err
+	}
+	return raw, nil
+}
+
+func (s *Settings) SetCanaryTwitchChannel(ctx context.Context, v string) error {
+	return s.setString(ctx, keyCanaryTwitchChannel, strings.TrimSpace(v))
+}
+
+// CanaryKickChannel is the Kick channel used for accrual canary checks.
+// Default "" (empty = canary skipped for Kick).
+func (s *Settings) CanaryKickChannel(ctx context.Context) (string, error) {
+	return s.getString(ctx, keyCanaryKickChannel)
+}
+
+func (s *Settings) SetCanaryKickChannel(ctx context.Context, v string) error {
+	return s.setString(ctx, keyCanaryKickChannel, strings.TrimSpace(v))
+}
+
+// CanaryIntervalSec is how often the accrual canary runs, in seconds.
+// Default 21600 (6 hours). An explicit 0 disables the canary (Runner.Run
+// treats <=0 as disabled). Empty/unset → default; 0 → disabled; parse
+// error → default.
+func (s *Settings) CanaryIntervalSec(ctx context.Context) (int, error) {
+	raw, err := s.getString(ctx, keyCanaryIntervalSec)
+	if err != nil {
+		return 0, err
+	}
+	// Distinguish "never set" (empty) from an explicit 0 (operator disabled).
+	if raw == "" {
+		return 6 * 3600, nil
+	}
+	n, perr := strconv.Atoi(raw)
+	if perr != nil {
+		return 6 * 3600, nil
+	}
+	// n == 0 is intentional: the operator explicitly disabled the canary.
+	return n, nil
+}
+
+func (s *Settings) SetCanaryIntervalSec(ctx context.Context, n int) error {
+	return s.setString(ctx, keyCanaryIntervalSec, strconv.Itoa(n))
 }

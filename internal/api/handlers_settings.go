@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"runtime"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/aalejandrofer/grubdrops/internal/auth"
 	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
+	"github.com/aalejandrofer/grubdrops/internal/canary"
 	"github.com/aalejandrofer/grubdrops/internal/gameslug"
 	"github.com/aalejandrofer/grubdrops/internal/scheduler"
 	"github.com/aalejandrofer/grubdrops/internal/store"
@@ -31,6 +33,9 @@ type settingsDeps struct {
 	reload func(context.Context) error
 	// notifier is the live Discord notifier, for the "send test" button.
 	notifier Notifier
+	// runCanary triggers an immediate canary RunOnce. Nil disables the
+	// "Run now" button.
+	runCanary func(context.Context) error
 	// status fields surfaced read-only on the settings page
 	startedAt   time.Time
 	logLevelEnv string
@@ -67,6 +72,17 @@ type settingsOIDC struct {
 	AllowedGroups []string
 }
 
+// canaryView carries one platform's last accrual-canary result for the
+// Health tab template. Configured=false means no channel is set for that
+// platform; OK/Detail/When are only meaningful when Configured=true AND a
+// result has been stored (When != "").
+type canaryView struct {
+	Configured bool
+	OK         bool
+	Detail     string
+	When       string // "5m ago" / "" when no result stored yet
+}
+
 type settingsPageData struct {
 	GlobalDiscordWebhook string
 	NotifyAvatarURL      string
@@ -81,6 +97,7 @@ type settingsPageData struct {
 	NotifyProgress       bool
 	NotifyAuth           bool
 	NotifyError          bool
+	NotifyCanary         bool
 	ProgressNotifyStep   int // milestone % step for progress notifications (0 = off)
 
 	// Global priority list — used as fallback when an account has no
@@ -98,6 +115,16 @@ type settingsPageData struct {
 	Version    string
 	// Read-only SSO status
 	OIDC settingsOIDC
+
+	// Accrual-canary results + config (Health tab)
+	CanaryTwitch           canaryView
+	CanaryKick             canaryView
+	CanaryTwitchChannel    string
+	CanaryKickChannel      string
+	CanaryIntervalSec      int
+	// CanaryPanelAutoRefresh, when true, adds a one-shot hx-trigger on the
+	// canary panel so the browser re-fetches the panel ~8s after a run-now.
+	CanaryPanelAutoRefresh bool
 }
 
 func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active string) {
@@ -114,7 +141,7 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 	if d.sidecars != nil {
 		sidecars = d.sidecars()
 	}
-	nc, np, na, ne := d.s.NotifyKinds(ctx)
+	nc, np, na, ne, ncan := d.s.NotifyKinds(ctx)
 	progStep, _ := d.s.ProgressNotifyStepPct(ctx)
 
 	uptime := ""
@@ -151,6 +178,14 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 			AllowedGroups: d.oidc.AllowedGroups(),
 		}
 	}
+
+	// Accrual-canary: read channel settings + stored results for the Health tab.
+	canaryTwitchCh, _ := d.s.CanaryTwitchChannel(ctx)
+	canaryKickCh, _ := d.s.CanaryKickChannel(ctx)
+	canaryIntervalSec, _ := d.s.CanaryIntervalSec(ctx)
+	canaryTwitchView := buildCanaryView(ctx, d.q, "twitch", canaryTwitchCh)
+	canaryKickView := buildCanaryView(ctx, d.q, "kick", canaryKickCh)
+
 	render(w, d.t, "settings.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: active,
 		Page: settingsPageData{
@@ -169,6 +204,7 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 			NotifyProgress:       np,
 			NotifyAuth:           na,
 			NotifyError:          ne,
+			NotifyCanary:         ncan,
 			ProgressNotifyStep:   progStep,
 			Uptime:               uptime,
 			GoVersion:            runtime.Version(),
@@ -178,6 +214,11 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 			GitCommit:            d.gitCommit,
 			Version:              d.version,
 			OIDC:                 ssoStatus,
+			CanaryTwitch:         canaryTwitchView,
+			CanaryKick:           canaryKickView,
+			CanaryTwitchChannel:  canaryTwitchCh,
+			CanaryKickChannel:    canaryKickCh,
+			CanaryIntervalSec:    canaryIntervalSec,
 		},
 		Flash: flash,
 	})
@@ -195,6 +236,9 @@ func (d *settingsDeps) getSecurity(w http.ResponseWriter, r *http.Request) {
 }
 func (d *settingsDeps) getExperimental(w http.ResponseWriter, r *http.Request) {
 	d.renderTab(w, r, "experimental")
+}
+func (d *settingsDeps) getHealth(w http.ResponseWriter, r *http.Request) {
+	d.renderTab(w, r, "health")
 }
 
 // saveErr writes a 500 and reports true when err is non-nil, so a save
@@ -268,7 +312,7 @@ func (d *settingsDeps) postNotifications(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	on := func(name string) bool { return r.FormValue(name) == "1" }
-	if saveErr(w, d.s.SetNotifyKinds(ctx, on("notify_claim"), on("notify_progress"), on("notify_auth"), on("notify_error"))) {
+	if saveErr(w, d.s.SetNotifyKinds(ctx, on("notify_claim"), on("notify_progress"), on("notify_auth"), on("notify_error"), on("notify_canary"))) {
 		return
 	}
 	stepChanged := false
@@ -544,4 +588,123 @@ func (d *settingsDeps) applyReload(ctx context.Context) {
 	if err := d.reload(ctx); err != nil {
 		slog.Warn("settings: scheduler reload failed after whitelist change", "err", err)
 	}
+}
+
+// buildCanaryView loads a stored canary result and builds the template view
+// for one platform. channel="" → Configured=false; no stored result →
+// Configured=true with empty When.
+func buildCanaryView(ctx context.Context, q *gen.Queries, platform, channel string) canaryView {
+	if channel == "" {
+		return canaryView{Configured: false}
+	}
+	if q == nil {
+		return canaryView{Configured: true}
+	}
+	res, ok, _ := canary.LoadResult(ctx, q, platform)
+	if !ok {
+		return canaryView{Configured: true}
+	}
+	when := ""
+	if !res.CheckedAt.IsZero() {
+		when = formatRelative(time.Since(res.CheckedAt))
+	}
+	return canaryView{
+		Configured: true,
+		OK:         res.OK,
+		Detail:     res.Detail,
+		When:       when,
+	}
+}
+
+// formatRelative returns a human "5m ago" / "2h ago" string for a duration.
+func formatRelative(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds ago", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	}
+}
+
+// canarySave handles POST /settings/canary — saves the three canary settings.
+func (d *settingsDeps) canarySave(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if saveErr(w, d.s.SetCanaryTwitchChannel(ctx, r.FormValue("canary_twitch_channel"))) {
+		return
+	}
+	if saveErr(w, d.s.SetCanaryKickChannel(ctx, r.FormValue("canary_kick_channel"))) {
+		return
+	}
+	if v := r.FormValue("canary_interval_sec"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			http.Error(w, "canary_interval_sec must be a non-negative integer", http.StatusBadRequest)
+			return
+		}
+		if saveErr(w, d.s.SetCanaryIntervalSec(ctx, n)) {
+			return
+		}
+	}
+	d.sm.Put(ctx, "flash", "canary settings saved")
+	http.Redirect(w, r, "/settings/health", http.StatusSeeOther)
+}
+
+// canaryRun handles POST /settings/canary/run — launches the canary in a
+// background goroutine (detached from the request context so navigating away
+// does not cancel the in-flight probe/save) and immediately returns the
+// current stored results. An hx-trigger="load delay:8s" on the returned panel
+// causes a single follow-up GET /settings/health/canary-panel that picks up
+// the completed result.
+func (d *settingsDeps) canaryRun(w http.ResponseWriter, r *http.Request) {
+	if d.runCanary != nil {
+		// Detach from the request context: use a bounded background context so
+		// the probe completes and persists regardless of the HTTP connection
+		// lifecycle (proxy timeout, user navigation). 90s is enough for two
+		// Twitch beacons at 5s + the Kick window (45s) with headroom.
+		runCtx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		go func() {
+			defer cancel()
+			if err := d.runCanary(runCtx); err != nil {
+				slog.Warn("canary run-now failed", "err", err)
+			}
+		}()
+	}
+	// Return current (pre-run) results immediately. The panel carries an
+	// hx-trigger="load delay:8s" so the browser re-fetches it once after the
+	// background run has had a chance to complete.
+	d.renderCanaryPanel(w, r, true /* addAutoRefresh */)
+}
+
+// canaryPanel handles GET /settings/health/canary-panel — returns the
+// canary_panel partial rendered from the latest stored results. Used by the
+// auto-refresh triggered after a run-now.
+func (d *settingsDeps) canaryPanel(w http.ResponseWriter, r *http.Request) {
+	d.renderCanaryPanel(w, r, false /* no further auto-refresh */)
+}
+
+// renderCanaryPanel renders the canary_panel partial. When addAutoRefresh is
+// true the panel gets hx-trigger="load delay:8s" so the browser polls once
+// after a background run-now finishes.
+func (d *settingsDeps) renderCanaryPanel(w http.ResponseWriter, r *http.Request, addAutoRefresh bool) {
+	ctx := r.Context()
+	twitchCh, _ := d.s.CanaryTwitchChannel(ctx)
+	kickCh, _ := d.s.CanaryKickChannel(ctx)
+	intervalSec, _ := d.s.CanaryIntervalSec(ctx)
+	page := settingsPageData{
+		CanaryTwitch:          buildCanaryView(ctx, d.q, "twitch", twitchCh),
+		CanaryKick:            buildCanaryView(ctx, d.q, "kick", kickCh),
+		CanaryTwitchChannel:   twitchCh,
+		CanaryKickChannel:     kickCh,
+		CanaryIntervalSec:     intervalSec,
+		CanaryPanelAutoRefresh: addAutoRefresh,
+	}
+	renderPartial(w, d.t, "canary_panel", templateData{
+		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "health",
+		Page: page,
+	})
 }

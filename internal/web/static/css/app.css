@@ -878,7 +878,7 @@
   }
   .mining-col-twitch .account-row .av { border-color: rgba(176, 121, 240, 0.5); }
   .mining-col-kick   .account-row .av { border-color: rgba(83, 231, 164, 0.5); }
-  .account-row .who { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+  .account-row .who { display: flex; flex-direction: column; justify-content: center; line-height: 1.2; min-width: 0; min-height: 30px; }
   .account-row .who .login {
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
@@ -2336,7 +2336,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.18em;
-    color: var(--text);
+    color: var(--accent);
   }
   .section-h .meta {
     font-family: 'JetBrains Mono', monospace;

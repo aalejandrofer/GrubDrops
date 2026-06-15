@@ -45,6 +45,44 @@ func TestSettings_LogRetentionDays(t *testing.T) {
 	assert.Equal(t, 30, days)
 }
 
+func TestSettings_Canary(t *testing.T) {
+	db, err := Open(context.Background(), filepath.Join(t.TempDir(), "t.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	s := NewSettings(gen.New(db))
+	ctx := context.Background()
+
+	tw, err := s.CanaryTwitchChannel(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "alveussanctuary", tw)
+
+	kk, err := s.CanaryKickChannel(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "", kk)
+
+	iv, err := s.CanaryIntervalSec(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 6*3600, iv)
+
+	require.NoError(t, s.SetCanaryTwitchChannel(ctx, "somechannel"))
+	tw, _ = s.CanaryTwitchChannel(ctx)
+	assert.Equal(t, "somechannel", tw)
+
+	require.NoError(t, s.SetCanaryKickChannel(ctx, "kickchan"))
+	kk, _ = s.CanaryKickChannel(ctx)
+	assert.Equal(t, "kickchan", kk)
+
+	require.NoError(t, s.SetCanaryIntervalSec(ctx, 1800))
+	iv, _ = s.CanaryIntervalSec(ctx)
+	assert.Equal(t, 1800, iv)
+
+	// Explicit 0 disables the canary (Runner.Run treats <=0 as disabled).
+	require.NoError(t, s.SetCanaryIntervalSec(ctx, 0))
+	iv, err = s.CanaryIntervalSec(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, iv, "explicit 0 must disable (not default to 6h)")
+}
+
 func TestSettings_KickWatchMode(t *testing.T) {
 	db, err := Open(context.Background(), filepath.Join(t.TempDir(), "t.db"))
 	require.NoError(t, err)

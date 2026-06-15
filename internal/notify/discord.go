@@ -223,6 +223,8 @@ func titleFor(event Event) string {
 		return "Auth event"
 	case EventError:
 		return "Error"
+	case EventCanary:
+		return "Accrual canary failed"
 	default:
 		return event
 	}
@@ -234,7 +236,7 @@ func colorFor(event Event, fields map[string]any) int {
 	switch event {
 	case EventClaim, EventTest:
 		return 0x23A55A
-	case EventError:
+	case EventError, EventCanary:
 		return 0xE74C3C
 	}
 	if plat, _ := fields["platform"].(string); plat != "" {
