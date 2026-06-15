@@ -4,6 +4,14 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Added
+
+- **Twitch watch-beacon canary probe.** `internal/canary.TwitchProbe` sends two
+  minute-watched beacons against the Twitch GQL endpoint and reports whether
+  the transport is accepted (HTTP 2xx, no GQL errors). Entry point lives in
+  `internal/platform/twitch` as `(*Backend).ProbeBeacon`; the canary calls it
+  without duplicating beacon encoding logic.
+
 ## [1.1.0] — 2026-06-15
 
 ### Added
