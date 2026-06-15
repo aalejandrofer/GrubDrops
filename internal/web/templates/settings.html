@@ -242,7 +242,7 @@
         <div class="kvrow"><span class="k">uptime</span><span class="v">{{if .Uptime}}{{.Uptime}}{{else}}—{{end}}</span></div>
         <div class="kvrow"><span class="k">go</span><span class="v">{{.GoVersion}}</span></div>
         <div class="kvrow"><span class="k">goroutines</span><span class="v">{{.Goroutines}}</span></div>
-        <div class="kvrow"><span class="k">sidecars</span><span class="v">{{if .Sidecars}}{{range .Sidecars}}<div>{{.}}</div>{{end}}{{else if .BrowserURL}}{{.BrowserURL}}{{else}}—{{end}}</span></div>
+        <div class="kvrow"><span class="k">sidecars</span><span class="v">{{if .Sidecars}}{{range .Sidecars}}<div>{{.}}</div>{{end}}{{else}}none running{{end}}</span></div>
         {{if .GitCommit}}<div class="kvrow"><span class="k">commit</span><span class="v">{{.GitCommit}}</span></div>{{end}}
         {{if .Version}}<div class="kvrow"><span class="k">version</span><span class="v">{{.Version}}</span></div>{{end}}
       </div>

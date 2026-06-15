@@ -93,6 +93,37 @@ func (r *sidecarRegistry) register(accountID, username string) {
 	r.byAcc[accountID] = &sidecar{containerName: name, slug: slug}
 }
 
+// runningNames returns the addresses of registered sidecars whose container is
+// actually running, sorted. Unlike names() (which lists every registered
+// account), this reflects runtime so the Status page shows a sidecar only when
+// it's up — on-demand containers that are idle/never-started don't appear. With
+// no docker controller, nothing is considered running.
+func (r *sidecarRegistry) runningNames(ctx context.Context) []string {
+	if r.ctl == nil {
+		return nil
+	}
+	type ent struct{ name, addr string }
+	r.mu.Lock()
+	ents := make([]ent, 0, len(r.byAcc))
+	for _, s := range r.byAcc {
+		if s.containerName == "" {
+			continue
+		}
+		ents = append(ents, ent{s.containerName, fmt.Sprintf("%s:%d", s.containerName, r.port)})
+	}
+	r.mu.Unlock()
+	out := make([]string, 0, len(ents))
+	for _, e := range ents {
+		running, err := r.ctl.Running(ctx, e.name)
+		if err != nil || !running {
+			continue
+		}
+		out = append(out, e.addr)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // networks resolves the network(s) to attach auto-created sidecars to. Uses the
 // override when set, else self-detects (cached). Empty result means attach to
 // none (the default bridge) — fine when the miner runs on the default network.

@@ -108,8 +108,15 @@ func New(c *browser.Client, ctl dockerctl.Controller, template string, port int,
 }
 
 // SidecarAddrs returns each registered account's sidecar address
-// ("container:port"), sorted, for the read-only Status panel on /settings.
+// ("container:port"), sorted, regardless of runtime state.
 func (b *Backend) SidecarAddrs() []string { return b.sidecars.names() }
+
+// RunningSidecarAddrs returns only the sidecar addresses whose container is
+// actually running, for the read-only Status panel on /settings — on-demand
+// sidecars that are idle/never-started are omitted.
+func (b *Backend) RunningSidecarAddrs(ctx context.Context) []string {
+	return b.sidecars.runningNames(ctx)
+}
 
 // ActiveWatchPath reports the watch path an account is using right now:
 // "chrome" (IVS sidecar) or "ws" (pure WebSocket). In auto mode it reflects the

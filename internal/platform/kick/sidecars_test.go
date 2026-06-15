@@ -127,6 +127,35 @@ func (f *fakeCtl) removedNames() []string {
 	return append([]string(nil), f.removed...)
 }
 
+// TestRegistry_RunningNamesFiltersStopped verifies the status list shows only
+// sidecars that are actually running — registered-but-stopped (e.g. on-demand
+// containers idle/never-started) must NOT appear. names() returns all
+// registered; runningNames() must filter.
+func TestRegistry_RunningNamesFiltersStopped(t *testing.T) {
+	ctl := newFakeCtl()
+	ctl.run["grubdrops-browser-ttik3r"] = true   // running
+	ctl.run["grubdrops-browser-phluses"] = false // registered but stopped
+	reg := newSidecarRegistry(ctl, "grubdrops-browser-{slug}", 9090, time.Minute)
+	reg.register("acc1", "TTik3r")
+	reg.register("acc2", "Phluses")
+
+	got := reg.runningNames(context.Background())
+	want := []string{"grubdrops-browser-ttik3r:9090"}
+	if len(got) != 1 || got[0] != want[0] {
+		t.Fatalf("runningNames = %v, want %v (only the running sidecar)", got, want)
+	}
+}
+
+// TestRegistry_RunningNamesNilCtl: with no docker controller, report nothing
+// running rather than the full registered list.
+func TestRegistry_RunningNamesNilCtl(t *testing.T) {
+	reg := newSidecarRegistry(nil, "grubdrops-browser-{slug}", 9090, time.Minute)
+	reg.register("acc1", "TTik3r")
+	if got := reg.runningNames(context.Background()); len(got) != 0 {
+		t.Fatalf("runningNames with nil ctl = %v, want empty", got)
+	}
+}
+
 func TestRegistry_ReaperStopsIdleRunning(t *testing.T) {
 	ctl := newFakeCtl()
 	ctl.run["grubdrops-browser-ttik3r"] = true

@@ -132,6 +132,21 @@ Channels auto-discover from each campaign's game, so there's nothing else to
 configure. When the session goes stale (discovery logs Cloudflare or 401
 errors), re-export and paste again.
 
+## Pick what to mine
+
+GrubDrops is whitelist-driven: it only discovers and mines games you opt into,
+so **a fresh install mines nothing until you whitelist at least one game**. Until
+then `/drops` shows a prompt pointing you here, and accounts sit in a *"no games
+yet"* state (not an error).
+
+Add games either way — by name, no need to wait for a campaign to appear first:
+
+- **Global** (applies to every account): **Settings → Drop Priority → add by name**.
+- **Per account** (overrides the global list): **Accounts → pick an account → add by name**.
+
+Discovery starts crawling that game on the next tick and live campaigns show up
+on `/drops`.
+
 ## How it works
 
 - **Twitch:** device-code login, then GraphQL + PubSub to track progress and claim.

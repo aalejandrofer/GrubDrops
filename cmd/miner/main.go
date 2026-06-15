@@ -731,12 +731,19 @@ func startDiscovery(
 }
 
 // kickSidecarLister returns a closure the Status panel calls to list the
-// per-account Kick sidecar addresses, or nil when no Kick backend is wired.
+// RUNNING per-account Kick sidecar addresses, or nil when no Kick backend is
+// wired. Only running sidecars are shown — on-demand containers spin up when a
+// Kick watcher needs them, so an empty list when all watchers are idle is
+// correct, not a fault.
 func kickSidecarLister(b *kick.Backend) func() []string {
 	if b == nil {
 		return nil
 	}
-	return b.SidecarAddrs
+	return func() []string {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		return b.RunningSidecarAddrs(ctx)
+	}
 }
 
 // kickActivePathFn returns a closure the dashboard calls to tag each Kick row

@@ -4,6 +4,23 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.0.5] — 2026-06-15
+
+### Changed
+
+- **Settings → Status "sidecars" lists only running sidecars** — Kick browser
+  sidecars are created on demand, so the row previously showed every *registered*
+  account address even when no container was up (and fell back to the login
+  browser URL when empty), implying sidecars were running when none were. It now
+  reflects runtime: only actually-running sidecars appear, and the row reads
+  "none running" when idle.
+
+### Added
+
+- **README "Pick what to mine" section** — documents the whitelist-first step
+  (nothing mines until a game is whitelisted) and the by-name add paths, matching
+  the new cold-start prompt on `/drops`.
+
 ## [1.0.4] — 2026-06-15
 
 ### Added
