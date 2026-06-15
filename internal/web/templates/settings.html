@@ -213,6 +213,18 @@
             <span class="d">how often it <b>looks for new drops</b> — re-scans the campaign catalog</span>
             <span class="v"><input type="number" name="discovery_interval_min" value="{{.DiscoveryIntervalMin}}" min="1" max="1440"><span class="u">min</span></span>
           </div>
+        </div>
+        <div class="row" style="margin-top:18px;justify-content:flex-end;">
+          <button class="btn-linear" type="submit">Save →</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="settings-card">
+      <header class="section-h"><h3>Logging</h3><span class="meta">verbosity + retention</span></header>
+      <form method="post" action="/settings">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <div class="kvedit">
           <div class="row">
             <span class="k">log level</span>
             <span class="d">logging verbosity</span>
@@ -230,9 +242,7 @@
             <span class="v"><input type="number" name="log_retention_days" value="{{.LogRetentionDays}}" min="1" max="365"><span class="u">days</span></span>
           </div>
         </div>
-        <div class="row" style="margin-top:18px;justify-content:flex-end;">
-          <button class="btn-linear" type="submit">Save →</button>
-        </div>
+        <div class="row" style="margin-top:18px;justify-content:flex-end;"><button class="btn-linear" type="submit">Save →</button></div>
       </form>
     </section>
 
