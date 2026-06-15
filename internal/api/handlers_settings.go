@@ -117,11 +117,11 @@ type settingsPageData struct {
 	OIDC settingsOIDC
 
 	// Accrual-canary results + config (Health tab)
-	CanaryTwitch           canaryView
-	CanaryKick             canaryView
-	CanaryTwitchChannel    string
-	CanaryKickChannel      string
-	CanaryIntervalSec      int
+	CanaryTwitch        canaryView
+	CanaryKick          canaryView
+	CanaryTwitchChannel string
+	CanaryKickChannel   string
+	CanaryIntervalSec   int
 	// CanaryPanelAutoRefresh, when true, adds a one-shot hx-trigger on the
 	// canary panel so the browser re-fetches the panel ~8s after a run-now.
 	CanaryPanelAutoRefresh bool
@@ -696,11 +696,11 @@ func (d *settingsDeps) renderCanaryPanel(w http.ResponseWriter, r *http.Request,
 	kickCh, _ := d.s.CanaryKickChannel(ctx)
 	intervalSec, _ := d.s.CanaryIntervalSec(ctx)
 	page := settingsPageData{
-		CanaryTwitch:          buildCanaryView(ctx, d.q, "twitch", twitchCh),
-		CanaryKick:            buildCanaryView(ctx, d.q, "kick", kickCh),
-		CanaryTwitchChannel:   twitchCh,
-		CanaryKickChannel:     kickCh,
-		CanaryIntervalSec:     intervalSec,
+		CanaryTwitch:           buildCanaryView(ctx, d.q, "twitch", twitchCh),
+		CanaryKick:             buildCanaryView(ctx, d.q, "kick", kickCh),
+		CanaryTwitchChannel:    twitchCh,
+		CanaryKickChannel:      kickCh,
+		CanaryIntervalSec:      intervalSec,
 		CanaryPanelAutoRefresh: addAutoRefresh,
 	}
 	renderPartial(w, d.t, "canary_panel", templateData{

@@ -65,13 +65,13 @@ type Runner struct {
 // notifier may be nil; when nil, no Discord alerts are sent.
 func NewRunner(q *gen.Queries, source SessionSource, twitch, kick probe, settings RunnerSettings, notifier notify.Notifier) *Runner {
 	return &Runner{
-		q:      q,
-		source: source,
-		twitchProbe: twitch,
-		kickProbe:   kick,
+		q:              q,
+		source:         source,
+		twitchProbe:    twitch,
+		kickProbe:      kick,
 		settingsReader: func(_ context.Context) RunnerSettings { return settings },
-		notifier: notifier,
-		log:    slog.Default().With("component", "canary"),
+		notifier:       notifier,
+		log:            slog.Default().With("component", "canary"),
 	}
 }
 

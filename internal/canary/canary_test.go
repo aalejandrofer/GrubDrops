@@ -19,8 +19,8 @@ import (
 
 // fakeProbe records the calls made to it and returns a pre-configured result.
 type fakeProbe struct {
-	calls   int
-	result  canary.Result
+	calls  int
+	result canary.Result
 }
 
 func (f *fakeProbe) Run(_ context.Context, _ platform.Session, _ string) canary.Result {
@@ -42,8 +42,8 @@ func (d *dynamicProbe) Run(_ context.Context, _ platform.Session, _ string) cana
 
 // spyNotifier records every Notify call.
 type spyNotifier struct {
-	mu     sync.Mutex
-	calls  []spyCall
+	mu    sync.Mutex
+	calls []spyCall
 }
 
 type spyCall struct {
@@ -380,4 +380,3 @@ func TestNotify_FiresBeforeSave(t *testing.T) {
 		assert.Equal(t, "boom", call.fields["detail"])
 	}
 }
-

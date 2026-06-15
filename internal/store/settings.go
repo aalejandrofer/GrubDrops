@@ -11,25 +11,25 @@ import (
 )
 
 const (
-	keyGlobalDiscord    = "settings:discord_webhook"
-	keyNotifyAvatarURL  = "settings:notify_avatar_url"
-	keyLogRetention     = "settings:log_retention_days"
-	keyLogLevel         = "settings:log_level"
-	keyTickIntervalSec  = "settings:tick_interval_sec"
-	keyTickIntervalMs   = "settings:tick_interval_ms" // legacy; migrated to tick_interval_sec
-	keyDiscoveryIntvMin = "settings:discovery_interval_min"
-	keyDiscoveryIntvSec = "settings:discovery_interval_sec" // legacy; migrated to discovery_interval_min
-	keyNotifyClaim      = "settings:notify_claim"
-	keyNotifyProgress   = "settings:notify_progress"
-	keyNotifyAuth       = "settings:notify_auth"
-	keyNotifyError      = "settings:notify_error"
-	keyNotifyCanary     = "settings:notify_canary"
-	keyNotifyProgStep   = "settings:notify_progress_step_pct"
-	keyPriorityMode          = "settings:priority_mode"
-	keyKickWatchMode         = "settings:kick_watch_mode"
-	keyCanaryTwitchChannel   = "settings:canary_twitch_channel"
-	keyCanaryKickChannel     = "settings:canary_kick_channel"
-	keyCanaryIntervalSec     = "settings:canary_interval_sec"
+	keyGlobalDiscord       = "settings:discord_webhook"
+	keyNotifyAvatarURL     = "settings:notify_avatar_url"
+	keyLogRetention        = "settings:log_retention_days"
+	keyLogLevel            = "settings:log_level"
+	keyTickIntervalSec     = "settings:tick_interval_sec"
+	keyTickIntervalMs      = "settings:tick_interval_ms" // legacy; migrated to tick_interval_sec
+	keyDiscoveryIntvMin    = "settings:discovery_interval_min"
+	keyDiscoveryIntvSec    = "settings:discovery_interval_sec" // legacy; migrated to discovery_interval_min
+	keyNotifyClaim         = "settings:notify_claim"
+	keyNotifyProgress      = "settings:notify_progress"
+	keyNotifyAuth          = "settings:notify_auth"
+	keyNotifyError         = "settings:notify_error"
+	keyNotifyCanary        = "settings:notify_canary"
+	keyNotifyProgStep      = "settings:notify_progress_step_pct"
+	keyPriorityMode        = "settings:priority_mode"
+	keyKickWatchMode       = "settings:kick_watch_mode"
+	keyCanaryTwitchChannel = "settings:canary_twitch_channel"
+	keyCanaryKickChannel   = "settings:canary_kick_channel"
+	keyCanaryIntervalSec   = "settings:canary_interval_sec"
 )
 
 // KickWatchMode selects how Kick watch-time is accrued.
