@@ -335,3 +335,49 @@ func TestNotify_Recovery_NoSpuriousFail(t *testing.T) {
 	require.NoError(t, r.RunOnce(ctx)) // fail again → notify (count=2)
 	assert.Equal(t, 2, spy.count(), "re-enter fail: another notification")
 }
+
+// TestNotify_FiresBeforeSave verifies that the Discord alert fires on an
+// OK→fail transition even when SaveResult fails (closed DB). This guards the
+// reorder fix: notify must run BEFORE persist so a DB error on the transition
+// tick never permanently suppresses the alert.
+func TestNotify_FiresBeforeSave(t *testing.T) {
+	ctx := context.Background()
+	spy := &spyNotifier{}
+
+	// Open a real DB, do a first OK run so prev.OK=true is stored, then close
+	// the DB so the second run's SaveResult fails.
+	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "t.db"))
+	require.NoError(t, err)
+	q := gen.New(db)
+
+	probe := &dynamicProbe{
+		results: []canary.Result{
+			{OK: true, Detail: "ok"},    // run 1: persisted normally
+			{OK: false, Detail: "boom"}, // run 2: save will fail (DB closed)
+		},
+	}
+	r := canary.NewRunner(q, alwaysSession, probe, &fakeProbe{}, canary.RunnerSettings{
+		TwitchChannel: "chan",
+	}, spy)
+
+	// First run: OK — should persist fine and not notify.
+	require.NoError(t, r.RunOnce(ctx))
+	assert.Equal(t, 0, spy.count(), "OK result must not notify")
+
+	// Close the DB to force SaveResult to fail on the next run.
+	require.NoError(t, db.Close())
+
+	// Second run: fail — SaveResult will error (closed DB), but notify must
+	// still fire because the alert is sent before the persist attempt.
+	_ = r.RunOnce(ctx) // error return is expected/ignored (save failed)
+	assert.Equal(t, 1, spy.count(), "notify must fire on OK→fail even when SaveResult fails")
+
+	// Verify the correct event and fields were sent.
+	if spy.count() > 0 {
+		call := spy.calls[0]
+		assert.Equal(t, notify.EventCanary, call.event)
+		assert.Equal(t, "twitch", call.fields["platform"])
+		assert.Equal(t, "boom", call.fields["detail"])
+	}
+}
+

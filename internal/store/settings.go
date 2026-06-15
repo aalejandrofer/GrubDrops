@@ -319,19 +319,23 @@ func (s *Settings) SetCanaryKickChannel(ctx context.Context, v string) error {
 }
 
 // CanaryIntervalSec is how often the accrual canary runs, in seconds.
-// Default 21600 (6 hours).
+// Default 21600 (6 hours). An explicit 0 disables the canary (Runner.Run
+// treats <=0 as disabled). Empty/unset → default; 0 → disabled; parse
+// error → default.
 func (s *Settings) CanaryIntervalSec(ctx context.Context) (int, error) {
 	raw, err := s.getString(ctx, keyCanaryIntervalSec)
 	if err != nil {
 		return 0, err
 	}
+	// Distinguish "never set" (empty) from an explicit 0 (operator disabled).
 	if raw == "" {
 		return 6 * 3600, nil
 	}
-	n, err := strconv.Atoi(raw)
-	if err != nil || n == 0 {
+	n, perr := strconv.Atoi(raw)
+	if perr != nil {
 		return 6 * 3600, nil
 	}
+	// n == 0 is intentional: the operator explicitly disabled the canary.
 	return n, nil
 }
 

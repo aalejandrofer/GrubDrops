@@ -492,7 +492,7 @@ func run() error {
 	canaryRunner := canary.NewRunnerWithSettingsReader(
 		q,
 		canarySource,
-		canary.NewTwitchProbe(twitchBackend, 60*time.Second),
+		canary.NewTwitchProbe(twitchBackend, 5*time.Second),
 		canary.NewKickProbe(kickBackend, 45*time.Second),
 		func(runCtx context.Context) canary.RunnerSettings {
 			twCh, _ := settingsStore.CanaryTwitchChannel(runCtx)

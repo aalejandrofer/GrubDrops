@@ -117,11 +117,14 @@ type settingsPageData struct {
 	OIDC settingsOIDC
 
 	// Accrual-canary results + config (Health tab)
-	CanaryTwitch        canaryView
-	CanaryKick          canaryView
-	CanaryTwitchChannel string
-	CanaryKickChannel   string
-	CanaryIntervalSec   int
+	CanaryTwitch           canaryView
+	CanaryKick             canaryView
+	CanaryTwitchChannel    string
+	CanaryKickChannel      string
+	CanaryIntervalSec      int
+	// CanaryPanelAutoRefresh, when true, adds a one-shot hx-trigger on the
+	// canary panel so the browser re-fetches the panel ~8s after a run-now.
+	CanaryPanelAutoRefresh bool
 }
 
 func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active string) {
@@ -651,25 +654,54 @@ func (d *settingsDeps) canarySave(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/settings/health", http.StatusSeeOther)
 }
 
-// canaryRun handles POST /settings/canary/run — runs the canary immediately
-// then returns a fresh #canary-panel HTMX fragment.
+// canaryRun handles POST /settings/canary/run — launches the canary in a
+// background goroutine (detached from the request context so navigating away
+// does not cancel the in-flight probe/save) and immediately returns the
+// current stored results. An hx-trigger="load delay:8s" on the returned panel
+// causes a single follow-up GET /settings/health/canary-panel that picks up
+// the completed result.
 func (d *settingsDeps) canaryRun(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
 	if d.runCanary != nil {
-		if err := d.runCanary(ctx); err != nil {
-			slog.Warn("canary run-now failed", "err", err)
-		}
+		// Detach from the request context: use a bounded background context so
+		// the probe completes and persists regardless of the HTTP connection
+		// lifecycle (proxy timeout, user navigation). 90s is enough for two
+		// Twitch beacons at 5s + the Kick window (45s) with headroom.
+		runCtx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		go func() {
+			defer cancel()
+			if err := d.runCanary(runCtx); err != nil {
+				slog.Warn("canary run-now failed", "err", err)
+			}
+		}()
 	}
-	// Re-read fresh results and render just the canary panel partial.
+	// Return current (pre-run) results immediately. The panel carries an
+	// hx-trigger="load delay:8s" so the browser re-fetches it once after the
+	// background run has had a chance to complete.
+	d.renderCanaryPanel(w, r, true /* addAutoRefresh */)
+}
+
+// canaryPanel handles GET /settings/health/canary-panel — returns the
+// canary_panel partial rendered from the latest stored results. Used by the
+// auto-refresh triggered after a run-now.
+func (d *settingsDeps) canaryPanel(w http.ResponseWriter, r *http.Request) {
+	d.renderCanaryPanel(w, r, false /* no further auto-refresh */)
+}
+
+// renderCanaryPanel renders the canary_panel partial. When addAutoRefresh is
+// true the panel gets hx-trigger="load delay:8s" so the browser polls once
+// after a background run-now finishes.
+func (d *settingsDeps) renderCanaryPanel(w http.ResponseWriter, r *http.Request, addAutoRefresh bool) {
+	ctx := r.Context()
 	twitchCh, _ := d.s.CanaryTwitchChannel(ctx)
 	kickCh, _ := d.s.CanaryKickChannel(ctx)
 	intervalSec, _ := d.s.CanaryIntervalSec(ctx)
 	page := settingsPageData{
-		CanaryTwitch:        buildCanaryView(ctx, d.q, "twitch", twitchCh),
-		CanaryKick:          buildCanaryView(ctx, d.q, "kick", kickCh),
-		CanaryTwitchChannel: twitchCh,
-		CanaryKickChannel:   kickCh,
-		CanaryIntervalSec:   intervalSec,
+		CanaryTwitch:          buildCanaryView(ctx, d.q, "twitch", twitchCh),
+		CanaryKick:            buildCanaryView(ctx, d.q, "kick", kickCh),
+		CanaryTwitchChannel:   twitchCh,
+		CanaryKickChannel:     kickCh,
+		CanaryIntervalSec:     intervalSec,
+		CanaryPanelAutoRefresh: addAutoRefresh,
 	}
 	renderPartial(w, d.t, "canary_panel", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "health",

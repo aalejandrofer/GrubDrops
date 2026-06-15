@@ -1,6 +1,12 @@
 {{define "canary_panel"}}
 {{/* . = templateData; .Page = settingsPageData; .CSRFToken = CSRF token */}}
-<div class="kvlist" id="canary-panel">
+<div class="kvlist" id="canary-panel"
+  {{- with .Page}}{{if .CanaryPanelAutoRefresh}}
+  hx-get="/settings/health/canary-panel"
+  hx-trigger="load delay:8s"
+  hx-target="#canary-panel"
+  hx-swap="outerHTML"
+  {{- end}}{{end}}>
   {{with .Page}}
   <div class="kvrow">
     <span class="k">twitch</span>

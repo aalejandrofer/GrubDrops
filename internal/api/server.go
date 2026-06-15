@@ -305,6 +305,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/settings/notify-test", settingsH.notifyTest)
 	authed.Post("/settings/canary", settingsH.canarySave)
 	authed.Post("/settings/canary/run", settingsH.canaryRun)
+	authed.Get("/settings/health/canary-panel", settingsH.canaryPanel)
 	authed.Get("/drops", dropsH.list)
 	authed.Get("/drops/campaigns/{id}/items", dropsH.items)
 	authed.Post("/drops/whitelist/add", dropsH.addWhitelist)

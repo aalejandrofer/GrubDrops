@@ -75,6 +75,12 @@ func TestSettings_Canary(t *testing.T) {
 	require.NoError(t, s.SetCanaryIntervalSec(ctx, 1800))
 	iv, _ = s.CanaryIntervalSec(ctx)
 	assert.Equal(t, 1800, iv)
+
+	// Explicit 0 disables the canary (Runner.Run treats <=0 as disabled).
+	require.NoError(t, s.SetCanaryIntervalSec(ctx, 0))
+	iv, err = s.CanaryIntervalSec(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, iv, "explicit 0 must disable (not default to 6h)")
 }
 
 func TestSettings_KickWatchMode(t *testing.T) {

@@ -193,6 +193,9 @@ func (b *Backend) ProbeWS(ctx context.Context, sess platform.Session, channel st
 	}
 
 	spy := newProbingConn(rawConn)
+	// NOTE: spy.Close() is called explicitly below, BEFORE snapshot(), to
+	// ensure the pumpWS reader goroutine has fully drained before we read
+	// pongSeen. The defer here is a safety net for early-return paths only.
 	defer spy.Close()
 
 	// Use synthetic channel IDs — the probe tests transport, not real channel
@@ -213,6 +216,14 @@ func (b *Backend) ProbeWS(ctx context.Context, sess platform.Session, channel st
 
 	// pumpWS returns nil on ctx cancel — that is the expected exit path here.
 	_ = pumpWS(pumpCtx, spy, probeChannelID, probeLivestreamID, probeHandshakeEvery, window+time.Second)
+
+	// Close the connection BEFORE reading the snapshot so that the pumpWS
+	// inbound reader goroutine has settled. Without this, a pong arriving
+	// after snapshot() but before the deferred Close is counted as lost →
+	// false "no inbound frame" negative. Closing the conn causes the reader
+	// to exit (with an error), ensuring any in-flight pong is already
+	// recorded in pongSeen before snapshot() reads it.
+	_ = spy.Close()
 
 	hsSent, pongSeen := spy.snapshot()
 

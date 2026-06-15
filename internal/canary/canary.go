@@ -132,13 +132,9 @@ func (r *Runner) runProbe(ctx context.Context, plat, channel string, p probe) {
 	prev, hasPrev, _ := LoadResult(ctx, r.q, plat)
 
 	result := p.Run(ctx, sess, channel)
-	if err := SaveResult(ctx, r.q, plat, result); err != nil {
-		r.log.Warn("canary: persist result failed", "platform", plat, "err", err)
-		return
-	}
-	r.log.Info("canary: probe complete", "platform", plat, "ok", result.OK, "detail", result.Detail)
 
-	// Notify on entering the failed state:
+	// Notify on entering the failed state BEFORE persisting, so a DB error on
+	// the transition tick does not suppress the Discord alert.
 	//   - no previous result AND new is fail (first-ever fail), OR
 	//   - previous was OK AND new is fail (OK→fail transition).
 	// fail→fail: no re-notify (prevents noise while the problem persists).
@@ -154,6 +150,12 @@ func (r *Runner) runProbe(ctx context.Context, plat, channel string, p probe) {
 			}
 		}
 	}
+
+	if err := SaveResult(ctx, r.q, plat, result); err != nil {
+		r.log.Warn("canary: persist result failed", "platform", plat, "err", err)
+		return
+	}
+	r.log.Info("canary: probe complete", "platform", plat, "ok", result.OK, "detail", result.Detail)
 }
 
 // Run probes once immediately (to surface issues without waiting for the first
