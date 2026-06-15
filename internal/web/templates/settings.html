@@ -259,9 +259,9 @@
             <span class="k">Kick watch path</span>
             <span class="d">how Kick accrues watch-time · <b>Chrome</b> = IVS video in the sidecar (verified) · <b>WS</b> = pure WebSocket, no browser (experimental — may earn nothing until the WS path is proven) · <b>WS, fall back to Chrome</b> = try WS, switch to Chrome if it stops accruing · applies on reload</span>
             <span class="v"><select name="kick_watch_mode">
-              <option value="browser" {{if eq .KickWatchMode "browser"}}selected{{end}}>Chrome sidecar (default)</option>
+              <option value="auto" {{if eq .KickWatchMode "auto"}}selected{{end}}>WS, fall back to Chrome (default)</option>
+              <option value="browser" {{if eq .KickWatchMode "browser"}}selected{{end}}>Chrome sidecar (verified)</option>
               <option value="ws" {{if eq .KickWatchMode "ws"}}selected{{end}}>WebSocket only (experimental)</option>
-              <option value="auto" {{if eq .KickWatchMode "auto"}}selected{{end}}>WS, fall back to Chrome (experimental)</option>
             </select></span>
           </div>
         </div>

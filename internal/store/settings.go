@@ -244,23 +244,25 @@ func (s *Settings) SetPriorityMode(ctx context.Context, mode string) error {
 	return s.setString(ctx, keyPriorityMode, mode)
 }
 
-// KickWatchMode returns the configured Kick watch path ("browser" default,
-// or "ws"). Read at miner startup (reload required to apply) and surfaced on
-// the dashboard so the operator can see which path is active.
+// KickWatchMode returns the configured Kick watch path. Default is "auto"
+// (WS first, Chrome sidecar fallback): WS needs no Docker so a fresh install
+// mines Kick on any Pi out of the box, and auto falls back to the verified
+// Chrome IVS path if WS stops accruing. Read at miner startup (reload required
+// to apply) and surfaced on the dashboard so the operator can see the active path.
 func (s *Settings) KickWatchMode(ctx context.Context) (string, error) {
 	v, err := s.getString(ctx, keyKickWatchMode)
 	if err != nil || v == "" {
-		return KickWatchModeBrowser, err
+		return KickWatchModeAuto, err
 	}
 	if v != KickWatchModeBrowser && v != KickWatchModeWS && v != KickWatchModeAuto {
-		return KickWatchModeBrowser, nil
+		return KickWatchModeAuto, nil
 	}
 	return v, nil
 }
 
 func (s *Settings) SetKickWatchMode(ctx context.Context, mode string) error {
 	if mode != KickWatchModeBrowser && mode != KickWatchModeWS && mode != KickWatchModeAuto {
-		mode = KickWatchModeBrowser
+		mode = KickWatchModeAuto
 	}
 	return s.setString(ctx, keyKickWatchMode, mode)
 }

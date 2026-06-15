@@ -36,7 +36,7 @@ image and a single SQLite file.
 - 🔗 **It knows about account links** (Krafton, Embark, …) with a per-account "I've linked it" override.
 - 🖥️ **A live console**: lifetime stats, current mining, drops catalog, claim history.
 - 🔔 **Discord notifications**, toggle per event type.
-- 🧪 **Experimental browserless Kick** (Settings → Experimental): a WebSocket-only watch mode that drops the Chrome sidecar entirely — no Docker-for-Kick, light enough for any Pi. Opt-in; may stop accruing.
+- 🧪 **Browserless Kick by default**: Kick now starts on a WebSocket watch path (no Chrome, no Docker — light enough for any Pi) and **falls back to the Chrome sidecar automatically** if WS stops accruing. Force a specific path in Settings → Experimental.
 - 🔒 **Your credentials stay yours**: Twitch uses the official device-code login, Kick uses a session you export. No passwords sent to GrubDrops.
 
 ## Getting started
@@ -58,7 +58,7 @@ Twitch is direct HTTP — a plain Go binary mines it anywhere, no Docker. Kick w
 
 > **Raspberry Pi / ARM:** both images ship `arm64`; the sidecar uses Debian Chromium (keeps the H.264/AAC codecs for Kick's IVS stream). Heavy — ~4 GB RAM each.
 >
-> **Browserless Kick (experimental):** Settings → Experimental → *WebSocket only* drops the sidecar — no Chrome, no Docker-for-Kick, fine on any Pi. May stop accruing.
+> **Kick watch path:** defaults to *WS, fall back to Chrome* — tries the browserless WebSocket path first (no Docker) and switches to the Chrome sidecar only if WS stops accruing. Keep the docker-socket mount so the fallback works; force *Chrome sidecar* or *WebSocket only* in Settings → Experimental.
 
 ### Supported platforms
 

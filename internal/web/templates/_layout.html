@@ -4,6 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{block "title" .}}GrubDrops{{end}}</title>
+<script>
+  // Set the saved theme on <html> BEFORE the stylesheet paints, so there's no
+  // flash of the wrong theme (FOUC). Defaults to dark (the original look).
+  (function () {
+    try {
+      var t = localStorage.getItem('theme');
+      document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
+    } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+  })();
+</script>
 <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png">
@@ -34,6 +44,24 @@
       el.textContent = pad(n.getUTCHours()) + ':' + pad(n.getUTCMinutes()) + ':' + pad(n.getUTCSeconds()) + ' UTC';
     }
     tick(); setInterval(tick, 1000);
+  })();
+</script>
+<script>
+  // Theme toggle: flip data-theme on <html>, persist to localStorage, update the
+  // button glyph. The pre-paint head script applies the saved value on load.
+  (function () {
+    var btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    function glyph() {
+      return document.documentElement.getAttribute('data-theme') === 'light' ? '☾' : '☀';
+    }
+    btn.textContent = glyph();
+    btn.addEventListener('click', function () {
+      var next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('theme', next); } catch (e) {}
+      btn.textContent = glyph();
+    });
   })();
 </script>
 </body>

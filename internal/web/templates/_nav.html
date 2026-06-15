@@ -13,6 +13,7 @@
       <a href="/settings" class="{{if or (eq .Active "settings") (eq .Active "accounts")}}active{{end}}">Settings</a>
     </nav>
     <div class="user">
+      <button type="button" class="theme-toggle" id="theme-toggle" title="Toggle light / dark" aria-label="Toggle light or dark theme">☀</button>
       <span class="clock">— UTC</span>
       <span class="pulse" title="live"></span>
       <a class="gh-link" href="https://github.com/aalejandrofer/grubdrops" target="_blank" rel="noopener" title="GitHub" aria-label="GitHub repository">

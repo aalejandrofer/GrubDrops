@@ -4,6 +4,23 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-06-15
+
+### Added
+
+- **Light theme + toggle.** A ☀/☾ toggle in the top bar switches between the
+  original dark theme and a new warm light theme; the choice persists
+  (localStorage) and is applied before paint, so there's no flash on reload.
+
+### Changed
+
+- **Kick defaults to WS-first (WS, fall back to Chrome).** Fresh installs now
+  start on the browserless WebSocket watch path — no Docker/Chrome needed to mine
+  Kick on a Pi — and fall back to the Chrome IVS sidecar automatically if WS stops
+  accruing. Was `browser` (Chrome required) by default. Existing installs keep
+  their saved mode; only new installs get the new default. Override in
+  Settings → Experimental.
+
 ## [1.0.5] — 2026-06-15
 
 ### Changed

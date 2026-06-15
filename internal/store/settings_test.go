@@ -53,20 +53,28 @@ func TestSettings_KickWatchMode(t *testing.T) {
 	s := NewSettings(gen.New(db))
 	ctx := context.Background()
 
-	// Default is the verified browser path.
+	// Default is auto (WS first, Chrome fallback): WS needs no Docker so a fresh
+	// install mines Kick on any Pi out of the box, and auto falls back to the
+	// Chrome sidecar if WS stops accruing.
 	mode, err := s.KickWatchMode(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, KickWatchModeAuto, mode)
+
+	// Round-trips the explicit browser path.
+	require.NoError(t, s.SetKickWatchMode(ctx, KickWatchModeBrowser))
+	mode, err = s.KickWatchMode(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, KickWatchModeBrowser, mode)
 
-	// Round-trips the experimental WS path.
+	// Round-trips the experimental WS-only path.
 	require.NoError(t, s.SetKickWatchMode(ctx, KickWatchModeWS))
 	mode, err = s.KickWatchMode(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, KickWatchModeWS, mode)
 
-	// Unknown values are coerced back to the safe default on both write…
+	// Unknown values are coerced back to the auto default on write…
 	require.NoError(t, s.SetKickWatchMode(ctx, "garbage"))
 	mode, err = s.KickWatchMode(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, KickWatchModeBrowser, mode)
+	assert.Equal(t, KickWatchModeAuto, mode)
 }
