@@ -4,6 +4,8 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.0.4] — 2026-06-15
+
 ### Added
 
 - **Experimental settings tab** — the Kick watch-path toggle moved out of General
