@@ -197,15 +197,31 @@ func (d *settingsDeps) getExperimental(w http.ResponseWriter, r *http.Request) {
 	d.renderTab(w, r, "experimental")
 }
 
+// saveErr writes a 500 and reports true when err is non-nil, so a save
+// handler can abort BEFORE flashing "saved". Without this, settings writes
+// that fail (e.g. a DB error) were swallowed and the UI falsely reported
+// success — the user's "Save successful but nothing persisted" bug.
+func saveErr(w http.ResponseWriter, err error) bool {
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return true
+	}
+	return false
+}
+
 // postGeneral saves the General tab: tick/discovery intervals + logging.
 func (d *settingsDeps) postGeneral(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if v := r.FormValue("log_retention_days"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
-			_ = d.s.SetLogRetentionDays(ctx, n)
+			if saveErr(w, d.s.SetLogRetentionDays(ctx, n)) {
+				return
+			}
 		}
 	}
-	_ = d.s.SetLogLevel(ctx, r.FormValue("log_level"))
+	if saveErr(w, d.s.SetLogLevel(ctx, r.FormValue("log_level"))) {
+		return
+	}
 
 	intervalsChanged := false
 	if v := r.FormValue("tick_interval_sec"); v != "" {
@@ -213,7 +229,9 @@ func (d *settingsDeps) postGeneral(w http.ResponseWriter, r *http.Request) {
 			if cur, _ := d.s.TickIntervalSec(ctx); cur != n {
 				intervalsChanged = true
 			}
-			_ = d.s.SetTickIntervalSec(ctx, n)
+			if saveErr(w, d.s.SetTickIntervalSec(ctx, n)) {
+				return
+			}
 		}
 	}
 	if v := r.FormValue("discovery_interval_min"); v != "" {
@@ -221,7 +239,9 @@ func (d *settingsDeps) postGeneral(w http.ResponseWriter, r *http.Request) {
 			if cur, _ := d.s.DiscoveryIntervalMin(ctx); cur != n {
 				intervalsChanged = true
 			}
-			_ = d.s.SetDiscoveryIntervalMin(ctx, n)
+			if saveErr(w, d.s.SetDiscoveryIntervalMin(ctx, n)) {
+				return
+			}
 		}
 	}
 	// heartbeat_interval_sec intentionally not accepted: HeartbeatInterval is
@@ -244,16 +264,22 @@ func (d *settingsDeps) postNotifications(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	_ = d.s.SetNotifyAvatarURL(ctx, strings.TrimSpace(r.FormValue("notify_avatar_url")))
+	if saveErr(w, d.s.SetNotifyAvatarURL(ctx, strings.TrimSpace(r.FormValue("notify_avatar_url")))) {
+		return
+	}
 	on := func(name string) bool { return r.FormValue(name) == "1" }
-	_ = d.s.SetNotifyKinds(ctx, on("notify_claim"), on("notify_progress"), on("notify_auth"), on("notify_error"))
+	if saveErr(w, d.s.SetNotifyKinds(ctx, on("notify_claim"), on("notify_progress"), on("notify_auth"), on("notify_error"))) {
+		return
+	}
 	stepChanged := false
 	if v := r.FormValue("progress_notify_step"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			if cur, _ := d.s.ProgressNotifyStepPct(ctx); cur != n {
 				stepChanged = true
 			}
-			_ = d.s.SetProgressNotifyStepPct(ctx, n)
+			if saveErr(w, d.s.SetProgressNotifyStepPct(ctx, n)) {
+				return
+			}
 		}
 	}
 	if d.onUpdate != nil {
@@ -272,7 +298,9 @@ func (d *settingsDeps) postNotifications(w http.ResponseWriter, r *http.Request)
 // postPriorityMode saves the Drop Priority tab's mode selector.
 func (d *settingsDeps) postPriorityMode(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	_ = d.s.SetPriorityMode(ctx, r.FormValue("priority_mode"))
+	if saveErr(w, d.s.SetPriorityMode(ctx, r.FormValue("priority_mode"))) {
+		return
+	}
 	if d.onUpdate != nil {
 		d.onUpdate()
 	}
@@ -296,7 +324,9 @@ func (d *settingsDeps) postExperimental(w http.ResponseWriter, r *http.Request) 
 	if cur, _ := d.s.KickWatchMode(ctx); cur != mode {
 		changed = true
 	}
-	_ = d.s.SetKickWatchMode(ctx, mode)
+	if saveErr(w, d.s.SetKickWatchMode(ctx, mode)) {
+		return
+	}
 	if d.onUpdate != nil {
 		d.onUpdate()
 	}

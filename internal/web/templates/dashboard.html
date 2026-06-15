@@ -23,10 +23,10 @@
 <section class="alerts">
   {{range .Alerts}}
   <div class="alert alert-{{.Kind}}">
-    <span class="alert-tag">{{if eq .Kind "needs_auth"}}needs auth{{else if eq .Kind "awaiting_connect"}}awaiting connect{{else}}needs drops{{end}}</span>
+    <span class="alert-tag">{{if eq .Kind "needs_auth"}}needs auth{{else if eq .Kind "awaiting_connect"}}awaiting connect{{else if eq .Kind "no_games"}}no games{{else}}needs drops{{end}}</span>
     <span class="alert-body">
       <strong>{{.Account}}</strong>
-      {{if eq .Kind "needs_auth"}}— session expired or never authenticated{{else if eq .Kind "awaiting_connect"}}— has a whitelisted live campaign, but the external account isn't linked. Connect it so watch-time counts.{{else}}— sleeping with 0 enrolled drops. Re-authenticate with a device code so Twitch enrolls this account in drops.{{end}}
+      {{if eq .Kind "needs_auth"}}— session expired or never authenticated{{else if eq .Kind "awaiting_connect"}}— has a whitelisted live campaign, but the external account isn't linked. Connect it so watch-time counts.{{else if eq .Kind "no_games"}}— authenticated, but no games are whitelisted yet, so there's nothing to mine. Add a game to start.{{else}}— sleeping with 0 enrolled drops. Re-authenticate with a device code so Twitch enrolls this account in drops.{{end}}
     </span>
     <a class="btn sm alert-cta" href="{{.URL}}">{{.Action}}</a>
   </div>

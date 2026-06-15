@@ -53,7 +53,7 @@
               {{else}}<span class="auth-pill bad" title="{{.AuthMsg}} · checked {{.AuthWhen}} UTC">✗ auth — re-auth needed</span>{{end}}
             {{else}}<span class="auth-pill unknown" title="not checked yet">auth ?</span>{{end}}
           </span>
-          <span class="ac"><span class="state-pill state-{{.StateTier}}">{{if eq .StateTier "green"}}● {{.State}}{{else if eq .StateTier "orange"}}● {{if eq .State "needs_auth"}}needs login{{else if eq .State "sleeping"}}sleeping{{else}}{{.State}}{{end}}{{else}}○ disabled{{end}}</span></span>
+          <span class="ac"><span class="state-pill state-{{.StateTier}}">{{if eq .StateTier "green"}}● {{.State}}{{else if eq .StateTier "orange"}}● {{if eq .State "needs_auth"}}needs login{{else if eq .State "no_games"}}no games yet{{else if eq .State "sleeping"}}sleeping{{else}}{{.State}}{{end}}{{else}}○ disabled{{end}}</span></span>
         </div>
       </div>
       {{end}}
