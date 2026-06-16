@@ -3,12 +3,12 @@
      them. Caller passes the root data so .Active marks the current tab. */}}
 {{define "settings_subnav"}}
   <nav class="subnav">
-    <a href="/settings" class="subnav-link {{if eq .Active "settings"}}on{{end}}">General</a>
-    <a href="/settings/accounts" class="subnav-link {{if eq .Active "accounts"}}on{{end}}">Accounts</a>
-    <a href="/settings/priority" class="subnav-link {{if eq .Active "priority"}}on{{end}}">Drop Priority</a>
-    <a href="/settings/notifications" class="subnav-link {{if eq .Active "notifications"}}on{{end}}">Notifications</a>
-    <a href="/settings/security" class="subnav-link {{if eq .Active "security"}}on{{end}}">Security</a>
-    <a href="/settings/health" class="subnav-link {{if eq .Active "health"}}on{{end}}">Health</a>
-    <a href="/settings/experimental" class="subnav-link {{if eq .Active "experimental"}}on{{end}}">Experimental</a>
+    <a href="/settings" class="subnav-link {{if eq .Active "settings"}}on{{end}}">{{t "settings_subnav.general"}}</a>
+    <a href="/settings/accounts" class="subnav-link {{if eq .Active "accounts"}}on{{end}}">{{t "settings_subnav.accounts"}}</a>
+    <a href="/settings/priority" class="subnav-link {{if eq .Active "priority"}}on{{end}}">{{t "settings_subnav.priority"}}</a>
+    <a href="/settings/notifications" class="subnav-link {{if eq .Active "notifications"}}on{{end}}">{{t "settings_subnav.notifications"}}</a>
+    <a href="/settings/security" class="subnav-link {{if eq .Active "security"}}on{{end}}">{{t "settings_subnav.security"}}</a>
+    <a href="/settings/health" class="subnav-link {{if eq .Active "health"}}on{{end}}">{{t "settings_subnav.health"}}</a>
+    <a href="/settings/experimental" class="subnav-link {{if eq .Active "experimental"}}on{{end}}">{{t "settings_subnav.experimental"}}</a>
   </nav>
 {{end}}

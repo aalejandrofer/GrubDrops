@@ -1,21 +1,21 @@
 {{define "setup.html"}}{{template "layout" .}}{{end}}
 
-{{define "title"}}Setup · GrubDrops{{end}}
+{{define "title"}}{{t "setup.title"}}{{end}}
 
 {{define "content"}}
 <div class="auth-wrap">
   <div class="auth-card">
-    <div class="kicker">// first-run setup</div>
-    <h1>Create admin password</h1>
-    <p class="intro">This is the only credential to control the miner.</p>
-    {{if .Flash}}<div class="err">{{.Flash}}</div>{{end}}
+    <div class="kicker">{{t "setup.first_run"}}</div>
+    <h1>{{t "setup.create_admin"}}</h1>
+    <p class="intro">{{t "setup.intro"}}</p>
+    {{if .Flash}}<div class="err">{{t .Flash}}</div>{{end}}
     <form method="post" action="/setup">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-      <label>Password<input type="password" name="password" minlength="8" required autofocus></label>
-      <label>Confirm<input type="password" name="confirm" minlength="8" required></label>
+      <label>{{t "setup.password"}}<input type="password" name="password" minlength="8" required autofocus></label>
+      <label>{{t "setup.confirm"}}<input type="password" name="confirm" minlength="8" required></label>
       <div class="submit-row">
-        <span class="alt">min 8 chars</span>
-        <button class="btn-linear" type="submit">Create admin →</button>
+        <span class="alt">{{t "setup.min_chars"}}</span>
+        <button class="btn-linear" type="submit">{{t "setup.create_btn"}} →</button>
       </div>
     </form>
   </div>

@@ -1,21 +1,21 @@
-{{define "title"}}Console · GrubDrops{{end}}
+{{define "title"}}{{t "dashboard.title"}}{{end}}
 
 {{define "content"}}
-{{if .Flash}}<div class="flash-ok">{{.Flash}}</div>{{end}}
+{{if .Flash}}<div class="flash-ok">{{t .Flash}}</div>{{end}}
 {{with .Page}}
 <div class="page-head">
   <div>
-    <div class="kicker">// welcome</div>
-    <h1>Console</h1>
-    <div class="sub">uptime {{.Uptime}}</div>
+    <div class="kicker">{{t "dashboard.welcome"}}</div>
+    <h1>{{t "dashboard.heading"}}</h1>
+    <div class="sub">{{t "dashboard.uptime"}} {{.Uptime}}</div>
   </div>
   <div class="actions">
     <form method="post" action="/accounts/apply" class="apply-form"
-          onsubmit="return confirm('Reload all accounts?\n\nThis stops every account’s current watch/claim activity and restarts all watchers from scratch (re-discover campaigns, re-pick streams). Server-side drop minutes are kept.');">
+          onsubmit="return confirm('{{t "dashboard.reload_confirm"}}');">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-      <button type="submit" class="btn">Reload</button>
+      <button type="submit" class="btn">{{t "dashboard.reload"}}</button>
     </form>
-    <a class="btn primary" href="/accounts/new">+ Add account</a>
+    <a class="btn primary" href="/accounts/new">{{t "dashboard.add_account"}}</a>
   </div>
 </div>
 
@@ -23,10 +23,10 @@
 <section class="alerts">
   {{range .Alerts}}
   <div class="alert alert-{{.Kind}}">
-    <span class="alert-tag">{{if eq .Kind "needs_auth"}}needs auth{{else if eq .Kind "awaiting_connect"}}awaiting connect{{else if eq .Kind "no_games"}}no games{{else}}needs drops{{end}}</span>
+    <span class="alert-tag">{{t (printf "dashboard.%s" .Kind)}}</span>
     <span class="alert-body">
       <strong>{{.Account}}</strong>
-      {{if eq .Kind "needs_auth"}}— session expired or never authenticated{{else if eq .Kind "awaiting_connect"}}— has a whitelisted live campaign, but the external account isn't linked. Connect it so watch-time counts.{{else if eq .Kind "no_games"}}— authenticated, but no games are whitelisted yet, so there's nothing to mine. Add a game to start.{{else}}— sleeping with 0 enrolled drops. Re-authenticate with a device code so Twitch enrolls this account in drops.{{end}}
+      — {{t (printf "dashboard.alert_%s" .Kind)}}
     </span>
     <a class="btn sm alert-cta" href="{{.URL}}">{{.Action}}</a>
   </div>
@@ -34,33 +34,18 @@
 </section>
 {{end}}
 
-{{/* Telemetry band polls /dashboard/telemetry every 10s so the live tiles
-     (esp. NEXT CLAIM's closest-to-finish ETA) track the watchers instead of
-     freezing at whatever was closest on page load. */}}
 <section class="telemetry" id="telemetry-swap"
          hx-get="/dashboard/telemetry" hx-trigger="every 10s" hx-swap="innerHTML">
   {{template "dashboard_telemetry" .Tele}}
 </section>
 
-{{/* Next-claim ETAs section removed — the Currently Mining band below
-     shows the same per-account drop, progress (X/Ym) and ETA, so a
-     separate ETA list was redundant. */}}
-
-{{/* Currently mining — full-width band, split by platform into two
-     compact account-row columns. HTMX polls /dashboard/cards every 2s
-     and swaps the inner .mining-columns wrapper. */}}
 <section class="section section-wide" id="mining">
-  {{/* "Currently mining" title + counter dropped — the ● TWITCH / ● KICK
-       column heads carry it, and the telemetry's dashed rule already
-       separates this band. */}}
   <div id="mining-swap" hx-get="/dashboard/cards" hx-trigger="every 10s" hx-swap="innerHTML">
     {{template "dashboard_mining_columns" .Mining}}
   </div>
 </section>
 <script>
 (function() {
-  // Persist <details> open state across hx-get refreshes of the
-  // Currently Mining columns. Track by account-id in localStorage.
   var KEY = 'dm.openMiningRows';
   function loadSet() {
     try { return new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch (_) { return new Set(); }
@@ -74,7 +59,6 @@
       if (set.has(d.dataset.accountId)) d.setAttribute('open', '');
     });
   }
-  // Hook click on any summary inside mining-swap to persist state.
   document.addEventListener('click', function(e) {
     var sum = e.target && e.target.closest && e.target.closest('#mining-swap details.account-row-d summary');
     if (!sum) return;
@@ -87,7 +71,6 @@
       saveSet(s);
     }, 0);
   });
-  // Re-apply open state after htmx swaps.
   document.body.addEventListener('htmx:afterSwap', function(e) {
     if (e.target && e.target.id === 'mining-swap') applyOpen();
   });
@@ -95,9 +78,6 @@
 })();
 </script>
 
-{{/* Live events — full-width drawer. (Live channels panel removed; the live
-     channel + viewers + watch link now surface inside each Currently Mining
-     account row's expand.) */}}
 <section class="section section-wide">
   <section class="drawer">
     <form class="drawer-head" id="events-form" autocomplete="off"
@@ -105,27 +85,22 @@
           hx-target="#events-list"
           hx-swap="innerHTML"
           hx-trigger="change, click from:.filter a">
-      <h3>Live events</h3>
-      <div class="filter" role="group" aria-label="event kind filter">
+      <h3>{{t "dashboard.live_events"}}</h3>
+      <div class="filter" role="group" aria-label="{{t "dashboard.live_events"}}">
         <input type="hidden" name="filter" id="ev-filter" value="all">
-        <a class="on" data-kind="all" href="#">all</a>
-        <a data-kind="claim" href="#">claims</a>
-        <a data-kind="progress" href="#">progress</a>
-        <a data-kind="state" href="#">state</a>
-        <a data-kind="discovery" href="#">discovery</a>
-        <a data-kind="auth" href="#">auth</a>
-        <a data-kind="error" href="#">errors</a>
+        <a class="on" data-kind="all" href="#">{{t "dashboard.filter_all"}}</a>
+        <a data-kind="claim" href="#">{{t "dashboard.filter_claims"}}</a>
+        <a data-kind="progress" href="#">{{t "dashboard.filter_progress"}}</a>
+        <a data-kind="state" href="#">{{t "dashboard.filter_state"}}</a>
+        <a data-kind="discovery" href="#">{{t "dashboard.filter_discovery"}}</a>
+        <a data-kind="auth" href="#">{{t "dashboard.filter_auth"}}</a>
+        <a data-kind="error" href="#">{{t "dashboard.filter_errors"}}</a>
       </div>
       <select name="account" id="ev-account" class="ev-account">
-        <option value="all">all accounts</option>
-        {{/* Native <select> ignores per-<option> color in most browsers (and
-             the closed label never reflects it), so duplicate display names
-             across platforms (Twitch vs Kick) would be indistinguishable.
-             Append a platform suffix to the option text to disambiguate; the
-             inline color is kept for the browsers/dark contexts that honour it. */}}
+        <option value="all">{{t "dashboard.all_accounts"}}</option>
         {{range .EventAccounts}}<option value="{{.ID}}" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}text{{end}})">{{.Label}}{{if .Platform}} · {{.Platform}}{{end}}</option>{{end}}
       </select>
-      <div class="live">streaming</div>
+      <div class="live">{{t "dashboard.streaming"}}</div>
     </form>
     <div class="events" id="events-list"
          hx-get="/dashboard/events"
@@ -138,10 +113,6 @@
 </section>
 
 <script>
-  // Filter tabs are pure anchors; click selects them and mirrors
-  // into the hidden #ev-filter input so HTMX requests carry the
-  // kind in the query string. Listing as a small inline script
-  // keeps the template self-contained and avoids a new JS bundle.
   (function () {
     var form = document.getElementById('events-form');
     if (!form) return;
@@ -153,27 +124,21 @@
         tabs.forEach(function (t) { t.classList.remove('on'); });
         a.classList.add('on');
         hidden.value = a.getAttribute('data-kind') || 'all';
-        // Manually dispatch so HTMX picks up the new hidden value.
         htmx.trigger(form, 'change');
       });
     });
   })();
 </script>
 
-{{/* Modal target — populated by hx-get on Active Campaigns rows.
-     Empty by default; the partial owns its own overlay markup. */}}
 <div id="modal"></div>
 <script>
   (function () {
-    // ESC closes whatever modal is open.
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') {
         var m = document.getElementById('modal');
         if (m) m.innerHTML = '';
       }
     });
-    // Backdrop click closes — relies on the partial root having
-    // data-modal-backdrop set on the overlay element.
     document.addEventListener('click', function (e) {
       var t = e.target;
       if (t && t.hasAttribute && t.hasAttribute('data-modal-backdrop')) {

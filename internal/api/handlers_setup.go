@@ -23,7 +23,7 @@ func (d setupDeps) get(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	render(w, d.t, "setup.html", templateData{
+	render(w, r, d.t, "setup.html", templateData{
 		AuthedAdmin: false,
 		CSRFToken:   csrfToken(r),
 	})
@@ -38,16 +38,16 @@ func (d setupDeps) post(w http.ResponseWriter, r *http.Request) {
 	pw := r.FormValue("password")
 	confirm := r.FormValue("confirm")
 	if pw != confirm {
-		render(w, d.t, "setup.html", templateData{
+		render(w, r, d.t, "setup.html", templateData{
 			AuthedAdmin: false,
 			CSRFToken:   csrfToken(r),
-			Flash:       "passwords do not match",
+			Flash:       "flash.passwords_mismatch",
 		})
 		return
 	}
 	hash, err := auth.HashPassword(pw)
 	if err != nil {
-		render(w, d.t, "setup.html", templateData{
+		render(w, r, d.t, "setup.html", templateData{
 			AuthedAdmin: false,
 			CSRFToken:   csrfToken(r),
 			Flash:       err.Error(),

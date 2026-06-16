@@ -7,6 +7,8 @@ import (
 	"io"
 	"io/fs"
 	"strings"
+
+	"github.com/aalejandrofer/grubdrops/internal/i18n"
 )
 
 //go:embed templates/*.html
@@ -56,6 +58,7 @@ func (p *PageTemplates) Lookup(name string) *template.Template {
 
 var sharedFuncs = template.FuncMap{
 	"safe": func(s string) template.HTML { return template.HTML(s) },
+	"t":    i18n.TemplateFunc(),
 	"not": func(v any) bool {
 		if v == nil {
 			return true

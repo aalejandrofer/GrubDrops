@@ -7,26 +7,46 @@
     </a>
     {{if .AuthedAdmin}}
     <nav class="nav">
-      <a href="/" class="{{if eq .Active "dashboard"}}active{{end}}">Console</a>
-      <a href="/drops" class="{{if eq .Active "drops"}}active{{end}}">Drops</a>
-      <a href="/history" class="{{if eq .Active "history"}}active{{end}}">History</a>
-      <a href="/settings" class="{{if or (eq .Active "settings") (eq .Active "accounts")}}active{{end}}">Settings</a>
+      <a href="/" class="{{if eq .Active "dashboard"}}active{{end}}">{{t "nav.console"}}</a>
+      <a href="/drops" class="{{if eq .Active "drops"}}active{{end}}">{{t "nav.drops"}}</a>
+      <a href="/history" class="{{if eq .Active "history"}}active{{end}}">{{t "nav.history"}}</a>
+      <a href="/settings" class="{{if or (eq .Active "settings") (eq .Active "accounts")}}active{{end}}">{{t "nav.settings"}}</a>
     </nav>
     <div class="user">
-      <button type="button" class="theme-toggle" id="theme-toggle" title="Toggle light / dark" aria-label="Toggle light or dark theme">☀</button>
-      <span class="clock">— UTC</span>
-      <span class="pulse" title="live"></span>
-      <a class="gh-link" href="https://github.com/aalejandrofer/grubdrops" target="_blank" rel="noopener" title="GitHub" aria-label="GitHub repository">
+      <button type="button" class="theme-toggle" id="theme-toggle" title="{{t "nav.toggle_theme"}}" aria-label="{{t "nav.toggle_theme_aria"}}">☀</button>
+      <span class="clock">—</span>
+      <span class="pulse" title="{{t "dashboard.streaming"}}"></span>
+      <div class="lang-dd" id="lang-dd">
+        <button type="button" class="lang-dd-btn" id="lang-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+          {{if eq .Lang "zh-CN"}}中文{{else}}EN{{end}} <span class="lang-dd-arrow">▾</span>
+        </button>
+        <ul class="lang-dd-menu" id="lang-dd-menu" role="listbox" hidden>
+          <li role="option" data-lang="en" class="{{if eq .Lang "en"}}selected{{end}}">EN — English</li>
+          <li role="option" data-lang="zh-CN" class="{{if eq .Lang "zh-CN"}}selected{{end}}">中文 — Chinese</li>
+        </ul>
+      </div>
+      <a class="gh-link" href="https://github.com/aalejandrofer/grubdrops" target="_blank" rel="noopener" title="GitHub" aria-label="{{t "nav.github_aria"}}">
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
       </a>
       <form method="post" action="/logout" style="display:inline">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-        <button type="submit" class="btn sm ghost" style="margin-left:6px">Logout</button>
+        <button type="submit" class="btn sm ghost" style="margin-left:6px">{{t "nav.logout"}}</button>
       </form>
     </div>
     {{else}}
     <nav class="nav"></nav>
-    <div class="user"><span class="clock">— UTC</span></div>
+    <div class="user">
+      <span class="clock">—</span>
+      <div class="lang-dd" id="lang-dd">
+        <button type="button" class="lang-dd-btn" id="lang-dd-btn" aria-haspopup="listbox" aria-expanded="false">
+          {{if eq .Lang "zh-CN"}}中文{{else}}EN{{end}} <span class="lang-dd-arrow">▾</span>
+        </button>
+        <ul class="lang-dd-menu" id="lang-dd-menu" role="listbox" hidden>
+          <li role="option" data-lang="en" class="{{if eq .Lang "en"}}selected{{end}}">EN — English</li>
+          <li role="option" data-lang="zh-CN" class="{{if eq .Lang "zh-CN"}}selected{{end}}">中文 — Chinese</li>
+        </ul>
+      </div>
+    </div>
     {{end}}
   </div>
 </header>

@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -70,6 +69,8 @@ type Deps struct {
 	Registrar        KickChannelRegistrar
 	SettingsStore    *store.Settings
 	OnSettingsUpdate func()
+	// Location is the timezone for displayed times (from TZ env var).
+	Location *time.Location
 	// OIDC is the configured single-sign-on provider. Nil or disabled means
 	// the SSO button is hidden and the /auth/oidc/* routes redirect to /login.
 	OIDC *oidc.Provider
@@ -117,6 +118,28 @@ func NewRouter(d Deps) http.Handler {
 		_, _ = w.Write([]byte("ok\n"))
 	})
 
+	// Language switch: POST /api/lang sets a "lang" cookie (1 year).
+	r.Post("/api/lang", func(w http.ResponseWriter, r *http.Request) {
+		lang := strings.TrimSpace(r.FormValue("lang"))
+		if lang == "" {
+			lang = "en"
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     "lang",
+			Value:    lang,
+			Path:     "/",
+			MaxAge:   365 * 24 * 60 * 60,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
+		// Redirect back to the referer or /.
+		ref := r.Header.Get("Referer")
+		if ref == "" {
+			ref = "/"
+		}
+		http.Redirect(w, r, ref, http.StatusSeeOther)
+	})
+
 	// Static assets shipped via internal/web/static/. Cache aggressively
 	// since file names change on rebuild.
 	r.Handle("/static/*", http.StripPrefix("/static/", staticHandler()))
@@ -152,10 +175,11 @@ func NewRouter(d Deps) http.Handler {
 		ring:            d.LogRing,
 		s:               d.SettingsStore,
 		start:           startedAt,
+		loc:             d.Location,
 		channelCounters: channelCountersFromRegistry(d.Registry),
 		kickPath:        d.KickActivePath,
 	}
-	accs := accountsDeps{q: d.Q, db: d.DB, t: d.Templates, sm: d.Session, sch: d.Scheduler, reload: d.Reload, authCheck: d.AuthCheck, reloadAccount: d.ReloadAccount, rootCtx: d.RootCtx}
+	accs := accountsDeps{q: d.Q, db: d.DB, t: d.Templates, sm: d.Session, sch: d.Scheduler, reload: d.Reload, authCheck: d.AuthCheck, reloadAccount: d.ReloadAccount, rootCtx: d.RootCtx, loc: d.Location}
 	loginTwitch := newLoginTwitchDeps(d, d.RootCtx)
 	loginKick := &loginKickDeps{
 		q:         d.Q,
@@ -166,6 +190,7 @@ func NewRouter(d Deps) http.Handler {
 		registrar: d.Registrar,
 		reload:    d.Reload,
 		rootCtx:   d.RootCtx,
+		loc:       d.Location,
 	}
 	// loginTwitchPaste retired: Twitch cookie-paste no longer authenticates
 	// (web-issued token vs Android client_id). Twitch login is device-code
@@ -255,10 +280,7 @@ func NewRouter(d Deps) http.Handler {
 		// Count enabled accounts so the flash message is actually
 		// informative; a query failure is non-fatal — fall back to
 		// the bare success string.
-		msg := "watchers reloaded"
-		if accs, err := d.Q.ListEnabledAccounts(r.Context()); err == nil {
-			msg = fmt.Sprintf("watchers reloaded — %d enabled accounts", len(accs))
-		}
+		msg := "flash.watchers_reloaded"
 		d.Session.Put(r.Context(), "flash", msg)
 		// Redirect back to where the user clicked Reload from
 		// instead of always bouncing to /accounts. The dashboard
@@ -279,6 +301,7 @@ func NewRouter(d Deps) http.Handler {
 		notifier:    d.Notifier,
 		runCanary:   d.RunCanary,
 		startedAt:   startedAt,
+		loc:         d.Location,
 		logLevelEnv: d.LogLevelEnv,
 		browserURL:  d.BrowserURLDisplay,
 		sidecars:    d.KickSidecars,
@@ -286,8 +309,8 @@ func NewRouter(d Deps) http.Handler {
 		version:     d.Version,
 		oidc:        d.OIDC,
 	}
-	dropsH := &dropsDeps{q: d.Q, t: d.Templates, reload: d.Reload, sessions: d.Sessions, registry: d.Registry}
-	historyH := &historyDeps{q: d.Q, ring: d.LogRing, t: d.Templates}
+	dropsH := &dropsDeps{q: d.Q, t: d.Templates, reload: d.Reload, sessions: d.Sessions, registry: d.Registry, loc: d.Location}
+	historyH := &historyDeps{q: d.Q, ring: d.LogRing, t: d.Templates, loc: d.Location}
 
 	authed.Get("/settings", settingsH.get)
 	authed.Get("/settings/priority", settingsH.getPriority)

@@ -1,14 +1,11 @@
 {{define "drops_campaign_items"}}
 {{if .Benefits}}
-{{/* Item list — row style consistent with the app's other tables
-     (icon · name · collected · required). COLLECTED shows which accounts
-     have already claimed each benefit (platform-colored). */}}
 <div class="drop-items">
   <div class="drop-items-head">
     <span></span>
-    <span>item</span>
-    <span>collected</span>
-    <span>type</span>
+    <span>{{t "campaign_items.item"}}</span>
+    <span>{{t "campaign_items.collected"}}</span>
+    <span>{{t "campaign_items.type"}}</span>
   </div>
   {{range .Benefits}}
   <div class="drop-item{{if le .RequiredMinutes 0}} drop-dim{{end}}">
@@ -18,18 +15,18 @@
     <span class="drop-item-name">{{.Name}}</span>
     <span class="drop-item-collected">
       {{if .Collected}}
-        {{range .Collected}}<span class="cmark cmark-{{.Platform}}" title="claimed by {{.Login}}">{{.Login}}</span>{{end}}
+        {{range .Collected}}<span class="cmark cmark-{{.Platform}}" title="{{t "campaign_items.claimed_by"}} {{.Login}}">{{.Login}}</span>{{end}}
       {{else}}
         <span class="cmark-none">—</span>
       {{end}}
     </span>
     <span class="drop-item-type">
-      {{if gt .RequiredMinutes 0}}<span class="dtype dtype-watch" title="watch-time drop — auto-mined">⏱ {{.RequiredMinutes}}m watch</span>{{else}}<span class="dtype dtype-action" title="not a watch-time drop — can't auto-mine">action required</span>{{end}}
+      {{if gt .RequiredMinutes 0}}<span class="dtype dtype-watch" title="{{t "campaign_items.watch_drop"}}">⏱ {{.RequiredMinutes}}{{t "campaign_items.m_watch"}}</span>{{else}}<span class="dtype dtype-action" title="{{t "campaign_items.action_required"}}">{{t "campaign_items.action_required"}}</span>{{end}}
     </span>
   </div>
   {{end}}
 </div>
 {{else}}
-<div class="ev-detail" style="color:var(--muted);font-size:11px;">No items recorded for this campaign yet.</div>
+<div class="ev-detail" style="color:var(--muted);font-size:11px;">{{t "campaign_items.no_items"}}</div>
 {{end}}
 {{end}}

@@ -1,40 +1,40 @@
 {{define "accounts_new.html"}}{{template "layout" .}}{{end}}
 
-{{define "title"}}New account · GrubDrops{{end}}
+{{define "title"}}{{t "new_account.title"}}{{end}}
 
 {{define "content"}}
 <div class="shell">
   <div class="ph">
     <div>
-      <div class="kicker">// accounts / new</div>
-      <h1>New account</h1>
+      <div class="kicker">{{t "new_account.heading"}}</div>
+      <h1>{{t "new_account.h1"}}</h1>
     </div>
   </div>
 
-  {{if .Flash}}<div class="flash-ok" style="color:var(--red);border-left-color:var(--red);background:rgba(198,74,60,.06);">{{.Flash}}</div>{{end}}
+  {{if .Flash}}<div class="flash-ok" style="color:var(--red);border-left-color:var(--red);background:rgba(198,74,60,.06);">{{t .Flash}}</div>{{end}}
 
   <section class="settings-card">
-    <header class="section-h"><h3>Account</h3><span class="meta">Platform + label</span></header>
+    <header class="section-h"><h3>{{t "new_account.account"}}</h3><span class="meta">{{t "new_account.platform_label"}}</span></header>
     <form method="post" action="/accounts/new">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       <div class="kvedit">
         <div class="row">
-          <span class="k">platform</span>
+          <span class="k">{{t "new_account.platform"}}</span>
           <span class="d"></span>
           <span class="v"><select name="platform">
-            <option value="twitch">Twitch (drops)</option>
-            <option value="kick">Kick (drops)</option>
+            <option value="twitch">{{t "new_account.twitch"}}</option>
+            <option value="kick">{{t "new_account.kick"}}</option>
           </select></span>
         </div>
         <div class="row">
-          <span class="k">display name</span>
-          <span class="d">a friendly label shown across the UI — for Twitch the real account is whoever approves the device code on the next screen</span>
-          <span class="v"><input type="text" name="display_name" required placeholder="e.g. TTik3r"></span>
+          <span class="k">{{t "new_account.display_name"}}</span>
+          <span class="d">{{t "new_account.display_name_desc"}}</span>
+          <span class="v"><input type="text" name="display_name" required placeholder="{{t "new_account.display_name_placeholder"}}"></span>
         </div>
       </div>
       <div class="row" style="margin-top:18px;">
-        <a class="back-link" href="/accounts">← back</a>
-        <button class="btn-linear" type="submit" style="margin-left:auto;">Create →</button>
+        <a class="back-link" href="/accounts">← {{t "new_account.back"}}</a>
+        <button class="btn-linear" type="submit" style="margin-left:auto;">{{t "new_account.create"}} →</button>
       </div>
     </form>
   </section>

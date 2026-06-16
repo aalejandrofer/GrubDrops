@@ -1,35 +1,35 @@
 {{define "accounts_list.html"}}{{template "layout" .}}{{end}}
 
-{{define "title"}}Accounts · GrubDrops{{end}}
+{{define "title"}}{{t "accounts.title"}}{{end}}
 
 {{define "content"}}
 <div class="shell">
   <div class="ph">
     <div>
-      <div class="kicker">// settings / accounts</div>
-      <h1>Accounts</h1>
+      <div class="kicker">{{t "accounts.settings_accounts"}}</div>
+      <h1>{{t "accounts.heading"}}</h1>
     </div>
     <div class="actions">
       <form method="post" action="/accounts/check-auth" class="inline-form">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-        <button class="btn" type="submit" title="Probe every account's auth (Twitch token / Kick cookies) now.">Check auth</button>
+        <button class="btn" type="submit" title="{{t "accounts.check_auth_title"}}">{{t "accounts.check_auth"}}</button>
       </form>
       <form method="post" action="/accounts/apply" class="inline-form"
-            onsubmit="return confirm('Reload all watchers? This restarts every account’s current watch/claim activity (re-discover, re-pick). Server-side drop minutes are kept.');">
+            onsubmit="return confirm('{{t "accounts.reload_confirm"}}');">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-        <button class="btn" type="submit">Apply changes</button>
+        <button class="btn" type="submit">{{t "accounts.apply_changes"}}</button>
       </form>
-      <a class="btn primary" href="/accounts/new">+ Add account</a>
+      <a class="btn primary" href="/accounts/new">{{t "accounts.add_account"}}</a>
     </div>
   </div>
   {{template "settings_subnav" .}}
 
-  {{if .Flash}}<div class="flash-ok">{{.Flash}}</div>{{end}}
+  {{if .Flash}}<div class="flash-ok">{{t .Flash}}</div>{{end}}
 
   <section class="settings-block">
-    <header class="section-h"><h3>Configured accounts</h3><span class="meta">{{len .Page}} total</span></header>
+    <header class="section-h"><h3>{{t "accounts.configured"}}</h3><span class="meta">{{len .Page}} {{t "accounts.total"}}</span></header>
     {{if not .Page}}
-    <div class="empty">No accounts yet. <a href="/accounts/new">Add one →</a></div>
+    <div class="empty">{{t "accounts.no_accounts"}} <a href="/accounts/new">{{t "accounts.add_one"}} →</a></div>
     {{else}}
     <div class="events accounts-rows">
       {{range .Page}}
@@ -39,14 +39,14 @@
           <span class="t" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}text{{end}})">{{.DisplayName}}</span>
           <span class="lvl" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">●</span>
           <span class="body"><em>{{.Platform}}</em>
-            <a href="/accounts/{{.ID}}" class="row-link">edit →</a>
-            <a href="/accounts/{{.ID}}/login" class="row-link">re-auth →</a>
+            <a href="/accounts/{{.ID}}" class="row-link">{{t "accounts.edit"}} →</a>
+            <a href="/accounts/{{.ID}}/login" class="row-link">{{t "accounts.re_auth"}} →</a>
             {{if .AuthChecked}}
-              {{if .AuthOK}}<span class="auth-pill ok" title="auth healthy · checked {{.AuthWhen}} UTC">✓ auth</span>
-              {{else}}<span class="auth-pill bad" title="{{.AuthMsg}} · checked {{.AuthWhen}} UTC">✗ auth — re-auth needed</span>{{end}}
-            {{else}}<span class="auth-pill unknown" title="not checked yet">auth ?</span>{{end}}
+              {{if .AuthOK}}<span class="auth-pill ok" title="{{t "accounts.auth_ok"}} {{.AuthWhen}}">✓ auth</span>
+              {{else}}<span class="auth-pill bad" title="{{.AuthMsg}} · {{t "accounts.auth_ok"}} {{.AuthWhen}}">✗ auth — {{t "accounts.re_auth_needed"}}</span>{{end}}
+            {{else}}<span class="auth-pill unknown" title="{{t "accounts.not_checked"}}">auth ?</span>{{end}}
           </span>
-          <span class="ac"><span class="state-pill state-{{.StateTier}}">{{if eq .StateTier "green"}}● {{.State}}{{else if eq .StateTier "orange"}}● {{if eq .State "needs_auth"}}needs login{{else if eq .State "no_games"}}no games yet{{else if eq .State "sleeping"}}sleeping{{else}}{{.State}}{{end}}{{else}}○ disabled{{end}}</span></span>
+          <span class="ac"><span class="state-pill state-{{.StateTier}}">{{if eq .StateTier "green"}}● {{t .StateLabel}}{{else if eq .StateTier "orange"}}● {{t .StateLabel}}{{else}}○ {{t "accounts.disabled"}}{{end}}</span></span>
         </div>
       </div>
       {{end}}

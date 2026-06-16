@@ -35,6 +35,7 @@ type kickBrowserClient = KickBrowserClient
 type kickChannelRegistrar = KickChannelRegistrar
 
 type loginKickDeps struct {
+	loc   *time.Location // timezone for displayed times
 	q         *gen.Queries
 	t         Renderer
 	sm        *scs.SessionManager
@@ -63,7 +64,7 @@ func (d *loginKickDeps) get(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	render(w, d.t, "login_kick.html", templateData{
+	render(w, r, d.t, "login_kick.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
 		Page: loginKickPageData{AccountID: id, DisplayName: acc.DisplayName},
 	})
@@ -93,9 +94,9 @@ func (d *loginKickDeps) post(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flash := "Kick cookies persisted — watcher will verify shortly"
+	flash := "flash.kick_cookies_persisted"
 	if verified {
-		flash = "Kick session verified ✓"
+		flash = "flash.kick_session_verified"
 	}
 	d.sm.Put(r.Context(), "flash", flash)
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
@@ -233,7 +234,7 @@ type kickAuthVerifier interface {
 }
 
 func (d *loginKickDeps) renderError(w http.ResponseWriter, r *http.Request, id, name, flash string) {
-	render(w, d.t, "login_kick.html", templateData{
+	render(w, r, d.t, "login_kick.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
 		Page:  loginKickPageData{AccountID: id, DisplayName: name},
 		Flash: flash,

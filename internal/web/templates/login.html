@@ -1,26 +1,26 @@
 {{define "login.html"}}{{template "layout" .}}{{end}}
 
-{{define "title"}}Login · GrubDrops{{end}}
+{{define "title"}}{{t "login.title"}}{{end}}
 
 {{define "content"}}
 <div class="auth-wrap">
   <div class="auth-card auth-centered auth-bare">
     <img class="auth-logo" src="/static/img/icon-512.png" alt="GrubDrops" width="96" height="96">
     <h1 class="auth-name">GRUB<span class="dot"></span>DROPS</h1>
-    {{if .Flash}}<div class="err">{{.Flash}}</div>{{end}}
+    {{if .Flash}}<div class="err">{{t .Flash}}</div>{{end}}
 
     {{if .OIDCEnabled}}
-    <a class="btn-sso" href="/auth/oidc/login">Continue with SSO</a>
+    <a class="btn-sso" href="/auth/oidc/login">{{t "login.sso"}}</a>
     {{else}}
-    <span class="btn-sso is-disabled" aria-disabled="true" title="SSO not configured">Continue with SSO</span>
+    <span class="btn-sso is-disabled" aria-disabled="true" title="{{t "login.sso_disabled_title"}}">{{t "login.sso"}}</span>
     {{end}}
-    <div class="sso-divider"><span>or</span></div>
+    <div class="sso-divider"><span>{{t "login.or"}}</span></div>
 
     <form method="post" action="/login" class="auth-secondary">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       <div class="login-row">
-        <input id="pw" type="password" name="password" placeholder="Password" required {{if not .OIDCEnabled}}autofocus{{end}}>
-        <button class="btn-arrow" type="submit" aria-label="Log in">→</button>
+        <input id="pw" type="password" name="password" placeholder="{{t "login.password"}}" required {{if not .OIDCEnabled}}autofocus{{end}}>
+        <button class="btn-arrow" type="submit" aria-label="{{t "login.log_in"}}">→</button>
       </div>
     </form>
   </div>

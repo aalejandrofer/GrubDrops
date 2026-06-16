@@ -20,6 +20,7 @@ import (
 )
 
 type accountsDeps struct {
+	loc   *time.Location // timezone for displayed times
 	q             *gen.Queries
 	db            *sql.DB
 	t             Renderer
@@ -50,8 +51,9 @@ func (d accountsDeps) applyReload(ctx context.Context) {
 
 type accountRow struct {
 	gen.Account
-	State     string // raw scheduler state: watching, claiming, …, needs_auth, stopped
-	StateTier string // ui colour bucket: "green" | "orange" | "grey"
+	State      string // raw scheduler state: watching, claiming, …, needs_auth, stopped
+	StateTier  string // ui colour bucket: "green" | "orange" | "grey"
+	StateLabel string // i18n key for state pill text
 	// Auth-health (from the periodic sweep / manual check). AuthChecked
 	// is false when no probe has run yet.
 	AuthChecked bool
@@ -70,9 +72,9 @@ type accountRow struct {
 func (d accountsDeps) checkAuth(w http.ResponseWriter, r *http.Request) {
 	if d.authCheck != nil {
 		d.authCheck(r.Context())
-		d.sm.Put(r.Context(), "flash", "auth check complete")
+		d.sm.Put(r.Context(), "flash", "flash.auth_check_complete")
 	} else {
-		d.sm.Put(r.Context(), "flash", "auth check unavailable")
+		d.sm.Put(r.Context(), "flash", "flash.auth_check_unavailable")
 	}
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
@@ -99,6 +101,7 @@ func (d accountsDeps) list(w http.ResponseWriter, r *http.Request) {
 			Account:        a,
 			State:          st,
 			StateTier:      tierForState(a.Enabled == 1, st),
+			StateLabel:     stateLabel(st),
 			AvatarURL:      avatarSrc(a.Platform, a.AvatarUrl),
 			AccountInitial: initial(a.DisplayName),
 		}
@@ -106,12 +109,12 @@ func (d accountsDeps) list(w http.ResponseWriter, r *http.Request) {
 			row.AuthChecked = true
 			row.AuthOK = res.OK
 			row.AuthMsg = res.Msg
-			row.AuthWhen = time.Unix(res.CheckedAt, 0).UTC().Format("2006-01-02 15:04")
+			row.AuthWhen = time.Unix(res.CheckedAt, 0).In(d.loc).Format("2006-01-02 15:04")
 		}
 		enriched = append(enriched, row)
 	}
 	flash := d.sm.PopString(r.Context(), "flash")
-	render(w, d.t, "accounts_list.html", templateData{
+	render(w, r, d.t, "accounts_list.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
 		Page: enriched, Flash: flash, Active: "accounts",
 	})
@@ -131,7 +134,7 @@ func tierForState(enabled bool, state string) string {
 }
 
 func (d accountsDeps) newGet(w http.ResponseWriter, r *http.Request) {
-	render(w, d.t, "accounts_new.html", templateData{
+	render(w, r, d.t, "accounts_new.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "accounts",
 	})
 }
@@ -140,9 +143,9 @@ func (d accountsDeps) newPost(w http.ResponseWriter, r *http.Request) {
 	platform := r.FormValue("platform")
 	display := strings.TrimSpace(r.FormValue("display_name"))
 	if platform == "" || display == "" {
-		render(w, d.t, "accounts_new.html", templateData{
+		render(w, r, d.t, "accounts_new.html", templateData{
 			AuthedAdmin: true, CSRFToken: csrfToken(r),
-			Flash: "platform and display name required", Active: "accounts",
+			Flash: "flash.platform_name_required", Active: "accounts",
 		})
 		return
 	}
@@ -153,7 +156,7 @@ func (d accountsDeps) newPost(w http.ResponseWriter, r *http.Request) {
 		Status: "idle", FingerprintJson: "{}", Enabled: 1,
 		CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
-		render(w, d.t, "accounts_new.html", templateData{
+		render(w, r, d.t, "accounts_new.html", templateData{
 			AuthedAdmin: true, CSRFToken: csrfToken(r),
 			Flash: err.Error(), Active: "accounts",
 		})
@@ -163,7 +166,7 @@ func (d accountsDeps) newPost(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/accounts/"+id+"/login", http.StatusSeeOther)
 		return
 	}
-	d.sm.Put(r.Context(), "flash", "account added — click Apply changes to start mining")
+	d.sm.Put(r.Context(), "flash", "flash.account_added")
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
 
@@ -209,7 +212,7 @@ func (d accountsDeps) detail(w http.ResponseWriter, r *http.Request) {
 		selected = append(selected, gameRow{ID: p.ID, Name: p.Name, Slug: p.Slug, Selected: true, Rank: int(p.Rank)})
 	}
 
-	render(w, d.t, "accounts_detail.html", templateData{
+	render(w, r, d.t, "accounts_detail.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
 		Page:   accountDetailPage{Account: row, AllGames: allRows, SelectedGames: selected},
 		Active: "accounts",
@@ -288,7 +291,7 @@ func (d accountsDeps) useGlobal(w http.ResponseWriter, r *http.Request) {
 	// No auto-reload: whitelist/priority/account edits take effect on the
 	// next manual "Apply changes" (or the next discovery tick for /drops).
 	// Avoids tearing down + respinning every watcher on each small save.
-	d.sm.Put(r.Context(), "flash", "account whitelist cleared — now follows global priority")
+	d.sm.Put(r.Context(), "flash", "flash.account_whitelist_cleared")
 	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
 
@@ -321,7 +324,7 @@ func (d accountsDeps) games(w http.ResponseWriter, r *http.Request) {
 	// No auto-reload: whitelist/priority/account edits take effect on the
 	// next manual "Apply changes" (or the next discovery tick for /drops).
 	// Avoids tearing down + respinning every watcher on each small save.
-	d.sm.Put(r.Context(), "flash", "games saved")
+	d.sm.Put(r.Context(), "flash", "flash.games_saved")
 	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
 
@@ -370,7 +373,7 @@ func (d accountsDeps) update(w http.ResponseWriter, r *http.Request) {
 		}
 		d.reloadAccount(ctx, id)
 	}
-	d.sm.Put(r.Context(), "flash", "saved — this account reloaded")
+	d.sm.Put(r.Context(), "flash", "flash.account_saved")
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
 
@@ -423,7 +426,7 @@ func (d accountsDeps) delete(w http.ResponseWriter, r *http.Request) {
 	// No auto-reload: whitelist/priority/account edits take effect on the
 	// next manual "Apply changes" (or the next discovery tick for /drops).
 	// Avoids tearing down + respinning every watcher on each small save.
-	d.sm.Put(r.Context(), "flash", "deleted")
+	d.sm.Put(r.Context(), "flash", "flash.deleted")
 	http.Redirect(w, r, "/accounts", http.StatusSeeOther)
 }
 

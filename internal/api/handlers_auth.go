@@ -27,7 +27,7 @@ func (d authDeps) loginGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	flash := d.sm.PopString(r.Context(), "flash")
-	render(w, d.t, "login.html", templateData{
+	render(w, r, d.t, "login.html", templateData{
 		CSRFToken:        csrfToken(r),
 		Flash:            flash,
 		OIDCEnabled:      d.oidcEnabled,
@@ -38,11 +38,11 @@ func (d authDeps) loginGet(w http.ResponseWriter, r *http.Request) {
 func (d authDeps) loginPost(w http.ResponseWriter, r *http.Request) {
 	admin, err := d.q.GetAdmin(r.Context())
 	if err != nil {
-		render(w, d.t, "login.html", templateData{CSRFToken: csrfToken(r), Flash: "admin not configured"})
+		render(w, r, d.t, "login.html", templateData{CSRFToken: csrfToken(r), Flash: "flash.admin_not_configured"})
 		return
 	}
 	if err := auth.VerifyPassword(admin.PasswordHash, r.FormValue("password")); err != nil {
-		render(w, d.t, "login.html", templateData{CSRFToken: csrfToken(r), Flash: "wrong password"})
+		render(w, r, d.t, "login.html", templateData{CSRFToken: csrfToken(r), Flash: "flash.wrong_password"})
 		return
 	}
 	if err := d.sm.RenewToken(r.Context()); err != nil {

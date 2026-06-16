@@ -1,4 +1,5 @@
   :root {
+    color-scheme: dark;
     --bg:        #0e0f11;
     --bg-grad:   radial-gradient(1400px 900px at 100% -10%, #1a1410 0%, #0e0f11 60%);
     --surface:   #16181c;
@@ -24,6 +25,7 @@
      localStorage in _layout.html). Warm cream palette to match the brand
      orange; brand/status colors darkened for contrast on a light surface. */
   html[data-theme="light"] {
+    color-scheme: light;
     --bg:        #f6f2ea;
     --bg-grad:   radial-gradient(1400px 900px at 100% -10%, #fbeede 0%, #f6f2ea 60%);
     --surface:   #ffffff;
@@ -60,6 +62,26 @@
   }
   ::-webkit-scrollbar-thumb:hover { background: var(--muted); background-clip: padding-box; }
   ::-webkit-scrollbar-corner { background: transparent; }
+
+  /* Global <select> theming — native dropdowns pick up the surface color
+     so they don't flash white in dark mode. color-scheme on :root handles
+     the popup chrome; these rules handle the visible button area. */
+  select {
+    background-color: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-family: inherit;
+    font-size: inherit;
+    outline: none;
+    cursor: pointer;
+  }
+  select:hover, select:focus { border-color: var(--accent); }
+  select option {
+    background-color: var(--surface-2);
+    color: var(--text);
+  }
 
   html, body {
     margin: 0; padding: 0;
@@ -3383,3 +3405,42 @@
   .kvedit .v.grow { flex-basis: 100%; order: 2; }
   .kvedit .row .d { order: 3; }
 }
+
+/* ── Language dropdown (custom, not native <select>) ─────── */
+.lang-dd { position: relative; display: inline-block; margin-left: 6px; }
+.lang-dd-btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font: 500 11px/1 'JetBrains Mono', monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 5px 8px 5px 10px;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 4px;
+  transition: border-color .15s;
+}
+.lang-dd-btn:hover, .lang-dd-btn[aria-expanded="true"] { border-color: var(--accent); color: var(--text); }
+.lang-dd-arrow { font-size: 8px; opacity: .6; }
+.lang-dd-menu {
+  position: absolute; top: calc(100% + 4px); right: 0;
+  list-style: none; margin: 0; padding: 4px 0;
+  min-width: 140px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  z-index: 900;
+}
+.lang-dd-menu li {
+  padding: 7px 14px;
+  font: 500 12px/1.4 'JetBrains Mono', monospace;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .1s;
+}
+.lang-dd-menu li:hover { background: var(--surface-2); }
+.lang-dd-menu li.selected { color: var(--accent); }

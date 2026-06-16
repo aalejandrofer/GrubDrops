@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	mlog "github.com/aalejandrofer/grubdrops/internal/log"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
@@ -22,7 +23,7 @@ import (
 // `kindFilter` is one of "" / "all" / "claim" / "progress" / "state" /
 // "discovery" / "error" / "auth"; anything else is treated as "all".
 // `accountFilter` is the account ID to keep ("" or "all" = keep all).
-func eventsFromRing(ring *mlog.Ring, kindFilter, accountFilter string, accs []gen.Account) []dashEvent {
+func eventsFromRing(ring *mlog.Ring, kindFilter, accountFilter string, accs []gen.Account, loc *time.Location) []dashEvent {
 	if ring == nil {
 		return nil
 	}
@@ -56,7 +57,7 @@ func eventsFromRing(ring *mlog.Ring, kindFilter, accountFilter string, accs []ge
 		}
 		out = append(out, dashEvent{
 			ID:       fmt.Sprintf("ev-%d-%d", l.TS.UnixNano(), i),
-			Time:     l.TS.UTC().Format("15:04:05"),
+			Time:     l.TS.In(loc).Format("15:04:05"),
 			Kind:     kind,
 			Color:    colorForKind(kind, l.Level),
 			BodyHTML: fmt.Sprintf("<em>%s</em> · %s", kind, htmlEscape(l.Msg)),

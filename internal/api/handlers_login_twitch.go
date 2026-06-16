@@ -93,7 +93,7 @@ func (d *loginTwitchDeps) get(w http.ResponseWriter, r *http.Request) {
 	d.pending.Store(id, st)
 	go d.poll(pollCtx, id, backend, st)
 
-	render(w, d.t, "login_twitch.html", templateData{
+	render(w, r, d.t, "login_twitch.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
 		Page: loginPageData{
 			AccountID:       id,
@@ -176,12 +176,12 @@ func (d *loginTwitchDeps) status(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	v, ok := d.pending.Load(id)
 	if !ok {
-		renderPartial(w, d.t, "login_twitch_status", "error")
+		renderPartial(w, r, d.t, "login_twitch_status", "error")
 		return
 	}
 	st := v.(*twitchLoginState)
 	st.mu.Lock()
 	status := st.status
 	st.mu.Unlock()
-	renderPartial(w, d.t, "login_twitch_status", status)
+	renderPartial(w, r, d.t, "login_twitch_status", status)
 }

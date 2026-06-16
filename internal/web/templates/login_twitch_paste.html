@@ -1,59 +1,59 @@
 {{define "login_twitch_paste.html"}}{{template "layout" .}}{{end}}
 
-{{define "title"}}Twitch login · GrubDrops{{end}}
+{{define "title"}}{{t "login_twitch_paste.title"}}{{end}}
 
 {{define "content"}}
 {{with .Page}}
 <div class="auth-wrap wide">
   <div class="auth-card">
-    <div class="kicker">// twitch · authorize</div>
-    <h1>Authorize {{.DisplayName}}</h1>
-    <p class="intro">Twitch's integrity gate rejects web-issued auth-tokens — gql returns <code>dropCampaigns: null</code>, PubSub LISTEN returns <code>ERR_BADAUTH</code>. Only Android-issued OAuth tokens pass. Two paths below; the first is the only one that fully unlocks drops.</p>
+    <div class="kicker">{{t "login_twitch_paste.authorize"}}</div>
+    <h1>{{t "login_twitch_paste.authorize_h1"}} {{.DisplayName}}</h1>
+    <p class="intro">{{t "login_twitch_paste.intro"}} <code>{{t "login_twitch_paste.drop_campaigns"}}</code>, {{t "login_twitch_paste.pubsub"}} <code>{{t "login_twitch_paste.err_badauth"}}</code>. {{t "login_twitch_paste.only_android"}}</p>
   </div>
 
   <div class="auth-card method preferred">
     <div class="method-head">
-      <span class="method-tag">recommended</span>
-      <h2>Device-code login</h2>
+      <span class="method-tag">{{t "login_twitch_paste.recommended"}}</span>
+      <h2>{{t "login_twitch_paste.device_code_login"}}</h2>
     </div>
-    <p>Mints an Android-issued OAuth token via Twitch's official device-code flow. The miner injects it as the <code>auth-token</code> cookie in the sidecar tab so gql + PubSub both unlock.</p>
+    <p>{{t "login_twitch_paste.device_code_desc"}} <code>{{t "login_twitch_paste.auth_token"}}</code> {{t "login_twitch_paste.cookie_in_sidecar"}}</p>
     <div class="method-cta">
-      <a class="btn primary" href="/accounts/{{.AccountID}}/twitch/device">Start device-code →</a>
-      <span class="hint">Opens activate.twitch.tv with a 6-character code. ~30 seconds.</span>
+      <a class="btn primary" href="/accounts/{{.AccountID}}/twitch/device">{{t "login_twitch_paste.start_device"}} →</a>
+      <span class="hint">{{t "login_twitch_paste.device_hint"}}</span>
     </div>
   </div>
 
   <div class="auth-card method">
     <div class="method-head">
-      <span class="method-tag muted">fallback</span>
-      <h2>Manual cookie paste</h2>
+      <span class="method-tag muted">{{t "login_twitch_paste.fallback"}}</span>
+      <h2>{{t "login_twitch_paste.manual_paste"}}</h2>
     </div>
     <ol class="steps">
-      <li>Open <code>twitch.tv</code> in any browser and sign in.</li>
-      <li>DevTools → Application → Cookies → <code>https://www.twitch.tv</code>.</li>
-      <li>Copy at minimum <code>auth-token</code>.</li>
-      <li>Paste below. Web-issued tokens do not pass integrity — device-code is preferred.</li>
+      <li>{{t "login_twitch_paste.open"}} <code>{{t "login_twitch_paste.twitch_tv"}}</code> {{t "login_twitch_paste.in_any_browser"}}</li>
+      <li>{{t "login_twitch_paste.devtools"}} <code>https://www.twitch.tv</code>.</li>
+      <li>{{t "login_twitch_paste.copy_minimum"}} <code>{{t "login_twitch_paste.auth_token"}}</code>.</li>
+      <li>{{t "login_twitch_paste.paste_below"}}</li>
     </ol>
   </div>
   {{end}}
-  {{if .Flash}}<div class="auth-flash"><div class="err">{{.Flash}}</div></div>{{end}}
+  {{if .Flash}}<div class="auth-flash"><div class="err">{{t .Flash}}</div></div>{{end}}
   {{with .Page}}
   <div class="auth-card">
     <form method="post" action="/accounts/{{.AccountID}}/twitch/paste">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-      <label>auth-token <span class="req">(required)</span><input type="text" name="auth-token" required autocomplete="off"></label>
-      <label>persistent <span class="opt">(optional)</span><input type="text" name="persistent" autocomplete="off"></label>
-      <label>server_session_id <span class="opt">(optional)</span><input type="text" name="server_session_id" autocomplete="off"></label>
-      <label>twilight-user <span class="opt">(optional)</span><input type="text" name="twilight-user" autocomplete="off"></label>
-      <label>unique_id <span class="opt">(optional)</span><input type="text" name="unique_id" autocomplete="off"></label>
-      <label>login <span class="opt">(optional)</span><input type="text" name="login" autocomplete="off"></label>
-      <label>name <span class="opt">(optional)</span><input type="text" name="name" autocomplete="off"></label>
-      <label>raw paste <span class="opt">(optional — name=value lines, overrides empty fields above)</span>
+      <label>{{t "login_twitch_paste.auth_token"}} <span class="req">({{t "login_kick.required"}})</span><input type="text" name="auth-token" required autocomplete="off"></label>
+      <label>{{t "login_twitch_paste.persistent"}} <span class="opt">({{t "login_kick.optional"}})</span><input type="text" name="persistent" autocomplete="off"></label>
+      <label>server_session_id <span class="opt">({{t "login_kick.optional"}})</span><input type="text" name="server_session_id" autocomplete="off"></label>
+      <label>twilight-user <span class="opt">({{t "login_kick.optional"}})</span><input type="text" name="twilight-user" autocomplete="off"></label>
+      <label>unique_id <span class="opt">({{t "login_kick.optional"}})</span><input type="text" name="unique_id" autocomplete="off"></label>
+      <label>login <span class="opt">({{t "login_kick.optional"}})</span><input type="text" name="login" autocomplete="off"></label>
+      <label>name <span class="opt">({{t "login_kick.optional"}})</span><input type="text" name="name" autocomplete="off"></label>
+      <label>{{t "login_twitch_paste.raw_paste"}} <span class="opt">{{t "login_twitch_paste.raw_paste_desc"}}</span>
         <textarea name="raw" rows="6" class="raw-paste" autocomplete="off"></textarea>
       </label>
       <div class="submit-row">
-        <a class="alt" href="/accounts">← cancel</a>
-        <button class="btn primary" type="submit">Authorize →</button>
+        <a class="alt" href="/accounts">← {{t "login_twitch_paste.cancel"}}</a>
+        <button class="btn primary" type="submit">{{t "login_twitch_paste.authorize_btn"}} →</button>
       </div>
     </form>
   </div>

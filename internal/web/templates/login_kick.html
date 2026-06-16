@@ -1,42 +1,42 @@
 {{define "login_kick.html"}}{{template "layout" .}}{{end}}
 
-{{define "title"}}Kick login · GrubDrops{{end}}
+{{define "title"}}{{t "login_kick.title"}}{{end}}
 
 {{define "content"}}
 {{with .Page}}
 <div class="shell narrow">
   <div class="ph">
     <div>
-      <div class="kicker">// kick · authorize</div>
-      <h1>Authorize {{.DisplayName}}</h1>
+      <div class="kicker">{{t "login_kick.authorize"}}</div>
+      <h1>{{t "login_kick.authorize_h1"}} {{.DisplayName}}</h1>
     </div>
-    <div class="actions"><a class="btn ghost" href="/accounts">← accounts</a></div>
+    <div class="actions"><a class="btn ghost" href="/accounts">← {{t "login_kick.accounts"}}</a></div>
   </div>
 
-  <p class="lede">Kick has no public OAuth, so GrubDrops replays your kick.com session. Export your cookies once with a browser extension and paste them here — when discovery logs cloudflare / 401 the cookies have gone stale; re-export and paste again.</p>
+  <p class="lede">{{t "login_kick.intro"}}</p>
 
-  {{if $.Flash}}<div class="login-flash">{{$.Flash}}</div>{{end}}
+  {{if $.Flash}}<div class="login-flash">{{t $.Flash}}</div>{{end}}
 
   <div class="settings-stack">
 
     <section class="settings-card">
-      <header class="section-h"><h3>cookies.txt</h3></header>
+      <header class="section-h"><h3>{{t "login_kick.cookies_txt"}}</h3></header>
       <ol class="steps">
-        <li>Install <a href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc" target="_blank" rel="noopener noreferrer">Get cookies.txt LOCALLY</a> (Chrome / Edge / Brave) or <a href="https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/" target="_blank" rel="noopener noreferrer">cookies.txt</a> (Firefox).</li>
-        <li>Sign in at <code>kick.com</code>, click the extension's icon and hit <b>Export</b> (current site only).</li>
-        <li>Pick the downloaded file below — or open it and paste everything into the box.</li>
+        <li>{{t "login_kick.install"}} <a href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc" target="_blank" rel="noopener noreferrer">{{t "login_kick.chrome_ext"}}</a> (Chrome / Edge / Brave) or <a href="https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/" target="_blank" rel="noopener noreferrer">{{t "login_kick.firefox_ext"}}</a> (Firefox).</li>
+        <li>{{t "login_kick.sign_in"}} <code>kick.com</code>, {{t "login_kick.click_export"}} <b>{{t "login_kick.export_btn"}}</b> {{t "login_kick.current_site"}}</li>
+        <li>{{t "login_kick.pick_file"}}</li>
       </ol>
       <form method="post" action="/accounts/{{.AccountID}}/login">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-        <label>cookies.txt file <span class="opt">fills the box for you</span>
+        <label>{{t "login_kick.cookies_file"}} <span class="opt">{{t "login_kick.fills_box"}}</span>
           <input type="file" id="cookies-file" accept=".txt,text/plain">
         </label>
-        <label>contents <span class="req">required</span>
+        <label>{{t "login_kick.contents"}} <span class="req">{{t "login_kick.required"}}</span>
           <textarea name="cookies_txt" rows="8" required autocomplete="off" spellcheck="false" placeholder="# Netscape HTTP Cookie File&#10;.kick.com&#9;TRUE&#9;/&#9;TRUE&#9;…&#9;kick_session&#9;…"></textarea>
         </label>
         <div class="row">
-          <a class="back-link" href="/accounts">← cancel</a>
-          <button class="btn-linear" type="submit">Authorize →</button>
+          <a class="back-link" href="/accounts">← {{t "login_kick.cancel"}}</a>
+          <button class="btn-linear" type="submit">{{t "login_kick.authorize_btn"}} →</button>
         </div>
       </form>
       <script>

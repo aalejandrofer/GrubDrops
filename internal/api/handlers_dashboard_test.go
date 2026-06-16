@@ -80,7 +80,7 @@ func TestActiveCampsFromDiscovery_PopulatesChannelsAndClaimed(t *testing.T) {
 	}
 	claimed := stubClaimedCounter{counts: map[string]int64{"camp1": 2}}
 
-	rows := activeCampsFromDiscovery(ctx, sch, counters, claimed)
+	rows := activeCampsFromDiscovery(ctx, sch, counters, claimed, "en")
 	require.Len(t, rows, 1, "expected the single mock campaign in the snapshot")
 	row := rows[0]
 	assert.Equal(t, "camp1", row.ID)
@@ -112,7 +112,7 @@ func TestActiveCampsFromDiscovery_NilDepsFallBackToZero(t *testing.T) {
 	require.NoError(t, sch.Start(ctx))
 	sch.Wait()
 
-	rows := activeCampsFromDiscovery(ctx, sch, nil, nil)
+	rows := activeCampsFromDiscovery(ctx, sch, nil, nil, "en")
 	require.Len(t, rows, 1)
 	assert.Equal(t, 0, rows[0].Channels)
 	assert.Equal(t, 0, rows[0].Claimed)
@@ -122,7 +122,7 @@ func TestActiveCampsFromDiscovery_NilDepsFallBackToZero(t *testing.T) {
 // rather than panicking. The dashboard renders fine with nil for the
 // ActiveCamps field, so an early return preserves that contract.
 func TestActiveCampsFromDiscovery_NilScheduler(t *testing.T) {
-	assert.Nil(t, activeCampsFromDiscovery(context.Background(), nil, nil, nil))
+	assert.Nil(t, activeCampsFromDiscovery(context.Background(), nil, nil, nil, "en"))
 }
 
 // stubCompletedSource is a deterministic completedDataSource for the

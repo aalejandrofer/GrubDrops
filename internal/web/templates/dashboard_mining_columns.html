@@ -1,19 +1,14 @@
 {{define "dashboard_mining_columns"}}
-{{/* Two compact columns: TWITCH on the left, KICK on the right.
-     Each column renders one .account-row per account: avatar + handle +
-     state pill + a one-liner activity. Designed to fit 5–8 accounts per
-     column without scroll. The wrapping <div> is the HTMX swap target;
-     the polling endpoint refreshes its innerHTML every 2s. */}}
 <div class="mining-columns">
 
   <section class="mining-col mining-col-twitch">
     <header class="mining-col-head">
       <span class="pip twitch"></span>
-      <h3>TWITCH</h3>
+      <h3>{{t "mining.twitch"}}</h3>
       <span class="count">{{len .Twitch}}</span>
     </header>
     {{if not .Twitch}}
-    <div class="account-row empty">no twitch accounts</div>
+    <div class="account-row empty">{{t "mining.no_twitch"}}</div>
     {{end}}
     {{range .Twitch}}{{template "dashboard_account_row" .}}{{end}}
   </section>
@@ -21,11 +16,11 @@
   <section class="mining-col mining-col-kick">
     <header class="mining-col-head">
       <span class="pip kick"></span>
-      <h3>KICK</h3>
+      <h3>{{t "mining.kick"}}</h3>
       <span class="count">{{len .Kick}}</span>
     </header>
     {{if not .Kick}}
-    <div class="account-row empty">no kick accounts</div>
+    <div class="account-row empty">{{t "mining.no_kick"}}</div>
     {{end}}
     {{range .Kick}}{{template "dashboard_account_row" .}}{{end}}
   </section>
@@ -34,45 +29,42 @@
 {{end}}
 
 {{define "dashboard_account_row"}}
-{{/* <details> instead of <a>+modal — click to expand inline. Summary
-     row matches the previous layout; the expanded block shows just
-     the current drop + progress + next-up. */}}
 <details class="account-row-d {{if not .Enabled}}disabled{{end}} state-{{.State}}">
   <summary class="account-row">
     <span class="av">{{if .AvatarURL}}<img src="{{.AvatarURL}}" alt="" loading="lazy" onerror="this.remove()"><span class="av-i">{{.AccountInitial}}</span>{{else}}{{.AccountInitial}}{{end}}</span>
     <span class="who">
       <span class="name">{{if .Name}}{{.Name}}{{else}}{{.Login}}{{end}}</span>
-      {{if eq .WatchPath "ws"}}<span class="watch-mode ws" title="Accruing via pure WebSocket (no browser)">WS</span>
-      {{else if eq .WatchPath "chrome"}}<span class="watch-mode chrome" title="Accruing via Chrome sidecar (IVS playback)">Chrome</span>{{end}}
+      {{if eq .WatchPath "ws"}}<span class="watch-mode ws" title="{{t "mining.ws_title"}}">WS</span>
+      {{else if eq .WatchPath "chrome"}}<span class="watch-mode chrome" title="{{t "mining.chrome_title"}}">Chrome</span>{{end}}
     </span>
     <span class="activity">
       {{if eq .State "watching"}}
         <span class="drop">{{if .DropName}}{{.DropName}}{{else}}—{{end}}</span>
-        <span class="meta">{{.DropMins}}/{{.DropReq}}m · ETA {{.DropETA}}</span>
+        <span class="meta">{{.DropMins}}/{{.DropReq}}m · {{t "mining.eta"}} {{.DropETA}}</span>
       {{else if eq .State "claiming"}}
-        <span class="drop">{{if .DropName}}{{.DropName}}{{else}}drop{{end}}</span>
-        <span class="meta">claim in flight</span>
+        <span class="drop">{{if .DropName}}{{.DropName}}{{else}}{{t "mining.drop"}}{{end}}</span>
+        <span class="meta">{{t "mining.claim_in_flight"}}</span>
       {{else if eq .State "pick_stream"}}
-        <span class="meta">scanning channels{{if .DropCampaign}} · {{.DropCampaign}}{{end}}</span>
+        <span class="meta">{{t "mining.scanning_channels"}}{{if .DropCampaign}} · {{.DropCampaign}}{{end}}</span>
       {{else if eq .State "needs_auth"}}
-        <span class="meta">login required</span>
+        <span class="meta">{{t "mining.login_required"}}</span>
       {{else if eq .State "sleeping"}}
-        <span class="meta">no eligible campaign</span>
+        <span class="meta">{{t "mining.no_eligible"}}</span>
       {{else if eq .State "awaiting_connect"}}
-        <span class="meta">connect account to mine</span>
+        <span class="meta">{{t "mining.connect_account"}}</span>
       {{else}}
-        <span class="meta">{{if .StateSub}}{{.StateSub}}{{else}}—{{end}}</span>
+        <span class="meta">{{if .StateSub}}{{t .StateSub}}{{else}}—{{end}}</span>
       {{end}}
     </span>
     <span class="state-pill pill-{{.State}}">
-      {{if eq .State "watching"}}watching
-      {{else if eq .State "claiming"}}claiming
-      {{else if eq .State "needs_auth"}}needs login
-      {{else if eq .State "sleeping"}}sleeping
-      {{else if eq .State "awaiting_connect"}}awaiting connect
-      {{else if eq .State "pick_stream"}}scanning
-      {{else if eq .State "pick_campaign"}}picking
-      {{else if eq .State "idle"}}idle
+      {{if eq .State "watching"}}{{t "mining.watching"}}
+      {{else if eq .State "claiming"}}{{t "mining.claiming"}}
+      {{else if eq .State "needs_auth"}}{{t "mining.needs_login"}}
+      {{else if eq .State "sleeping"}}{{t "mining.sleeping"}}
+      {{else if eq .State "awaiting_connect"}}{{t "mining.awaiting_connect"}}
+      {{else if eq .State "pick_stream"}}{{t "mining.scanning"}}
+      {{else if eq .State "pick_campaign"}}{{t "mining.picking"}}
+      {{else if eq .State "idle"}}{{t "mining.idle"}}
       {{else}}{{.State}}{{end}}
     </span>
     {{if eq .State "watching"}}
@@ -80,15 +72,11 @@
       <span class="fill" style="width: {{.DropPercent}}%"></span>
     </span>
     {{end}}
-    {{/* Per-account reload: restarts ONLY this account's watcher (the rest
-         of the roster keeps running). Posts to /accounts/{id}/reload with
-         the CSRF token. onclick stops the click from toggling the parent
-         <details> open/closed. */}}
-    <button type="button" class="btn sm icon row-reload" title="Reload this account"
-            aria-label="Reload this account"
+    <button type="button" class="btn sm icon row-reload" title="{{t "mining.reload_account"}}"
+            aria-label="{{t "mining.reload_account"}}"
             hx-post="/accounts/{{.ID}}/reload"
             hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'
-            hx-confirm="Reload this account's watcher?"
+            hx-confirm="{{t "mining.reload_confirm"}}"
             onclick="event.stopPropagation();">↻</button>
   </summary>
 
@@ -97,20 +85,20 @@
     <div class="acc-exp-grid">
       <div class="acc-exp-main">
         <div class="acc-exp-row">
-          <span class="acc-exp-k">drop</span>
+          <span class="acc-exp-k">{{t "mining.drop"}}</span>
           <span class="acc-exp-v">{{if .DropName}}{{.DropName}}{{else}}—{{end}}</span>
         </div>
         <div class="acc-exp-row">
-          <span class="acc-exp-k">game</span>
+          <span class="acc-exp-k">{{t "mining.game"}}</span>
           <span class="acc-exp-v">{{if .ChannelGame}}{{.ChannelGame}}{{else}}—{{end}}</span>
         </div>
         <div class="acc-exp-row">
-          <span class="acc-exp-k">channel</span>
-          <span class="acc-exp-v">{{if .Channel}}<a href="{{.ChannelURL}}" target="_blank" rel="noopener">{{.Channel}} ↗</a>{{if ne .ChannelViews "—"}} <span class="acc-exp-views">· {{.ChannelViews}} viewers</span>{{end}}{{else}}—{{end}}</span>
+          <span class="acc-exp-k">{{t "mining.channel"}}</span>
+          <span class="acc-exp-v">{{if .Channel}}<a href="{{.ChannelURL}}" target="_blank" rel="noopener">{{.Channel}} ↗</a>{{if ne .ChannelViews "—"}} <span class="acc-exp-views">· {{.ChannelViews}} {{t "mining.viewers"}}</span>{{end}}{{else}}—{{end}}</span>
         </div>
         <div class="acc-exp-row">
-          <span class="acc-exp-k">progress</span>
-          <span class="acc-exp-v">{{.DropMins}}/{{.DropReq}}m · {{.DropPercent}}% · ETA {{.DropETA}}{{if .Uptime}} · {{.Uptime}} on stream{{end}}{{if .LastPoll}} · last poll {{.LastPoll}}{{end}}</span>
+          <span class="acc-exp-k">{{t "mining.progress"}}</span>
+          <span class="acc-exp-v">{{.DropMins}}/{{.DropReq}}m · {{.DropPercent}}% · {{t "mining.eta"}} {{.DropETA}}{{if .Uptime}} · {{.Uptime}} {{t "mining.on_stream"}}{{end}}{{if .LastPoll}} · {{t "mining.last_poll"}} {{.LastPoll}}{{end}}</span>
         </div>
       </div>
       {{if .DropImage}}
@@ -121,13 +109,13 @@
     </div>
     {{else}}
     <div class="acc-exp-row">
-      <span class="acc-exp-k">state</span>
-      <span class="acc-exp-v">{{.State}}{{if .StateSub}} · {{.StateSub}}{{end}}</span>
+      <span class="acc-exp-k">{{t "mining.state"}}</span>
+      <span class="acc-exp-v">{{.State}}{{if .StateSub}} · {{t .StateSub}}{{end}}</span>
     </div>
     {{end}}
     {{if .Queue}}
     <div class="acc-exp-row acc-exp-next">
-      <span class="acc-exp-k">next</span>
+      <span class="acc-exp-k">{{t "mining.next"}}</span>
       <span class="acc-exp-v">
         {{range .Queue}}<span class="acc-exp-queue-item">{{.N}}. {{.Name}} <small>{{.Sub}} · {{.Req}}</small></span>{{end}}
       </span>
@@ -137,17 +125,11 @@
 </details>
 {{end}}
 
-{{/* Telemetry tiles — data is the dashTelemetry (.Tele on the page). Rendered
-     on page load and re-fetched every 10s via #telemetry-swap so NEXT CLAIM
-     reflects the current closest-to-finish drop across all accounts. */}}
 {{define "dashboard_telemetry"}}
-  {{/* Watch time + Drops claimed are all-time totals (Claimed today sits next
-       to its lifetime sibling); Active campaigns / Drops collected / Next claim
-       describe the current run, with explicit scope labels. */}}
-  <div class="stat"><div class="label">Watch time</div><div class="value">{{.WatchTimeTotal}}<sup>h:m</sup></div><div class="delta flat">lifetime</div></div>
-  <div class="stat"><div class="label">Drops claimed</div><div class="value">{{.ClaimsTotal}}<sup>items</sup></div><div class="delta flat">lifetime</div></div>
-  <div class="stat"><div class="label">Claimed today</div><div class="value">{{.ClaimsToday}}<sup>items</sup></div><div class="delta flat">since midnight</div></div>
-  <div class="stat"><div class="label">Active campaigns</div><div class="value">{{.ActiveCamps}}<sup>live</sup></div><div class="delta flat">on your whitelist</div></div>
-  <div class="stat"><div class="label">Drops collected</div><div class="value">{{.Completed}} / {{.TotalDrops}}<sup>drops</sup></div><div class="delta flat">whitelist total</div></div>
-  <div class="stat"><div class="label">Next claim</div><div class="value" style="color:var(--accent)">{{.NextClaimETA}}<sup>h:m</sup></div><div class="delta">{{.NextClaimName}}</div></div>
+  <div class="stat"><div class="label">{{t "tele.watch_time"}}</div><div class="value">{{.WatchTimeTotal}}<sup>{{t "tele.hm"}}</sup></div><div class="delta flat">{{t "tele.lifetime"}}</div></div>
+  <div class="stat"><div class="label">{{t "tele.drops_claimed"}}</div><div class="value">{{.ClaimsTotal}}<sup>{{t "tele.items"}}</sup></div><div class="delta flat">{{t "tele.lifetime"}}</div></div>
+  <div class="stat"><div class="label">{{t "tele.claimed_today"}}</div><div class="value">{{.ClaimsToday}}<sup>{{t "tele.items"}}</sup></div><div class="delta flat">{{t "tele.since_midnight"}}</div></div>
+  <div class="stat"><div class="label">{{t "tele.active_campaigns"}}</div><div class="value">{{.ActiveCamps}}<sup>{{t "tele.live"}}</sup></div><div class="delta flat">{{t "tele.on_whitelist"}}</div></div>
+  <div class="stat"><div class="label">{{t "tele.drops_collected"}}</div><div class="value">{{.Completed}} / {{.TotalDrops}}<sup>{{t "tele.drops"}}</sup></div><div class="delta flat">{{t "tele.whitelist_total"}}</div></div>
+  <div class="stat"><div class="label">{{t "tele.next_claim"}}</div><div class="value" style="color:var(--accent)">{{.NextClaimETA}}<sup>{{t "tele.hm"}}</sup></div><div class="delta">{{.NextClaimName}}</div></div>
 {{end}}

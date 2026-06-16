@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+
+	"github.com/aalejandrofer/grubdrops/internal/i18n"
 )
 
 // Renderer is satisfied by *web.PageTemplates and by *template.Template.
@@ -20,9 +22,16 @@ type templateData struct {
 	AccountsRows     any    // optional: inline accounts table on settings page
 	OIDCEnabled      bool   // show the SSO button on the login page
 	OIDCProviderName string // SSO button label
+	Lang             string // current language code (e.g. "en", "zh-CN")
 }
 
-func render(w http.ResponseWriter, t Renderer, name string, data templateData) {
+func render(w http.ResponseWriter, r *http.Request, t Renderer, name string, data templateData) {
+	// Detect and set language for the template function "t".
+	lang := i18n.DetectLang(r)
+	data.Lang = lang
+	i18n.SetLang(lang)
+	defer i18n.ClearLang()
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	var buf bytes.Buffer
 	if err := t.ExecuteTemplate(&buf, name, data); err != nil {
@@ -32,7 +41,11 @@ func render(w http.ResponseWriter, t Renderer, name string, data templateData) {
 	_, _ = w.Write(buf.Bytes())
 }
 
-func renderPartial(w http.ResponseWriter, t Renderer, name string, data any) {
+func renderPartial(w http.ResponseWriter, r *http.Request, t Renderer, name string, data any) {
+	lang := i18n.DetectLang(r)
+	i18n.SetLang(lang)
+	defer i18n.ClearLang()
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	var buf bytes.Buffer
 	if err := t.ExecuteTemplate(&buf, name, data); err != nil {

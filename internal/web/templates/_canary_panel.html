@@ -9,28 +9,28 @@
   {{- end}}{{end}}>
   {{with .Page}}
   <div class="kvrow">
-    <span class="k">twitch</span>
+    <span class="k">{{t "canary.twitch"}}</span>
     <span class="v">
       {{if not .CanaryTwitch.Configured}}
-        <span class="muted">not configured</span>
+        <span class="muted">{{t "canary.not_configured"}}</span>
       {{else if eq .CanaryTwitch.When ""}}
-        <span class="muted">no result yet</span>
+        <span class="muted">{{t "canary.no_result"}}</span>
       {{else if .CanaryTwitch.OK}}
-        <span class="canary-ok">&#x2713; ok</span> <span class="muted">{{.CanaryTwitch.When}}</span>
+        <span class="canary-ok">&#x2713; {{t "canary.ok"}}</span> <span class="muted">{{.CanaryTwitch.When}}</span>
       {{else}}
         <span class="canary-err">&#x2717; {{.CanaryTwitch.Detail}}</span> <span class="muted">{{.CanaryTwitch.When}}</span>
       {{end}}
     </span>
   </div>
   <div class="kvrow">
-    <span class="k">kick</span>
+    <span class="k">{{t "canary.kick"}}</span>
     <span class="v">
       {{if not .CanaryKick.Configured}}
-        <span class="muted">not configured</span>
+        <span class="muted">{{t "canary.not_configured"}}</span>
       {{else if eq .CanaryKick.When ""}}
-        <span class="muted">no result yet</span>
+        <span class="muted">{{t "canary.no_result"}}</span>
       {{else if .CanaryKick.OK}}
-        <span class="canary-ok">&#x2713; ok</span> <span class="muted">{{.CanaryKick.When}}</span>
+        <span class="canary-ok">&#x2713; {{t "canary.ok"}}</span> <span class="muted">{{.CanaryKick.When}}</span>
       {{else}}
         <span class="canary-err">&#x2717; {{.CanaryKick.Detail}}</span> <span class="muted">{{.CanaryKick.When}}</span>
       {{end}}
@@ -43,7 +43,7 @@
         hx-post="/settings/canary/run"
         hx-target="#canary-panel"
         hx-swap="outerHTML"
-        hx-headers='{"X-CSRF-Token": "{{$.CSRFToken}}"}'>Run now &#x2192;</button>
+        hx-headers='{"X-CSRF-Token": "{{$.CSRFToken}}"}'>{{t "canary.run_now"}} &#x2192;</button>
     </span>
   </div>
   {{end}}
@@ -59,24 +59,24 @@
   <div class="kvedit">
     {{with .Page}}
     <div class="row">
-      <span class="k">twitch channel</span>
-      <span class="d">Twitch channel slug to probe &#x2014; leave empty to skip</span>
-      <span class="v grow"><input type="text" name="canary_twitch_channel" value="{{.CanaryTwitchChannel}}" placeholder="e.g. ninja"></span>
+      <span class="k">{{t "canary.twitch_channel"}}</span>
+      <span class="d">{{t "canary.twitch_channel_desc"}}</span>
+      <span class="v grow"><input type="text" name="canary_twitch_channel" value="{{.CanaryTwitchChannel}}" placeholder="{{t "canary.twitch_placeholder"}}"></span>
     </div>
     <div class="row">
-      <span class="k">kick channel</span>
-      <span class="d">Kick channel slug to probe &#x2014; leave empty to skip</span>
-      <span class="v grow"><input type="text" name="canary_kick_channel" value="{{.CanaryKickChannel}}" placeholder="e.g. xqc"></span>
+      <span class="k">{{t "canary.kick_channel"}}</span>
+      <span class="d">{{t "canary.kick_channel_desc"}}</span>
+      <span class="v grow"><input type="text" name="canary_kick_channel" value="{{.CanaryKickChannel}}" placeholder="{{t "canary.kick_placeholder"}}"></span>
     </div>
     <div class="row">
-      <span class="k">interval</span>
-      <span class="d">how often the canary runs (0 = disabled)</span>
+      <span class="k">{{t "canary.interval"}}</span>
+      <span class="d">{{t "canary.interval_desc"}}</span>
       <span class="v"><input type="number" name="canary_interval_sec" value="{{.CanaryIntervalSec}}" min="0" max="86400"><span class="u">s</span></span>
     </div>
     {{end}}
   </div>
   <div class="row" style="margin-top:18px;justify-content:flex-end;">
-    <button class="btn-linear" type="submit">Save &#x2192;</button>
+    <button class="btn-linear" type="submit">{{t "canary.save"}} &#x2192;</button>
   </div>
 </form>
 {{end}}

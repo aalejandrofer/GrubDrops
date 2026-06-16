@@ -1,5 +1,5 @@
 {{define "layout"}}<!doctype html>
-<html lang="en">
+<html lang="{{.Lang}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -35,16 +35,30 @@
 {{block "content" .}}{{end}}
 </main>
 <script>
+  // Clock: show browser-local time instead of UTC.
   (function () {
     function tick() {
-      const el = document.querySelector('.clock');
+      var el = document.querySelector('.clock');
       if (!el) return;
-      const n = new Date();
-      const pad = (x) => String(x).padStart(2,'0');
-      el.textContent = pad(n.getUTCHours()) + ':' + pad(n.getUTCMinutes()) + ':' + pad(n.getUTCSeconds()) + ' UTC';
+      el.textContent = new Date().toLocaleTimeString();
     }
     tick(); setInterval(tick, 1000);
   })();
+  // Convert any element with data-ts attribute from ISO 8601 to local time.
+  function convertTimestamps(root) {
+    (root || document).querySelectorAll('[data-ts]').forEach(function(el) {
+      var ts = el.getAttribute('data-ts');
+      if (ts) {
+        var d = new Date(ts);
+        if (!isNaN(d)) el.textContent = d.toLocaleString();
+      }
+    });
+  }
+  convertTimestamps(document);
+  // Re-convert after HTMX swaps.
+  document.body.addEventListener('htmx:afterSwap', function(e) {
+    convertTimestamps(e.target || document);
+  });
 </script>
 <script>
   // Theme toggle: flip data-theme on <html>, persist to localStorage, update the
@@ -61,6 +75,36 @@
       document.documentElement.setAttribute('data-theme', next);
       try { localStorage.setItem('theme', next); } catch (e) {}
       btn.textContent = glyph();
+    });
+  })();
+</script>
+<script>
+  // Custom language dropdown.
+  (function () {
+    var dd = document.getElementById('lang-dd');
+    if (!dd) return;
+    var btn = document.getElementById('lang-dd-btn');
+    var menu = document.getElementById('lang-dd-menu');
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = menu.hidden;
+      menu.hidden = !open;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    menu.addEventListener('click', function (e) {
+      var li = e.target.closest('li[data-lang]');
+      if (!li) return;
+      var lang = li.getAttribute('data-lang');
+      // POST to /api/lang via a hidden form.
+      var f = document.createElement('form');
+      f.method = 'POST'; f.action = '/api/lang'; f.style.display = 'none';
+      var i = document.createElement('input');
+      i.name = 'lang'; i.value = lang; f.appendChild(i);
+      document.body.appendChild(f); f.submit();
+    });
+    document.addEventListener('click', function () {
+      menu.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
     });
   })();
 </script>

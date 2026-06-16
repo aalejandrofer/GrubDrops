@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -14,6 +15,9 @@ type Config struct {
 	DiscordWebhookURL string
 	SecureCookies     bool
 	BrowserURL        string
+	// Location is the timezone used for all displayed times. Loaded from the
+	// TZ environment variable (e.g. "Asia/Shanghai"). Defaults to UTC.
+	Location *time.Location
 	// BrowserURLs is the full sidecar pool (GRUB_BROWSER_URLS, comma-sep).
 	// Kick shards accounts across these so two logged-in Kick accounts get
 	// their own Chrome (one shared Chrome collides on the kick.com cookie).
@@ -79,6 +83,13 @@ func Load() (Config, error) {
 	cfg.OIDCAllowedGroups = splitList(os.Getenv("GRUB_OIDC_ALLOWED_GROUPS"))
 	if strings.TrimSpace(cfg.MasterKey) == "" {
 		return Config{}, fmt.Errorf("GRUB_MASTER_KEY is required")
+	}
+	// Timezone: TZ env var → time.Local (Docker-style).
+	cfg.Location = time.UTC
+	if tz := os.Getenv("TZ"); tz != "" {
+		if loc, err := time.LoadLocation(tz); err == nil {
+			cfg.Location = loc
+		}
 	}
 	return cfg, nil
 }

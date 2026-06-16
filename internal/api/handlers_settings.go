@@ -13,6 +13,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 
 	"github.com/aalejandrofer/grubdrops/internal/auth"
+	"github.com/aalejandrofer/grubdrops/internal/i18n"
 	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
 	"github.com/aalejandrofer/grubdrops/internal/canary"
 	"github.com/aalejandrofer/grubdrops/internal/gameslug"
@@ -22,6 +23,7 @@ import (
 )
 
 type settingsDeps struct {
+	loc   *time.Location // timezone for displayed times
 	s        *store.Settings
 	q        *gen.Queries // for inline accounts table
 	sch      *scheduler.Scheduler
@@ -128,6 +130,7 @@ type settingsPageData struct {
 }
 
 func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active string) {
+	lang := i18n.DetectLang(r)
 	ctx := r.Context()
 	url, _ := d.s.GlobalDiscordWebhook(ctx)
 	avatarURL, _ := d.s.NotifyAvatarURL(ctx)
@@ -183,10 +186,10 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 	canaryTwitchCh, _ := d.s.CanaryTwitchChannel(ctx)
 	canaryKickCh, _ := d.s.CanaryKickChannel(ctx)
 	canaryIntervalSec, _ := d.s.CanaryIntervalSec(ctx)
-	canaryTwitchView := buildCanaryView(ctx, d.q, "twitch", canaryTwitchCh)
-	canaryKickView := buildCanaryView(ctx, d.q, "kick", canaryKickCh)
+	canaryTwitchView := buildCanaryView(ctx, d.q, "twitch", canaryTwitchCh, lang)
+	canaryKickView := buildCanaryView(ctx, d.q, "kick", canaryKickCh, lang)
 
-	render(w, d.t, "settings.html", templateData{
+	render(w, r, d.t, "settings.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: active,
 		Page: settingsPageData{
 			GlobalDiscordWebhook: url,
@@ -293,9 +296,9 @@ func (d *settingsDeps) postGeneral(w http.ResponseWriter, r *http.Request) {
 	if d.onUpdate != nil {
 		d.onUpdate()
 	}
-	msg := "settings saved"
+	msg := "flash.settings_saved"
 	if intervalsChanged {
-		msg = "settings saved — reload watchers (or restart) to apply the new cadence"
+		msg = "flash.settings_saved_reload"
 	}
 	d.sm.Put(ctx, "flash", msg)
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
@@ -329,11 +332,11 @@ func (d *settingsDeps) postNotifications(w http.ResponseWriter, r *http.Request)
 	if d.onUpdate != nil {
 		d.onUpdate()
 	}
-	msg := "notifications saved"
+	msg := "flash.notifications_saved"
 	if stepChanged {
 		// The step is read by each watcher at build time, so it applies on
 		// the next scheduler reload, not live like the on/off toggles.
-		msg = "notifications saved — reload watchers to apply the progress milestone step"
+		msg = "flash.notifications_saved_reload"
 	}
 	d.sm.Put(ctx, "flash", msg)
 	http.Redirect(w, r, "/settings/notifications", http.StatusSeeOther)
@@ -348,7 +351,7 @@ func (d *settingsDeps) postPriorityMode(w http.ResponseWriter, r *http.Request) 
 	if d.onUpdate != nil {
 		d.onUpdate()
 	}
-	d.sm.Put(ctx, "flash", "priority mode saved")
+	d.sm.Put(ctx, "flash", "flash.priority_mode_saved")
 	http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
 }
 
@@ -374,9 +377,9 @@ func (d *settingsDeps) postExperimental(w http.ResponseWriter, r *http.Request) 
 	if d.onUpdate != nil {
 		d.onUpdate()
 	}
-	msg := "experimental settings saved"
+	msg := "flash.experimental_saved"
 	if changed {
-		msg = "Kick watch mode saved — reload watchers (or restart) to switch paths"
+		msg = "flash.kick_watch_saved"
 	}
 	d.sm.Put(ctx, "flash", msg)
 	http.Redirect(w, r, "/settings/experimental", http.StatusSeeOther)
@@ -516,31 +519,31 @@ func (d *settingsDeps) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	admin, err := d.q.GetAdmin(ctx)
 	if err != nil {
-		fail("admin not configured")
+		fail("flash.admin_not_configured")
 		return
 	}
 	if err := auth.VerifyPassword(admin.PasswordHash, cur); err != nil {
-		fail("current password is wrong")
+		fail("flash.current_password_wrong")
 		return
 	}
 	if len(nw) < 8 {
-		fail("new password must be at least 8 characters")
+		fail("flash.new_password_short")
 		return
 	}
 	if nw != cf {
-		fail("new passwords do not match")
+		fail("flash.new_passwords_mismatch")
 		return
 	}
 	hash, err := auth.HashPassword(nw)
 	if err != nil {
-		fail("could not hash password")
+		fail("flash.could_not_hash")
 		return
 	}
 	if err := d.q.UpsertAdmin(ctx, gen.UpsertAdminParams{PasswordHash: hash, CreatedAt: time.Now().Unix()}); err != nil {
-		fail("could not save password")
+		fail("flash.could_not_save")
 		return
 	}
-	d.sm.Put(ctx, "flash", "master password changed")
+	d.sm.Put(ctx, "flash", "flash.master_password_changed")
 	http.Redirect(w, r, "/settings/security", http.StatusSeeOther)
 }
 
@@ -574,7 +577,7 @@ func (d *settingsDeps) globalGamesPost(w http.ResponseWriter, r *http.Request) {
 		d.onUpdate()
 	}
 	d.applyReload(ctx)
-	d.sm.Put(ctx, "flash", "global priority saved")
+	d.sm.Put(ctx, "flash", "flash.global_priority_saved")
 	http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
 }
 
@@ -593,7 +596,7 @@ func (d *settingsDeps) applyReload(ctx context.Context) {
 // buildCanaryView loads a stored canary result and builds the template view
 // for one platform. channel="" → Configured=false; no stored result →
 // Configured=true with empty When.
-func buildCanaryView(ctx context.Context, q *gen.Queries, platform, channel string) canaryView {
+func buildCanaryView(ctx context.Context, q *gen.Queries, platform, channel, lang string) canaryView {
 	if channel == "" {
 		return canaryView{Configured: false}
 	}
@@ -606,7 +609,7 @@ func buildCanaryView(ctx context.Context, q *gen.Queries, platform, channel stri
 	}
 	when := ""
 	if !res.CheckedAt.IsZero() {
-		when = formatRelative(time.Since(res.CheckedAt))
+		when = formatRelative(time.Since(res.CheckedAt), lang)
 	}
 	return canaryView{
 		Configured: true,
@@ -617,17 +620,18 @@ func buildCanaryView(ctx context.Context, q *gen.Queries, platform, channel stri
 }
 
 // formatRelative returns a human "5m ago" / "2h ago" string for a duration.
-func formatRelative(d time.Duration) string {
+func formatRelative(d time.Duration, lang string) string {
 	if d < 0 {
 		d = 0
 	}
+	ago := i18n.T(lang, "time.ago")
 	switch {
 	case d < time.Minute:
-		return fmt.Sprintf("%ds ago", int(d.Seconds()))
+		return fmt.Sprintf("%ds %s", int(d.Seconds()), ago)
 	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+		return fmt.Sprintf("%dm %s", int(d.Minutes()), ago)
 	default:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
+		return fmt.Sprintf("%dh %s", int(d.Hours()), ago)
 	}
 }
 
@@ -650,7 +654,7 @@ func (d *settingsDeps) canarySave(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	d.sm.Put(ctx, "flash", "canary settings saved")
+	d.sm.Put(ctx, "flash", "flash.canary_saved")
 	http.Redirect(w, r, "/settings/health", http.StatusSeeOther)
 }
 
@@ -691,19 +695,20 @@ func (d *settingsDeps) canaryPanel(w http.ResponseWriter, r *http.Request) {
 // true the panel gets hx-trigger="load delay:8s" so the browser polls once
 // after a background run-now finishes.
 func (d *settingsDeps) renderCanaryPanel(w http.ResponseWriter, r *http.Request, addAutoRefresh bool) {
+	lang := i18n.DetectLang(r)
 	ctx := r.Context()
 	twitchCh, _ := d.s.CanaryTwitchChannel(ctx)
 	kickCh, _ := d.s.CanaryKickChannel(ctx)
 	intervalSec, _ := d.s.CanaryIntervalSec(ctx)
 	page := settingsPageData{
-		CanaryTwitch:           buildCanaryView(ctx, d.q, "twitch", twitchCh),
-		CanaryKick:             buildCanaryView(ctx, d.q, "kick", kickCh),
+		CanaryTwitch:           buildCanaryView(ctx, d.q, "twitch", twitchCh, lang),
+		CanaryKick:             buildCanaryView(ctx, d.q, "kick", kickCh, lang),
 		CanaryTwitchChannel:    twitchCh,
 		CanaryKickChannel:      kickCh,
 		CanaryIntervalSec:      intervalSec,
 		CanaryPanelAutoRefresh: addAutoRefresh,
 	}
-	renderPartial(w, d.t, "canary_panel", templateData{
+	renderPartial(w, r, d.t, "canary_panel", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "health",
 		Page: page,
 	})

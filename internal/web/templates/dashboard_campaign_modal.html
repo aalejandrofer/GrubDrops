@@ -9,39 +9,39 @@
           <span class="plat">{{.Platform}}</span>
           {{if .Game}} · <span class="game">{{.Game}}</span>{{end}}
           {{if .Status}} · <span class="status">{{.Status}}</span>{{end}}
-          {{if eq .Platform "twitch"}} · {{if .AccountLinked}}<span class="link-chip link-ok" title="external account linked — drop can be issued">● connected</span>{{else}}<span class="link-chip link-warn" title="external account NOT linked — drop blocked">⚠ not connected</span>{{end}}{{end}}
-          {{if eq .Kind "reward"}} · <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;padding:1px 6px;border:1px solid var(--accent);color:var(--accent);background:rgba(212,99,30,0.08);">reward</span>{{end}}
+          {{if eq .Platform "twitch"}} · {{if .AccountLinked}}<span class="link-chip link-ok" title="{{t "campaign_modal.linked_title"}}">● {{t "campaign_modal.connected"}}</span>{{else}}<span class="link-chip link-warn" title="{{t "campaign_modal.not_linked_title"}}">⚠ {{t "campaign_modal.not_connected"}}</span>{{end}}{{end}}
+          {{if eq .Kind "reward"}} · <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;padding:1px 6px;border:1px solid var(--accent);color:var(--accent);background:rgba(212,99,30,0.08);">{{t "campaign_modal.reward"}}</span>{{end}}
         </div>
       </div>
-      <button type="button" class="modal-close" onclick="document.getElementById('modal').innerHTML=''" aria-label="Close">×</button>
+      <button type="button" class="modal-close" onclick="document.getElementById('modal').innerHTML=''" aria-label="{{t "campaign_modal.close_aria"}}">×</button>
     </div>
 
     <div class="modal-body">
       <div class="modal-row">
-        <div class="kv"><span class="k">ID</span><span class="v">{{.ID}}</span></div>
-        <div class="kv"><span class="k">Starts</span><span class="v">{{.StartsAt}}</span></div>
+        <div class="kv"><span class="k">{{t "campaign_modal.id"}}</span><span class="v">{{.ID}}</span></div>
+        <div class="kv"><span class="k">{{t "campaign_modal.starts"}}</span><span class="v">{{.StartsAt}}</span></div>
         <div class="kv">
-          <span class="k">Ends</span>
+          <span class="k">{{t "campaign_modal.ends"}}</span>
           <span class="v" {{if .EndsUrgent}}style="color: var(--red)"{{end}}>
-            {{.EndsAt}}{{if .EndsIn}} <small class="muted">(in {{.EndsIn}})</small>{{end}}
+            {{.EndsAt}}{{if .EndsIn}} <small class="muted">({{t "campaign_modal.in_prefix"}} {{.EndsIn}})</small>{{end}}
           </span>
         </div>
       </div>
 
       {{if and (eq .Platform "twitch") (not .AccountLinked)}}
       <div class="modal-section" style="border-left:3px solid var(--accent);padding-left:12px;">
-        <h4 style="color:var(--accent)">⚠ External account not linked</h4>
+        <h4 style="color:var(--accent)">⚠ {{t "campaign_modal.ext_not_linked"}}</h4>
         <p style="color:var(--muted);margin:6px 0;font-size:12px;line-height:1.5;">
-          Twitch can't issue this drop until you link the required external account (e.g. Mojang for Minecraft, Battle.net for Diablo). Watcher skips the campaign until linked.
+          {{t "campaign_modal.ext_not_linked_desc"}}
         </p>
         {{if .AccountLinkURL}}
-        <a class="btn primary" href="{{.AccountLinkURL}}" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px;">Link account →</a>
+        <a class="btn primary" href="{{.AccountLinkURL}}" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px;">{{t "campaign_modal.link_account"}} →</a>
         {{end}}
       </div>
       {{end}}
 
       <div class="modal-section">
-        <h4>Drop benefits <span class="meta">{{len .Benefits}}</span></h4>
+        <h4>{{t "campaign_modal.drop_benefits"}} <span class="meta">{{len .Benefits}}</span></h4>
         {{if .Benefits}}
         <ul class="modal-benefits">
           {{range .Benefits}}
@@ -49,30 +49,30 @@
             {{if .ImageURL}}<img src="{{.ImageURL}}" alt="" class="benefit-img">{{end}}
             <div class="benefit-meta">
               <div class="benefit-name">{{.Name}}</div>
-              <div class="benefit-sub">{{.RequiredMinutes}}m required · {{.ID}}</div>
+              <div class="benefit-sub">{{.RequiredMinutes}}{{t "campaign_modal.m_required"}} · {{.ID}}</div>
             </div>
           </li>
           {{end}}
         </ul>
         {{else}}
-        <div class="modal-empty">No benefits reported.</div>
+        <div class="modal-empty">{{t "campaign_modal.no_benefits"}}</div>
         {{end}}
       </div>
 
       <div class="modal-section">
-        <h4>Eligible accounts <span class="meta">{{len .EligibleAccounts}}</span></h4>
+        <h4>{{t "campaign_modal.eligible_accounts"}} <span class="meta">{{len .EligibleAccounts}}</span></h4>
         {{if .EligibleAccounts}}
         <ul class="modal-accounts">
           {{range .EligibleAccounts}}<li>{{.}}</li>{{end}}
         </ul>
         {{else}}
-        <div class="modal-empty">No account has this campaign's game whitelisted.</div>
+        <div class="modal-empty">{{t "campaign_modal.no_eligible_accounts"}}</div>
         {{end}}
       </div>
 
       {{if and .SourceAccounts (gt (len .SourceAccounts) (len .EligibleAccounts))}}
       <div class="modal-section">
-        <h4>Also seen by <span class="meta">{{len .SourceAccounts}}</span></h4>
+        <h4>{{t "campaign_modal.also_seen_by"}} <span class="meta">{{len .SourceAccounts}}</span></h4>
         <ul class="modal-accounts">
           {{range .SourceAccounts}}<li>{{.}}</li>{{end}}
         </ul>
@@ -80,7 +80,7 @@
       {{end}}
 
       <details class="modal-section">
-        <summary>Raw campaign JSON</summary>
+        <summary>{{t "campaign_modal.raw_json"}}</summary>
         <pre class="modal-json">{{.RawJSON}}</pre>
       </details>
     </div>

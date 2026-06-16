@@ -12,6 +12,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/aalejandrofer/grubdrops/internal/i18n"
 	mlog "github.com/aalejandrofer/grubdrops/internal/log"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/scheduler"
@@ -58,6 +59,7 @@ type dashboardDeps struct {
 	ring  *mlog.Ring
 	s     *store.Settings
 	start time.Time
+	loc   *time.Location // timezone for displayed times
 	// channelCounters is keyed by platform name ("twitch", "kick"). Nil
 	// or missing entries make the dashboard fall back to zero for that
 	// platform — safer than panicking when a backend isn't wired up.
@@ -253,6 +255,7 @@ type dashAlert struct {
 }
 
 func (d dashboardDeps) collectPage(r *http.Request) dashPage {
+	lang := i18n.DetectLang(r)
 	accs, _ := d.q.ListAllAccounts(r.Context())
 	snapshots := d.sch.WatcherSnapshots()
 	snapByID := map[string]watcher.Snapshot{}
@@ -290,7 +293,7 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 		if !ok {
 			snap = watcher.Snapshot{AccountID: a.ID, State: "stopped"}
 		}
-		c := mineCardFromSnap(a, snap)
+		c := mineCardFromSnap(a, snap, lang)
 		c.CSRFToken = csrf
 		if c.Platform == "kick" && d.kickPath != nil {
 			c.WatchPath = d.kickPath(a.ID)
@@ -307,29 +310,29 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 		case "needs_auth":
 			alerts = append(alerts, dashAlert{
 				Kind: "needs_auth", Account: c.Name,
-				URL: "/accounts/" + c.ID + "/login", Action: "Re-authenticate →",
+				URL: "/accounts/" + c.ID + "/login", Action: i18n.T(lang, "dashboard.action_re_auth"),
 			})
 		case "sleeping":
 			if c.Platform == "twitch" {
 				alerts = append(alerts, dashAlert{
 					Kind: "no_drops", Account: c.Name,
-					URL: "/accounts/" + c.ID + "/login", Action: "Switch to device-code login →",
+					URL: "/accounts/" + c.ID + "/login", Action: i18n.T(lang, "dashboard.action_device_code"),
 				})
 			}
 		case "awaiting_connect":
 			alerts = append(alerts, dashAlert{
 				Kind: "awaiting_connect", Account: c.Name,
-				URL: "/drops", Action: "Connect account →",
+				URL: "/drops", Action: i18n.T(lang, "dashboard.action_connect"),
 			})
 		case "no_games":
 			alerts = append(alerts, dashAlert{
 				Kind: "no_games", Account: c.Name,
-				URL: "/accounts/" + c.ID, Action: "Add games →",
+				URL: "/accounts/" + c.ID, Action: i18n.T(lang, "dashboard.action_add_games"),
 			})
 		}
 	}
 
-	camps := activeCampsFromDiscovery(r.Context(), d.sch, d.channelCounters, d.q)
+	camps := activeCampsFromDiscovery(r.Context(), d.sch, d.channelCounters, d.q, lang)
 
 	mining := bucketMiningByPlatform(cards)
 	if d.s != nil {
@@ -343,7 +346,7 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 		NextClaims:    nextClaimsFrom(cards),
 		ActiveCamps:   camps,
 		LiveChannels:  liveChannelsFor(accs, snapshots, allowed),
-		Events:        eventsFromRing(d.ring, "", "", accs),
+		Events:        eventsFromRing(d.ring, "", "", accs, d.loc),
 		EventAccounts: eventAccountsFrom(accs),
 		EventFilter:   "all",
 		UpdatedAt:     nowPoll(time.Now()),
@@ -392,7 +395,7 @@ type claimedCounter interface {
 // per campaign; `q` supplies the cross-account claim count. Either may
 // be nil — the corresponding column then renders as zero, matching the
 // previous TODO behaviour.
-func activeCampsFromDiscovery(ctx context.Context, sch *scheduler.Scheduler, chanCounters map[string]ChannelCounter, q claimedCounter) []dashCampaign {
+func activeCampsFromDiscovery(ctx context.Context, sch *scheduler.Scheduler, chanCounters map[string]ChannelCounter, q claimedCounter, lang string) []dashCampaign {
 	if sch == nil {
 		return nil
 	}
@@ -403,7 +406,7 @@ func activeCampsFromDiscovery(ctx context.Context, sch *scheduler.Scheduler, cha
 		ends := ""
 		urgent := false
 		if !dc.EndsAt.IsZero() {
-			ends = formatEndsIn(dc.EndsAt.Sub(now))
+			ends = formatEndsIn(dc.EndsAt.Sub(now), lang)
 			urgent = dc.EndsAt.Sub(now) < 24*time.Hour && dc.EndsAt.After(now)
 		}
 		channels := 0
@@ -536,9 +539,9 @@ func completedByAllConnected(ctx context.Context, snap []scheduler.DiscoveredCam
 // formatEndsIn renders a duration as "12d", "18h", or "42m" so the
 // Active Campaigns rows stay compact. Negative durations (already
 // expired) render as "ended".
-func formatEndsIn(d time.Duration) string {
+func formatEndsIn(d time.Duration, lang string) string {
 	if d <= 0 {
-		return "ended"
+		return i18n.T(lang, "time.ended")
 	}
 	if d >= 24*time.Hour {
 		days := int(d / (24 * time.Hour))
@@ -666,7 +669,7 @@ func formatViews(n int) string {
 	return fmt.Sprintf("%d", n)
 }
 
-func mineCardFromSnap(a gen.Account, s watcher.Snapshot) dashMineCard {
+func mineCardFromSnap(a gen.Account, s watcher.Snapshot, lang string) dashMineCard {
 	c := dashMineCard{
 		ID:             a.ID,
 		Name:           a.DisplayName,
@@ -679,10 +682,10 @@ func mineCardFromSnap(a gen.Account, s watcher.Snapshot) dashMineCard {
 	}
 	switch s.State {
 	case "watching":
-		c.StateSub = "live"
+		c.StateSub = "mining.live"
 		c.Uptime = formatShort(time.Since(s.StartedAt))
 		if !s.LastPollAt.IsZero() {
-			c.LastPoll = formatShort(time.Since(s.LastPollAt)) + " ago"
+			c.LastPoll = formatShort(time.Since(s.LastPollAt)) + " " + i18n.T(lang, "time.ago")
 		}
 		c.Channel = s.Channel
 		c.ChannelInitial = initial(s.Channel)
@@ -696,27 +699,27 @@ func mineCardFromSnap(a gen.Account, s watcher.Snapshot) dashMineCard {
 		c.DropPercent = pct(s.MinutesWatched, s.RequiredMinutes)
 		c.DropETA = etaFrom(s.MinutesWatched, s.RequiredMinutes)
 	case "claiming":
-		c.StateSub = "claim in flight"
+		c.StateSub = "mining.claim_in_flight"
 		c.DropName = s.BenefitName
 		c.DropImage = s.BenefitImage
 		c.DropCampaign = s.CampaignName
 		c.DropMins, c.DropReq = s.RequiredMinutes, max1(s.RequiredMinutes)
 		c.DropPercent = 100
-		c.DropETA = "claiming…"
+		c.DropETA = i18n.T(lang, "mining.claiming_ellipsis")
 	case "pick_stream":
-		c.StateSub = "scanning channels"
+		c.StateSub = "mining.scanning_channels"
 		c.DropName = s.BenefitName
 		c.DropCampaign = s.CampaignName
 	case "pick_campaign", "idle":
-		c.StateSub = "looking for work"
+		c.StateSub = "mining.looking_for_work"
 	case "sleeping":
-		c.StateSub = "no eligible campaign"
+		c.StateSub = "mining.no_eligible"
 	case "awaiting_connect":
-		c.StateSub = "connect account to mine"
+		c.StateSub = "mining.connect_account"
 	case "needs_auth":
-		c.StateSub = "login required"
+		c.StateSub = "mining.login_required"
 	case "no_games":
-		c.StateSub = "no games whitelisted"
+		c.StateSub = "mining.no_games_whitelisted"
 	}
 	c.WatchToday = "—"
 	c.ClaimsToday = 0
@@ -897,7 +900,7 @@ func (d dashboardDeps) page(w http.ResponseWriter, r *http.Request) {
 	if d.sm != nil {
 		flash = d.sm.PopString(r.Context(), "flash")
 	}
-	render(w, d.t, "dashboard.html", templateData{
+	render(w, r, d.t, "dashboard.html", templateData{
 		AuthedAdmin: true,
 		CSRFToken:   csrfToken(r),
 		Active:      "dashboard",
@@ -910,26 +913,27 @@ func (d dashboardDeps) cards(w http.ResponseWriter, r *http.Request) {
 	// HTMX partial — refreshes just the mining columns block. The
 	// template name stays "dashboard_mining_columns" so the polling
 	// endpoint and the page render share the same partial.
-	renderPartial(w, d.t, "dashboard_mining_columns", d.collectPage(r).Mining)
+	renderPartial(w, r, d.t, "dashboard_mining_columns", d.collectPage(r).Mining)
 }
 
 func (d dashboardDeps) telemetry(w http.ResponseWriter, r *http.Request) {
 	// HTMX partial — refreshes the telemetry tiles so NEXT CLAIM (and the
 	// live counts) track the watchers instead of freezing at page-load state.
-	renderPartial(w, d.t, "dashboard_telemetry", d.collectPage(r).Tele)
+	renderPartial(w, r, d.t, "dashboard_telemetry", d.collectPage(r).Tele)
 }
 
 func (d dashboardDeps) events(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("filter")
 	account := r.URL.Query().Get("account")
 	accs, _ := d.q.ListAllAccounts(r.Context())
-	renderPartial(w, d.t, "dashboard_events", eventsFromRing(d.ring, kind, account, accs))
+	renderPartial(w, r, d.t, "dashboard_events", eventsFromRing(d.ring, kind, account, accs, d.loc))
 }
 
 // campaignDetail renders the modal partial for a single discovered
 // campaign. HTMX hits this from each Active Campaigns row; the response
 // is dropped into the dashboard's #modal target.
 func (d dashboardDeps) campaignDetail(w http.ResponseWriter, r *http.Request) {
+	lang := i18n.DetectLang(r)
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		http.Error(w, "missing campaign id", http.StatusBadRequest)
@@ -964,16 +968,16 @@ func (d dashboardDeps) campaignDetail(w http.ResponseWriter, r *http.Request) {
 	endsIn := ""
 	urgent := false
 	if !dc.EndsAt.IsZero() {
-		endsIn = formatEndsIn(dc.EndsAt.Sub(now))
+		endsIn = formatEndsIn(dc.EndsAt.Sub(now), lang)
 		urgent = dc.EndsAt.Sub(now) < 24*time.Hour && dc.EndsAt.After(now)
 	}
 	startsAt := "—"
 	if !dc.StartsAt.IsZero() {
-		startsAt = dc.StartsAt.UTC().Format("2006-01-02 15:04 UTC")
+		startsAt = dc.StartsAt.In(d.loc).Format("2006-01-02 15:04 UTC")
 	}
 	endsAt := "—"
 	if !dc.EndsAt.IsZero() {
-		endsAt = dc.EndsAt.UTC().Format("2006-01-02 15:04 UTC")
+		endsAt = dc.EndsAt.In(d.loc).Format("2006-01-02 15:04 UTC")
 	}
 
 	benefits := make([]dashCampaignBenefit, 0, len(dc.Benefits))
@@ -1006,7 +1010,7 @@ func (d dashboardDeps) campaignDetail(w http.ResponseWriter, r *http.Request) {
 		AccountLinkURL:   dc.AccountLinkURL,
 		RawJSON:          string(rawJSON),
 	}
-	renderPartial(w, d.t, "dashboard_campaign_modal", detail)
+	renderPartial(w, r, d.t, "dashboard_campaign_modal", detail)
 }
 
 // dashAccountDetail powers the per-account modal opened from
@@ -1062,6 +1066,7 @@ type dashAccountCampaignRow struct {
 }
 
 func (d dashboardDeps) accountDetail(w http.ResponseWriter, r *http.Request) {
+	lang := i18n.DetectLang(r)
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		http.Error(w, "missing account id", http.StatusBadRequest)
@@ -1131,10 +1136,10 @@ func (d dashboardDeps) accountDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		row := dashAccountCampaignRow{ID: dc.ID, Name: dc.Name, Game: dc.Game}
 		if !dc.EndsAt.IsZero() {
-			row.EndsIn = formatEndsIn(dc.EndsAt.Sub(now))
+			row.EndsIn = formatEndsIn(dc.EndsAt.Sub(now), lang)
 		}
 		if !dc.StartsAt.IsZero() && dc.StartsAt.After(now) {
-			row.StartsIn = formatEndsIn(dc.StartsAt.Sub(now))
+			row.StartsIn = formatEndsIn(dc.StartsAt.Sub(now), lang)
 			detail.UpcomingCampaigns = append(detail.UpcomingCampaigns, row)
 		} else {
 			detail.EligibleCampaigns = append(detail.EligibleCampaigns, row)
@@ -1143,36 +1148,36 @@ func (d dashboardDeps) accountDetail(w http.ResponseWriter, r *http.Request) {
 
 	// Filter events ring for this account.
 	if d.ring != nil {
-		all := eventsFromRing(d.ring, "", id, []gen.Account{acc})
+		all := eventsFromRing(d.ring, "", id, []gen.Account{acc}, d.loc)
 		if len(all) > 20 {
 			all = all[:20]
 		}
 		detail.RecentEvents = all
 	}
 
-	renderPartial(w, d.t, "dashboard_account_modal", detail)
+	renderPartial(w, r, d.t, "dashboard_account_modal", detail)
 }
 
 func stateLabel(s string) string {
 	switch s {
 	case "watching":
-		return "watching"
+		return "state.watching"
 	case "claiming":
-		return "claiming"
+		return "state.claiming"
 	case "pick_stream":
-		return "scanning channels"
+		return "state.scanning_channels"
 	case "pick_campaign", "idle":
-		return "looking for work"
+		return "state.looking_for_work"
 	case "sleeping":
-		return "no eligible campaign"
+		return "state.no_eligible_campaign"
 	case "awaiting_connect":
-		return "awaiting connect"
+		return "state.awaiting_connect"
 	case "needs_auth":
-		return "needs login"
+		return "state.needs_login"
 	case "no_games":
-		return "no games yet"
+		return "state.no_games_yet"
 	case "stopped":
-		return "stopped"
+		return "state.stopped"
 	}
 	return s
 }

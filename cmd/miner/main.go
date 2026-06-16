@@ -19,6 +19,7 @@ import (
 
 	"github.com/aalejandrofer/grubdrops/internal/api"
 	"github.com/aalejandrofer/grubdrops/internal/auth/browser"
+	"github.com/aalejandrofer/grubdrops/internal/i18n"
 	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
 	"github.com/aalejandrofer/grubdrops/internal/authcheck"
 	"github.com/aalejandrofer/grubdrops/internal/canary"
@@ -80,6 +81,10 @@ func run() error {
 	q := gen.New(db)
 	settingsStore := store.NewSettings(q)
 	sessions := store.NewSessionStore(db, q, cryptor)
+
+	if err := i18n.Load(); err != nil {
+		return fmt.Errorf("load i18n: %w", err)
+	}
 
 	tmplSet, err := web.Templates()
 	if err != nil {
@@ -542,7 +547,11 @@ func run() error {
 		Version:           cmp.Or(version, os.Getenv("GRUB_VERSION")),
 		OIDC:              oidcProvider,
 		SecureCookies:     cfg.SecureCookies,
+		Location:          cfg.Location,
 	}
+
+	// Set process-wide timezone so time.Now() / Claims Today use TZ.
+	time.Local = cfg.Location
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

@@ -1,53 +1,53 @@
 {{define "settings.html"}}{{template "layout" .}}{{end}}
 
-{{define "title"}}Settings · GrubDrops{{end}}
+{{define "title"}}{{t "settings.title"}}{{end}}
 
 {{define "content"}}
 <div class="shell">
   <div class="ph">
     <div>
-      <div class="kicker">// config</div>
-      <h1>Settings</h1>
+      <div class="kicker">{{t "settings.config"}}</div>
+      <h1>{{t "settings.heading"}}</h1>
     </div>
     <div class="actions">
-      <a class="btn primary" href="/accounts/new">+ Add account</a>
+      <a class="btn primary" href="/accounts/new">{{t "settings.add_account"}}</a>
     </div>
   </div>
   {{template "settings_subnav" .}}
 
-  {{if .Flash}}<div class="flash-ok">{{.Flash}}</div>{{end}}
+  {{if .Flash}}<div class="flash-ok">{{t .Flash}}</div>{{end}}
 
   {{with .Page}}
   <div class="settings-stack">
 
     {{if eq $.Active "priority"}}
     <section class="settings-card">
-      <header class="section-h"><h3>Global priority list</h3></header>
+      <header class="section-h"><h3>{{t "priority.global_list"}}</h3></header>
       <form method="post" action="/settings/global-games" id="global-games-form">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
         <div class="settings-grid-2">
           <div>
-            <div class="kicker">Selected · drag to reorder</div>
+            <div class="kicker">{{t "priority.selected_drag"}}</div>
             <ul id="global-selected" class="rank-list">
               {{range .GlobalGames}}
               <li draggable="true" data-game-id="{{.ID}}">
                 <span>{{.Name}}</span>
-                <button type="button" class="rank-rm" onclick="gpRemove('{{.ID}}')">remove ×</button>
+                <button type="button" class="rank-rm" onclick="gpRemove('{{.ID}}')">{{t "priority.remove"}} ×</button>
               </li>
               {{end}}
               {{if not .GlobalGames}}
-              <li class="rank-empty">No global priority set — pick from the right →</li>
+              <li class="rank-empty">{{t "priority.no_global"}} →</li>
               {{end}}
             </ul>
           </div>
           <div>
-            <div class="kicker">Available</div>
+            <div class="kicker">{{t "priority.available"}}</div>
             <ul id="global-available" class="rank-list rank-available">
               {{range .AllGames}}
               {{if not .Selected}}
               <li data-game-id="{{.ID}}">
                 <span>{{.Name}}</span>
-                <button type="button" class="rank-add" onclick="gpAdd('{{.ID}}','{{.Name}}')">add +</button>
+                <button type="button" class="rank-add" onclick="gpAdd('{{.ID}}','{{.Name}}')">{{t "priority.add_plus"}}</button>
               </li>
               {{end}}
               {{end}}
@@ -55,8 +55,8 @@
           </div>
         </div>
         <div class="row">
-          <span class="hint">Order in the left column = mining priority for accounts without an override.</span>
-          <button class="btn-linear" type="submit">Save priority →</button>
+          <span class="hint">{{t "priority.order_hint"}}</span>
+          <button class="btn-linear" type="submit">{{t "priority.save_priority"}} →</button>
         </div>
       </form>
 
@@ -64,30 +64,30 @@
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
         <div class="kvedit">
           <div class="row">
-            <span class="k">add by name</span>
-            <span class="v grow"><input type="text" name="name" placeholder="e.g. Marathon" required></span>
-            <button class="btn-linear" type="submit">Add →</button>
+            <span class="k">{{t "priority.add_by_name"}}</span>
+            <span class="v grow"><input type="text" name="name" placeholder="{{t "priority.add_placeholder"}}" required></span>
+            <button class="btn-linear" type="submit">{{t "priority.add"}} →</button>
           </div>
         </div>
       </form>
     </section>
 
     <section class="settings-card">
-      <header class="section-h"><h3>Drop priority mode</h3><span class="meta">How accounts pick the next campaign</span></header>
+      <header class="section-h"><h3>{{t "priority.drop_mode"}}</h3><span class="meta">{{t "priority.mode_meta"}}</span></header>
       <form method="post" action="/settings/priority-mode">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
         <div class="kvedit">
           <div class="row">
-            <span class="k">priority mode</span>
+            <span class="k">{{t "priority.mode"}}</span>
             <span class="d"></span>
             <span class="v"><select name="priority_mode">
-              <option value="ordered" {{if eq .PriorityMode "ordered"}}selected{{end}}>Ordered — top whitelist first</option>
-              <option value="ending_soonest" {{if eq .PriorityMode "ending_soonest"}}selected{{end}}>Ending soonest — claim expiring first</option>
+              <option value="ordered" {{if eq .PriorityMode "ordered"}}selected{{end}}>{{t "priority.ordered"}}</option>
+              <option value="ending_soonest" {{if eq .PriorityMode "ending_soonest"}}selected{{end}}>{{t "priority.ending_soonest"}}</option>
             </select></span>
           </div>
         </div>
         <div class="row" style="margin-top:18px;justify-content:flex-end;">
-          <button class="btn-linear" type="submit">Save →</button>
+          <button class="btn-linear" type="submit">{{t "priority.save"}} →</button>
         </div>
       </form>
     </section>
@@ -95,31 +95,31 @@
 
     {{if eq $.Active "notifications"}}
     <section class="settings-card">
-      <header class="section-h"><h3>Notifications</h3><span class="meta">Discord</span></header>
+      <header class="section-h"><h3>{{t "notify.heading"}}</h3><span class="meta">{{t "notify.discord"}}</span></header>
       <form method="post" action="/settings/notifications" id="notifications-form">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
         <div class="kvedit">
           <div class="row">
-            <span class="k">discord webhook</span>
+            <span class="k">{{t "notify.webhook"}}</span>
             <span class="v grow"><input type="url" name="discord_webhook" value="{{.GlobalDiscordWebhook}}" placeholder="https://discord.com/api/webhooks/…"></span>
           </div>
           <div class="row">
-            <span class="k">bot avatar</span>
+            <span class="k">{{t "notify.avatar"}}</span>
             <span class="v grow"><input type="url" name="notify_avatar_url" value="{{.NotifyAvatarURL}}" placeholder="https://…/avatar.png · optional — shown as the sender avatar"></span>
           </div>
           <div class="row">
-            <span class="k">notify on</span>
+            <span class="k">{{t "notify.notify_on"}}</span>
             <span class="v cbs">
-              <label class="cb"><input type="checkbox" name="notify_claim" value="1" {{if .NotifyClaim}}checked{{end}}> claims</label>
-              <label class="cb"><input type="checkbox" name="notify_progress" value="1" {{if .NotifyProgress}}checked{{end}}> progress</label>
-              <label class="cb"><input type="checkbox" name="notify_auth" value="1" {{if .NotifyAuth}}checked{{end}}> auth</label>
-              <label class="cb"><input type="checkbox" name="notify_error" value="1" {{if .NotifyError}}checked{{end}}> errors</label>
-              <label class="cb"><input type="checkbox" name="notify_canary" value="1" {{if .NotifyCanary}}checked{{end}}> heartbeat health check</label>
+              <label class="cb"><input type="checkbox" name="notify_claim" value="1" {{if .NotifyClaim}}checked{{end}}> {{t "notify.claims"}}</label>
+              <label class="cb"><input type="checkbox" name="notify_progress" value="1" {{if .NotifyProgress}}checked{{end}}> {{t "notify.progress"}}</label>
+              <label class="cb"><input type="checkbox" name="notify_auth" value="1" {{if .NotifyAuth}}checked{{end}}> {{t "notify.auth"}}</label>
+              <label class="cb"><input type="checkbox" name="notify_error" value="1" {{if .NotifyError}}checked{{end}}> {{t "notify.errors"}}</label>
+              <label class="cb"><input type="checkbox" name="notify_canary" value="1" {{if .NotifyCanary}}checked{{end}}> {{t "notify.heartbeat"}}</label>
             </span>
           </div>
           <div class="row">
-            <span class="k">progress step</span>
-            <span class="d">when "progress" is on, notify at 0% (start), every N%, 100% · 50 = start/50/100 · 0 = off · applies on reload</span>
+            <span class="k">{{t "notify.progress_step"}}</span>
+            <span class="d">{{t "notify.progress_step_desc"}}</span>
             <span class="v"><input type="number" name="progress_notify_step" value="{{.ProgressNotifyStep}}" min="0" max="100" step="5"><span class="u">%</span></span>
           </div>
         </div>
@@ -128,9 +128,9 @@
             hx-post="/settings/notify-test"
             hx-target="#notify-test-result"
             hx-swap="innerHTML"
-            hx-headers='{"X-CSRF-Token": "{{$.CSRFToken}}"}'>Send test →</button>
+            hx-headers='{"X-CSRF-Token": "{{$.CSRFToken}}"}'>{{t "notify.send_test"}} →</button>
           <span id="notify-test-result"></span>
-          <button class="btn-linear" type="submit" style="margin-left:auto;">Save →</button>
+          <button class="btn-linear" type="submit" style="margin-left:auto;">{{t "notify.save"}} →</button>
         </div>
       </form>
     </section>
@@ -139,53 +139,53 @@
     {{if eq $.Active "security"}}
     <section class="settings-card">
       <header class="section-h">
-        <h3>Single sign-on (SSO)</h3>
+        <h3>{{t "security.sso"}}</h3>
         {{if .OIDC.Enabled}}
-          <span class="sso-status-pill on">● enabled</span>
+          <span class="sso-status-pill on">{{t "security.enabled"}}</span>
         {{else}}
-          <span class="sso-status-pill off">○ disabled</span>
+          <span class="sso-status-pill off">{{t "security.disabled"}}</span>
         {{end}}
       </header>
       {{if .OIDC.Enabled}}
       <div class="kvlist">
-        <div class="kvrow"><span class="k">provider</span><span class="v">{{.OIDC.ProviderName}}</span></div>
-        <div class="kvrow"><span class="k">issuer</span><span class="v">{{.OIDC.Issuer}}</span></div>
-        <div class="kvrow"><span class="k">access</span><span class="v">
+        <div class="kvrow"><span class="k">{{t "security.provider"}}</span><span class="v">{{.OIDC.ProviderName}}</span></div>
+        <div class="kvrow"><span class="k">{{t "security.issuer"}}</span><span class="v">{{.OIDC.Issuer}}</span></div>
+        <div class="kvrow"><span class="k">{{t "security.access"}}</span><span class="v">
           {{if or .OIDC.AllowedEmails .OIDC.AllowedGroups}}
             {{range .OIDC.AllowedEmails}}{{.}} {{end}}{{range .OIDC.AllowedGroups}}@{{.}} {{end}}
-          {{else}}Any user authenticated by your identity provider{{end}}
+          {{else}}{{t "security.any_user"}}{{end}}
         </span></div>
-        <div class="kvrow"><span class="k">callback</span><span class="v">
+        <div class="kvrow"><span class="k">{{t "security.callback"}}</span><span class="v">
           <code id="sso-callback">{{.OIDC.CallbackURL}}</code>
-          <button type="button" class="btn-linear" onclick="navigator.clipboard.writeText(document.getElementById('sso-callback').textContent.trim())">copy →</button>
+          <button type="button" class="btn-linear" onclick="navigator.clipboard.writeText(document.getElementById('sso-callback').textContent.trim())">{{t "security.copy"}} →</button>
         </span></div>
       </div>
-      <p class="hint" style="margin-top:10px;">Configured via <code>GRUB_OIDC_*</code> environment variables (read-only here).</p>
+      <p class="hint" style="margin-top:10px;">{{t "security.configured_via"}} <code>GRUB_OIDC_*</code> {{t "security.env_vars_readonly"}}</p>
       {{else}}
-      <p class="hint">Not configured — set the <code>GRUB_OIDC_*</code> environment variables to enable SSO. See the README "Single sign-on (OIDC)" section.</p>
+      <p class="hint">{{t "security.not_configured"}} <code>GRUB_OIDC_*</code> {{t "security.env_vars_enable"}}</p>
       {{end}}
     </section>
 
     <section class="settings-card">
-      <header class="section-h"><h3>Master password</h3><span class="meta">Admin login</span></header>
+      <header class="section-h"><h3>{{t "security.master_password"}}</h3><span class="meta">{{t "security.admin_login"}}</span></header>
       <form method="post" action="/settings/password" autocomplete="off">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
         <div class="kvedit">
           <div class="row">
-            <span class="k">current password</span>
+            <span class="k">{{t "security.current_password"}}</span>
             <span class="v grow"><input type="password" name="current_password" required autocomplete="current-password"></span>
           </div>
           <div class="row">
-            <span class="k">new password</span>
+            <span class="k">{{t "security.new_password"}}</span>
             <span class="v grow"><input type="password" name="new_password" required minlength="8" autocomplete="new-password"></span>
           </div>
           <div class="row">
-            <span class="k">confirm new password</span>
+            <span class="k">{{t "security.confirm_password"}}</span>
             <span class="v grow"><input type="password" name="confirm_password" required minlength="8" autocomplete="new-password"></span>
           </div>
         </div>
         <div class="row" style="margin-top:18px;justify-content:flex-end;">
-          <button class="btn-linear" type="submit">Change password →</button>
+          <button class="btn-linear" type="submit">{{t "security.change_password"}} →</button>
         </div>
       </form>
     </section>
@@ -193,50 +193,50 @@
 
     {{if or (eq $.Active "settings") (eq $.Active "")}}
     <section class="settings-card">
-      <header class="section-h"><h3>Runtime</h3><span class="meta">Reload required for tick/discovery</span></header>
+      <header class="section-h"><h3>{{t "runtime.heading"}}</h3><span class="meta">{{t "runtime.reload_meta"}}</span></header>
       <form method="post" action="/settings" id="settings-form">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
         <div class="kvedit">
           <div class="row">
-            <span class="k">tick interval</span>
-            <span class="d">how often it <b>thinks</b> — the watcher loop pulse (no network)</span>
+            <span class="k">{{t "runtime.tick_interval"}}</span>
+            <span class="d">{{t "runtime.tick_desc_prefix"}} <b>{{t "runtime.tick_desc_bold"}}</b> {{t "runtime.tick_desc_suffix"}}</span>
             <span class="v"><input type="number" name="tick_interval_sec" value="{{.TickIntervalSec}}" min="1" max="300"><span class="u">s</span></span>
           </div>
           <div class="row">
-            <span class="k">discovery interval</span>
-            <span class="d">how often it <b>looks for new drops</b> — re-scans the campaign catalog</span>
+            <span class="k">{{t "runtime.discovery_interval"}}</span>
+            <span class="d">{{t "runtime.disc_desc_prefix"}} <b>{{t "runtime.disc_desc_bold"}}</b> {{t "runtime.disc_desc_suffix"}}</span>
             <span class="v"><input type="number" name="discovery_interval_min" value="{{.DiscoveryIntervalMin}}" min="1" max="1440"><span class="u">min</span></span>
           </div>
         </div>
         <div class="row" style="margin-top:18px;justify-content:flex-end;">
-          <button class="btn-linear" type="submit">Save →</button>
+          <button class="btn-linear" type="submit">{{t "runtime.save"}} →</button>
         </div>
       </form>
     </section>
 
     <section class="settings-card">
-      <header class="section-h"><h3>Logging</h3><span class="meta">verbosity + retention</span></header>
+      <header class="section-h"><h3>{{t "logging.heading"}}</h3><span class="meta">{{t "logging.meta"}}</span></header>
       <form method="post" action="/settings">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
         <div class="kvedit">
           <div class="row">
-            <span class="k">log level</span>
-            <span class="d">logging verbosity</span>
+            <span class="k">{{t "logging.level"}}</span>
+            <span class="d">{{t "logging.level_desc"}}</span>
             <span class="v"><select name="log_level">
-              <option value="" {{if eq .LogLevel ""}}selected{{end}}>default ({{.LogLevelEnv}})</option>
-              <option value="debug" {{if eq .LogLevel "debug"}}selected{{end}}>debug</option>
-              <option value="info" {{if eq .LogLevel "info"}}selected{{end}}>info</option>
-              <option value="warn" {{if eq .LogLevel "warn"}}selected{{end}}>warn</option>
-              <option value="error" {{if eq .LogLevel "error"}}selected{{end}}>error</option>
+              <option value="" {{if eq .LogLevel ""}}selected{{end}}>{{t "logging.default"}} ({{.LogLevelEnv}})</option>
+              <option value="debug" {{if eq .LogLevel "debug"}}selected{{end}}>{{t "logging.debug"}}</option>
+              <option value="info" {{if eq .LogLevel "info"}}selected{{end}}>{{t "logging.info"}}</option>
+              <option value="warn" {{if eq .LogLevel "warn"}}selected{{end}}>{{t "logging.warn"}}</option>
+              <option value="error" {{if eq .LogLevel "error"}}selected{{end}}>{{t "logging.error"}}</option>
             </select></span>
           </div>
           <div class="row">
-            <span class="k">log retention</span>
-            <span class="d">how long log history is kept</span>
+            <span class="k">{{t "logging.retention"}}</span>
+            <span class="d">{{t "logging.retention_desc"}}</span>
             <span class="v"><input type="number" name="log_retention_days" value="{{.LogRetentionDays}}" min="1" max="365"><span class="u">days</span></span>
           </div>
         </div>
-        <div class="row" style="margin-top:18px;justify-content:flex-end;"><button class="btn-linear" type="submit">Save →</button></div>
+        <div class="row" style="margin-top:18px;justify-content:flex-end;"><button class="btn-linear" type="submit">{{t "logging.save"}} →</button></div>
       </form>
     </section>
 
@@ -244,22 +244,22 @@
 
     {{if eq $.Active "experimental"}}
     <section class="settings-card">
-      <header class="section-h"><h3>Experimental</h3><span class="meta">Unstable — may not accrue</span></header>
+      <header class="section-h"><h3>{{t "experimental.heading"}}</h3><span class="meta">{{t "experimental.meta"}}</span></header>
       <form method="post" action="/settings/experimental">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
         <div class="kvedit">
           <div class="row">
-            <span class="k">Kick Watch Path</span>
-            <span class="d">how Kick accrues watch-time · <b>Chrome</b> = IVS video in the sidecar (verified) · <b>WS</b> = pure WebSocket, no browser (experimental — may earn nothing until the WS path is proven) · <b>WS, fall back to Chrome</b> = try WS, switch to Chrome if it stops accruing · applies on reload</span>
+            <span class="k">{{t "experimental.kick_watch"}}</span>
+            <span class="d">{{t "experimental.kick_desc_prefix"}} <b>{{t "experimental.chrome"}}</b> {{t "experimental.chrome_desc"}} <b>{{t "experimental.ws"}}</b> {{t "experimental.ws_desc"}} <b>{{t "experimental.auto"}}</b> {{t "experimental.auto_desc"}}</span>
             <span class="v"><select name="kick_watch_mode">
-              <option value="auto" {{if eq .KickWatchMode "auto"}}selected{{end}}>WS, fall back to Chrome (default)</option>
-              <option value="browser" {{if eq .KickWatchMode "browser"}}selected{{end}}>Chrome sidecar (verified)</option>
-              <option value="ws" {{if eq .KickWatchMode "ws"}}selected{{end}}>WebSocket only (experimental)</option>
+              <option value="auto" {{if eq .KickWatchMode "auto"}}selected{{end}}>{{t "experimental.auto_default"}}</option>
+              <option value="browser" {{if eq .KickWatchMode "browser"}}selected{{end}}>{{t "experimental.browser_verified"}}</option>
+              <option value="ws" {{if eq .KickWatchMode "ws"}}selected{{end}}>{{t "experimental.ws_only"}}</option>
             </select></span>
           </div>
         </div>
         <div class="row" style="margin-top:18px;justify-content:flex-end;">
-          <button class="btn-linear" type="submit">Save →</button>
+          <button class="btn-linear" type="submit">{{t "experimental.save"}} →</button>
         </div>
       </form>
     </section>
@@ -267,19 +267,19 @@
 
     {{if eq $.Active "health"}}
 <section class="settings-card">
-  <header class="section-h"><h3>Heartbeat Health Checker</h3><span class="meta">transport health</span></header>
+  <header class="section-h"><h3>{{t "health.heading"}}</h3><span class="meta">{{t "health.transport"}}</span></header>
   {{template "canary_panel" $}}
   {{template "canary_form" $}}
 </section>
 <section class="settings-card">
-  <header class="section-h"><h3>Status</h3><span class="meta">Read-only</span></header>
+  <header class="section-h"><h3>{{t "health.status"}}</h3><span class="meta">{{t "health.readonly"}}</span></header>
   <div class="kvlist">
-    <div class="kvrow"><span class="k">uptime</span><span class="v">{{if .Uptime}}{{.Uptime}}{{else}}—{{end}}</span></div>
-    <div class="kvrow"><span class="k">go</span><span class="v">{{.GoVersion}}</span></div>
-    <div class="kvrow"><span class="k">goroutines</span><span class="v">{{.Goroutines}}</span></div>
-    <div class="kvrow"><span class="k">sidecars</span><span class="v">{{if .Sidecars}}{{range .Sidecars}}<div>{{.}}</div>{{end}}{{else}}none running{{end}}</span></div>
-    {{if .GitCommit}}<div class="kvrow"><span class="k">commit</span><span class="v">{{.GitCommit}}</span></div>{{end}}
-    {{if .Version}}<div class="kvrow"><span class="k">version</span><span class="v">{{.Version}}</span></div>{{end}}
+    <div class="kvrow"><span class="k">{{t "health.uptime"}}</span><span class="v">{{if .Uptime}}{{.Uptime}}{{else}}—{{end}}</span></div>
+    <div class="kvrow"><span class="k">{{t "health.go"}}</span><span class="v">{{.GoVersion}}</span></div>
+    <div class="kvrow"><span class="k">{{t "health.goroutines"}}</span><span class="v">{{.Goroutines}}</span></div>
+    <div class="kvrow"><span class="k">{{t "health.sidecars"}}</span><span class="v">{{if .Sidecars}}{{range .Sidecars}}<div>{{.}}</div>{{end}}{{else}}{{t "health.none_running"}}{{end}}</span></div>
+    {{if .GitCommit}}<div class="kvrow"><span class="k">{{t "health.commit"}}</span><span class="v">{{.GitCommit}}</span></div>{{end}}
+    {{if .Version}}<div class="kvrow"><span class="k">{{t "health.version"}}</span><span class="v">{{.Version}}</span></div>{{end}}
   </div>
 </section>
 {{end}}
@@ -314,7 +314,7 @@
     var ph = sel.querySelector('.rank-empty'); if (ph) ph.remove();
     var li = document.createElement('li');
     li.dataset.gameId = id; li.draggable = true;
-    li.innerHTML = '<span>' + name + '</span><button type="button" class="rank-rm" onclick="gpRemove(\''+id+'\')">remove ×</button>';
+    li.innerHTML = '<span>' + name + '</span><button type="button" class="rank-rm" onclick="gpRemove(\''+id+'\')">{{t "priority.remove"}} ×</button>';
     bindDrag(li);
     sel.appendChild(li);
     var a = avail.querySelector('li[data-game-id="'+id+'"]'); if (a) a.remove();
@@ -323,7 +323,7 @@
     var li = sel.querySelector('li[data-game-id="'+id+'"]'); if (!li) return;
     var name = li.querySelector('span').textContent; li.remove();
     var a = document.createElement('li'); a.dataset.gameId = id;
-    a.innerHTML = '<span>' + name + '</span><button type="button" class="rank-add" onclick="gpAdd(\''+id+'\',\''+name+'\')">add +</button>';
+    a.innerHTML = '<span>' + name + '</span><button type="button" class="rank-add" onclick="gpAdd(\''+id+'\',\''+name+'\')">{{t "priority.add_plus"}}</button>';
     avail.appendChild(a);
   };
   var dragSrc = null;
@@ -366,4 +366,3 @@
 </script>
 {{end}}
 {{end}}
-

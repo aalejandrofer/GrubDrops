@@ -1,5 +1,5 @@
 {{define "dashboard_events"}}
-{{if not .}}<div class="ev empty"><span class="body">No events yet.</span></div>{{end}}
+{{if not .}}<div class="ev empty"><span class="body">{{t "events.no_events"}}</span></div>{{end}}
 {{range .}}
 <details class="ev kind-{{.Kind}}" id="{{.ID}}" hx-preserve="true">
   <summary>

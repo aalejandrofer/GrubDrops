@@ -15,6 +15,7 @@ import (
 // table + ring-buffered reward-reaper claims + ring events so the
 // page surfaces both persistent + ephemeral history in one feed.
 type historyDeps struct {
+	loc   *time.Location // timezone for displayed times
 	q    *gen.Queries
 	ring *mlog.Ring
 	t    Renderer
@@ -65,7 +66,7 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 				acc = "@" + acc
 			}
 			page.Claims = append(page.Claims, historyClaim{
-				When:         time.Unix(row.ClaimedAt, 0).UTC().Format("2006-01-02 15:04"),
+				When:         time.Unix(row.ClaimedAt, 0).In(d.loc).Format("2006-01-02 15:04"),
 				Platform:     row.Platform,
 				Game:         row.Game,
 				Title:        row.BenefitName,
@@ -79,7 +80,7 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 	// Ring-buffered reward claims (no benefit_id, so they don't reach
 	// the claims table). Walk the ring for kind=claim entries.
 	if d.ring != nil {
-		page.Claims = append(page.Claims, rewardClaimsFromRing(d.ring.Snapshot(), labelByID, platformByID)...)
+		page.Claims = append(page.Claims, rewardClaimsFromRing(d.ring.Snapshot(), labelByID, platformByID, d.loc)...)
 	}
 
 	// Cross-source dedupe — when a claim reaches the claims table it
@@ -115,7 +116,7 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 			acc := fieldStr(l.Fields, "account")
 			label := labelByID[acc]
 			page.Events = append(page.Events, historyEvent{
-				Time:    l.TS.UTC().Format("15:04:05"),
+				Time:    l.TS.In(d.loc).Format("15:04:05"),
 				Kind:    kind,
 				Color:   colorForKind(kind, l.Level),
 				Message: l.Msg,
@@ -124,7 +125,7 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	render(w, d.t, "history.html", templateData{
+	render(w, r, d.t, "history.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "history",
 		Page: page,
 	})
@@ -137,7 +138,7 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 // the title-bearing entry is a renderable reward row — the other would
 // render "reward · — · —", so we drop any entry without a non-empty
 // title. A legitimate Kick reward has no game, so game is NOT required.
-func rewardClaimsFromRing(lines []mlog.LogLine, labelByID, platformByID map[string]string) []historyClaim {
+func rewardClaimsFromRing(lines []mlog.LogLine, labelByID, platformByID map[string]string, loc *time.Location) []historyClaim {
 	var out []historyClaim
 	for _, l := range lines {
 		if l.Kind != "claim" {
@@ -163,7 +164,7 @@ func rewardClaimsFromRing(lines []mlog.LogLine, labelByID, platformByID map[stri
 			platform = "twitch"
 		}
 		out = append(out, historyClaim{
-			When:     l.TS.UTC().Format("2006-01-02 15:04"),
+			When:     l.TS.In(loc).Format("2006-01-02 15:04"),
 			Platform: platform,
 			Game:     game,
 			Title:    title,

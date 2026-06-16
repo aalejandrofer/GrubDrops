@@ -1,7 +1,7 @@
 {{define "login_twitch_status"}}
-{{if eq . "pending"}}<em>still waiting…</em>{{end}}
-{{if eq . "done"}}<strong class="ok">authorized — redirecting</strong>
+{{if eq . "pending"}}<em>{{t "twitch_status.waiting"}}</em>{{end}}
+{{if eq . "done"}}<strong class="ok">{{t "twitch_status.authorized"}}</strong>
 <script>setTimeout(()=>window.location='/accounts','800');</script>{{end}}
-{{if eq . "expired"}}<strong style="color: var(--red); font-family: 'JetBrains Mono', monospace; font-size: 12px;">code expired — <a href="/accounts" style="color: var(--accent);">return to accounts</a> and re-add</strong>{{end}}
-{{if eq . "error"}}<strong style="color: var(--red); font-family: 'JetBrains Mono', monospace; font-size: 12px;">error — check logs</strong>{{end}}
+{{if eq . "expired"}}<strong style="color: var(--red); font-family: 'JetBrains Mono', monospace; font-size: 12px;">{{t "twitch_status.expired_prefix"}} <a href="/accounts" style="color: var(--accent);">{{t "twitch_status.return_accounts"}}</a> {{t "twitch_status.re_add"}}</strong>{{end}}
+{{if eq . "error"}}<strong style="color: var(--red); font-family: 'JetBrains Mono', monospace; font-size: 12px;">{{t "twitch_status.error"}}</strong>{{end}}
 {{end}}

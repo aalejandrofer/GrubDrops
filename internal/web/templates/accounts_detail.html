@@ -1,6 +1,6 @@
 {{define "accounts_detail.html"}}{{template "layout" .}}{{end}}
 
-{{define "title"}}Account · GrubDrops{{end}}
+{{define "title"}}{{t "account.title"}}{{end}}
 
 {{define "content"}}
 {{with .Page}}
@@ -8,27 +8,27 @@
 <div class="shell">
   <div class="ph">
     <div>
-      <div class="kicker">// accounts / edit</div>
+      <div class="kicker">{{t "account.edit"}}</div>
       <h1>{{.DisplayName}}</h1>
     </div>
   </div>
 
   <div class="settings-stack">
   <section class="settings-card">
-    <header class="section-h"><h3>Account</h3><span class="meta">{{.Platform}} · {{.ID}}</span></header>
+    <header class="section-h"><h3>{{t "account.heading"}}</h3><span class="meta">{{.Platform}} · {{.ID}}</span></header>
 
     {{if eq .Platform "twitch"}}
     <div class="reauth-row">
       <div class="reauth-actions">
-        <a class="btn-linear" href="/accounts/{{.ID}}/login">Authenticate with device code →</a>
-        <span class="hint">Twitch login is <strong>device-code only</strong>. You get a short code, open <code>twitch.tv/activate</code> on any browser signed into the Twitch account for <strong>{{.DisplayName}}</strong>, and approve it. No password or cookies pass through GrubDrops; a new session replaces the old one.</span>
+        <a class="btn-linear" href="/accounts/{{.ID}}/login">{{t "account.device_code_link"}} →</a>
+        <span class="hint">{{t "account.twitch_hint"}}</span>
       </div>
     </div>
     {{else if eq .Platform "kick"}}
     <div class="reauth-row">
       <div class="reauth-actions">
-        <a class="btn-linear" href="/accounts/{{.ID}}/login">Re-authenticate →</a>
-        <span class="hint">Kick auth needs real browser cookies (the API rejects automated logins). Re-authenticate opens the cookie form. Existing session is overwritten.</span>
+        <a class="btn-linear" href="/accounts/{{.ID}}/login">{{t "account.re_authenticate"}} →</a>
+        <span class="hint">{{t "account.kick_hint"}}</span>
       </div>
     </div>
     {{end}}
@@ -37,64 +37,64 @@
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
       <div class="kvedit">
         <div class="row">
-          <span class="k">display name</span>
+          <span class="k">{{t "account.display_name"}}</span>
           <span class="v grow"><input type="text" name="display_name" value="{{.DisplayName}}"></span>
         </div>
         <div class="row">
-          <span class="k">enabled</span>
-          <span class="d">account participates in mining</span>
-          <span class="v"><label class="cb"><input type="checkbox" name="enabled" value="1" {{if eq .Enabled 1}}checked{{end}}> on</label></span>
+          <span class="k">{{t "account.enabled"}}</span>
+          <span class="d">{{t "account.participates"}}</span>
+          <span class="v"><label class="cb"><input type="checkbox" name="enabled" value="1" {{if eq .Enabled 1}}checked{{end}}> {{t "account.on"}}</label></span>
         </div>
         <div class="row">
-          <span class="k">discord webhook</span>
-          <span class="d">overrides global</span>
+          <span class="k">{{t "account.discord_webhook"}}</span>
+          <span class="d">{{t "account.overrides_global"}}</span>
           <span class="v grow"><input type="url" name="webhook_url" value="{{.WebhookUrl.String}}" placeholder="https://discord.com/api/webhooks/…"></span>
         </div>
       </div>
       <div class="row" style="margin-top:18px;">
-        <a class="back-link" href="/accounts">← back</a>
-        <button class="btn-linear" type="submit" style="margin-left:auto;">Save →</button>
+        <a class="back-link" href="/accounts">← {{t "account.back"}}</a>
+        <button class="btn-linear" type="submit" style="margin-left:auto;">{{t "account.save"}} →</button>
       </div>
     </form>
 
     <div class="danger-zone">
-      <span class="danger-label">danger zone</span>
-      <form method="post" action="/accounts/{{.ID}}/delete" onsubmit="return confirm('Delete this account permanently?');">
+      <span class="danger-label">{{t "account.danger_zone"}}</span>
+      <form method="post" action="/accounts/{{.ID}}/delete" onsubmit="return confirm('{{t "account.delete_confirm"}}');">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-        <button class="btn-linear red" type="submit">Delete account →</button>
+        <button class="btn-linear red" type="submit">{{t "account.delete_account"}} →</button>
       </form>
     </div>
   </section>
 {{end}}{{/* .Account */}}
 
   <section class="settings-card">
-    <header class="section-h"><h3>Games</h3><span class="meta">Order = priority · empty selection idles</span></header>
-    <p class="hint" style="margin:0 0 14px;">The watcher only mines campaigns whose game appears here. Top of the list is mined first.</p>
+    <header class="section-h"><h3>{{t "account.games"}}</h3><span class="meta">{{t "account.games_meta"}}</span></header>
+    <p class="hint" style="margin:0 0 14px;">{{t "account.games_hint"}}</p>
     <form method="post" action="/accounts/{{.Account.ID}}/games" id="games-form">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
       <div class="settings-grid-2">
         <div>
-          <div class="kicker">Selected · drag to reorder</div>
+          <div class="kicker">{{t "account.selected_drag"}}</div>
           <ul id="selected-list" class="rank-list">
             {{range .SelectedGames}}
             <li draggable="true" data-game-id="{{.ID}}">
               <span>{{.Name}}</span>
-              <button type="button" class="rank-rm" onclick="removeGame('{{.ID}}')">remove ×</button>
+              <button type="button" class="rank-rm" onclick="removeGame('{{.ID}}')">{{t "account.remove"}} ×</button>
             </li>
             {{end}}
             {{if not .SelectedGames}}
-            <li class="rank-empty">No games selected — pick from the right →</li>
+            <li class="rank-empty">{{t "account.no_games_selected"}} →</li>
             {{end}}
           </ul>
         </div>
         <div>
-          <div class="kicker">Available</div>
+          <div class="kicker">{{t "account.available"}}</div>
           <ul id="available-list" class="rank-list rank-available">
             {{range .AllGames}}
             {{if not .Selected}}
             <li data-game-id="{{.ID}}">
               <span>{{.Name}}</span>
-              <button type="button" class="rank-add" onclick="addGame('{{.ID}}','{{.Name}}')">add +</button>
+              <button type="button" class="rank-add" onclick="addGame('{{.ID}}','{{.Name}}')">{{t "account.add_plus"}}</button>
             </li>
             {{end}}
             {{end}}
@@ -102,8 +102,8 @@
         </div>
       </div>
       <div class="row">
-        <span class="hint">Order in the left column = mining priority.</span>
-        <button class="btn-linear" type="submit">Save games →</button>
+        <span class="hint">{{t "account.priority_hint"}}</span>
+        <button class="btn-linear" type="submit">{{t "account.save_games"}} →</button>
       </div>
     </form>
 
@@ -111,21 +111,21 @@
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
       <div class="kvedit">
         <div class="row">
-          <span class="k">add by name</span>
-          <span class="d">whitelist a game before discovery surfaces it</span>
-          <span class="v grow"><input type="text" name="name" placeholder="e.g. Marvel Rivals" required></span>
-          <button class="btn-linear" type="submit">Add →</button>
+          <span class="k">{{t "account.add_by_name"}}</span>
+          <span class="d">{{t "account.add_by_name_desc"}}</span>
+          <span class="v grow"><input type="text" name="name" placeholder="{{t "account.add_placeholder"}}" required></span>
+          <button class="btn-linear" type="submit">{{t "account.add"}} →</button>
         </div>
       </div>
     </form>
 
-    <form method="post" action="/accounts/{{.Account.ID}}/games/use-global" onsubmit="return confirm('Clear this account whitelist and follow the global priority list?');">
+    <form method="post" action="/accounts/{{.Account.ID}}/games/use-global" onsubmit="return confirm('{{t "account.use_global_confirm"}}');">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
       <div class="kvedit">
         <div class="row">
-          <span class="k">use global list</span>
-          <span class="d">clears the account override — watcher reads Settings → Global priority</span>
-          <button class="btn-linear" type="submit" style="color:var(--muted);">Use global →</button>
+          <span class="k">{{t "account.use_global_list"}}</span>
+          <span class="d">{{t "account.use_global_desc"}}</span>
+          <button class="btn-linear" type="submit" style="color:var(--muted);">{{t "account.use_global_btn"}} →</button>
         </div>
       </div>
     </form>
@@ -140,7 +140,6 @@
   const form = document.getElementById('games-form');
 
   function addInputs() {
-    // Drop any existing inputs then rebuild from current order.
     form.querySelectorAll('input[name="game_ids[]"]').forEach(n => n.remove());
     sel.querySelectorAll('li[data-game-id]').forEach(li => {
       const i = document.createElement('input');
@@ -164,10 +163,9 @@
     const li = document.createElement('li');
     li.dataset.gameId = id;
     li.draggable = true;
-    li.innerHTML = '<span>' + name + '</span><button type="button" class="rank-rm" onclick="removeGame(\''+id+'\')">remove ×</button>';
+    li.innerHTML = '<span>' + name + '</span><button type="button" class="rank-rm" onclick="removeGame(\''+id+'\')">{{t "account.remove"}} ×</button>';
     bindDrag(li);
     sel.appendChild(li);
-    // also remove from available
     const a = avail.querySelector('li[data-game-id="'+id+'"]');
     if (a) a.remove();
   };
@@ -179,20 +177,19 @@
     li.remove();
     const a = document.createElement('li');
     a.dataset.gameId = id;
-    a.innerHTML = '<span>' + name + '</span><button type="button" class="rank-add" onclick="addGame(\''+id+'\',\''+name+'\')">add +</button>';
+    a.innerHTML = '<span>' + name + '</span><button type="button" class="rank-add" onclick="addGame(\''+id+'\',\''+name+'\')">{{t "account.add_plus"}}</button>';
     avail.appendChild(a);
   };
 
   let dragSrc = null;
   function bindDrag(li) {
-    if (li.dataset.dragBound === '1') return; // idempotent
+    if (li.dataset.dragBound === '1') return;
     li.dataset.dragBound = '1';
     if (!li.hasAttribute('draggable')) li.setAttribute('draggable', 'true');
 
     li.addEventListener('dragstart', function(e) {
       dragSrc = li;
       try { e.dataTransfer.effectAllowed = 'move'; } catch (_) {}
-      // Firefox requires dataTransfer.setData to actually start a drag.
       try { e.dataTransfer.setData('text/plain', li.dataset.gameId || ''); } catch (_) {}
       li.classList.add('dragging');
     });
@@ -224,7 +221,6 @@
     });
   }
 
-  // Allow dropping onto the empty area of the <ul> (e.g. below the last item).
   sel.addEventListener('dragover', function(e) {
     if (!dragSrc) return;
     e.preventDefault();
@@ -232,7 +228,6 @@
   });
   sel.addEventListener('drop', function(e) {
     if (!dragSrc) return;
-    // Only handle drops directly on the list (not bubbled from an <li>, which handled its own drop).
     if (e.target === sel) {
       e.preventDefault();
       sel.appendChild(dragSrc);
@@ -242,10 +237,7 @@
 
   sel.querySelectorAll('li[data-game-id]').forEach(bindDrag);
 
-  // formdata fires right before the form is serialized — guaranteed timing,
-  // and works for both classic submit and programmatic submission.
   form.addEventListener('formdata', addInputs);
-  // Fallback for older browsers without FormData event support.
   form.addEventListener('submit', addInputs);
 })();
 </script>

@@ -32,7 +32,7 @@ func TestRewardClaimsFromRing_FiltersTitlelessEntry(t *testing.T) {
 		}},
 	}
 
-	got := rewardClaimsFromRing(lines, map[string]string{"acc1": "@nori"}, map[string]string{"acc1": "kick"})
+	got := rewardClaimsFromRing(lines, map[string]string{"acc1": "@nori"}, map[string]string{"acc1": "kick"}, time.UTC)
 
 	assert.Len(t, got, 1, "only the title-bearing entry should survive")
 	assert.Equal(t, "Kick + Rust Wallpaper Pattern", got[0].Title)
@@ -59,7 +59,7 @@ func TestRewardClaimsFromRing_PlatformFromAccount(t *testing.T) {
 	}
 	platformByID := map[string]string{"acc_kick": "kick", "acc_twitch": "twitch"}
 
-	got := rewardClaimsFromRing(lines, nil, platformByID)
+	got := rewardClaimsFromRing(lines, nil, platformByID, time.UTC)
 
 	assert.Len(t, got, 3)
 	byTitle := map[string]string{}
@@ -77,7 +77,7 @@ func TestRewardClaimsFromRing_SkipsNonClaimKinds(t *testing.T) {
 		{Kind: "progress", Fields: map[string]any{"title": "ignored"}},
 		{Kind: "discovery", Fields: map[string]any{"title": "ignored"}},
 	}
-	assert.Empty(t, rewardClaimsFromRing(lines, nil, nil))
+	assert.Empty(t, rewardClaimsFromRing(lines, nil, nil, time.UTC))
 }
 
 // The watcher's sweep + benefit-complete double-emit (same account,
