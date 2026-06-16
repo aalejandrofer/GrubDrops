@@ -1,6 +1,6 @@
 services:
   miner:
-    image: grubdrops:dev
+    image: ghcr.io/ab-code520/grubdrops:latest
     build:
       context: ..
       dockerfile: deploy/Dockerfile.miner
@@ -11,32 +11,20 @@ services:
       GRUB_MASTER_KEY: ${GRUB_MASTER_KEY:?GRUB_MASTER_KEY required}
       GRUB_DB_PATH: /data/miner.db
       GRUB_HTTP_ADDR: 0.0.0.0:8080
+      # Timezone: sets the server-side clock for log timestamps and
+      # "Claims Today" midnight reset. Uses Go's IANA database.
+      # Examples: Asia/Shanghai, America/New_York, Europe/London
+      TZ: ${TZ:-UTC}
       # Browser sidecar gRPC endpoint. Empty = no sidecar. Point at the
       # compose `browser` service with GRUB_BROWSER_URL=browser:9090 (and
       # start the `browser` profile) to enable the codec-enabled IVS watch.
       GRUB_BROWSER_URL: ${GRUB_BROWSER_URL:-}
-      # Kick credits drop minutes ONLY for a real, actively-playing IVS <video>
-      # with periodic viewer activity, so Kick watch always runs through the
-      # browser sidecar — it's the only accruing path. Provide a sidecar
-      # (auto-created over the docker socket, or GRUB_BROWSER_URL + the
-      # `browser` profile); without one Kick StartWatch errors loudly.
-      # On-demand sidecars: each Kick account's watch container is named from
-      # its username slug via this template ("{slug}" placeholder). The daemon
-      # starts/stops these containers over the mounted docker socket so a
-      # Chrome only runs while that account is actively watching. The service
-      # name below MUST match the derived name (e.g. user "TTik3r" ->
-      # grubdrops-browser-ttik3r). Degrades to always-on if the socket is
-      # unreachable.
+      # Kick sidecar config
       GRUB_KICK_SIDECAR_TEMPLATE: ${GRUB_KICK_SIDECAR_TEMPLATE:-grubdrops-browser-{slug}}
       GRUB_KICK_SIDECAR_PORT: ${GRUB_KICK_SIDECAR_PORT:-9090}
-      # Secure cookies: ON behind Traefik/HTTPS. The OIDC SameSite=Lax state
-      # cookie and the session cookie both need this to work over real HTTPS.
-      # Turn off only for plain-HTTP localhost.
+      # Secure cookies: ON behind Traefik/HTTPS. Turn off only for plain-HTTP localhost.
       GRUB_SECURE_COOKIES: ${GRUB_SECURE_COOKIES:-1}
-      # OIDC SSO (optional). All four mandatory vars must be set for SSO to
-      # turn on; absent = disabled, password login only. Redirect URL must be
-      # https://<your-traefik-host>/auth/oidc/callback and registered in the
-      # IdP. See README "Single sign-on (OIDC)".
+      # OIDC SSO (optional). All four mandatory vars must be set for SSO to turn on.
       GRUB_OIDC_ISSUER: ${GRUB_OIDC_ISSUER:-}
       GRUB_OIDC_CLIENT_ID: ${GRUB_OIDC_CLIENT_ID:-}
       GRUB_OIDC_CLIENT_SECRET: ${GRUB_OIDC_CLIENT_SECRET:-}
@@ -46,14 +34,13 @@ services:
       GRUB_OIDC_ALLOWED_GROUPS: ${GRUB_OIDC_ALLOWED_GROUPS:-}
     volumes:
       # The miner runs as distroless nonroot (UID 65532). A host-owned bind
-      # mount leaves SQLite unable to write miner.db, so sessions don't persist
-      # and login fails with "failed to persist session". Make it writable
-      # first: `mkdir -p data && sudo chown 65532:65532 data` (or use a named
-      # volume, which Docker creates already writable by the container).
+      # mount leaves SQLite unable to write miner.db. Make it writable first:
+      #   mkdir -p data && sudo chown 65532:65532 data
+      # Or use a named volume (Docker creates it already writable).
       - ./data:/data
 
   browser:
-    image: grubdrops-browser:dev
+    image: ghcr.io/ab-code520/grubdrops-browser:latest
     build:
       context: ..
       dockerfile: deploy/Dockerfile.browser

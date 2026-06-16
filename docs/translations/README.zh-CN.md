@@ -13,8 +13,8 @@
   <img alt="UI" src="https://img.shields.io/badge/UI-HTMX%20%2B%20Go%20templates-2c2c2c">
   <img alt="Storage" src="https://img.shields.io/badge/DB-SQLite-003B57?logo=sqlite&logoColor=white">
   <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-Docker-2496ED?logo=docker&logoColor=white">
-  <a href="https://github.com/aalejandrofer/grubdrops/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/aalejandrofer/grubdrops?logo=github&label=release"></a>
-  <a href="https://github.com/aalejandrofer/grubdrops/pkgs/container/grubdrops"><img alt="ghcr.io image" src="https://img.shields.io/badge/ghcr.io-grubdrops-2496ED?logo=github"></a>
+  <a href="https://github.com/Ab-code520/GrubDrops/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Ab-code520/GrubDrops?logo=github&label=release"></a>
+  <a href="https://github.com/Ab-code520/GrubDrops/pkgs/container/grubdrops"><img alt="ghcr.io image" src="https://img.shields.io/badge/ghcr.io-grubdrops-2496ED?logo=github"></a>
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
 </p>
 

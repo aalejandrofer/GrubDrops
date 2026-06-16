@@ -51,7 +51,7 @@ jobs:
           # via -ldflags so Settings shows the running tag.
           build-args: |
             VERSION=${{ github.ref_name }}
-          outputs: type=image,name=ghcr.io/aalejandrofer/${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=ghcr.io/ab-code520/${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
           # Cache scoped per image+arch so an amd64 change doesn't bust the arm64
           # cache (and vice-versa).
           cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.arch }}
@@ -98,9 +98,9 @@ jobs:
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create \
-            -t ghcr.io/aalejandrofer/${{ matrix.image }}:${{ github.ref_name }} \
-            -t ghcr.io/aalejandrofer/${{ matrix.image }}:latest \
-            $(printf 'ghcr.io/aalejandrofer/${{ matrix.image }}@sha256:%s ' *)
+            -t ghcr.io/ab-code520/${{ matrix.image }}:${{ github.ref_name }} \
+            -t ghcr.io/ab-code520/${{ matrix.image }}:latest \
+            $(printf 'ghcr.io/ab-code520/${{ matrix.image }}@sha256:%s ' *)
 
       - name: Inspect
-        run: docker buildx imagetools inspect ghcr.io/aalejandrofer/${{ matrix.image }}:${{ github.ref_name }}
+        run: docker buildx imagetools inspect ghcr.io/ab-code520/${{ matrix.image }}:${{ github.ref_name }}
