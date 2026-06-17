@@ -10,6 +10,8 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/justinas/nosurf"
+
+	"github.com/aalejandrofer/grubdrops/internal/i18n"
 )
 
 type ctxKey int
@@ -105,13 +107,14 @@ func CSRF(secureCookies bool) func(http.Handler) http.Handler {
 			)
 			// Surface the most likely self-host misconfiguration so the next
 			// person can diagnose it without reading the source.
-			hint := "reload the page to get a fresh token and resubmit"
+			lang := i18n.DetectLang(r)
+			hint := i18n.T(lang, "error.csrf_reload")
 			if !secureCookies && https {
-				hint = "request looks like HTTPS but GRUB_SECURE_COOKIES=0 — set GRUB_SECURE_COOKIES=1 when serving over HTTPS / behind a TLS-terminating proxy"
+				hint = i18n.T(lang, "error.csrf_https_no_secure")
 			} else if secureCookies && !https {
-				hint = "GRUB_SECURE_COOKIES=1 but this request arrived over plain HTTP — the session/CSRF cookie is dropped by the browser; either serve over HTTPS (set X-Forwarded-Proto on your proxy) or set GRUB_SECURE_COOKIES=0"
+				hint = i18n.T(lang, "error.csrf_secure_http")
 			}
-			http.Error(w, "CSRF token invalid — "+hint, http.StatusForbidden)
+			http.Error(w, i18n.T(lang, "error.csrf_invalid")+" — "+hint, http.StatusForbidden)
 		}))
 		return h
 	}
