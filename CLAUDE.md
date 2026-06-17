@@ -7,9 +7,18 @@ A commit is **not** a release. Day-to-day work lands on `master` freely.
 1. **Log every change to `docs/CHANGELOG.md`** under `## [Unreleased]`
    (Added / Changed / Fixed / Removed) as you commit — every bug fix, addition,
    removal, and change, no matter how small. This is the complete running record.
-2. **Cut a version only after verifying drop-mining works.** A green build and
-   passing tests are not enough — confirm the miner actually accrues watch-time
-   and claims a drop (Twitch and/or Kick, whichever the change touches).
+2. **Verify before cutting a version.** Live drops are rarely available to test
+   against, so the gate is tiered:
+   - **Default gate (no live drop available):** a green build + passing unit tests
+     + a green Kick WS transport canary (Heartbeat Health Checker). This is enough
+     to tag changes that do **not** touch accrual/claim logic (UI, settings,
+     watcher lifecycle, discovery, plumbing). Cover the fix with a unit test —
+     that's the durable proof, since most of the time a live drop can't be.
+   - **Accrual/claim changes:** when a change touches how watch-time accrues or how
+     a drop is claimed (Twitch beacon, Kick WS/IVS watch path, claim flow), confirm
+     against a **live drop** before tagging (Twitch and/or Kick, whichever the
+     change touches). If no live drop is available, hold the tag in `[Unreleased]`
+     until one is — do not tag accrual changes on unit tests alone.
 3. Once verified: move `[Unreleased]` to the new version in `docs/CHANGELOG.md`, push
    the `v*` tag (this triggers the ghcr image build), and write the patch notes
    in the GitHub **Releases** tab — **cherry-pick** the user-facing highlights
