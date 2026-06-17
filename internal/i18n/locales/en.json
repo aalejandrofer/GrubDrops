@@ -350,7 +350,7 @@
   "account.edit": "// accounts / edit",
   "account.heading": "Account",
   "account.device_code_link": "Authenticate with device code",
-  "account.twitch_hint": "Twitch login is <strong>device-code only</strong>. You get a short code, open <code>twitch.tv/activate</code> on any browser signed into the Twitch account for <strong>{{.DisplayName}}</strong>, and approve it. No password or cookies pass through GrubDrops; a new session replaces the old one.",
+  "account.twitch_hint": "Twitch login is <strong>device-code only</strong>. You get a short code, open <code>twitch.tv/activate</code> on any browser signed into this Twitch account, and approve it. No password or cookies pass through GrubDrops; a new session replaces the old one.",
   "account.re_authenticate": "Re-authenticate",
   "account.kick_hint": "Kick auth needs real browser cookies (the API rejects automated logins). Re-authenticate opens the cookie form. Existing session is overwritten.",
   "account.display_name": "display name",
@@ -458,7 +458,7 @@
   "security.change_password": "Change password",
 
   "runtime.heading": "Runtime",
-  "runtime.reload_meta": "Reload required for tick/discovery",
+  "runtime.reload_meta": "Reload required to update tick/discovery",
   "runtime.tick_interval": "tick interval",
   "runtime.tick_desc_prefix": "how often it",
   "runtime.tick_desc_bold": "thinks",

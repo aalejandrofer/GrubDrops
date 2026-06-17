@@ -10,6 +10,11 @@
       <h1>{{t "settings.heading"}}</h1>
     </div>
     <div class="actions">
+      <form method="post" action="/accounts/apply" class="inline-form"
+            onsubmit="return confirm('{{t "accounts.reload_confirm"}}');">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <button class="btn" type="submit">{{t "accounts.apply_changes"}}</button>
+      </form>
       <a class="btn primary" href="/accounts/new">{{t "settings.add_account"}}</a>
     </div>
   </div>
