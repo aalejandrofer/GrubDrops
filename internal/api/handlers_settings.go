@@ -157,7 +157,7 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 
 	uptime := ""
 	if !d.startedAt.IsZero() {
-		uptime = formatUptime(time.Since(d.startedAt))
+		uptime = formatUptime(time.Since(d.startedAt), lang)
 	}
 
 	flash := d.sm.PopString(ctx, "flash")
@@ -402,6 +402,7 @@ func (d *settingsDeps) postExperimental(w http.ResponseWriter, r *http.Request) 
 // so the operator can confirm the webhook + embed look right. Returns a small
 // HTMX fragment (not a redirect) reporting success or the error.
 func (d *settingsDeps) notifyTest(w http.ResponseWriter, r *http.Request) {
+	lang := i18n.DetectLang(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	ctx := r.Context()
 	writeResult := func(ok bool, msg string) {
@@ -651,6 +652,7 @@ func formatRelative(d time.Duration, lang string) string {
 
 // canarySave handles POST /settings/canary — saves the three canary settings.
 func (d *settingsDeps) canarySave(w http.ResponseWriter, r *http.Request) {
+	lang := i18n.DetectLang(r)
 	ctx := r.Context()
 	if saveErr(w, d.s.SetCanaryTwitchChannel(ctx, r.FormValue("canary_twitch_channel"))) {
 		return

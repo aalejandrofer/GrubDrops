@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -148,8 +149,10 @@ func run() error {
 	}
 
 	// Proxy support: read from settings and create shared transport
-	proxyURL := settingOr(logger, settingsStore.ProxyURL(ctx), "", "proxy_url")
-	proxyEnabled := settingOr(logger, settingsStore.ProxyEnabled(ctx), false, "proxy_enabled")
+	proxyURLVal, proxyURLErr := settingsStore.ProxyURL(ctx)
+	proxyURL := settingOr(logger, proxyURLVal, proxyURLErr, "", "proxy_url")
+	proxyEnabledVal, proxyEnabledErr := settingsStore.ProxyEnabled(ctx)
+	proxyEnabled := settingOr(logger, proxyEnabledVal, proxyEnabledErr, false, "proxy_enabled")
 	var proxyTransport *http.Transport
 	if proxyEnabled && proxyURL != "" {
 		proxyTransport = netutil.NewTransport(proxyURL)
@@ -180,7 +183,8 @@ func run() error {
 	// internal/platform/kick/wswatch.go). The two are mutually exclusive (one
 	// active watch per account). EnableBrowserWatch no-ops + warns if no sidecar
 	// client is configured.
-	kickWatchMode := settingOr(logger, settingsStore.KickWatchMode(ctx), store.KickWatchModeBrowser, "kick_watch_mode")
+	kickWatchModeVal, kickWatchModeErr := settingsStore.KickWatchMode(ctx)
+	kickWatchMode := settingOr(logger, kickWatchModeVal, kickWatchModeErr, store.KickWatchModeBrowser, "kick_watch_mode")
 	switch kickWatchMode {
 	case store.KickWatchModeWS:
 		// pure WebSocket, no browser — nothing to enable.
@@ -385,12 +389,15 @@ func run() error {
 		// PriorityMode is a global setting — read once per build (i.e.
 		// per Reload). Watcher snapshots the value for the lifetime of
 		// the entry; the next Reload picks up changes.
-		priorityMode := settingOr(logger, settingsStore.PriorityMode(ctx), store.PriorityModeOrdered, "priority_mode")
+		priorityModeVal, priorityModeErr := settingsStore.PriorityMode(ctx)
+		priorityMode := settingOr(logger, priorityModeVal, priorityModeErr, store.PriorityModeOrdered, "priority_mode")
 
 		// Runtime cadence + progress-notify granularity — read per build (per
 		// Reload) so saving on /settings + reloading takes effect.
-		tickSec := settingOr(logger, settingsStore.TickIntervalSec(ctx), int64(60), "tick_interval_sec")
-		progressStep := settingOr(logger, settingsStore.ProgressNotifyStepPct(ctx), int64(25), "notify_progress_step_pct")
+		tickSecVal, tickSecErr := settingsStore.TickIntervalSec(ctx)
+		tickSec := settingOr(logger, tickSecVal, tickSecErr, 60, "tick_interval_sec")
+		progressStepVal, progressStepErr := settingsStore.ProgressNotifyStepPct(ctx)
+		progressStep := settingOr(logger, progressStepVal, progressStepErr, 25, "notify_progress_step_pct")
 
 		// Manual "I've linked it" overrides — campaign ids the user asserted
 		// are account-linked. Loaded per build (per Reload) so toggling +
@@ -492,7 +499,8 @@ func run() error {
 	// game opt-ins; non-whitelisted games are never scraped.
 	// Cadence comes from the /settings DB value (minutes); the env var,
 	// when set, overrides it (ops escape hatch).
-	discMin := settingOr(logger, settingsStore.DiscoveryIntervalMin(ctx), int64(30), "discovery_interval_min")
+	discMinVal, discMinErr := settingsStore.DiscoveryIntervalMin(ctx)
+	discMin := settingOr(logger, discMinVal, discMinErr, 30, "discovery_interval_min")
 	discoveryInterval := parseDuration(os.Getenv("GRUB_DISCOVERY_INTERVAL"), time.Duration(discMin)*time.Minute)
 	startDiscovery(ctx, logger, q, sessions, registry, campaignPersister, discoveryInterval)
 
@@ -537,13 +545,16 @@ func run() error {
 		canary.NewTwitchProbe(twitchBackend, 5*time.Second),
 		canary.NewKickProbe(kickBackend, 45*time.Second),
 		func(runCtx context.Context) canary.RunnerSettings {
-			twCh := settingOr(logger, settingsStore.CanaryTwitchChannel(runCtx), "", "canary_twitch_channel")
-			kkCh := settingOr(logger, settingsStore.CanaryKickChannel(runCtx), "", "canary_kick_channel")
+			twChVal, twChErr := settingsStore.CanaryTwitchChannel(runCtx)
+			twCh := settingOr(logger, twChVal, twChErr, "", "canary_twitch_channel")
+			kkChVal, kkChErr := settingsStore.CanaryKickChannel(runCtx)
+			kkCh := settingOr(logger, kkChVal, kkChErr, "", "canary_kick_channel")
 			return canary.RunnerSettings{TwitchChannel: twCh, KickChannel: kkCh}
 		},
 		notifier,
 	)
-	canaryIntervalSec := settingOr(logger, settingsStore.CanaryIntervalSec(ctx), int64(3600), "canary_interval_sec")
+	canaryIntervalSecVal, canaryIntervalSecErr := settingsStore.CanaryIntervalSec(ctx)
+	canaryIntervalSec := settingOr(logger, canaryIntervalSecVal, canaryIntervalSecErr, 3600, "canary_interval_sec")
 	canaryInterval := parseDuration(os.Getenv("GRUB_CANARY_INTERVAL"), time.Duration(canaryIntervalSec)*time.Second)
 	go canaryRunner.Run(ctx, canaryInterval)
 

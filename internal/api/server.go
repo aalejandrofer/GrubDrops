@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
+	"github.com/aalejandrofer/grubdrops/internal/i18n"
 	mlog "github.com/aalejandrofer/grubdrops/internal/log"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/scheduler"
@@ -118,32 +119,6 @@ func NewRouter(d Deps) http.Handler {
 		_, _ = w.Write([]byte("ok\n"))
 	})
 
-	// Language switch: POST /api/lang sets a "lang" cookie (1 year).
-	r.Method(http.MethodPost, "/api/lang", withSession(csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		lang := strings.TrimSpace(r.FormValue("lang"))
-		if lang == "" {
-			lang = "en"
-		}
-		// Validate language is supported
-		if lang != "en" && lang != "zh-CN" {
-			lang = "en"
-		}
-		http.SetCookie(w, &http.Cookie{
-			Name:     "lang",
-			Value:    lang,
-			Path:     "/",
-			MaxAge:   365 * 24 * 60 * 60,
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-		})
-		// Redirect back to the referer only if it's a local path.
-		ref := r.Header.Get("Referer")
-		if ref == "" || !isLocalRedirect(ref) {
-			ref = "/"
-		}
-		http.Redirect(w, r, ref, http.StatusSeeOther)
-	}))))
-
 	// Static assets shipped via internal/web/static/. Cache aggressively
 	// since file names change on rebuild.
 	r.Handle("/static/*", http.StripPrefix("/static/", staticHandler()))
@@ -204,6 +179,32 @@ func NewRouter(d Deps) http.Handler {
 
 	withSession := func(h http.Handler) http.Handler { return d.Session.LoadAndSave(h) }
 	csrf := CSRF(d.SecureCookies)
+
+	// Language switch: POST /api/lang sets a "lang" cookie (1 year).
+	r.Method(http.MethodPost, "/api/lang", withSession(csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lang := strings.TrimSpace(r.FormValue("lang"))
+		if lang == "" {
+			lang = "en"
+		}
+		// Validate language is supported
+		if lang != "en" && lang != "zh-CN" {
+			lang = "en"
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     "lang",
+			Value:    lang,
+			Path:     "/",
+			MaxAge:   365 * 24 * 60 * 60,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
+		// Redirect back to the referer only if it's a local path.
+		ref := r.Header.Get("Referer")
+		if ref == "" || !isLocalRedirect(ref) {
+			ref = "/"
+		}
+		http.Redirect(w, r, ref, http.StatusSeeOther)
+	}))))
 
 	// Public (no auth required, but still session + CSRF)
 	r.Method(http.MethodGet, "/setup", withSession(csrf(http.HandlerFunc(setup.get))))

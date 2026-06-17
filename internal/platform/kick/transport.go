@@ -9,6 +9,7 @@ import (
 	"net/http"
 	neturl "net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
@@ -41,10 +42,10 @@ type httpDoer struct {
 }
 
 type cachedConn struct {
-	uconn     *utls.UClient
-	transport *http2.Transport
-	cc        *http2.ClientConn
-	lastUse   time.Time
+	uconn   *utls.UConn
+	tr      *http2.Transport
+	cc      *http2.ClientConn
+	lastUse time.Time
 }
 
 func newHTTPDoer() *httpDoer {
@@ -89,10 +90,10 @@ func (d *httpDoer) connFor(ctx context.Context, host string) (*cachedConn, error
 	}
 
 	cached := &cachedConn{
-		uconn:     uconn,
-		transport: tr,
-		cc:        cc,
-		lastUse:   time.Now(),
+		uconn:   uconn,
+		tr:      tr,
+		cc:      cc,
+		lastUse: time.Now(),
 	}
 
 	d.mu.Lock()
@@ -107,7 +108,7 @@ func (d *httpDoer) closeConn(host string) {
 	d.mu.Lock()
 	if cc, ok := d.conns[host]; ok {
 		cc.uconn.Close()
-		cc.transport.Close()
+		cc.tr.CloseIdleConnections()
 		delete(d.conns, host)
 	}
 	d.mu.Unlock()
