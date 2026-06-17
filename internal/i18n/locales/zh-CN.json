@@ -612,6 +612,8 @@
   "error.service_unavailable": "服务不可用",
   "error.csrf_invalid": "CSRF 令牌无效",
   "error.admin_configured": "管理员已配置",
+  "error.platform_no_login": "平台不需要登录",
+  "error.platform_no_login_post": "平台不接受登录 POST",
 
   "state.watching": "观看中",
   "state.claiming": "领取中",

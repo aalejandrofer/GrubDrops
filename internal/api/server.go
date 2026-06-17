@@ -242,7 +242,7 @@ func NewRouter(d Deps) http.Handler {
 		case "kick":
 			loginKick.get(w, r)
 		default:
-			http.Error(w, "platform does not need login", http.StatusBadRequest)
+			http.Error(w, i18n.T(i18n.DetectLang(r), "error.platform_no_login"), http.StatusBadRequest)
 		}
 	})
 	// Twitch cookie-paste is retired (doesn't authenticate on the direct
@@ -269,7 +269,7 @@ func NewRouter(d Deps) http.Handler {
 		case "kick":
 			loginKick.post(w, r)
 		default:
-			http.Error(w, "platform does not accept login POST", http.StatusBadRequest)
+			http.Error(w, i18n.T(i18n.DetectLang(r), "error.platform_no_login_post"), http.StatusBadRequest)
 		}
 	})
 	authed.Post("/accounts/{id}/update", accs.update)
