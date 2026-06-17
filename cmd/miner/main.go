@@ -114,7 +114,7 @@ func run() error {
 		logger.Warn("oidc disabled: discovery failed", "err", oidcErr)
 		oidcProvider, _ = oidc.New(ctx, oidc.Config{}) // disabled provider
 	}
-	if oidcProvider.Enabled() {
+	if oidcProvider != nil && oidcProvider.Enabled() {
 		logger.Info("oidc enabled", "issuer", cfg.OIDCIssuer, "provider", oidcProvider.Name())
 		// Open-by-default footgun: with no allowlist, ANY user the IdP
 		// authenticates becomes admin. Warn so operators notice.

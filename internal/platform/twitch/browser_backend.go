@@ -474,7 +474,11 @@ func (b *BrowserBackend) ClaimRewards(ctx context.Context, s platform.Session, a
 	}
 	out := make([]platform.ClaimedReward, 0, len(games))
 	for i := range games {
-		out = append(out, platform.ClaimedReward{Game: games[i], Title: titles[i]})
+		title := ""
+		if i < len(titles) {
+			title = titles[i]
+		}
+		out = append(out, platform.ClaimedReward{Game: games[i], Title: title})
 	}
 	return out, nil
 }

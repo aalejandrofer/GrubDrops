@@ -473,6 +473,7 @@ func (d *settingsDeps) notifyTest(w http.ResponseWriter, r *http.Request) {
 // the global list before any campaign scrape surfaces the game.
 func (d *settingsDeps) globalGamesAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	lang := i18n.DetectLang(r)
 	if d.q == nil {
 		http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
 		return
