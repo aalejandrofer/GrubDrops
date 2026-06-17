@@ -756,6 +756,25 @@
   .auth-pill.ok      { color: var(--green);  border: 1px solid rgba(111, 181, 107, 0.4); }
   .auth-pill.bad     { color: var(--accent); border: 1px solid rgba(212, 99, 30, 0.5); background: rgba(212, 99, 30, 0.08); }
   .auth-pill.unknown { color: var(--dim);    border: 1px solid var(--line); }
+  /* Per-account enable/disable toggle — boxed pill that reads as a switch:
+     green-bordered when the account is ON (button disables it), muted when
+     OFF (button enables it). */
+  .row-toggle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 3px 11px;
+    border-radius: 4px;
+    margin-left: 10px;
+    background: transparent;
+    cursor: pointer;
+    transition: color .12s, border-color .12s, background .12s;
+  }
+  .row-toggle.on        { color: var(--green); border: 1px solid rgba(111, 181, 107, 0.4); }
+  .row-toggle.on:hover  { background: rgba(111, 181, 107, 0.10); border-color: var(--green); }
+  .row-toggle.off       { color: var(--dim);   border: 1px solid var(--line); }
+  .row-toggle.off:hover { color: var(--text);  border-color: var(--accent); background: rgba(212, 99, 30, 0.06); }
   /* not-linked row actions: "connect account →" link + "I've linked it"
      override button, kept on one line, right-aligned in the .ac cell. */
   /* per-account connect chips on a not-linked row */

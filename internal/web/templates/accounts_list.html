@@ -46,7 +46,7 @@
               {{else}}<span class="auth-pill bad" title="{{.AuthMsg}} · {{t "accounts.auth_ok"}} {{.AuthWhen}}">✗ auth — {{t "accounts.re_auth_needed"}}</span>{{end}}
             {{else}}<span class="auth-pill unknown" title="{{t "accounts.not_checked"}}">auth ?</span>{{end}}
           </span>
-          <span class="ac"><span class="state-pill state-{{.StateTier}}">{{if eq .StateTier "green"}}● {{t .StateLabel}}{{else if eq .StateTier "orange"}}● {{t .StateLabel}}{{else}}○ {{t "accounts.disabled"}}{{end}}</span><button type="button" class="btn sm ghost row-toggle" style="margin-left:8px"
+          <span class="ac"><span class="state-pill state-{{.StateTier}}">{{if eq .StateTier "green"}}● {{t .StateLabel}}{{else if eq .StateTier "orange"}}● {{t .StateLabel}}{{else}}○ {{t "accounts.disabled"}}{{end}}</span><button type="button" class="row-toggle {{if eq .Enabled 1}}on{{else}}off{{end}}"
               hx-post="/accounts/{{.ID}}/toggle"
               hx-headers='{"X-CSRF-Token": "{{$.CSRFToken}}"}'>{{if eq .Enabled 1}}{{t "accounts.disable"}}{{else}}{{t "accounts.enable"}}{{end}}</button></span>
         </div>
