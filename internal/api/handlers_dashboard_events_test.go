@@ -49,7 +49,9 @@ func TestColorForKind(t *testing.T) {
 }
 
 func TestHTMLEscape(t *testing.T) {
-	if got := htmlEscape(`<b>&"</b>`); got != `&lt;b&gt;&amp;"&lt;/b&gt;` {
+	// html.EscapeString escapes the double-quote too (&#34;) — the XSS-safe
+	// behaviour that replaced the old custom escaper which left quotes raw.
+	if got := htmlEscape(`<b>&"</b>`); got != `&lt;b&gt;&amp;&#34;&lt;/b&gt;` {
 		t.Errorf("htmlEscape = %q", got)
 	}
 }

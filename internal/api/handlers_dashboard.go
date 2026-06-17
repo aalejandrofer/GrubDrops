@@ -349,7 +349,7 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 		NextClaims:    nextClaimsFrom(cards),
 		ActiveCamps:   camps,
 		LiveChannels:  liveChannelsFor(accs, snapshots, allowed),
-		Events:        eventsFromRing(d.ring, "", "", accs, d.loc),
+		Events:        eventsFromRing(d.ring, "", "", lang, accs, d.loc),
 		EventAccounts: eventAccountsFrom(accs),
 		EventFilter:   "all",
 		UpdatedAt:     nowPoll(time.Now(), lang),
@@ -931,7 +931,8 @@ func (d dashboardDeps) events(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("filter")
 	account := r.URL.Query().Get("account")
 	accs, _ := d.q.ListAllAccounts(r.Context())
-	renderPartial(w, r, d.t, "dashboard_events", eventsFromRing(d.ring, kind, account, accs, d.loc))
+	lang := i18n.DetectLang(r)
+	renderPartial(w, r, d.t, "dashboard_events", eventsFromRing(d.ring, kind, account, lang, accs, d.loc))
 }
 
 // campaignDetail renders the modal partial for a single discovered
@@ -1166,7 +1167,7 @@ func (d dashboardDeps) accountDetail(w http.ResponseWriter, r *http.Request) {
 
 	// Filter events ring for this account.
 	if d.ring != nil {
-		all := eventsFromRing(d.ring, "", id, []gen.Account{acc}, d.loc)
+		all := eventsFromRing(d.ring, "", id, lang, []gen.Account{acc}, d.loc)
 		if len(all) > 20 {
 			all = all[:20]
 		}
