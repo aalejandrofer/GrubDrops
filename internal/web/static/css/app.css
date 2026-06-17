@@ -1429,12 +1429,12 @@
      drawer's 8 chars). Override the second grid track explicitly. */
   .drops-rows .ev > summary,
   .events .ev > summary {
-    grid-template-columns: 14px 130px 10px 1fr 160px;
+    grid-template-columns: 14px 160px 10px 1fr 160px;
   }
   /* not-linked rows pack "connect account →" + "✓ I've linked it" into the
      last cell — give it room so they stay on one line. */
   .drops-rows .ev-linkrow > summary {
-    grid-template-columns: 14px 130px 10px 1fr 240px;
+    grid-template-columns: 14px 160px 10px 1fr 240px;
   }
   .ev > summary::-webkit-details-marker,
   .ev > summary::marker { display: none; content: ""; }
