@@ -6,9 +6,10 @@
 {{with .Page}}
 <div class="auth-wrap wide">
   <div class="auth-card">
-    <div class="kicker">{{t "login_twitch_cookie.authorize"}}</div>
+    <div class="kicker">{{t "login_twitch_cookie.authorize"}} · {{t "login_twitch_choose.experimental"}}</div>
     <h1>{{t "login_twitch_cookie.authorize_h1"}} {{.DisplayName}}</h1>
     <p class="intro">{{t "login_twitch_cookie.intro"}}</p>
+    <div class="err" style="margin-top:12px;">⚠ {{t "login_twitch_cookie.experimental_warning"}}</div>
   </div>
 
   {{if .Flash}}<div class="auth-flash"><div class="err">{{t .Flash}}</div></div>{{end}}
