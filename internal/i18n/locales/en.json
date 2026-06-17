@@ -242,6 +242,8 @@
   "accounts.no_games_yet": "no games yet",
   "accounts.sleeping": "sleeping",
   "accounts.disabled": "disabled",
+  "accounts.enable": "enable",
+  "accounts.disable": "disable",
 
   "account.title": "Account · GrubDrops",
   "account.edit": "// accounts / edit",
@@ -297,6 +299,7 @@
   "settings.title": "Settings · GrubDrops",
   "settings.config": "// config",
   "settings.heading": "Settings",
+  "settings.language": "Language",
   "settings.add_account": "+ Add account",
 
   "priority.global_list": "Global priority list",
@@ -531,6 +534,8 @@
   "flash.game_added": "game added",
   "flash.account_saved": "saved — this account reloaded",
   "flash.account_reloaded": "account reloaded",
+  "flash.account_enabled": "account enabled — reloaded",
+  "flash.account_disabled": "account disabled — reloaded",
   "flash.deleted": "deleted",
   "flash.platform_name_required": "platform and display name required",
   "flash.watchers_reloaded": "watchers reloaded",

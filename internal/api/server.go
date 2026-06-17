@@ -278,6 +278,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/accounts/{id}/games/add", accs.addGame)
 	authed.Post("/accounts/{id}/games/use-global", accs.useGlobal)
 	authed.Post("/accounts/{id}/reload", accs.reloadOne)
+	authed.Post("/accounts/{id}/toggle", accs.toggleEnabled)
 	authed.Post("/accounts/{id}/delete", accs.delete)
 	authed.Post("/accounts/apply", func(w http.ResponseWriter, r *http.Request) {
 		if err := d.Reload(r.Context()); err != nil {

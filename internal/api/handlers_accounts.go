@@ -478,6 +478,51 @@ func (d accountsDeps) reloadOne(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
+// toggleEnabled flips a single account's enabled flag (the enable/disable
+// button on the accounts list) and fires a targeted watcher reload so the
+// change takes effect immediately: disable stops that account mining, enable
+// starts it, and the rest of the roster keeps running. Mirrors reloadOne's
+// HTMX contract — emit HX-Redirect for a full navigation so the flash renders
+// — and uses the long-lived root context for the reload (NOT r.Context(),
+// which cancels on redirect and would tear the rebuilt watcher down).
+func (d accountsDeps) toggleEnabled(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	acc, err := d.q.GetAccount(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	enabled := int64(1)
+	if acc.Enabled == 1 {
+		enabled = 0
+	}
+	if err := d.q.SetAccountEnabled(r.Context(), gen.SetAccountEnabledParams{
+		Enabled: enabled, UpdatedAt: time.Now().Unix(), ID: id,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if d.reloadAccount != nil {
+		ctx := d.rootCtx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		d.reloadAccount(ctx, id)
+	}
+	if enabled == 1 {
+		d.sm.Put(r.Context(), "flash", "flash.account_enabled")
+	} else {
+		d.sm.Put(r.Context(), "flash", "flash.account_disabled")
+	}
+	target := applyRedirectTarget(r)
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Redirect", target)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
 func genID() string {
 	var b [12]byte
 	_, _ = rand.Read(b[:])
