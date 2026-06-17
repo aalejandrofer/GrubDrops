@@ -15,23 +15,7 @@
 
   <div class="settings-stack">
   <section class="settings-card">
-    <header class="section-h"><h3>{{t "account.heading"}}</h3><span class="meta">{{.Platform}} · {{.ID}}</span></header>
-
-    {{if eq .Platform "twitch"}}
-    <div class="reauth-row">
-      <div class="reauth-actions">
-        <a class="btn-linear" href="/accounts/{{.ID}}/login">{{t "account.device_code_link"}} →</a>
-        <span class="hint">{{t "account.twitch_hint" | safe}}</span>
-      </div>
-    </div>
-    {{else if eq .Platform "kick"}}
-    <div class="reauth-row">
-      <div class="reauth-actions">
-        <a class="btn-linear" href="/accounts/{{.ID}}/login">{{t "account.re_authenticate"}} →</a>
-        <span class="hint">{{t "account.kick_hint"}}</span>
-      </div>
-    </div>
-    {{end}}
+    <header class="section-h"><h3>{{t "account.heading"}}</h3><span class="meta">{{.Platform}} · {{.ID}} · <a href="/accounts/{{.ID}}/login" class="row-link">{{t "account.re_authenticate"}} →</a></span></header>
 
     <form method="post" action="/accounts/{{.ID}}/update">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
