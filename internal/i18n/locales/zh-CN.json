@@ -431,7 +431,7 @@
   "notify.progress": "进度",
   "notify.auth": "认证",
   "notify.errors": "错误",
-  "notify.heartbeat": "心跳健康检查",
+  "notify.heartbeat": "健康检查失败",
   "notify.progress_step": "进度步长",
   "notify.progress_step_desc": "当\"进度\"开启时，在 0%（开始）、每 N%、100% 时通知 · 50 = 开始/50/100 · 0 = 关闭 · 重新加载后生效",
   "notify.send_test": "发送测试",

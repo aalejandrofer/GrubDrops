@@ -2462,6 +2462,9 @@
     padding: 9px 0;
   }
   .kvedit .row:last-child { border-bottom: none; }
+  /* Right-align numeric values so the digits hug the unit at the right edge
+     (e.g. "21600 s") instead of floating at the left of the input box. */
+  .kvedit .v input[type="number"] { text-align: right; }
   .kvedit .k { color: var(--text); font-weight: 600; white-space: nowrap; }
   .kvedit .d {
     flex: 1;

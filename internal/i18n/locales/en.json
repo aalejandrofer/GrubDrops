@@ -431,7 +431,7 @@
   "notify.progress": "progress",
   "notify.auth": "auth",
   "notify.errors": "errors",
-  "notify.heartbeat": "heartbeat health check",
+  "notify.heartbeat": "Health Failed",
   "notify.progress_step": "progress step",
   "notify.progress_step_desc": "when \"progress\" is on, notify at 0% (start), every N%, 100% · 50 = start/50/100 · 0 = off · applies on reload",
   "notify.send_test": "Send test",
