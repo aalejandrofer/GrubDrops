@@ -8,6 +8,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 
 	"github.com/aalejandrofer/grubdrops/internal/auth"
+	"github.com/aalejandrofer/grubdrops/internal/i18n"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
@@ -30,9 +31,10 @@ func (d setupDeps) get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d setupDeps) post(w http.ResponseWriter, r *http.Request) {
+	lang := i18n.DetectLang(r)
 	exists, err := d.q.AdminExists(r.Context())
 	if err == nil && exists {
-		http.Error(w, "admin already configured", http.StatusConflict)
+		http.Error(w, i18n.T(lang, "error.admin_configured"), http.StatusConflict)
 		return
 	}
 	pw := r.FormValue("password")

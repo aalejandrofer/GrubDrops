@@ -601,6 +601,18 @@
   "time.ago": "前",
   "time.ended": "已结束",
 
+  "error.missing_param": "缺少必需参数",
+  "error.bad_image_path": "无效的图片路径",
+  "error.kick_unavailable": "Kick 后端不可用",
+  "error.kick_no_image": "Kick 后端无法获取图片",
+  "error.image_fetch_failed": "图片获取失败",
+  "error.internal": "内部错误",
+  "error.not_found": "未找到",
+  "error.bad_request": "请求错误",
+  "error.service_unavailable": "服务不可用",
+  "error.csrf_invalid": "CSRF 令牌无效",
+  "error.admin_configured": "管理员已配置",
+
   "state.watching": "观看中",
   "state.claiming": "领取中",
   "state.scanning_channels": "扫描频道中",

@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/aalejandrofer/grubdrops/internal/i18n"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
@@ -38,9 +39,10 @@ const kickImageTransform = "width=384,format=webp,quality=75"
 // (older rows stored files.kick.com, which 502s). The path must be a Kick
 // reward-image path to avoid turning this into an open relay.
 func (d *imageProxyDeps) kick(w http.ResponseWriter, r *http.Request) {
+	lang := i18n.DetectLang(r)
 	raw := strings.TrimSpace(r.URL.Query().Get("u"))
 	if raw == "" {
-		http.Error(w, "missing u", http.StatusBadRequest)
+		http.Error(w, i18n.T(lang, "error.missing_param"), http.StatusBadRequest)
 		return
 	}
 	path := raw
@@ -52,7 +54,7 @@ func (d *imageProxyDeps) kick(w http.ResponseWriter, r *http.Request) {
 	path = strings.TrimPrefix(path, "/")
 	// SSRF guard: only Kick reward/drop image paths and user avatars.
 	if !strings.HasPrefix(path, "drops/") && !strings.HasPrefix(path, "images/") {
-		http.Error(w, "bad image path", http.StatusBadRequest)
+		http.Error(w, i18n.T(lang, "error.bad_image_path"), http.StatusBadRequest)
 		return
 	}
 	// User profile pictures live on files.kick.com under images/user/... and
@@ -67,18 +69,18 @@ func (d *imageProxyDeps) kick(w http.ResponseWriter, r *http.Request) {
 
 	b, ok := d.registry.Get("kick")
 	if !ok {
-		http.Error(w, "kick backend unavailable", http.StatusServiceUnavailable)
+		http.Error(w, i18n.T(lang, "error.kick_unavailable"), http.StatusServiceUnavailable)
 		return
 	}
 	fetcher, ok := b.(imageFetcher)
 	if !ok {
-		http.Error(w, "kick backend cannot fetch images", http.StatusServiceUnavailable)
+		http.Error(w, i18n.T(lang, "error.kick_no_image"), http.StatusServiceUnavailable)
 		return
 	}
 
 	data, ct, status, err := fetcher.FetchImage(r.Context(), target)
 	if err != nil || status != http.StatusOK {
-		http.Error(w, "image fetch failed", http.StatusBadGateway)
+		http.Error(w, i18n.T(lang, "error.image_fetch_failed"), http.StatusBadGateway)
 		return
 	}
 	if ct == "" {

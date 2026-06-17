@@ -601,6 +601,18 @@
   "time.ago": "ago",
   "time.ended": "ended",
 
+  "error.missing_param": "missing required parameter",
+  "error.bad_image_path": "invalid image path",
+  "error.kick_unavailable": "Kick backend unavailable",
+  "error.kick_no_image": "Kick backend cannot fetch images",
+  "error.image_fetch_failed": "image fetch failed",
+  "error.internal": "internal error",
+  "error.not_found": "not found",
+  "error.bad_request": "bad request",
+  "error.service_unavailable": "service unavailable",
+  "error.csrf_invalid": "CSRF token invalid",
+  "error.admin_configured": "admin already configured",
+
   "state.watching": "watching",
   "state.claiming": "claiming",
   "state.scanning_channels": "scanning channels",

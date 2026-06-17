@@ -941,16 +941,16 @@ func (d dashboardDeps) campaignDetail(w http.ResponseWriter, r *http.Request) {
 	lang := i18n.DetectLang(r)
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		http.Error(w, "missing campaign id", http.StatusBadRequest)
+		http.Error(w, i18n.T(lang, "error.missing_param"), http.StatusBadRequest)
 		return
 	}
 	if d.sch == nil {
-		http.Error(w, "scheduler not available", http.StatusServiceUnavailable)
+		http.Error(w, i18n.T(lang, "error.service_unavailable"), http.StatusServiceUnavailable)
 		return
 	}
 	dc, ok := d.sch.FindDiscoveredCampaign(id)
 	if !ok {
-		http.Error(w, "campaign not in discovery cache", http.StatusNotFound)
+		http.Error(w, i18n.T(lang, "error.not_found"), http.StatusNotFound)
 		return
 	}
 
@@ -1078,7 +1078,7 @@ func (d dashboardDeps) accountDetail(w http.ResponseWriter, r *http.Request) {
 	lang := i18n.DetectLang(r)
 	id := chi.URLParam(r, "id")
 	if id == "" {
-		http.Error(w, "missing account id", http.StatusBadRequest)
+		http.Error(w, i18n.T(lang, "error.missing_param"), http.StatusBadRequest)
 		return
 	}
 	acc, err := d.q.GetAccount(r.Context(), id)
