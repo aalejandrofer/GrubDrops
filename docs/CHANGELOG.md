@@ -4,6 +4,39 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.2.5] — 2026-06-17
+
+### Added
+
+- **Twitch Cookie File Import** — new login method that allows importing Twitch
+  cookies from a Python pickle file (cookies.jar). This provides an alternative
+  to the device-code flow for users who have existing Twitch sessions exported
+  as pickle files. The parser supports Python pickle protocol 2-5 and extracts
+  the `auth-token` cookie from SimpleCookie structures.
+- **Login Method Chooser** — Twitch login now shows a choice page with two
+  options: device-code login (recommended) and cookie file import (alternative).
+  Users can select their preferred authentication method.
+- **Multi-language Support** — added Chinese and English translations for all
+  new cookie import related UI elements and error messages.
+
+### Changed
+
+- **Twitch Login Flow** — the `/accounts/{id}/login` route for Twitch accounts
+  now shows a method chooser page instead of going directly to the device-code
+  flow. This allows users to select between device-code and cookie import.
+
+### Technical
+
+- **Python Pickle Parser** — new `internal/platform/twitch/cookie_parser.go`
+  implements a subset of Python's pickle protocol (opcodes needed for
+  SimpleCookie parsing) including support for protocol 4/5 features like
+  SHORT_BINUNICODE (0x8c), MEMOIZE, NEWTRUE/NEWFALSE, and FRAME.
+- **Session Management** — cookie import creates a platform.Session with the
+  extracted auth-token and attempts verification via Twitch's CurrentUser GQL
+  query. Sessions are persisted with age encryption and 60-day expiry.
+- **Exported SynthCookieBlob** — the internal cookie blob builder is now
+  exported from the twitch package for reuse by the cookie import handler.
+
 ## [1.2.3] — 2026-06-16
 
 ### Fixed

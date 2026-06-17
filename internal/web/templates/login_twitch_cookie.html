@@ -1,0 +1,42 @@
+{{define "login_twitch_cookie.html"}}{{template "layout" .}}{{end}}
+
+{{define "title"}}{{t "login_twitch_cookie.title"}}{{end}}
+
+{{define "content"}}
+{{with .Page}}
+<div class="auth-wrap wide">
+  <div class="auth-card">
+    <div class="kicker">{{t "login_twitch_cookie.authorize"}}</div>
+    <h1>{{t "login_twitch_cookie.authorize_h1"}} {{.DisplayName}}</h1>
+    <p class="intro">{{t "login_twitch_cookie.intro"}}</p>
+  </div>
+
+  {{if .Flash}}<div class="auth-flash"><div class="err">{{t .Flash}}</div></div>{{end}}
+
+  <div class="auth-card">
+    <form method="post" action="/accounts/{{.AccountID}}/twitch/cookie" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+
+      <div class="method-head">
+        <h2>{{t "login_twitch_cookie.upload_title"}}</h2>
+      </div>
+
+      <ol class="steps">
+        <li>{{t "login_twitch_cookie.step1"}}</li>
+        <li>{{t "login_twitch_cookie.step2"}}</li>
+        <li>{{t "login_twitch_cookie.step3"}}</li>
+      </ol>
+
+      <label>{{t "login_twitch_cookie.cookie_file"}} <span class="req">({{t "login_twitch_cookie.required"}})</span>
+        <input type="file" name="cookie_file" accept=".jar,.pkl,.pickle" required>
+      </label>
+
+      <div class="submit-row">
+        <a class="alt" href="/accounts">← {{t "login_twitch_cookie.cancel"}}</a>
+        <button class="btn primary" type="submit">{{t "login_twitch_cookie.import_btn"}} →</button>
+      </div>
+    </form>
+  </div>
+</div>
+{{end}}
+{{end}}

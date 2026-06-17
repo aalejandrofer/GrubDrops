@@ -181,6 +181,8 @@ func NewRouter(d Deps) http.Handler {
 	}
 	accs := accountsDeps{q: d.Q, db: d.DB, t: d.Templates, sm: d.Session, sch: d.Scheduler, reload: d.Reload, authCheck: d.AuthCheck, reloadAccount: d.ReloadAccount, rootCtx: d.RootCtx, loc: d.Location}
 	loginTwitch := newLoginTwitchDeps(d, d.RootCtx)
+	loginTwitchCookie := newLoginTwitchCookieDeps(d, d.RootCtx)
+	loginTwitchChoose := &loginTwitchChooseDeps{q: d.Q, t: d.Templates}
 	loginKick := &loginKickDeps{
 		q:         d.Q,
 		t:         d.Templates,
@@ -231,11 +233,8 @@ func NewRouter(d Deps) http.Handler {
 		}
 		switch acc.Platform {
 		case "twitch":
-			// Twitch is device-code only. Cookie-paste gives a web-issued
-			// auth-token, which fails against the Android client_id our
-			// direct backend uses (currentUser:null / integrity wall).
-			// Device-code mints the Android-issued token DevilXD relies on.
-			loginTwitch.get(w, r)
+			// Show choose page with both device-code and cookie import options
+			loginTwitchChoose.get(w, r)
 		case "kick":
 			loginKick.get(w, r)
 		default:
@@ -252,6 +251,9 @@ func NewRouter(d Deps) http.Handler {
 	})
 	authed.Get("/accounts/{id}/twitch/device", loginTwitch.get)
 	authed.Get("/accounts/{id}/login/poll", loginTwitch.status)
+	// New: Twitch cookie file import
+	authed.Get("/accounts/{id}/twitch/cookie", loginTwitchCookie.get)
+	authed.Post("/accounts/{id}/twitch/cookie", loginTwitchCookie.post)
 	authed.Post("/accounts/{id}/login", func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		acc, err := d.Q.GetAccount(r.Context(), id)

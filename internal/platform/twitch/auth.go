@@ -109,16 +109,17 @@ func (a *authFlow) poll(ctx context.Context, internal deviceInternal) (platform.
 		AccessToken:  body.AccessToken,
 		RefreshToken: body.RefreshToken,
 		ExpiresAt:    computeExpiresAt(body.ExpiresIn),
-		Cookies:      synthCookieBlob(body.AccessToken),
+		Cookies:      SynthCookieBlob(body.AccessToken),
 	}, nil
 }
 
-// synthCookieBlob builds the {"twitch": "<json>"} session blob the
+// SynthCookieBlob builds the {"twitch": "<json>"} session blob the
 // browser sidecar expects, with auth-token = device-code access_token.
 // Used when sessions come from OAuth device flow instead of pasted
 // browser cookies — the sidecar reads s.Cookies["twitch"] and
 // installs auth-token into the chromedp tab.
-func synthCookieBlob(accessToken string) map[string]string {
+// Exported so the cookie import handler can reuse it.
+func SynthCookieBlob(accessToken string) map[string]string {
 	if accessToken == "" {
 		return nil
 	}
@@ -181,7 +182,7 @@ func (a *authFlow) refresh(ctx context.Context, s platform.Session) (platform.Se
 		AccessToken:  body.AccessToken,
 		RefreshToken: body.RefreshToken,
 		ExpiresAt:    computeExpiresAt(body.ExpiresIn),
-		Cookies:      synthCookieBlob(body.AccessToken),
+		Cookies:      SynthCookieBlob(body.AccessToken),
 		GameFilter:   s.GameFilter,
 	}, nil
 }

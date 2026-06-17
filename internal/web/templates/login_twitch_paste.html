@@ -35,6 +35,17 @@
       <li>{{t "login_twitch_paste.paste_below"}}</li>
     </ol>
   </div>
+
+  <div class="auth-card method">
+    <div class="method-head">
+      <span class="method-tag muted">{{t "login_twitch_paste.fallback"}}</span>
+      <h2>{{t "login_twitch_cookie.upload_title"}}</h2>
+    </div>
+    <p>{{t "login_twitch_cookie.intro"}}</p>
+    <div class="method-cta">
+      <a class="btn primary" href="/accounts/{{.AccountID}}/twitch/cookie">{{t "login_twitch_cookie.import_btn"}} →</a>
+    </div>
+  </div>
   {{end}}
   {{if .Flash}}<div class="auth-flash"><div class="err">{{t .Flash}}</div></div>{{end}}
   {{with .Page}}

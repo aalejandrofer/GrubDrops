@@ -1,0 +1,43 @@
+{{define "login_twitch_choose.html"}}{{template "layout" .}}{{end}}
+
+{{define "title"}}{{t "login_twitch_choose.title"}}{{end}}
+
+{{define "content"}}
+{{with .Page}}
+<div class="auth-wrap wide">
+  <div class="auth-card">
+    <div class="kicker">{{t "login_twitch_choose.authorize"}}</div>
+    <h1>{{t "login_twitch_choose.authorize_h1"}} {{.DisplayName}}</h1>
+    <p class="intro">{{t "login_twitch_choose.intro"}}</p>
+  </div>
+
+  <div class="auth-card method preferred">
+    <div class="method-head">
+      <span class="method-tag">{{t "login_twitch_choose.recommended"}}</span>
+      <h2>{{t "login_twitch_choose.device_code_login"}}</h2>
+    </div>
+    <p>{{t "login_twitch_choose.device_code_desc"}}</p>
+    <div class="method-cta">
+      <a class="btn primary" href="/accounts/{{.AccountID}}/twitch/device">{{t "login_twitch_choose.start_device"}} →</a>
+      <span class="hint">{{t "login_twitch_choose.device_hint"}}</span>
+    </div>
+  </div>
+
+  <div class="auth-card method">
+    <div class="method-head">
+      <span class="method-tag muted">{{t "login_twitch_choose.fallback"}}</span>
+      <h2>{{t "login_twitch_choose.cookie_import"}}</h2>
+    </div>
+    <p>{{t "login_twitch_choose.cookie_import_desc"}}</p>
+    <div class="method-cta">
+      <a class="btn primary" href="/accounts/{{.AccountID}}/twitch/cookie">{{t "login_twitch_choose.import_cookie"}} →</a>
+      <span class="hint">{{t "login_twitch_choose.cookie_hint"}}</span>
+    </div>
+  </div>
+
+  <div class="submit-row">
+    <a class="alt" href="/accounts">← {{t "login_twitch_choose.cancel"}}</a>
+  </div>
+</div>
+{{end}}
+{{end}}
