@@ -41,10 +41,10 @@ type httpDoer struct {
 }
 
 type cachedConn struct {
-	uconn   *utls.UClient
+	uconn     *utls.UClient
 	transport *http2.Transport
-	cc      *http2.ClientConn
-	lastUse time.Time
+	cc        *http2.ClientConn
+	lastUse   time.Time
 }
 
 func newHTTPDoer() *httpDoer {
