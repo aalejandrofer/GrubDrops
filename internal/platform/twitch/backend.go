@@ -108,6 +108,20 @@ type Backend struct {
 
 var _ platform.Backend = (*Backend)(nil)
 
+// Close stops the PubSub goroutine and releases resources.
+func (b *Backend) Close() {
+	b.pubsubMu.Lock()
+	if b.pubsub != nil {
+		b.pubsub.Close()
+		b.pubsub = nil
+	}
+	if b.pubsubCancel != nil {
+		b.pubsubCancel()
+		b.pubsubCancel = nil
+	}
+	b.pubsubMu.Unlock()
+}
+
 // Backend must satisfy ChannelSubscriber so the watcher subscribes
 // video-playback PubSub topics for event-driven stream-up/down, and
 // PubSubAware so the watcher's real-time hooks actually receive events

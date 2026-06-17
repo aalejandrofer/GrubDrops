@@ -106,7 +106,7 @@ func (b *BrowserBackend) InvalidateAuth(accountID string) {
 	b.invalidateAuth(accountID)
 	b.pubsubMu.Lock()
 	if client, ok := b.pubsubs[accountID]; ok {
-		_ = client
+		client.Close()
 		delete(b.pubsubs, accountID)
 	}
 	b.pubsubMu.Unlock()
@@ -372,7 +372,9 @@ func (b *BrowserBackend) ensurePubSub(s platform.Session, a *twitchAccount) {
 			TopicOnsiteNotifications(userID),
 		}
 		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		client.mu.Lock()
+		client.cancel = cancel
+		client.mu.Unlock()
 		if err := client.Run(ctx, topics); err != nil && !errors.Is(err, context.Canceled) {
 			slog.Warn("pubsub run exited", "account", s.AccountID, "err", err)
 		}

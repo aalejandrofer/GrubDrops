@@ -72,6 +72,7 @@ type PubSubClient struct {
 	topics map[string]struct{}
 	conn   *websocket.Conn
 	closed bool
+	cancel context.CancelFunc // stops the Run loop
 }
 
 // NewPubSubClient builds a client. Call Connect to dial.
@@ -81,6 +82,19 @@ func NewPubSubClient(authToken string, handlers PubSubHandlers) *PubSubClient {
 		handlers:  handlers,
 		topics:    map[string]struct{}{},
 	}
+}
+
+// Close stops the Run loop and closes the WebSocket connection.
+func (p *PubSubClient) Close() {
+	p.mu.Lock()
+	p.closed = true
+	if p.cancel != nil {
+		p.cancel()
+	}
+	if p.conn != nil {
+		p.conn.Close()
+	}
+	p.mu.Unlock()
 }
 
 // Run dials, subscribes, and pumps messages until ctx is cancelled.
