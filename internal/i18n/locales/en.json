@@ -614,6 +614,9 @@
   "error.admin_configured": "admin already configured",
   "error.platform_no_login": "platform does not need login",
   "error.platform_no_login_post": "platform does not accept login POST",
+  "error.no_backend": "no backend for platform",
+  "error.reload_unavailable": "per-account reload not available",
+  "error.invalid_interval": "interval must be a non-negative integer",
 
   "state.watching": "watching",
   "state.claiming": "claiming",

@@ -661,7 +661,7 @@ func (d *settingsDeps) canarySave(w http.ResponseWriter, r *http.Request) {
 	if v := r.FormValue("canary_interval_sec"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
-			http.Error(w, "canary_interval_sec must be a non-negative integer", http.StatusBadRequest)
+			http.Error(w, i18n.T(lang, "error.invalid_interval"), http.StatusBadRequest)
 			return
 		}
 		if saveErr(w, d.s.SetCanaryIntervalSec(ctx, n)) {

@@ -36,7 +36,7 @@ func (d oidcDeps) loginRedirect(w http.ResponseWriter, r *http.Request) {
 	verifier := oidc.NewVerifier()
 
 	if err := d.hs.Put(r.Context(), state, nonce, verifier, 5*time.Minute); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		http.Error(w, i18n.T(i18n.DetectLang(r), "error.internal"), http.StatusInternalServerError)
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -90,7 +90,7 @@ func (d oidcDeps) callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := d.sm.RenewToken(r.Context()); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		http.Error(w, i18n.T(i18n.DetectLang(r), "error.internal"), http.StatusInternalServerError)
 		return
 	}
 	d.sm.Put(r.Context(), "admin_authed", true)

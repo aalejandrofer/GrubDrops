@@ -614,6 +614,9 @@
   "error.admin_configured": "管理员已配置",
   "error.platform_no_login": "平台不需要登录",
   "error.platform_no_login_post": "平台不接受登录 POST",
+  "error.no_backend": "平台没有后端",
+  "error.reload_unavailable": "单个账号重新加载不可用",
+  "error.invalid_interval": "间隔必须是非负整数",
 
   "state.watching": "观看中",
   "state.claiming": "领取中",

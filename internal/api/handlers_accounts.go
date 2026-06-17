@@ -448,7 +448,7 @@ func (d accountsDeps) reloadOne(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if d.reloadAccount == nil {
-		http.Error(w, "per-account reload not available", http.StatusServiceUnavailable)
+		http.Error(w, i18n.T(i18n.DetectLang(r), "error.reload_unavailable"), http.StatusServiceUnavailable)
 		return
 	}
 	ctx := d.rootCtx

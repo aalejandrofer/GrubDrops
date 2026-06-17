@@ -11,6 +11,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/aalejandrofer/grubdrops/internal/i18n"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
@@ -68,7 +69,7 @@ func (d *loginTwitchDeps) get(w http.ResponseWriter, r *http.Request) {
 	}
 	backend, ok := d.registry.Get(acc.Platform)
 	if !ok {
-		http.Error(w, "no backend for platform", http.StatusBadRequest)
+		http.Error(w, i18n.T(i18n.DetectLang(r), "error.no_backend"), http.StatusBadRequest)
 		return
 	}
 
