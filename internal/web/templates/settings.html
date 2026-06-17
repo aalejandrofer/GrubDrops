@@ -233,7 +233,7 @@
           <div class="row">
             <span class="k">{{t "logging.retention"}}</span>
             <span class="d">{{t "logging.retention_desc"}}</span>
-            <span class="v"><input type="number" name="log_retention_days" value="{{.LogRetentionDays}}" min="1" max="365"><span class="u">days</span></span>
+            <span class="v"><input type="number" name="log_retention_days" value="{{.LogRetentionDays}}" min="1" max="365"><span class="u">{{t "time.days"}}</span></span>
           </div>
         </div>
         <div class="row" style="margin-top:18px;justify-content:flex-end;"><button class="btn-linear" type="submit">{{t "logging.save"}} →</button></div>

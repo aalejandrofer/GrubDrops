@@ -586,6 +586,12 @@
   "oidc.signin_failed": "登录失败",
   "oidc.account_not_allowed": "账号不允许",
 
+  "time.days": "天",
+  "time.hours": "时",
+  "time.minutes": "分",
+  "time.seconds": "秒",
+  "time.ago": "前",
+
   "state.watching": "观看中",
   "state.claiming": "领取中",
   "state.scanning_channels": "扫描频道中",

@@ -586,6 +586,12 @@
   "oidc.signin_failed": "sign-in failed",
   "oidc.account_not_allowed": "account not allowed",
 
+  "time.days": "days",
+  "time.hours": "h",
+  "time.minutes": "m",
+  "time.seconds": "s",
+  "time.ago": "ago",
+
   "state.watching": "watching",
   "state.claiming": "claiming",
   "state.scanning_channels": "scanning channels",
