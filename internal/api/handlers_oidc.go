@@ -9,6 +9,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 
 	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
+	"github.com/aalejandrofer/grubdrops/internal/i18n"
 )
 
 const oidcStateCookie = "grub_oidc_state"
@@ -60,31 +61,32 @@ func (d oidcDeps) callback(w http.ResponseWriter, r *http.Request) {
 
 	cookie, err := r.Cookie(oidcStateCookie)
 	queryState := r.URL.Query().Get("state")
+	lang := i18n.DetectLang(r)
 	if err != nil || cookie.Value == "" || cookie.Value != queryState {
-		d.fail(w, r, "login session expired, try again", nil)
+		d.fail(w, r, i18n.T(lang, "oidc.session_expired"), nil)
 		return
 	}
 	if e := r.URL.Query().Get("error"); e != "" {
-		d.fail(w, r, "sign-in denied by provider", fmt.Errorf("idp error: %s", e))
+		d.fail(w, r, i18n.T(lang, "oidc.denied_by_provider"), fmt.Errorf("idp error: %s", e))
 		return
 	}
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		d.fail(w, r, "authorization failed", nil)
+		d.fail(w, r, i18n.T(lang, "oidc.auth_failed"), nil)
 		return
 	}
 	nonce, verifier, err := d.hs.Take(r.Context(), queryState)
 	if err != nil {
-		d.fail(w, r, "login session expired, try again", err)
+		d.fail(w, r, i18n.T(lang, "oidc.session_expired"), err)
 		return
 	}
 	claims, err := d.p.ExchangeAndVerify(r.Context(), code, verifier, nonce)
 	if err != nil {
-		d.fail(w, r, "sign-in failed", err)
+		d.fail(w, r, i18n.T(lang, "oidc.signin_failed"), err)
 		return
 	}
 	if err := d.p.Authorize(claims); err != nil {
-		d.fail(w, r, "account not allowed", err)
+		d.fail(w, r, i18n.T(lang, "oidc.account_not_allowed"), err)
 		return
 	}
 	if err := d.sm.RenewToken(r.Context()); err != nil {

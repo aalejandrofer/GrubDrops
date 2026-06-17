@@ -514,7 +514,7 @@ func (d *settingsDeps) globalGamesAdd(w http.ResponseWriter, r *http.Request) {
 		d.onUpdate()
 	}
 	d.applyReload(ctx)
-	d.sm.Put(ctx, "flash", "added "+name+" to global priority")
+	d.sm.Put(ctx, "flash", i18n.T(lang, "flash.added_to_global_priority"))
 	http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
 }
 

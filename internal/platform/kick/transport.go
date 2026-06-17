@@ -83,14 +83,15 @@ func (d *httpDoer) getRaw(ctx context.Context, rawURL string) ([]byte, string, i
 	req.Header.Set("Sec-Fetch-Dest", "image")
 
 	tr := &http2.Transport{}
+	defer tr.Close()
 	cc, err := tr.NewClientConn(uconn)
 	if err != nil {
 		uconn.Close()
 		return nil, "", 0, fmt.Errorf("h2 clientconn: %w", err)
 	}
+	defer uconn.Close()
 	resp, err := cc.RoundTrip(req)
 	if err != nil {
-		uconn.Close()
 		return nil, "", 0, fmt.Errorf("roundtrip: %w", err)
 	}
 	defer resp.Body.Close()
@@ -169,14 +170,15 @@ func (d *httpDoer) do(ctx context.Context, sess platform.Session, method, rawURL
 	}
 
 	tr := &http2.Transport{}
+	defer tr.Close()
 	cc, err := tr.NewClientConn(uconn)
 	if err != nil {
 		uconn.Close()
 		return nil, 0, fmt.Errorf("h2 clientconn: %w", err)
 	}
+	defer uconn.Close()
 	resp, err := cc.RoundTrip(req)
 	if err != nil {
-		uconn.Close()
 		return nil, 0, fmt.Errorf("roundtrip: %w", err)
 	}
 	defer resp.Body.Close()

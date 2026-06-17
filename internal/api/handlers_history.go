@@ -66,7 +66,7 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 				acc = "@" + acc
 			}
 			page.Claims = append(page.Claims, historyClaim{
-				When:         time.Unix(row.ClaimedAt, 0).In(d.loc).Format("2006-01-02 15:04"),
+				When:         time.Unix(row.ClaimedAt, 0).In(d.loc).Format("2006-01-02 15:04 MST"),
 				Platform:     row.Platform,
 				Game:         row.Game,
 				Title:        row.BenefitName,
@@ -164,7 +164,7 @@ func rewardClaimsFromRing(lines []mlog.LogLine, labelByID, platformByID map[stri
 			platform = "twitch"
 		}
 		out = append(out, historyClaim{
-			When:     l.TS.In(loc).Format("2006-01-02 15:04"),
+			When:     l.TS.In(loc).Format("2006-01-02 15:04 MST"),
 			Platform: platform,
 			Game:     game,
 			Title:    title,

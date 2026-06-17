@@ -6,6 +6,7 @@ package api
 
 import (
 	"fmt"
+	"html"
 	"sort"
 	"strings"
 	"time"
@@ -162,6 +163,5 @@ func fieldStr(f map[string]any, k string) string {
 }
 
 func htmlEscape(s string) string {
-	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
-	return r.Replace(s)
+	return html.EscapeString(s)
 }

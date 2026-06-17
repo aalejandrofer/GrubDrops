@@ -1051,6 +1051,10 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 
 func (w *Watcher) pickStream(ctx context.Context) error {
 	w.mu.Lock()
+	if w.currentCampaign == nil {
+		w.mu.Unlock()
+		return fmt.Errorf("no current campaign")
+	}
 	camp := *w.currentCampaign
 	w.mu.Unlock()
 	slog.Debug("watcher pickStream", "account", w.cfg.AccountID, "campaign", camp.Name)
@@ -1185,6 +1189,10 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 
 func (w *Watcher) tickWatch(ctx context.Context) error {
 	w.mu.Lock()
+	if w.handle == nil || w.currentBenefit == nil || w.currentCampaign == nil {
+		w.mu.Unlock()
+		return fmt.Errorf("watcher state incomplete: handle=%v benefit=%v campaign=%v", w.handle, w.currentBenefit, w.currentCampaign)
+	}
 	handle := *w.handle
 	benefit := *w.currentBenefit
 	campaign := *w.currentCampaign
@@ -1564,6 +1572,10 @@ func (w *Watcher) notifySwept(ctx context.Context, cr platform.ClaimedReward) {
 
 func (w *Watcher) claim(ctx context.Context) error {
 	w.mu.Lock()
+	if w.currentBenefit == nil || w.handle == nil {
+		w.mu.Unlock()
+		return fmt.Errorf("cannot claim: benefit=%v handle=%v", w.currentBenefit, w.handle)
+	}
 	benefit := *w.currentBenefit
 	handle := *w.handle
 	w.mu.Unlock()

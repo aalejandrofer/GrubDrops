@@ -55,6 +55,9 @@ type Backend struct {
 	campaignChannels map[string][]kickChannel // campaignID -> eligible channels (slug+id)
 	categoryChannels map[string][]kickChannel // game/category -> union of participating channels across campaigns
 
+	// reaperCancel stops the sidecar reaper goroutine on Close().
+	reaperCancel context.CancelFunc
+
 	// probeDeps holds injectable dial/token helpers for ProbeWS. Zero value
 	// means "use the real Kick endpoints". Set by NewKickBackendForTest.
 	probeDeps probeWSDeps
@@ -106,9 +109,18 @@ func New(c *browser.Client, ctl dockerctl.Controller, template string, port int,
 		categoryChannels: map[string][]kickChannel{},
 	}
 	if ctl != nil {
-		go b.sidecars.runReaper(context.Background())
+		ctx, cancel := context.WithCancel(context.Background())
+		b.reaperCancel = cancel
+		go b.sidecars.runReaper(ctx)
 	}
 	return b
+}
+
+// Close stops background goroutines (sidecar reaper) and releases resources.
+func (b *Backend) Close() {
+	if b.reaperCancel != nil {
+		b.reaperCancel()
+	}
 }
 
 // SidecarAddrs returns each registered account's sidecar address

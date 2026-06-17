@@ -119,9 +119,13 @@ func NewRouter(d Deps) http.Handler {
 	})
 
 	// Language switch: POST /api/lang sets a "lang" cookie (1 year).
-	r.Post("/api/lang", func(w http.ResponseWriter, r *http.Request) {
+	r.Method(http.MethodPost, "/api/lang", withSession(csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lang := strings.TrimSpace(r.FormValue("lang"))
 		if lang == "" {
+			lang = "en"
+		}
+		// Validate language is supported
+		if lang != "en" && lang != "zh-CN" {
 			lang = "en"
 		}
 		http.SetCookie(w, &http.Cookie{
@@ -132,13 +136,13 @@ func NewRouter(d Deps) http.Handler {
 			HttpOnly: true,
 			SameSite: http.SameSiteLaxMode,
 		})
-		// Redirect back to the referer or /.
+		// Redirect back to the referer only if it's a local path.
 		ref := r.Header.Get("Referer")
-		if ref == "" {
+		if ref == "" || !isLocalRedirect(ref) {
 			ref = "/"
 		}
 		http.Redirect(w, r, ref, http.StatusSeeOther)
-	})
+	}))))
 
 	// Static assets shipped via internal/web/static/. Cache aggressively
 	// since file names change on rebuild.
@@ -342,6 +346,24 @@ func NewRouter(d Deps) http.Handler {
 
 	r.Mount("/", withSession(csrf(authed)))
 	return r
+}
+
+// isLocalRedirect checks if a redirect URL is local (same-origin) to prevent open redirect attacks.
+func isLocalRedirect(rawURL string) bool {
+	if rawURL == "" {
+		return false
+	}
+	// Relative paths are always safe
+	if rawURL[0] == '/' && (len(rawURL) == 1 || rawURL[1] != '/') {
+		return true
+	}
+	// Parse and check if it's the same host
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	// Only allow relative URLs or same-host absolute URLs
+	return u.Host == "" || u.Host == "localhost"
 }
 
 // staticHandler serves the embedded static/ assets. CSS/JS use no-cache

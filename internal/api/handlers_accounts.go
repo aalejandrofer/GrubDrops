@@ -109,7 +109,7 @@ func (d accountsDeps) list(w http.ResponseWriter, r *http.Request) {
 			row.AuthChecked = true
 			row.AuthOK = res.OK
 			row.AuthMsg = res.Msg
-			row.AuthWhen = time.Unix(res.CheckedAt, 0).In(d.loc).Format("2006-01-02 15:04")
+			row.AuthWhen = time.Unix(res.CheckedAt, 0).In(d.loc).Format("2006-01-02 15:04 MST")
 		}
 		enriched = append(enriched, row)
 	}
@@ -271,7 +271,7 @@ func (d accountsDeps) addGame(w http.ResponseWriter, r *http.Request) {
 	// No auto-reload: whitelist/priority/account edits take effect on the
 	// next manual "Apply changes" (or the next discovery tick for /drops).
 	// Avoids tearing down + respinning every watcher on each small save.
-	d.sm.Put(r.Context(), "flash", "added "+name)
+	d.sm.Put(r.Context(), "flash", i18n.T(i18n.DetectLang(r), "flash.game_added"))
 	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
 
@@ -459,7 +459,7 @@ func (d accountsDeps) reloadOne(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = acc.ID
 	}
-	d.sm.Put(r.Context(), "flash", "reloaded "+name)
+	d.sm.Put(r.Context(), "flash", i18n.T(i18n.DetectLang(r), "flash.account_reloaded"))
 	// Mirror /accounts/apply: land the user back where they clicked from
 	// (dashboard or /accounts) rather than always bouncing to /accounts.
 	target := applyRedirectTarget(r)

@@ -154,7 +154,9 @@ func run() error {
 	var proxyTransport *http.Transport
 	if proxyEnabled && proxyURL != "" {
 		proxyTransport = netutil.NewTransport(proxyURL)
-		logger.Info("proxy enabled", "url", proxyURL)
+		// Log proxy URL with credentials masked
+		safeURL := maskProxyURL(proxyURL)
+		logger.Info("proxy enabled", "url", safeURL)
 	}
 
 	// Kick runs over the pure-HTTP utls transport (Chrome TLS fingerprint) and
@@ -834,4 +836,16 @@ func kickActivePathFn(b *kick.Backend) func(string) string {
 		return nil
 	}
 	return b.ActiveWatchPath
+}
+
+// maskProxyURL masks credentials in proxy URLs for safe logging.
+// e.g. "http://user:pass@host:port" -> "http://user:***@host:port"
+func maskProxyURL(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.User == nil {
+		return rawURL
+	}
+	masked := *u
+	masked.User = url.UserPassword(u.User.Username(), "***")
+	return masked.String()
 }
