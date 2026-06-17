@@ -1973,11 +1973,15 @@
     border-color: var(--accent);
   }
   .auth-card textarea { min-height: 80px; resize: vertical; }
-  .auth-card .submit-row {
+  .auth-card .submit-row,
+  .auth-wrap > .submit-row {
     display: flex; justify-content: space-between; align-items: center;
     margin-top: 22px;
   }
-  .auth-card .submit-row .alt {
+  .auth-wrap > .submit-row { width: 100%; max-width: 460px; }
+  .auth-wrap.wide > .submit-row { max-width: 760px; }
+  .auth-card .submit-row .alt,
+  .auth-wrap > .submit-row .alt {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
     color: var(--muted);
@@ -1985,7 +1989,8 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
   }
-  .auth-card .submit-row .alt:hover { color: var(--accent); }
+  .auth-card .submit-row .alt:hover,
+  .auth-wrap > .submit-row .alt:hover { color: var(--accent); }
   .auth-card .err {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
