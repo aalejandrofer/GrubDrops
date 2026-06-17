@@ -10,11 +10,13 @@
       <h1>{{t "settings.heading"}}</h1>
     </div>
     <div class="actions">
+      {{if or (eq .Active "settings") (eq .Active "") (eq .Active "priority") (eq .Active "experimental") (eq .Active "proxy")}}
       <form method="post" action="/accounts/apply" class="inline-form"
             onsubmit="return confirm('{{t "accounts.reload_confirm"}}');">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <button class="btn" type="submit">{{t "accounts.apply_changes"}}</button>
       </form>
+      {{end}}
       <a class="btn primary" href="/accounts/new">{{t "settings.add_account"}}</a>
     </div>
   </div>

@@ -328,7 +328,7 @@
   "accounts.check_auth": "检查认证",
   "accounts.check_auth_title": "立即检查所有账号的认证状态（Twitch 令牌 / Kick Cookies）。",
   "accounts.reload_confirm": "重新加载所有监视器？这会重启每个账号当前的观看/领取活动（重新发现、重新选择）。服务端掉宝分钟数会保留。",
-  "accounts.apply_changes": "应用更改",
+  "accounts.apply_changes": "重新加载监视器",
   "accounts.add_account": "+ 添加账号",
   "accounts.configured": "已配置的账号",
   "accounts.total": "总计",

@@ -328,7 +328,7 @@
   "accounts.check_auth": "Check auth",
   "accounts.check_auth_title": "Probe every account's auth (Twitch token / Kick cookies) now.",
   "accounts.reload_confirm": "Reload all watchers? This restarts every account's current watch/claim activity (re-discover, re-pick). Server-side drop minutes are kept.",
-  "accounts.apply_changes": "Apply changes",
+  "accounts.apply_changes": "Reload Watchers",
   "accounts.add_account": "+ Add account",
   "accounts.configured": "Configured accounts",
   "accounts.total": "total",
