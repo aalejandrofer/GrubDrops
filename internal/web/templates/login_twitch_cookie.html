@@ -22,17 +22,21 @@
       </div>
 
       <ol class="steps">
-        <li>{{t "login_twitch_cookie.step1"}}</li>
+        <li>{{t "login_twitch_cookie.step1"}}: <a href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc" target="_blank" rel="noopener noreferrer">Chrome / Edge / Brave</a> {{t "login.or"}} <a href="https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/" target="_blank" rel="noopener noreferrer">Firefox</a>.</li>
         <li>{{t "login_twitch_cookie.step2"}}</li>
         <li>{{t "login_twitch_cookie.step3"}}</li>
       </ol>
 
-      <label>{{t "login_twitch_cookie.cookie_file"}} <span class="req">({{t "login_twitch_cookie.required"}})</span>
-        <input type="file" name="cookie_file" accept=".jar,.pkl,.pickle" required>
+      <label>{{t "login_twitch_cookie.paste_label"}}
+        <textarea name="cookies_txt" rows="8" autocomplete="off" spellcheck="false" placeholder="# Netscape HTTP Cookie File&#10;.twitch.tv&#9;TRUE&#9;/&#9;TRUE&#9;…&#9;auth-token&#9;…"></textarea>
+      </label>
+
+      <label>{{t "login_twitch_cookie.cookie_file"}} <span class="opt">{{t "login_twitch_cookie.or_file"}}</span>
+        <input type="file" id="cookie-file" name="cookie_file" accept=".txt,.jar,.pkl,.pickle,text/plain">
       </label>
 
       <div class="submit-row">
-        <a class="alt" href="/accounts">← {{t "login_twitch_cookie.cancel"}}</a>
+        <a class="alt" href="/accounts">{{t "login_twitch_cookie.cancel"}}</a>
         <button class="btn primary" type="submit">{{t "login_twitch_cookie.import_btn"}} →</button>
       </div>
     </form>
