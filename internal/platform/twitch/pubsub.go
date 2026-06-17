@@ -68,12 +68,12 @@ type PubSubClient struct {
 	authToken string
 	handlers  PubSubHandlers
 
-	mu       sync.Mutex
-	topics   map[string]struct{}
-	conn     *websocket.Conn
-	closed   bool
-	cancel   context.CancelFunc // stops the Run loop
-	writeMu  sync.Mutex         // protects WebSocket writes
+	mu      sync.Mutex
+	topics  map[string]struct{}
+	conn    *websocket.Conn
+	closed  bool
+	cancel  context.CancelFunc // stops the Run loop
+	writeMu sync.Mutex         // protects WebSocket writes
 }
 
 // NewPubSubClient builds a client. Call Connect to dial.
