@@ -4,6 +4,17 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Kick WS watch no longer death-loops after a stream ends.** When a tick failed
+  with a transient error (e.g. the WebSocket presence loop died), the watcher fell
+  back to re-discovery *without* stopping the live watch. The pure-WS path runs its
+  presence loop on its own background context, reachable only through that handle —
+  so dropping it leaked the goroutine and kept the server's one-watch-per-account
+  slot held. The next watch opened a second, non-accruing presence, and the watcher
+  spun on join→bounce→`pick_campaign` until a manual reload. The error path now
+  tears down the watch first, like every deliberate rotation path already does.
+
 ## [1.2.3] — 2026-06-16
 
 ### Fixed

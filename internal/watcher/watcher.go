@@ -397,6 +397,34 @@ func (w *Watcher) unsubscribeCurrentChannel() {
 	cs.UnsubscribeChannel(w.cfg.AccountID, channelID)
 }
 
+// stopCurrentWatch stops the in-flight watch (if any), drops its PubSub
+// subscription, and clears the per-watch handle/stream so a later tick
+// can't act on a torn-down watch. Safe to call when nothing is being
+// watched — it noops. currentCampaign/currentBenefit are intentionally
+// LEFT intact so re-discovery can resume the same drop. Used by the Run
+// error path to mirror the StopWatch the deliberate rotation paths do —
+// without it the pure-WS Kick presence loop (its own background context,
+// only cancellable through this handle) leaks and holds the server's
+// single watch slot.
+func (w *Watcher) stopCurrentWatch(ctx context.Context) {
+	w.mu.Lock()
+	handle := w.handle
+	var channelID string
+	if w.currentStream != nil {
+		channelID = w.currentStream.ChannelID
+	}
+	w.handle = nil
+	w.currentStream = nil
+	w.mu.Unlock()
+	if handle == nil {
+		return
+	}
+	_ = w.cfg.Backend.StopWatch(ctx, *handle)
+	if cs, ok := w.cfg.Backend.(platform.ChannelSubscriber); ok && channelID != "" {
+		cs.UnsubscribeChannel(w.cfg.AccountID, channelID)
+	}
+}
+
 func (w *Watcher) State() State {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -579,6 +607,16 @@ func (w *Watcher) Run(ctx context.Context) error {
 			slog.Warn("watcher step error; will retry after backoff",
 				"account", w.cfg.AccountID, "state", w.State().String(),
 				"backoff", backoff, "err", err)
+			// Tear down any live watch before re-discovering. The deliberate
+			// rotation paths (live-check swap, freeze, vanish, claim) all
+			// StopWatch first; the error path must too. For the pure-WS Kick
+			// path this is critical: the presence loop runs on its own
+			// background context and is ONLY stoppable via this handle, so
+			// dropping it here would leak the goroutine AND keep the server's
+			// one-watch-per-account slot held — the next StartWatch opens a
+			// second, non-accruing presence and the watcher death-loops
+			// join→bounce→pick_campaign.
+			w.stopCurrentWatch(ctx)
 			w.setState(ctx, StatePickCampaign)
 		}
 
