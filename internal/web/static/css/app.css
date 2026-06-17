@@ -1980,6 +1980,8 @@
   }
   .auth-wrap > .submit-row { width: 100%; max-width: 460px; }
   .auth-wrap.wide > .submit-row { max-width: 760px; }
+  /* solo: a lone cancel link, centered with a little breathing room above */
+  .auth-wrap > .submit-row.solo { justify-content: center; padding-top: 10px; }
   .auth-card .submit-row .alt,
   .auth-wrap > .submit-row .alt {
     font-family: 'JetBrains Mono', monospace;
