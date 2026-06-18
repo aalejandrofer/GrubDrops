@@ -959,6 +959,23 @@ type InventoryHistoryEntry struct {
 	Date  string `json:"date"` // free-text e.g. "Jun 5, 2026"; empty when not surfaced
 }
 
+// jsSafeJSON marshals v for embedding directly into a chromedp eval
+// script as a bare JS literal. encoding/json already escapes <, >, & to
+// \u00XX, but it leaves U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH
+// SEPARATOR) raw — both are valid inside a JSON string yet are line
+// terminators in JS, so an attacker-controlled game name or drop title
+// containing one would break out of the surrounding script literal. Escape
+// them so the embedded value is always a valid JS expression.
+func jsSafeJSON(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "[]"
+	}
+	b = bytes.ReplaceAll(b, []byte("\u2028"), []byte(`\u2028`))
+	b = bytes.ReplaceAll(b, []byte("\u2029"), []byte(`\u2029`))
+	return string(b)
+}
+
 // ClaimRewards navigates the account's auth tab to /drops/inventory
 // and clicks every visible "Claim" / "Claim now" button whose tile
 // belongs to a game on allowedGames (case-insensitive name OR slug).
@@ -975,8 +992,8 @@ func (t *Twitch) ClaimRewards(ctx context.Context, accountID string, allowedGame
 	if err != nil {
 		return nil, nil, fmt.Errorf("acquire tab: %w", err)
 	}
-	allowJSON, _ := json.Marshal(allowedGames)
-	alreadyJSON, _ := json.Marshal(t.alreadyClaimedTitles(accountID))
+	allowJSON := jsSafeJSON(allowedGames)
+	alreadyJSON := jsSafeJSON(t.alreadyClaimedTitles(accountID))
 	// Walk every tile on /drops/inventory. A claimable reward tile
 	// has a button whose accessible name contains "Claim". Strategy:
 	//   1. Find every "Claim" button.
@@ -990,8 +1007,8 @@ func (t *Twitch) ClaimRewards(ctx context.Context, accountID string, allowedGame
 	// Tiles with progress bars (in-progress watch-time drops) don't
 	// have a Claim button yet — they're naturally skipped.
 	script := `(async () => {
-		const allow = new Set((` + string(allowJSON) + ` || []).map(s => (s||'').toLowerCase()));
-		const already = new Set((` + string(alreadyJSON) + ` || []).map(s => (s||'').toLowerCase()));
+		const allow = new Set((` + allowJSON + ` || []).map(s => (s||'').toLowerCase()));
+		const already = new Set((` + alreadyJSON + ` || []).map(s => (s||'').toLowerCase()));
 		const norm = (s) => (s||'').toLowerCase().replace(/\s+/g, ' ').trim();
 		// Find the game heading nearest above the tile by walking up
 		// + scanning previous siblings for h1-h4 text.

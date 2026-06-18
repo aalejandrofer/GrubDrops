@@ -43,6 +43,12 @@ func applyRedirectTarget(r *http.Request) string {
 		return "/"
 	}
 	target := u.Path
+	// Reject protocol-relative paths ("//host") — browsers treat them as
+	// absolute URLs to another origin, so honoring one would be an open
+	// redirect even though the host was stripped above.
+	if strings.HasPrefix(target, "//") {
+		return "/"
+	}
 	if u.RawQuery != "" {
 		target += "?" + u.RawQuery
 	}
@@ -196,14 +202,11 @@ func NewRouter(d Deps) http.Handler {
 			Path:     "/",
 			MaxAge:   365 * 24 * 60 * 60,
 			HttpOnly: true,
+			Secure:   d.SecureCookies,
 			SameSite: http.SameSiteLaxMode,
 		})
-		// Redirect back to the referer only if it's a local path.
-		ref := r.Header.Get("Referer")
-		if ref == "" || !isLocalRedirect(ref) {
-			ref = "/"
-		}
-		http.Redirect(w, r, ref, http.StatusSeeOther)
+		// Redirect back to the referer's local path only (never its host).
+		http.Redirect(w, r, applyRedirectTarget(r), http.StatusSeeOther)
 	}))))
 
 	// Public (no auth required, but still session + CSRF)
@@ -350,24 +353,6 @@ func NewRouter(d Deps) http.Handler {
 
 	r.Mount("/", withSession(csrf(authed)))
 	return r
-}
-
-// isLocalRedirect checks if a redirect URL is local (same-origin) to prevent open redirect attacks.
-func isLocalRedirect(rawURL string) bool {
-	if rawURL == "" {
-		return false
-	}
-	// Relative paths are always safe
-	if rawURL[0] == '/' && (len(rawURL) == 1 || rawURL[1] != '/') {
-		return true
-	}
-	// Parse and check if it's the same host
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return false
-	}
-	// Only allow relative URLs or same-host absolute URLs
-	return u.Host == "" || u.Host == "localhost"
 }
 
 // staticHandler serves the embedded static/ assets. CSS/JS use no-cache

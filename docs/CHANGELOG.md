@@ -4,6 +4,20 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Hardened the Twitch reward-claim eval script against injection** (CodeQL
+  critical). Game names and drop titles are embedded into the chromedp eval
+  as JS literals; `encoding/json` leaves U+2028/U+2029 (JS line terminators)
+  raw, so a crafted name could have broken out of the script. They are now
+  escaped via a `jsSafeJSON` helper. No change to which rewards are claimed.
+- **Closed an open-redirect path on the language switch** (CodeQL). The
+  `/api/lang` handler now reuses `applyRedirectTarget` (referer path only,
+  never its host) and the flawed `isLocalRedirect` was removed.
+  `applyRedirectTarget` also rejects protocol-relative `//host` paths.
+- **`lang` cookie now sets `Secure`** when secure cookies are enabled
+  (`GRUB_SECURE_COOKIES`), matching the session/CSRF/OIDC cookies (CodeQL).
+
 ## [1.2.5] — 2026-06-18
 
 ### Added

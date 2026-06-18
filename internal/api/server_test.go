@@ -29,6 +29,7 @@ func TestApplyRedirectTarget(t *testing.T) {
 		{"with query string", "https://miner.example.com/accounts?filter=on", "/accounts?filter=on"},
 		{"settings referer", "https://miner.example.com/settings", "/settings"},
 		{"unparseable referer", "::not a url::", "/"},
+		{"protocol-relative open redirect", "https://miner.example.com//evil.com/path", "/"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
