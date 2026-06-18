@@ -4,7 +4,7 @@
 
 <p align="center"><sub><strong>English</strong> · <a href="docs/translations/README.zh-CN.md">简体中文</a> · <a href="docs/translations/README.es.md">Español</a></sub></p>
 
-<h3 align="center">Self-hosted, set-and-forget Twitch &amp; Kick drops miner.</h3>
+<h3 align="center">Self-hosted miner that AFK-farms Twitch &amp; Kick drops, with automatic claiming and channel switching.</h3>
 
 <p align="center">
   <img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white">
@@ -13,8 +13,8 @@
   <img alt="UI" src="https://img.shields.io/badge/UI-HTMX%20%2B%20Go%20templates-2c2c2c">
   <img alt="Storage" src="https://img.shields.io/badge/DB-SQLite-003B57?logo=sqlite&logoColor=white">
   <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-Docker-2496ED?logo=docker&logoColor=white">
-  <a href="https://github.com/Ab-code520/GrubDrops/releases"><img alt="Latest release" src="https://img.shields.io/badge/release-v1.2.5-2c2c2c?logo=github"></a>
-  <a href="https://github.com/Ab-code520/GrubDrops/pkgs/container/grubdrops"><img alt="ghcr.io image" src="https://img.shields.io/badge/ghcr.io-grubdrops-2496ED?logo=github"></a>
+  <a href="https://github.com/aalejandrofer/GrubDrops/releases"><img alt="Latest release" src="https://img.shields.io/badge/release-v1.2.5-2c2c2c?logo=github"></a>
+  <a href="https://github.com/aalejandrofer/GrubDrops/pkgs/container/grubdrops"><img alt="ghcr.io image" src="https://img.shields.io/badge/ghcr.io-grubdrops-2496ED?logo=github"></a>
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
 </p>
 
@@ -22,11 +22,37 @@
   <img src="docs/screenshots/console.png" width="900" alt="GrubDrops console: watch-time stats, per-account mining across Twitch and Kick, and a live event feed">
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/drops.png" width="440" alt="Drops catalog: whitelisted Twitch and Kick campaigns, drop items, and one-click whitelisting">
+  &nbsp;
+  <img src="docs/screenshots/whitelist.png" width="440" alt="Game whitelist: per-account drop priority list and priority mode">
+</p>
+
 ---
 
 Watches the right Twitch and Kick streams, banks the watch-time, and claims the
 drops — across several accounts at once. One small self-hosted web app: a Docker
 image and a single SQLite file.
+
+**The DevilXD / TwitchDropsMiner alternative that also mines Kick**, and runs
+headless on a server, NAS, or Raspberry Pi instead of a desktop.
+
+## GrubDrops vs TwitchDropsMiner
+
+|  | GrubDrops | TwitchDropsMiner |
+|---|:---:|:---:|
+| Twitch drops | ✅ | ✅ |
+| Auto-claim + channel switching | ✅ | ✅ |
+| **Kick drops** | ✅ | ❌ |
+| Self-hosted / Docker | ✅ | ❌ desktop only |
+| Web UI, mine from any device | ✅ | ❌ desktop GUI |
+| Runs headless on a Pi / NAS | ✅ | ❌ |
+| Multiple accounts at once | ✅ | ⚠️ one at a time |
+
+Credit where it's due: TwitchDropsMiner is the mature, battle-tested Twitch
+client and sips bandwidth (metadata-only, no video). GrubDrops trades a bit of
+that for **Kick support, multi-account, and a self-hosted web UI** you can leave
+running on a box you already own.
 
 ## Features
 

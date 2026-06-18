@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Settings · GrubDrops</title>
+<meta name="theme-color" content="#a020f0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/grubdrops/internal/web/static/css/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="topbar">
+    <a class="brand" href="/" style="text-decoration: none; color: inherit;">
+      <img class="brand-logo" src="/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/grubdrops/internal/web/static/img/logo.png" alt="" width="32" height="32">
+      <span class="mark">GRUB<span>·</span>DROPS</span>
+    </a>
+    <nav class="nav">
+      <a href="/">Console</a>
+      <a href="/drops">Drops</a>
+      <a href="/history">History</a>
+      <a href="/settings" class="active">Settings</a>
+    </nav>
+    <div class="user">
+      <button type="button" class="theme-toggle" id="theme-toggle" title="Toggle light / dark" aria-label="Toggle light or dark theme">☀</button>
+      <span class="clock">14:27:09 UTC</span>
+      <span class="pulse" title="streaming"></span>
+      <a class="gh-link" href="#" title="GitHub" aria-label="GitHub repository">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      </a>
+      <form method="post" action="#" style="display:inline">
+        <button type="submit" class="btn sm ghost" style="margin-left:6px">Logout</button>
+      </form>
+    </div>
+  </div>
+</header>
+<main>
+<div class="shell">
+  <div class="ph">
+    <div>
+      <div class="kicker">// config</div>
+      <h1>Settings</h1>
+    </div>
+    <div class="actions">
+      <form method="post" action="#" class="inline-form">
+        <button class="btn" type="button">Apply changes</button>
+      </form>
+      <a class="btn primary" href="#">+ Add account</a>
+    </div>
+  </div>
+
+  <nav class="subnav">
+    <a href="#" class="subnav-link">General</a>
+    <a href="#" class="subnav-link">Accounts</a>
+    <a href="#" class="subnav-link on">Drop Priority</a>
+    <a href="#" class="subnav-link">Notifications</a>
+    <a href="#" class="subnav-link">Security</a>
+    <a href="#" class="subnav-link">Health</a>
+    <a href="#" class="subnav-link">Experimental</a>
+    <a href="#" class="subnav-link">Proxy</a>
+  </nav>
+
+  <div class="settings-stack">
+
+    <section class="settings-card">
+      <header class="section-h"><h3>Global priority list</h3></header>
+      <form method="post" action="#" id="global-games-form">
+        <div class="settings-grid-2">
+          <div>
+            <div class="kicker">Selected · drag to reorder</div>
+            <ul id="global-selected" class="rank-list">
+              <li draggable="true" data-game-id="g1">
+                <span>Apex Legends</span>
+                <button type="button" class="rank-rm">remove ×</button>
+              </li>
+              <li draggable="true" data-game-id="g2">
+                <span>VALORANT</span>
+                <button type="button" class="rank-rm">remove ×</button>
+              </li>
+              <li draggable="true" data-game-id="g3">
+                <span>Rust</span>
+                <button type="button" class="rank-rm">remove ×</button>
+              </li>
+              <li draggable="true" data-game-id="g4">
+                <span>Counter-Strike 2</span>
+                <button type="button" class="rank-rm">remove ×</button>
+              </li>
+              <li draggable="true" data-game-id="g5">
+                <span>Marvel Rivals</span>
+                <button type="button" class="rank-rm">remove ×</button>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <div class="kicker">Available</div>
+            <ul id="global-available" class="rank-list rank-available">
+              <li data-game-id="g6"><span>Sea of Thieves</span><button type="button" class="rank-add">add +</button></li>
+              <li data-game-id="g7"><span>Dota 2</span><button type="button" class="rank-add">add +</button></li>
+              <li data-game-id="g8"><span>Escape from Tarkov</span><button type="button" class="rank-add">add +</button></li>
+              <li data-game-id="g9"><span>Overwatch 2</span><button type="button" class="rank-add">add +</button></li>
+              <li data-game-id="g10"><span>Warframe</span><button type="button" class="rank-add">add +</button></li>
+              <li data-game-id="g11"><span>Halo Infinite</span><button type="button" class="rank-add">add +</button></li>
+            </ul>
+          </div>
+        </div>
+        <div class="row">
+          <span class="hint">Order in the left column = mining priority for accounts without an override.</span>
+          <button class="btn-linear" type="button">Save priority →</button>
+        </div>
+      </form>
+
+      <form method="post" action="#" class="add-by-name">
+        <div class="kvedit">
+          <div class="row">
+            <span class="k">add by name</span>
+            <span class="v grow"><input type="text" name="name" placeholder="e.g. Marathon"></span>
+            <button class="btn-linear" type="button">Add →</button>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <section class="settings-card">
+      <header class="section-h"><h3>Drop priority mode</h3><span class="meta">How accounts pick the next campaign</span></header>
+      <form method="post" action="#">
+        <div class="kvedit">
+          <div class="row">
+            <span class="k">priority mode</span>
+            <span class="d"></span>
+            <span class="v"><select name="priority_mode">
+              <option value="ordered" selected>Ordered — top whitelist first</option>
+              <option value="ending_soonest">Ending soonest — claim expiring first</option>
+            </select></span>
+          </div>
+        </div>
+        <div class="row" style="margin-top:18px;justify-content:flex-end;">
+          <button class="btn-linear" type="button">Save →</button>
+        </div>
+      </form>
+    </section>
+
+  </div>
+</div>
+</main>
+</body>
+</html>

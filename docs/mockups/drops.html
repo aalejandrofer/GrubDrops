@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Drops · GrubDrops</title>
+<meta name="theme-color" content="#a020f0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/grubdrops/internal/web/static/css/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="topbar">
+    <a class="brand" href="/" style="text-decoration: none; color: inherit;">
+      <img class="brand-logo" src="/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/grubdrops/internal/web/static/img/logo.png" alt="" width="32" height="32">
+      <span class="mark">GRUB<span>·</span>DROPS</span>
+    </a>
+    <nav class="nav">
+      <a href="/">Console</a>
+      <a href="/drops" class="active">Drops</a>
+      <a href="/history">History</a>
+      <a href="/settings">Settings</a>
+    </nav>
+    <div class="user">
+      <button type="button" class="theme-toggle" id="theme-toggle" title="Toggle light / dark" aria-label="Toggle light or dark theme">☀</button>
+      <span class="clock">14:27:09 UTC</span>
+      <span class="pulse" title="streaming"></span>
+      <a class="gh-link" href="#" title="GitHub" aria-label="GitHub repository">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      </a>
+      <form method="post" action="#" style="display:inline">
+        <button type="submit" class="btn sm ghost" style="margin-left:6px">Logout</button>
+      </form>
+    </div>
+  </div>
+</header>
+<main>
+<div class="shell">
+  <div class="ph">
+    <div>
+      <div class="kicker">// <a href="#" class="kicker-link">Twitch Inventory</a> · <a href="#" class="kicker-link">Kick Inventory</a></div>
+      <h1>Drops</h1>
+    </div>
+    <div class="actions">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.14em;">filtered by whitelist</span>
+    </div>
+  </div>
+
+  <div class="drops-tabs" role="tablist">
+    <a role="tab" class="drops-tab" href="#">Past <span class="count">9</span></a>
+    <a role="tab" class="drops-tab on" href="#">Current <span class="count">4</span></a>
+    <a role="tab" class="drops-tab" href="#">Upcoming <span class="count">2</span></a>
+  </div>
+
+  <div id="drops-tabpanel" class="drops-tabpanel" role="tabpanel">
+    <div class="drops-grid">
+
+      <section class="drops-pane">
+        <header class="drops-pane-h">
+          <h3>Whitelisted</h3>
+          <span class="meta">4 · current</span>
+        </header>
+        <div class="events drops-rows scroll-cap">
+
+          <details class="ev kind-claim" open>
+            <summary>
+              <span class="chev" aria-hidden="true">›</span>
+              <span class="t">2026-06-17 09:12 UTC</span>
+              <span class="lvl" style="color:var(--purple)">●</span>
+              <span class="body"><em style="color:var(--purple)">twitch</em> · <span style="color:var(--muted);">Apex Legends</span> · Season Kickoff Rewards · <strong>Holo Banner Frame</strong></span>
+              <span class="ac collect"><span class="collect-box"><span class="tk" title="northwind_aria collected all watch-time drops">✓</span><span class="tk" title="quietfern collected all watch-time drops">✓</span></span></span>
+            </summary>
+            <div class="ev-detail-slot">
+              <div class="drop-items">
+                <div class="drop-items-head"><span></span><span>item</span><span>collected</span><span>type</span></div>
+                <div class="drop-item">
+                  <span class="drop-item-icon"><span class="ph"></span></span>
+                  <span class="drop-item-name">Holo Banner Frame</span>
+                  <span class="drop-item-collected"><span class="cmark cmark-twitch" title="claimed by northwind_aria">northwind_aria</span></span>
+                  <span class="drop-item-type"><span class="dtype dtype-watch" title="watch-time drop — auto-mined">⏱ 120m watch</span></span>
+                </div>
+                <div class="drop-item">
+                  <span class="drop-item-icon"><span class="ph"></span></span>
+                  <span class="drop-item-name">Pathfinder Charm</span>
+                  <span class="drop-item-collected"><span class="cmark cmark-twitch" title="claimed by quietfern">quietfern</span></span>
+                  <span class="drop-item-type"><span class="dtype dtype-watch" title="watch-time drop — auto-mined">⏱ 180m watch</span></span>
+                </div>
+                <div class="drop-item drop-dim">
+                  <span class="drop-item-icon"><span class="ph"></span></span>
+                  <span class="drop-item-name">Founder Loot Cache</span>
+                  <span class="drop-item-collected"><span class="cmark-none">—</span></span>
+                  <span class="drop-item-type"><span class="dtype dtype-action" title="action required">action required</span></span>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <details class="ev kind-claim">
+            <summary>
+              <span class="chev" aria-hidden="true">›</span>
+              <span class="t">2026-06-17 06:40 UTC</span>
+              <span class="lvl" style="color:var(--kick)">●</span>
+              <span class="body"><em style="color:var(--kick)">kick</em> · <span style="color:var(--muted);">VALORANT</span> · Radiant Drop Festival · <strong>Spectre Buddy</strong></span>
+              <span class="ac collect"><span class="collect-box"><span class="tk partial" title="brisk_otter partially collected">✓</span></span></span>
+            </summary>
+            <div class="ev-detail-slot">
+              <div class="ev-detail" style="color:var(--muted);font-size:11px;">Loading items…</div>
+            </div>
+          </details>
+
+          <details class="ev kind-claim">
+            <summary>
+              <span class="chev" aria-hidden="true">›</span>
+              <span class="t">2026-06-16 22:05 UTC</span>
+              <span class="lvl" style="color:var(--purple)">●</span>
+              <span class="body"><em style="color:var(--purple)">twitch</em> · <span style="color:var(--muted);">Rust</span> · Twitch Drops Round 18 · <strong>Tempered Hoodie</strong></span>
+              <span class="ac collect"><span class="collect-box"><span class="tk" title="northwind_aria collected all watch-time drops">✓</span></span></span>
+            </summary>
+            <div class="ev-detail-slot">
+              <div class="ev-detail" style="color:var(--muted);font-size:11px;">Loading items…</div>
+            </div>
+          </details>
+
+          <details class="ev kind-auth drop-dim">
+            <summary>
+              <span class="chev" aria-hidden="true">›</span>
+              <span class="t">2026-06-16 18:30 UTC</span>
+              <span class="lvl" style="color:var(--purple)">●</span>
+              <span class="body"><em style="color:var(--purple)">twitch</em> · reward · <span style="color:var(--muted);">Marvel Rivals</span> · Hero Pass Drops · <strong>Emblem · Vanguard</strong></span>
+              <span class="ac collect"><span class="collect-box" title="only action-required drops — nothing to auto-collect"><span class="tk cross">✗</span></span></span>
+            </summary>
+            <div class="ev-detail-slot">
+              <div class="ev-detail" style="color:var(--muted);font-size:11px;">Loading items…</div>
+            </div>
+          </details>
+
+        </div>
+      </section>
+
+      <section class="drops-pane">
+        <header class="drops-pane-h">
+          <h3>Whitelisted — account not linked</h3>
+          <span class="meta">1 · not mined</span>
+        </header>
+        <div class="events drops-rows">
+          <details class="ev kind-auth drop-dim ev-linkrow">
+            <summary>
+              <span class="chev" aria-hidden="true">›</span>
+              <span class="t">2026-06-17 02:14 UTC</span>
+              <span class="lvl" style="color:var(--kick)">●</span>
+              <span class="body"><em style="color:var(--kick)">kick</em> · <span style="color:var(--muted);">Counter-Strike 2</span> · Major Viewership Drops</span>
+              <span class="ac link-actions">
+                <span class="conn-chip ok" title="brisk_otter connected">✓ brisk_otter</span>
+                <a class="conn-chip need" href="#" onclick="event.stopPropagation()" title="connect account quietfern">quietfern →</a>
+                <form method="post" action="#" onclick="event.stopPropagation()">
+                  <button class="btn sm linked-btn" type="button" title="I've linked this account — mark it linked so the bot attempts to mine it.">✓</button>
+                </form>
+              </span>
+            </summary>
+            <div class="ev-detail-slot">
+              <div class="ev-detail" style="color:var(--muted);font-size:11px;">Loading items…</div>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="drops-pane">
+        <header class="drops-pane-h">
+          <h3>Discoverable — not whitelisted</h3>
+          <span class="meta">3</span>
+        </header>
+        <div class="events drops-rows scroll-cap">
+
+          <details class="ev kind-discovery ev-linkrow">
+            <summary>
+              <span class="chev" aria-hidden="true">›</span>
+              <span class="t">2026-06-17 11:03 UTC</span>
+              <span class="lvl" style="color:var(--purple)">●</span>
+              <span class="body"><em style="color:var(--purple)">twitch</em> · <span style="color:var(--muted);">Sea of Thieves</span> · Maiden Voyage Drops</span>
+              <span class="ac whitelist-add" onclick="event.stopPropagation()">
+                <form method="post" action="#" class="disc-add-form">
+                  <select name="account_id" onclick="event.stopPropagation()" title="whitelist + Sea of Thieves">
+                    <option value="__global__">★ Global</option>
+                    <option>northwind_aria</option>
+                    <option>quietfern</option>
+                  </select>
+                  <button class="btn sm" type="button" onclick="event.stopPropagation()">whitelist +</button>
+                </form>
+              </span>
+            </summary>
+            <div class="ev-detail-slot">
+              <div class="ev-detail" style="color:var(--muted);font-size:11px;">Loading items…</div>
+            </div>
+          </details>
+
+          <details class="ev kind-discovery ev-linkrow">
+            <summary>
+              <span class="chev" aria-hidden="true">›</span>
+              <span class="t">2026-06-17 10:48 UTC</span>
+              <span class="lvl" style="color:var(--kick)">●</span>
+              <span class="body"><em style="color:var(--kick)">kick</em> · <span style="color:var(--muted);">Escape from Tarkov</span> · Wipe Season Drops</span>
+              <span class="ac whitelist-add" onclick="event.stopPropagation()">
+                <form method="post" action="#" class="disc-add-form">
+                  <select name="account_id" onclick="event.stopPropagation()" title="whitelist + Escape from Tarkov">
+                    <option value="__global__">★ Global</option>
+                    <option>brisk_otter</option>
+                  </select>
+                  <button class="btn sm" type="button" onclick="event.stopPropagation()">whitelist +</button>
+                </form>
+              </span>
+            </summary>
+            <div class="ev-detail-slot">
+              <div class="ev-detail" style="color:var(--muted);font-size:11px;">Loading items…</div>
+            </div>
+          </details>
+
+          <details class="ev kind-discovery ev-linkrow">
+            <summary>
+              <span class="chev" aria-hidden="true">›</span>
+              <span class="t">2026-06-17 09:55 UTC</span>
+              <span class="lvl" style="color:var(--purple)">●</span>
+              <span class="body"><em style="color:var(--purple)">twitch</em> · <span style="color:var(--muted);">Dota 2</span> · The International Watch Rewards</span>
+              <span class="ac whitelist-add" onclick="event.stopPropagation()">
+                <form method="post" action="#" class="disc-add-form">
+                  <select name="account_id" onclick="event.stopPropagation()" title="whitelist + Dota 2">
+                    <option value="__global__">★ Global</option>
+                    <option>northwind_aria</option>
+                    <option>quietfern</option>
+                  </select>
+                  <button class="btn sm" type="button" onclick="event.stopPropagation()">whitelist +</button>
+                </form>
+              </span>
+            </summary>
+            <div class="ev-detail-slot">
+              <div class="ev-detail" style="color:var(--muted);font-size:11px;">Loading items…</div>
+            </div>
+          </details>
+
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+</main>
+</body>
+</html>

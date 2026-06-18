@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GrubDrops — Self-hosted Twitch &amp; Kick drops miner</title>
+<meta name="description" content="Self-hosted Twitch and Kick drops miner. Multi-account, auto-claim, web UI. A DevilXD TwitchDropsMiner alternative, with Kick support. Go + Docker.">
+<link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="GrubDrops — Self-hosted Twitch & Kick drops miner">
+<meta property="og:description" content="Multi-account, auto-claim, web UI. A DevilXD TwitchDropsMiner alternative, with Kick support.">
+<meta property="og:image" content="img/social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://aalejandrofer.github.io/GrubDrops/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0d12; --panel: #16151c; --line: rgba(255,255,255,0.10);
+    --fg: #f4f2f7; --muted: #b6b1c4; --purple: #a020f0; --purple-soft: #b07bff;
+    --kick: #53fc18;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background:
+      radial-gradient(1100px 600px at 80% -5%, rgba(160,32,240,0.22), transparent 60%),
+      radial-gradient(800px 500px at 0% 12%, rgba(83,252,24,0.07), transparent 55%),
+      var(--bg);
+    color: var(--fg); font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+  h1, h2, h3 { font-family: 'Bricolage Grotesque', sans-serif; letter-spacing: -0.5px; }
+  a { color: var(--purple-soft); }
+  code, .mono { font-family: 'JetBrains Mono', monospace; }
+
+  header { padding: 26px 0; }
+  .brand { display: flex; align-items: center; gap: 12px; font-weight: 700;
+    font-family: 'Bricolage Grotesque', sans-serif; font-size: 22px; }
+  .brand img { width: 38px; height: 38px; }
+
+  .hero { padding: 56px 0 40px; text-align: center; }
+  .hero h1 { font-size: clamp(38px, 7vw, 68px); line-height: 1.04; font-weight: 700; }
+  .hero h1 .tw { color: var(--purple-soft); } .hero h1 .kk { color: var(--kick); }
+  .hero p.lede { margin: 22px auto 0; max-width: 640px; font-size: 20px; color: var(--muted); }
+  .cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 34px; }
+  .btn { display: inline-block; padding: 13px 24px; border-radius: 10px; font-weight: 600;
+    text-decoration: none; font-size: 16px; }
+  .btn.primary { background: var(--purple); color: #fff; }
+  .btn.ghost { border: 1px solid var(--line); color: var(--fg); }
+  .chips { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 26px; }
+  .chip { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; }
+
+  .shots { margin: 40px 0; }
+  .shots img { width: 100%; border-radius: 12px; border: 1px solid var(--line); display: block; }
+  .shots .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  @media (max-width: 640px) { .shots .row2 { grid-template-columns: 1fr; } }
+
+  section { padding: 46px 0; }
+  h2 { font-size: 30px; margin-bottom: 8px; }
+  .sub { color: var(--muted); margin-bottom: 26px; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  th, td { padding: 13px 16px; text-align: left; border-bottom: 1px solid var(--line); font-size: 15px; }
+  th:nth-child(2), td:nth-child(2), th:nth-child(3), td:nth-child(3) { text-align: center; width: 22%; }
+  thead th { font-family: 'Bricolage Grotesque', sans-serif; }
+  tr:last-child td { border-bottom: 0; }
+  .yes { color: var(--kick); font-weight: 600; } .no { color: #7c7790; }
+
+  .feat { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .feat { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .card h3 { font-size: 17px; margin-bottom: 6px; } .card p { color: var(--muted); font-size: 15px; }
+
+  pre { background: #0a0910; border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px;
+    overflow-x: auto; font-size: 13.5px; color: #d8d4e4; }
+
+  footer { border-top: 1px solid var(--line); padding: 30px 0 50px; color: var(--muted);
+    font-size: 14px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand"><img src="img/logo.png" alt="">GrubDrops</div>
+  </header>
+
+  <div class="hero">
+    <h1>Self-hosted <span class="tw">Twitch</span> &amp; <span class="kk">Kick</span><br>drops miner</h1>
+    <p class="lede">AFK-farms timed drops across both platforms, auto-claims them, and switches channels for you. Multi-account, web UI, one <code>docker compose up</code>.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/aalejandrofer/GrubDrops">View on GitHub →</a>
+      <a class="btn ghost" href="https://github.com/aalejandrofer/GrubDrops#getting-started">Get started</a>
+    </div>
+    <div class="chips">
+      <span class="chip">Go + Docker</span>
+      <span class="chip">HTMX web UI</span>
+      <span class="chip">runs on a Raspberry Pi</span>
+      <span class="chip">MIT licensed</span>
+    </div>
+  </div>
+
+  <div class="shots">
+    <img src="screenshots/console.png" alt="GrubDrops console: watch-time stats and per-account mining across Twitch and Kick">
+    <div class="row2">
+      <img src="screenshots/drops.png" alt="Drops catalog with one-click whitelisting">
+      <img src="screenshots/whitelist.png" alt="Per-account game whitelist and priority">
+    </div>
+  </div>
+
+  <section>
+    <h2>GrubDrops vs TwitchDropsMiner</h2>
+    <p class="sub">The mature Twitch client is great. GrubDrops adds the parts it leaves out.</p>
+    <table>
+      <thead><tr><th></th><th>GrubDrops</th><th>TwitchDropsMiner</th></tr></thead>
+      <tbody>
+        <tr><td>Twitch drops</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+        <tr><td>Auto-claim + channel switching</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+        <tr><td><strong>Kick drops</strong></td><td class="yes">✓</td><td class="no">✗</td></tr>
+        <tr><td>Self-hosted / Docker</td><td class="yes">✓</td><td class="no">desktop only</td></tr>
+        <tr><td>Web UI, mine from any device</td><td class="yes">✓</td><td class="no">desktop GUI</td></tr>
+        <tr><td>Runs headless on a Pi / NAS</td><td class="yes">✓</td><td class="no">✗</td></tr>
+        <tr><td>Multiple accounts at once</td><td class="yes">✓</td><td class="no">one at a time</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>What it does</h2>
+    <div class="feat" style="margin-top:18px">
+      <div class="card"><h3>🎯 Whitelist-driven</h3><p>It only mines games you opt into, global or per account. Nothing else burns watch-time.</p></div>
+      <div class="card"><h3>🟣🟢 Twitch and Kick</h3><p>Several accounts on each platform, all tracked on one page.</p></div>
+      <div class="card"><h3>✅ Game-aware</h3><p>Confirms the stream is on the right game before crediting, so you never mine the wrong channel.</p></div>
+      <div class="card"><h3>🔒 Your credentials stay yours</h3><p>Twitch uses the official device-code login; Kick uses a session you export. No passwords sent anywhere.</p></div>
+      <div class="card"><h3>🔔 Discord notifications</h3><p>Per-event-type toggles for claims, auth, and discovery.</p></div>
+      <div class="card"><h3>🥧 Light enough for a Pi</h3><p>One Go binary and a SQLite file. arm64 images ship for Raspberry Pi.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Run it</h2>
+    <p class="sub">Published image, single compose file. Open <code>http://localhost:8080</code> and create the admin login.</p>
+    <pre>services:
+  miner:
+    image: ghcr.io/aalejandrofer/grubdrops:latest
+    restart: unless-stopped
+    ports: ["8080:8080"]
+    environment:
+      GRUB_MASTER_KEY: ${GRUB_MASTER_KEY:?run: head -c32 /dev/urandom | base64}
+      GRUB_DB_PATH: /data/miner.db
+    volumes:
+      - ./data:/data
+      - /var/run/docker.sock:/var/run/docker.sock</pre>
+  </section>
+
+  <footer>
+    Open source, MIT. <a href="https://github.com/aalejandrofer/GrubDrops">github.com/aalejandrofer/GrubDrops</a><br>
+    Stay within each platform's ToS, on your own accounts, at your own risk.
+  </footer>
+
+</div>
+</body>
+</html>

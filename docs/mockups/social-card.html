@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1280px; height: 640px; overflow: hidden; }
+  body {
+    background:
+      radial-gradient(900px 500px at 78% 18%, rgba(160,32,240,0.28), transparent 60%),
+      radial-gradient(700px 500px at 12% 90%, rgba(83,252,24,0.10), transparent 55%),
+      #0e0d12;
+    color: #f4f2f7;
+    font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 0 92px; position: relative;
+  }
+  .top { display: flex; align-items: center; gap: 22px; margin-bottom: 30px; }
+  .top img { width: 76px; height: 76px; }
+  .wordmark { font-weight: 700; font-size: 40px; letter-spacing: -0.5px; }
+  h1 {
+    font-weight: 700; font-size: 74px; line-height: 1.02;
+    letter-spacing: -2px; max-width: 1000px;
+  }
+  h1 .tw { color: #b07bff; }
+  h1 .kk { color: #53fc18; }
+  .sub {
+    margin-top: 26px; font-size: 27px; color: #b6b1c4; font-weight: 400;
+    max-width: 880px; line-height: 1.35;
+  }
+  .chips { display: flex; gap: 14px; margin-top: 38px; }
+  .chip {
+    font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 500;
+    padding: 9px 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14);
+    color: #cdc8da; background: rgba(255,255,255,0.03);
+  }
+  .url {
+    position: absolute; bottom: 46px; right: 92px;
+    font-family: 'JetBrains Mono', monospace; font-size: 19px; color: #8b86a0;
+  }
+</style>
+</head>
+<body>
+  <div class="top">
+    <img src="/Users/jandro/Library/CloudStorage/OneDrive-Personal/00ALX/02Projects/grubdrops/internal/web/static/img/logo.png" alt="">
+    <span class="wordmark">GrubDrops</span>
+  </div>
+  <h1>Self-hosted <span class="tw">Twitch</span> &amp; <span class="kk">Kick</span> drops miner</h1>
+  <p class="sub">Multi-account, auto-claim, web UI. The DevilXD TwitchDropsMiner alternative, with Kick support.</p>
+  <div class="chips">
+    <span class="chip">Go + Docker</span>
+    <span class="chip">HTMX</span>
+    <span class="chip">runs on a Pi</span>
+    <span class="chip">MIT</span>
+  </div>
+  <div class="url">github.com/aalejandrofer/GrubDrops</div>
+</body>
+</html>
