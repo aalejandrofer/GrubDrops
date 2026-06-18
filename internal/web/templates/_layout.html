@@ -35,12 +35,12 @@
 {{block "content" .}}{{end}}
 </main>
 <script>
-  // Clock: show browser-local time instead of UTC.
+  // Clock: show UTC, matching the UTC timestamps in the drops/history lists.
   (function () {
     function tick() {
       var el = document.querySelector('.clock');
       if (!el) return;
-      el.textContent = new Date().toLocaleTimeString();
+      el.textContent = new Date().toLocaleTimeString([], { timeZone: 'UTC', hour12: false }) + ' UTC';
     }
     tick(); setInterval(tick, 1000);
   })();

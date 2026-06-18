@@ -6,6 +6,8 @@ All notable changes to GrubDrops.
 
 ### Changed
 
+- **Top-right clock now shows UTC** (24h, with a `UTC` suffix) to match the
+  UTC timestamps in the drops and history lists, instead of browser-local time.
 - **Twitch cookie import reframed as "Migrate from TwitchDropsMiner".** The
   feature now targets users coming from DevilXD or rangermix TwitchDropsMiner:
   upload that miner's existing `cookies.jar` (stored next to its executable).
