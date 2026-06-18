@@ -4,6 +4,18 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Changed
+
+- **Twitch cookie import reframed as "Migrate from TwitchDropsMiner".** The
+  feature now targets users coming from DevilXD or rangermix TwitchDropsMiner:
+  upload that miner's existing `cookies.jar` (stored next to its executable).
+  Because TDM mints its auth-token under the same Android client_id GrubDrops
+  uses, the token is integrity-exempt and works here — unlike a browser-issued
+  web cookie, which fails the drops integrity check. Removed the browser
+  `cookies.txt` paste box, the cookie-export extension links, and the
+  "experimental / won't mine" warning (all of which pushed the dead web-cookie
+  path). Upload is now `.jar`/`.pkl`/`.pickle` only.
+
 ## [1.2.5] — 2026-06-18
 
 ### Added

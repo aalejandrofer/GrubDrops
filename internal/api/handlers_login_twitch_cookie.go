@@ -5,7 +5,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -78,37 +77,30 @@ func (d *loginTwitchCookieDeps) post(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Two input methods, like the Kick login: a pasted Netscape cookies.txt
-	// (textarea, takes priority) or an uploaded file. The file may be a
-	// TwitchDropsMiner pickle (.pkl) or a cookies.txt export — try pickle
-	// first, fall back to Netscape.
+	// Migration from DevilXD / rangermix TwitchDropsMiner: the user uploads
+	// their TDM cookies.jar (a Python pickle of an http.cookies.SimpleCookie).
+	// TDM mints its auth-token under the same Android client_id GrubDrops uses,
+	// so the token is integrity-exempt and works for mining. We try pickle
+	// first, falling back to Netscape cookies.txt for flexibility.
 	var authToken string
-	if raw := strings.TrimSpace(r.FormValue("cookies_txt")); raw != "" {
-		tok, err := twitchAuthTokenFromNetscape(raw)
-		if err != nil {
-			slog.Warn("twitch cookies.txt parse failed", "account", id, "err", err)
-			d.renderError(w, r, id, acc.DisplayName, "login_twitch_cookie.error.parse_netscape")
-			return
-		}
-		authToken = tok
-	} else if file, _, ferr := r.FormFile("cookie_file"); ferr == nil {
-		defer file.Close()
-		data, err := io.ReadAll(file)
-		if err != nil {
-			d.renderError(w, r, id, acc.DisplayName, "login_twitch_cookie.error.read_file")
-			return
-		}
-		if cookies, perr := twitch.ParsePickleCookies(data); perr == nil {
-			authToken = cookies["auth-token"]
-		} else if tok, nerr := twitchAuthTokenFromNetscape(string(data)); nerr == nil {
-			authToken = tok
-		} else {
-			slog.Error("parse cookie file failed (pickle + netscape)", "account", id, "pickle_err", perr, "netscape_err", nerr)
-			d.renderError(w, r, id, acc.DisplayName, "login_twitch_cookie.error.parse_pickle")
-			return
-		}
-	} else {
+	file, _, ferr := r.FormFile("cookie_file")
+	if ferr != nil {
 		d.renderError(w, r, id, acc.DisplayName, "login_twitch_cookie.error.no_file")
+		return
+	}
+	defer file.Close()
+	data, err := io.ReadAll(file)
+	if err != nil {
+		d.renderError(w, r, id, acc.DisplayName, "login_twitch_cookie.error.read_file")
+		return
+	}
+	if cookies, perr := twitch.ParsePickleCookies(data); perr == nil {
+		authToken = cookies["auth-token"]
+	} else if tok, nerr := twitchAuthTokenFromNetscape(string(data)); nerr == nil {
+		authToken = tok
+	} else {
+		slog.Error("parse cookie file failed (pickle + netscape)", "account", id, "pickle_err", perr, "netscape_err", nerr)
+		d.renderError(w, r, id, acc.DisplayName, "login_twitch_cookie.error.parse_pickle")
 		return
 	}
 
