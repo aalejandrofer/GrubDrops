@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -694,6 +695,90 @@ func TestWatcher_RewardReaperFires(t *testing.T) {
 	_ = w.Run(ctx)
 	assert.GreaterOrEqual(t, backend.calls, 1, "ClaimRewards must be invoked at least once")
 	assert.Contains(t, backend.games, "Minecraft", "reaper must scope claim to whitelisted game")
+}
+
+// errHeartbeatBackend starts a watch successfully, then fails every
+// Heartbeat with a TRANSIENT (non-cancel) error — simulating a Kick WS
+// presence loop that dies mid-watch. tickWatch surfaces that as a step
+// error, so Run takes its transient-error → PickCampaign branch. Each
+// StartWatch hands back a distinct live handle; StopWatch records how many
+// of those handles the watcher actually tore down.
+type errHeartbeatBackend struct {
+	*platformtest.MockBackend
+	mu          sync.Mutex
+	startCalled int
+	stopCalled  int
+}
+
+func (e *errHeartbeatBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	return []platform.Campaign{{
+		ID: "camp1", Game: "Rust", Name: "Rust Camp", Status: "active", AccountLinked: true,
+		Benefits: []platform.DropBenefit{{ID: "drop1", CampaignID: "camp1", Name: "Drop", RequiredMinutes: 9999}},
+	}}, nil
+}
+
+func (e *errHeartbeatBackend) ListEligibleChannels(_ context.Context, _ platform.Session, _ platform.Campaign) ([]platform.Stream, error) {
+	return []platform.Stream{{Channel: "chan1", DropsEnabled: true}}, nil
+}
+
+func (e *errHeartbeatBackend) StartWatch(_ context.Context, _ platform.Session, s platform.Stream) (platform.WatchHandle, error) {
+	e.mu.Lock()
+	e.startCalled++
+	n := e.startCalled
+	e.mu.Unlock()
+	// Non-nil Internal so the handle looks like a real, live watch the
+	// watcher is obligated to stop (mirrors the WS path's *kickWSWatch).
+	return platform.WatchHandle{Channel: s.Channel, Internal: n}, nil
+}
+
+func (e *errHeartbeatBackend) Heartbeat(_ context.Context, _ platform.WatchHandle) error {
+	return errors.New("ws presence loop died")
+}
+
+func (e *errHeartbeatBackend) StopWatch(_ context.Context, _ platform.WatchHandle) error {
+	e.mu.Lock()
+	e.stopCalled++
+	e.mu.Unlock()
+	return nil
+}
+
+func (e *errHeartbeatBackend) starts() int { e.mu.Lock(); defer e.mu.Unlock(); return e.startCalled }
+func (e *errHeartbeatBackend) stops() int  { e.mu.Lock(); defer e.mu.Unlock(); return e.stopCalled }
+
+// TestWatcher_StopsWatchOnTransientError: when a watch is live and the tick
+// fails with a transient error (e.g. the Kick WS presence loop died), Run
+// must STOP that watch before falling back to PickCampaign. Otherwise the
+// pure-WS path leaks the background presence goroutine (it runs on its own
+// context, only stoppable via the handle we're about to discard) and the
+// next StartWatch opens a SECOND presence for the same account — the server
+// credits one watch per account, so the new one accrues nothing and the
+// watcher death-loops join→bounce→pick_campaign forever.
+func TestWatcher_StopsWatchOnTransientError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	backend := &errHeartbeatBackend{MockBackend: platformtest.New()}
+	w := New(Config{
+		AccountID:         "acc-err",
+		Backend:           backend,
+		Session:           platform.Session{AccessToken: "tok"},
+		Notifier:          &recordingNotifier{},
+		TickInterval:      2 * time.Millisecond,
+		HeartbeatInterval: 2 * time.Millisecond,
+	})
+
+	go func() { _ = w.Run(ctx) }()
+
+	// The watcher must reach the watch and then fail the heartbeat tick.
+	require.Eventually(t, func() bool {
+		return backend.starts() >= 1
+	}, time.Second, 2*time.Millisecond, "watcher never started a watch")
+
+	// Every started watch must be torn down: a live handle abandoned on the
+	// error path is a leaked WS presence.
+	require.Eventually(t, func() bool {
+		return backend.stops() >= 1
+	}, time.Second, 2*time.Millisecond, "watcher abandoned a live watch on the transient-error path (leaked WS presence)")
 }
 
 // freezeBackend simulates a server-side stall: the current benefit is

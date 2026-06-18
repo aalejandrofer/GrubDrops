@@ -4,38 +4,52 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
-## [1.2.5] — 2026-06-17
+## [1.2.5] — 2026-06-18
 
 ### Added
 
-- **Twitch Cookie File Import** — new login method that allows importing Twitch
-  cookies from a Python pickle file (cookies.jar). This provides an alternative
-  to the device-code flow for users who have existing Twitch sessions exported
-  as pickle files. The parser supports Python pickle protocol 2-5 and extracts
-  the `auth-token` cookie from SimpleCookie structures.
-- **Login Method Chooser** — Twitch login now shows a choice page with two
-  options: device-code login (recommended) and cookie file import (alternative).
-  Users can select their preferred authentication method.
-- **Multi-language Support** — added Chinese and English translations for all
-  new cookie import related UI elements and error messages.
+- **Multi-language UI (English + Simplified Chinese).** Full app i18n with a
+  language switcher in Settings ▸ General; language is auto-detected from the
+  `Accept-Language` header and remembered in a `lang` cookie. Live-event logs
+  (kind tags + recurring watcher/pubsub/twitch/kick messages) are translated too.
+- **Timezone auto-detection.** Set `TZ` (e.g. `TZ=Asia/Shanghai`) and all
+  displayed times render in that zone with the correct abbreviation.
+- **Proxy support (HTTP / SOCKS5).** Global proxy in Settings ▸ Proxy, routing
+  outbound requests through the configured proxy.
+- **Per-account enable/disable toggle** on the accounts list — flips an account
+  on/off with a targeted watcher reload, no full restart.
+- **Twitch cookie import (experimental).** Paste a `cookies.txt` export or upload
+  a TwitchDropsMiner pickle file. Note: a web-issued cookie fails Twitch's drops
+  integrity check, so this generally **cannot mine** (the account logs in but then
+  flags auth-required) — device-code remains the reliable path. Flagged
+  experimental in the UI.
+- **"Reload Watchers" button** on the settings tabs whose changes need it
+  (General, Drop Priority, Experimental, Proxy).
 
 ### Changed
 
-- **Twitch Login Flow** — the `/accounts/{id}/login` route for Twitch accounts
-  now shows a method chooser page instead of going directly to the device-code
-  flow. This allows users to select between device-code and cookie import.
+- **Language switcher** moved from the nav bar into Settings ▸ General.
+- **Account edit screen**: a compact inline "re-authenticate →" link replaces the
+  verbose device-code copy block.
+- **Numeric setting values** right-align so the value and unit hug the right edge.
+- **Accrual-canary notification** relabelled "Health Failed" — it already fires
+  only on an OK→fail transition.
 
-### Technical
+### Fixed
 
-- **Python Pickle Parser** — new `internal/platform/twitch/cookie_parser.go`
-  implements a subset of Python's pickle protocol (opcodes needed for
-  SimpleCookie parsing) including support for protocol 4/5 features like
-  SHORT_BINUNICODE (0x8c), MEMOIZE, NEWTRUE/NEWFALSE, and FRAME.
-- **Session Management** — cookie import creates a platform.Session with the
-  extracted auth-token and attempts verification via Twitch's CurrentUser GQL
-  query. Sessions are persisted with age encryption and 60-day expiry.
-- **Exported SynthCookieBlob** — the internal cookie blob builder is now
-  exported from the twitch package for reuse by the cookie import handler.
+- **Kick WS watch no longer death-loops after a stream ends.** A transient tick
+  error fell back to re-discovery without stopping the live watch, leaking the
+  presence goroutine and holding the one-watch-per-account slot; the error path
+  now tears the watch down first.
+- **Audit hardening:** CSRF on `POST /api/lang`, supported-language validation,
+  Referer open-redirect guard, proxy-credential masking in logs, XSS-safe HTML
+  escaping, a PubSub goroutine leak, a WebSocket write race, Twitch backend
+  lifecycle cleanup, watcher nil-pointer guards on the pick/claim paths, Kick HTTP
+  transport connection cleanup, and a watcher timer leak.
+- **Timestamps** show the configured timezone abbreviation instead of a hardcoded
+  "UTC"; the drops table no longer overlaps the platform dot after the change.
+- Re-auth cancel-link styling, account-hint HTML rendering, and duplicate locale
+  keys.
 
 ## [1.2.3] — 2026-06-16
 
