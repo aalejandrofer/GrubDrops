@@ -97,7 +97,7 @@ services:
       TZ: Asia/Shanghai           # server-side timezone
     volumes:
       - ./data:/data
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock # Kick only, if WS Breaks
 ```
 
 The image runs as distroless `nonroot` (**UID 65532**), so make a bind-mounted
