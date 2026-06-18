@@ -4,20 +4,6 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
-### Changed
-
-- **Top-right clock now shows UTC** (24h, with a `UTC` suffix) to match the
-  UTC timestamps in the drops and history lists, instead of browser-local time.
-- **Twitch cookie import reframed as "Migrate from TwitchDropsMiner".** The
-  feature now targets users coming from DevilXD or rangermix TwitchDropsMiner:
-  upload that miner's existing `cookies.jar` (stored next to its executable).
-  Because TDM mints its auth-token under the same Android client_id GrubDrops
-  uses, the token is integrity-exempt and works here — unlike a browser-issued
-  web cookie, which fails the drops integrity check. Removed the browser
-  `cookies.txt` paste box, the cookie-export extension links, and the
-  "experimental / won't mine" warning (all of which pushed the dead web-cookie
-  path). Upload is now `.jar`/`.pkl`/`.pickle` only.
-
 ## [1.2.5] — 2026-06-18
 
 ### Added
@@ -32,11 +18,12 @@ All notable changes to GrubDrops.
   outbound requests through the configured proxy.
 - **Per-account enable/disable toggle** on the accounts list — flips an account
   on/off with a targeted watcher reload, no full restart.
-- **Twitch cookie import (experimental).** Paste a `cookies.txt` export or upload
-  a TwitchDropsMiner pickle file. Note: a web-issued cookie fails Twitch's drops
-  integrity check, so this generally **cannot mine** (the account logs in but then
-  flags auth-required) — device-code remains the reliable path. Flagged
-  experimental in the UI.
+- **Migrate from TwitchDropsMiner.** Coming from DevilXD or rangermix
+  TwitchDropsMiner? Upload that miner's existing `cookies.jar` (next to its
+  executable) to authorize a Twitch account here. TDM mints its auth-token under
+  the same Android client_id GrubDrops uses, so the token is integrity-exempt and
+  works for mining — unlike a browser-issued web cookie, which fails Twitch's
+  drops integrity check. Upload is `.jar`/`.pkl`/`.pickle`.
 - **"Reload Watchers" button** on the settings tabs whose changes need it
   (General, Drop Priority, Experimental, Proxy).
 
@@ -48,6 +35,8 @@ All notable changes to GrubDrops.
 - **Numeric setting values** right-align so the value and unit hug the right edge.
 - **Accrual-canary notification** relabelled "Health Failed" — it already fires
   only on an OK→fail transition.
+- **Top-right clock shows UTC** (24h, with a `UTC` suffix) to match the UTC
+  timestamps in the drops and history lists, instead of browser-local time.
 
 ### Fixed
 
