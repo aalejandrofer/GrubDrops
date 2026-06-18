@@ -4,7 +4,7 @@
 
 <p align="center"><sub><strong>English</strong> · <a href="docs/translations/README.zh-CN.md">简体中文</a> · <a href="docs/translations/README.es.md">Español</a></sub></p>
 
-<h3 align="center">Self-hosted miner that AFK-farms Twitch &amp; Kick drops, with automatic claiming and channel switching.</h3>
+<h3 align="center">Self-hosted, set-and-forget Twitch &amp; Kick drops miner.</h3>
 
 <p align="center">
   <img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white">
