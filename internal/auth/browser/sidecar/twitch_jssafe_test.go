@@ -1,32 +1,50 @@
 package sidecar
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"strings"
 	"testing"
 )
 
-// TestJSSafeJSON verifies that values embedded into the eval script can't
-// break out of the surrounding JS literal. encoding/json escapes <, >, &
-// but leaves U+2028/U+2029 raw — those are JS line terminators, so a game
-// name or drop title carrying one must come back escaped.
-func TestJSSafeJSON(t *testing.T) {
-	const ls = "\u2028" // LINE SEPARATOR
-	const ps = "\u2029" // PARAGRAPH SEPARATOR
+// TestJSB64JSON verifies that values embedded into the claim eval script are
+// base64-encoded so attacker-influenced game names / drop titles can never
+// break out of the surrounding JS literal, and that the payload round-trips
+// (including line terminators and non-ASCII / CJK titles).
+func TestJSB64JSON(t *testing.T) {
+	ls := string(rune(0x2028)) // LINE SEPARATOR
+	ps := string(rune(0x2029)) // PARAGRAPH SEPARATOR
+	in := []string{"Apex" + ls + "Legends", "Foo" + ps + "Bar", "O'Brien", "</script>", "原神"}
 
-	got := jsSafeJSON([]string{"Apex" + ls + "Legends", "Foo" + ps + "Bar"})
+	got := jsB64JSON(in)
 
-	if strings.Contains(got, ls) || strings.Contains(got, ps) {
-		t.Fatalf("raw line separator survived: %q", got)
+	// Output must be pure base64 — no quote, no line terminator, nothing
+	// that could escape the enclosing '...' in the script.
+	if strings.ContainsAny(got, "'\"`<>"+ls+ps) {
+		t.Fatalf("base64 output contains a break-out character: %q", got)
 	}
-	if !strings.Contains(got, `\u2028`) || !strings.Contains(got, `\u2029`) {
-		t.Fatalf("expected escaped separators in %q", got)
+
+	// Round-trips back to the exact input.
+	raw, err := base64.StdEncoding.DecodeString(got)
+	if err != nil {
+		t.Fatalf("not valid base64: %v", err)
 	}
-	// HTML-significant runes stay escaped by encoding/json's default.
-	if strings.Contains(jsSafeJSON([]string{"</script>"}), "<") {
-		t.Fatalf("raw < survived HTML escaping")
+	var out []string
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("decoded payload is not valid JSON: %v", err)
 	}
-	// Marshal failure falls back to a valid empty array literal.
-	if jsSafeJSON(make(chan int)) != "[]" {
-		t.Fatalf("expected [] fallback on marshal error")
+	if len(out) != len(in) {
+		t.Fatalf("round-trip length mismatch: got %v want %v", out, in)
+	}
+	for i := range in {
+		if out[i] != in[i] {
+			t.Fatalf("round-trip mismatch at %d: got %q want %q", i, out[i], in[i])
+		}
+	}
+
+	// Marshal failure falls back to a base64-encoded empty array.
+	fb, _ := base64.StdEncoding.DecodeString(jsB64JSON(make(chan int)))
+	if string(fb) != "[]" {
+		t.Fatalf("expected [] fallback on marshal error, got %q", fb)
 	}
 }

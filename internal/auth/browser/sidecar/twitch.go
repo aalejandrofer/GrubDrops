@@ -959,21 +959,19 @@ type InventoryHistoryEntry struct {
 	Date  string `json:"date"` // free-text e.g. "Jun 5, 2026"; empty when not surfaced
 }
 
-// jsSafeJSON marshals v for embedding directly into a chromedp eval
-// script as a bare JS literal. encoding/json already escapes <, >, & to
-// \u00XX, but it leaves U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH
-// SEPARATOR) raw — both are valid inside a JSON string yet are line
-// terminators in JS, so an attacker-controlled game name or drop title
-// containing one would break out of the surrounding script literal. Escape
-// them so the embedded value is always a valid JS expression.
-func jsSafeJSON(v any) string {
+// jsB64JSON marshals v to JSON and base64-encodes it for embedding into a
+// chromedp eval script. The script decodes it with __b64decode (see below).
+// Game names and drop titles can be attacker-influenced; concatenating their
+// JSON straight into the script risks breaking out of the literal (single
+// quotes, U+2028/U+2029 line terminators, etc). base64 output is only
+// [A-Za-z0-9+/=], so the embedded value can never escape its enclosing
+// quotes regardless of the input.
+func jsB64JSON(v any) string {
 	b, err := json.Marshal(v)
 	if err != nil {
-		return "[]"
+		b = []byte("[]")
 	}
-	b = bytes.ReplaceAll(b, []byte("\u2028"), []byte(`\u2028`))
-	b = bytes.ReplaceAll(b, []byte("\u2029"), []byte(`\u2029`))
-	return string(b)
+	return base64.StdEncoding.EncodeToString(b)
 }
 
 // ClaimRewards navigates the account's auth tab to /drops/inventory
@@ -992,8 +990,8 @@ func (t *Twitch) ClaimRewards(ctx context.Context, accountID string, allowedGame
 	if err != nil {
 		return nil, nil, fmt.Errorf("acquire tab: %w", err)
 	}
-	allowJSON := jsSafeJSON(allowedGames)
-	alreadyJSON := jsSafeJSON(t.alreadyClaimedTitles(accountID))
+	allowB64 := jsB64JSON(allowedGames)
+	alreadyB64 := jsB64JSON(t.alreadyClaimedTitles(accountID))
 	// Walk every tile on /drops/inventory. A claimable reward tile
 	// has a button whose accessible name contains "Claim". Strategy:
 	//   1. Find every "Claim" button.
@@ -1007,8 +1005,9 @@ func (t *Twitch) ClaimRewards(ctx context.Context, accountID string, allowedGame
 	// Tiles with progress bars (in-progress watch-time drops) don't
 	// have a Claim button yet — they're naturally skipped.
 	script := `(async () => {
-		const allow = new Set((` + allowJSON + ` || []).map(s => (s||'').toLowerCase()));
-		const already = new Set((` + alreadyJSON + ` || []).map(s => (s||'').toLowerCase()));
+		const __b64decode = (b) => { try { return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b), c => c.charCodeAt(0)))); } catch (e) { return []; } };
+		const allow = new Set((__b64decode('` + allowB64 + `') || []).map(s => (s||'').toLowerCase()));
+		const already = new Set((__b64decode('` + alreadyB64 + `') || []).map(s => (s||'').toLowerCase()));
 		const norm = (s) => (s||'').toLowerCase().replace(/\s+/g, ' ').trim();
 		// Find the game heading nearest above the tile by walking up
 		// + scanning previous siblings for h1-h4 text.
