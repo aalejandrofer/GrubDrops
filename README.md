@@ -23,9 +23,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/drops.png" width="440" alt="Drops catalog: whitelisted Twitch and Kick campaigns, drop items, and one-click whitelisting">
-  &nbsp;
-  <img src="docs/screenshots/whitelist.png" width="440" alt="Game whitelist: per-account drop priority list and priority mode">
+  <img src="docs/screenshots/drops-whitelist.png" width="900" alt="GrubDrops drops catalog with one-click whitelisting, alongside the per-account game whitelist and priority list">
 </p>
 
 ---
@@ -33,26 +31,6 @@
 Watches the right Twitch and Kick streams, banks the watch-time, and claims the
 drops — across several accounts at once. One small self-hosted web app: a Docker
 image and a single SQLite file.
-
-**The DevilXD / TwitchDropsMiner alternative that also mines Kick**, and runs
-headless on a server, NAS, or Raspberry Pi instead of a desktop.
-
-## GrubDrops vs TwitchDropsMiner
-
-|  | GrubDrops | TwitchDropsMiner |
-|---|:---:|:---:|
-| Twitch drops | ✅ | ✅ |
-| Auto-claim + channel switching | ✅ | ✅ |
-| **Kick drops** | ✅ | ❌ |
-| Self-hosted / Docker | ✅ | ❌ desktop only |
-| Web UI, mine from any device | ✅ | ❌ desktop GUI |
-| Runs headless on a Pi / NAS | ✅ | ❌ |
-| Multiple accounts at once | ✅ | ⚠️ one at a time |
-
-Credit where it's due: TwitchDropsMiner is the mature, battle-tested Twitch
-client and sips bandwidth (metadata-only, no video). GrubDrops trades a bit of
-that for **Kick support, multi-account, and a self-hosted web UI** you can leave
-running on a box you already own.
 
 ## Features
 
