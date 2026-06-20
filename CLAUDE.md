@@ -41,6 +41,10 @@ Bold the subject of each bullet; write what changed + why it matters in plain
 user-facing language, not commit-speak. The notes are a curated subset of
 `[Unreleased]`, not the raw changelog.
 
+Release **title** = bare version only (e.g. `v1.2.5`). Release **notes** are
+humanized (run the humanizer skill): plain voice, **no em/en dashes**, but keep
+the emoji-section + bold-subject format above.
+
 ## Architecture constraints
 
 - **The browser sidecar stack is core, not dead code.** Do not delete
@@ -65,3 +69,18 @@ user-facing language, not commit-speak. The notes are a curated subset of
 
 - **Never put `?` or parentheses in a `queries/*.sql` comment.** It corrupts
   placeholder rewriting for later queries, producing a cryptic SQL syntax error.
+
+## Security scanning
+
+- **CodeQL runs on every push to `master`** (GitHub default setup — there is no
+  workflow file). Keep it at zero open alerts.
+- **Never concatenate outside-controlled data into a chromedp `Evaluate` script.**
+  Game names, drop titles, and channel names can be attacker-influenced; embed
+  them base64-encoded (`jsB64JSON`) and decode in-script with `TextDecoder`, so
+  no input byte can break out of the eval literal.
+
+## See also
+
+- **`AGENTS.md`** — build/test/run commands, repo layout, and the same
+  architecture + platform constraints, for AI coding agents. Keep the shared
+  sections (architecture, platform gotchas, sqlc) in sync with this file.

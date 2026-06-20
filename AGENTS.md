@@ -17,6 +17,11 @@ docker build -f deploy/Dockerfile.miner .   # build the miner image
   before every push.
 - Always `go build ./...` **and** `go test ./...` after edits, including changes
   authored by others before you build on them. Don't assume a branch compiles.
+- **CodeQL code scanning** (GitHub default setup, no workflow file) runs on every
+  push to `master`. Keep it at zero open alerts. When embedding outside-controlled
+  data — game names, drop titles, channel names — into a chromedp `Evaluate`
+  script, **base64-encode it and decode in-script** (`jsB64JSON` +
+  `TextDecoder`); never concatenate raw/JSON values into the eval literal.
 
 ## Run locally
 
@@ -39,7 +44,8 @@ internal/platform/...   per-platform backends (twitch, kick)
 internal/watcher        per-account state machine (watch, mine, claim)
 internal/dockerctl      on-demand sidecar start/stop over the docker socket
 internal/discovery      catalog scraper
-internal/api + web      HTMX UI and handlers (html/template)
+internal/api            HTMX UI handlers (html/template)
+internal/web            embedded templates/ + static/ assets (go:embed)
 internal/store          SQLite (sqlc + goose), age-encrypted sessions
 internal/i18n           locale JSON + the `{{t "key"}}` template helper
 proto/                  buf config + gRPC defs for the sidecar — core, not dead code
