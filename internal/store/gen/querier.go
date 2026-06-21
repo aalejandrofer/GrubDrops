@@ -10,9 +10,11 @@ import (
 )
 
 type Querier interface {
+	AddAccountChannel(ctx context.Context, arg AddAccountChannelParams) error
 	AddAccountGame(ctx context.Context, arg AddAccountGameParams) error
 	AddGlobalGame(ctx context.Context, arg AddGlobalGameParams) error
 	AdminExists(ctx context.Context) (bool, error)
+	ClearAccountChannels(ctx context.Context, accountID string) error
 	ClearAccountGames(ctx context.Context, accountID string) error
 	ClearGlobalGames(ctx context.Context) error
 	// Distinct benefits already claimed by any account in this campaign.
@@ -46,6 +48,7 @@ type Querier interface {
 	GetSession(ctx context.Context, accountID string) (Session, error)
 	GetSettingString(ctx context.Context, key string) ([]byte, error)
 	InsertClaim(ctx context.Context, arg InsertClaimParams) error
+	ListAccountChannels(ctx context.Context, accountID string) ([]ListAccountChannelsRow, error)
 	ListAccountGames(ctx context.Context, accountID string) ([]ListAccountGamesRow, error)
 	// Per-account link state for a campaign, joined with the account handle.
 	// Drives the per-account connect chips on the not-linked table.
@@ -70,6 +73,7 @@ type Querier interface {
 	// Campaigns announced but not yet started. Whitelist filtering is
 	// applied in Go.
 	ListUpcomingCampaigns(ctx context.Context, arg ListUpcomingCampaignsParams) ([]Campaign, error)
+	RemoveAccountChannel(ctx context.Context, arg RemoveAccountChannelParams) error
 	RemoveAccountGame(ctx context.Context, arg RemoveAccountGameParams) error
 	SetAccountEnabled(ctx context.Context, arg SetAccountEnabledParams) error
 	// Lifetime watch minutes: sum of per-benefit progress. Persistent, so it

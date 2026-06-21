@@ -31,6 +31,12 @@ type AccountCampaignLink struct {
 	UpdatedAt  int64  `json:"updated_at"`
 }
 
+type AccountChannel struct {
+	AccountID string `json:"account_id"`
+	Channel   string `json:"channel"`
+	Rank      int64  `json:"rank"`
+}
+
 type AccountGame struct {
 	AccountID string `json:"account_id"`
 	GameID    string `json:"game_id"`
