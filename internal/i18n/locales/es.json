@@ -1,7 +1,6 @@
 {
   "lang.code": "es",
   "lang.name": "Español",
-
   "nav.console": "Consola",
   "nav.drops": "Drops",
   "nav.history": "Historial",
@@ -10,7 +9,6 @@
   "nav.toggle_theme": "Cambiar claro / oscuro",
   "nav.toggle_theme_aria": "Cambiar entre tema claro y oscuro",
   "nav.github_aria": "Repositorio de GitHub",
-
   "settings_subnav.general": "General",
   "settings_subnav.accounts": "Cuentas",
   "settings_subnav.priority": "Prioridad de drops",
@@ -19,7 +17,6 @@
   "settings_subnav.health": "Estado",
   "settings_subnav.experimental": "Experimental",
   "settings_subnav.proxy": "Proxy",
-
   "dashboard.title": "Consola · GrubDrops",
   "dashboard.welcome": "// bienvenida",
   "dashboard.heading": "Consola",
@@ -50,7 +47,6 @@
   "dashboard.action_device_code": "Cambiar a inicio con código de dispositivo →",
   "dashboard.action_connect": "Conectar cuenta →",
   "dashboard.action_add_games": "Añadir juegos →",
-
   "dashboard_modal.account": "cuenta",
   "dashboard_modal.close": "Cerrar",
   "dashboard_modal.close_aria": "Cerrar",
@@ -73,7 +69,6 @@
   "dashboard_modal.no_events": "Aún no hay eventos etiquetados con esta cuenta.",
   "dashboard_modal.edit_account": "Editar cuenta",
   "dashboard_modal.re_auth": "Volver a autenticar",
-
   "campaign_modal.connected": "conectada",
   "campaign_modal.not_connected": "no conectada",
   "campaign_modal.linked_title": "cuenta externa vinculada — se puede emitir el drop",
@@ -94,9 +89,7 @@
   "campaign_modal.no_eligible_accounts": "Ninguna cuenta tiene el juego de esta campaña en la lista blanca.",
   "campaign_modal.also_seen_by": "También visto por",
   "campaign_modal.raw_json": "JSON en bruto de la campaña",
-
   "events.no_events": "Aún no hay eventos.",
-
   "event.kind.auth": "autenticación",
   "event.kind.claim": "reclamación",
   "event.kind.discovery": "descubrimiento",
@@ -107,7 +100,6 @@
   "event.kind.progress": "progreso",
   "event.kind.state": "estado",
   "event.kind.watch": "visionado",
-
   "event.kick_ws_start_failed_fallback": "kick auto: falló el inicio de WS, recurriendo al sidecar de Chrome",
   "event.kick_sidecar_absent_autocreate": "sidecar de kick ausente, creando automáticamente",
   "event.kick_sidecar_probe_failed": "falló el sondeo de existencia del sidecar de kick; se asume activo",
@@ -197,7 +189,6 @@
   "event.watcher_benefit_never_appeared": "vigilante: el beneficio nunca apareció en el inventario (reclamado o fantasma); omitiendo",
   "event.watcher_integrity_blocked_needs_auth": "vigilante: bloqueado por integridad, marcando cuenta como needs_auth",
   "event.watcher_no_whitelisted_games": "vigilante: ningún juego de la lista blanca coincide con campañas activas, durmiendo",
-
   "mining.twitch": "TWITCH",
   "mining.no_twitch": "sin cuentas de twitch",
   "mining.kick": "KICK",
@@ -230,7 +221,6 @@
   "mining.last_poll": "último sondeo",
   "mining.state": "estado",
   "mining.next": "siguiente",
-
   "tele.watch_time": "Tiempo de visionado",
   "tele.hm": "h:m",
   "tele.lifetime": "total histórico",
@@ -245,7 +235,6 @@
   "tele.drops": "drops",
   "tele.whitelist_total": "total de lista blanca",
   "tele.next_claim": "Próxima reclamación",
-
   "drops.title": "Drops · GrubDrops",
   "drops.twitch_inventory": "Inventario de Twitch",
   "drops.kick_inventory": "Inventario de Kick",
@@ -254,7 +243,6 @@
   "drops.past": "Pasados",
   "drops.current": "Actuales",
   "drops.upcoming": "Próximos",
-
   "drops_table.no_games_tag": "sin juegos",
   "drops_table.no_games_title": "Aún no hay juegos en la lista blanca.",
   "drops_table.no_games_desc": "el descubrimiento de drops solo rastrea los juegos que eliges, así que no aparece nada hasta que añades uno. Añade un juego a la lista de prioridad global, o por cuenta, y el descubrimiento empezará a rellenar esta página.",
@@ -285,7 +273,6 @@
   "drops_table.global": "Global",
   "drops_table.whitelist_add": "lista blanca +",
   "drops_table.no_accounts": "sin cuentas",
-
   "campaign_items.item": "ítem",
   "campaign_items.collected": "recogido",
   "campaign_items.type": "tipo",
@@ -294,7 +281,6 @@
   "campaign_items.m_watch": "min visionado",
   "campaign_items.action_required": "requiere acción",
   "campaign_items.no_items": "Aún no hay ítems registrados para esta campaña.",
-
   "history.title": "Historial · GrubDrops",
   "history.cooking": "// cocinando",
   "history.heading": "Historial",
@@ -306,14 +292,12 @@
   "history.campaign": "campaña",
   "history.title_key": "título",
   "history.source": "origen",
-
   "login.title": "Iniciar sesión · GrubDrops",
   "login.sso": "Continuar con SSO",
   "login.sso_disabled_title": "SSO no configurado",
   "login.or": "o",
   "login.password": "Contraseña",
   "login.log_in": "Iniciar sesión",
-
   "setup.title": "Configuración · GrubDrops",
   "setup.first_run": "// configuración inicial",
   "setup.create_admin": "Crear contraseña de administrador",
@@ -322,7 +306,6 @@
   "setup.confirm": "Confirmar",
   "setup.min_chars": "mín. 8 caracteres",
   "setup.create_btn": "Crear administrador",
-
   "accounts.title": "Cuentas · GrubDrops",
   "accounts.settings_accounts": "// ajustes / cuentas",
   "accounts.heading": "Cuentas",
@@ -346,7 +329,6 @@
   "accounts.disabled": "desactivada",
   "accounts.enable": "activar",
   "accounts.disable": "desactivar",
-
   "account.title": "Cuenta · GrubDrops",
   "account.edit": "// cuentas / editar",
   "account.heading": "Cuenta",
@@ -383,7 +365,6 @@
   "account.use_global_list": "usar lista global",
   "account.use_global_desc": "borra la anulación de la cuenta — el vigilante lee Ajustes → Prioridad global",
   "account.use_global_btn": "Usar global",
-
   "new_account.title": "Nueva cuenta · GrubDrops",
   "new_account.heading": "// cuentas / nueva",
   "new_account.h1": "Nueva cuenta",
@@ -397,13 +378,11 @@
   "new_account.display_name_placeholder": "p. ej. TTik3r",
   "new_account.back": "volver",
   "new_account.create": "Crear",
-
   "settings.title": "Ajustes · GrubDrops",
   "settings.config": "// configuración",
   "settings.heading": "Ajustes",
   "settings.language": "Idioma",
   "settings.add_account": "+ Añadir cuenta",
-
   "priority.global_list": "Lista de prioridad global",
   "priority.selected_drag": "Seleccionados · arrastra para reordenar",
   "priority.remove": "quitar",
@@ -421,7 +400,6 @@
   "priority.ordered": "Ordenado — primero lo más alto en la lista blanca",
   "priority.ending_soonest": "Termina antes — primero lo que caduca antes",
   "priority.save": "Guardar",
-
   "notify.heading": "Notificaciones",
   "notify.discord": "Discord",
   "notify.webhook": "webhook de discord",
@@ -437,7 +415,6 @@
   "notify.progress_step_desc": "cuando \"progreso\" está activado, notifica al 0% (inicio), cada N%, 100% · 50 = inicio/50/100 · 0 = desactivado · se aplica al recargar",
   "notify.send_test": "Enviar prueba",
   "notify.save": "Guardar",
-
   "security.sso": "Inicio de sesión único (SSO)",
   "security.enabled": "● activado",
   "security.disabled": "○ desactivado",
@@ -457,7 +434,6 @@
   "security.new_password": "nueva contraseña",
   "security.confirm_password": "confirmar nueva contraseña",
   "security.change_password": "Cambiar contraseña",
-
   "runtime.heading": "Tiempo de ejecución",
   "runtime.reload_meta": "Se requiere recargar para actualizar el tick/descubrimiento",
   "runtime.tick_interval": "intervalo de tick",
@@ -469,7 +445,6 @@
   "runtime.disc_desc_bold": "busca nuevos drops",
   "runtime.disc_desc_suffix": "— vuelve a escanear el catálogo de campañas",
   "runtime.save": "Guardar",
-
   "logging.heading": "Registro",
   "logging.meta": "verbosidad + retención",
   "logging.level": "nivel de registro",
@@ -482,9 +457,7 @@
   "logging.retention": "retención de registros",
   "logging.retention_desc": "cuánto tiempo se conserva el historial de registros",
   "logging.save": "Guardar",
-
   "experimental.heading": "Experimental",
-
   "proxy.heading": "Ajustes de proxy",
   "proxy.meta": "Proxy de red",
   "proxy.enabled": "Activar proxy",
@@ -512,7 +485,6 @@
   "experimental.browser_verified": "Sidecar de Chrome (verificado)",
   "experimental.ws_only": "Solo WebSocket (experimental)",
   "experimental.save": "Guardar",
-
   "health.heading": "Comprobador de estado por latido",
   "health.transport": "estado del transporte",
   "health.status": "Estado",
@@ -524,7 +496,6 @@
   "health.none_running": "ninguno en ejecución",
   "health.commit": "commit",
   "health.version": "versión",
-
   "canary.twitch": "twitch",
   "canary.not_configured": "no configurado",
   "canary.no_result": "aún sin resultado",
@@ -540,7 +511,6 @@
   "canary.interval": "intervalo",
   "canary.interval_desc": "con qué frecuencia se ejecuta el canary (0 = desactivado)",
   "canary.save": "Guardar",
-
   "login_kick.title": "Inicio de sesión de Kick · GrubDrops",
   "login_kick.authorize": "// kick · autorizar",
   "login_kick.authorize_h1": "Autorizar",
@@ -563,7 +533,6 @@
   "login_kick.cancel": "cancelar",
   "login_kick.authorize_btn": "Autorizar",
   "login_kick.error.persist": "no se pudo guardar la sesión",
-
   "login_twitch.title": "Inicio de sesión de Twitch · GrubDrops",
   "login_twitch.device_code": "// twitch · código de dispositivo",
   "login_twitch.authorize_h1": "Autorizar",
@@ -572,7 +541,6 @@
   "login_twitch.waiting": "esperando autorización…",
   "login_twitch.cancel": "cancelar",
   "login_twitch.polling": "sondeo cada 3s",
-
   "login_twitch_paste.title": "Inicio de sesión de Twitch · GrubDrops",
   "login_twitch_paste.authorize": "// twitch · autorizar",
   "login_twitch_paste.authorize_h1": "Autorizar",
@@ -601,14 +569,12 @@
   "login_twitch_paste.raw_paste_desc": "(opcional — líneas nombre=valor, anula los campos vacíos de arriba)",
   "login_twitch_paste.cancel": "cancelar",
   "login_twitch_paste.authorize_btn": "Autorizar",
-
   "twitch_status.waiting": "aún esperando…",
   "twitch_status.authorized": "autorizado — redirigiendo",
   "twitch_status.expired_prefix": "código caducado —",
   "twitch_status.return_accounts": "volver a cuentas",
   "twitch_status.re_add": "y vuelve a añadir",
   "twitch_status.error": "error — revisa los registros",
-
   "flash.settings_saved": "ajustes guardados",
   "flash.settings_saved_reload": "ajustes guardados — recarga los vigilantes (o reinicia) para aplicar la nueva cadencia",
   "flash.notifications_saved": "notificaciones guardadas",
@@ -644,12 +610,10 @@
   "flash.kick_cookies_persisted": "cookies de Kick guardadas — el vigilante las verificará en breve",
   "flash.kick_session_verified": "sesión de Kick verificada ✓",
   "flash.twitch_cookie_imported": "cookie de Twitch importada correctamente ✓",
-
   "notify.no_notifier": "no hay notificador configurado",
   "notify.no_webhook": "no hay webhook configurado — define un webhook global o por cuenta y guarda primero",
   "notify.test_failed": "falló la prueba",
   "notify.test_sent": "prueba enviada ✓ — revisa Discord",
-
   "login_twitch_cookie.title": "Migrar desde TwitchDropsMiner · GrubDrops",
   "login_twitch_cookie.authorize": "// twitch · migrar",
   "login_twitch_cookie.authorize_h1": "Importar cookies para",
@@ -661,7 +625,6 @@
   "login_twitch_cookie.required": "requerido",
   "login_twitch_cookie.cancel": "cancelar",
   "login_twitch_cookie.import_btn": "Importar",
-
   "login_twitch_choose.title": "Inicio de sesión de Twitch · GrubDrops",
   "login_twitch_choose.authorize": "// twitch · autorizar",
   "login_twitch_choose.authorize_h1": "Autorizar",
@@ -678,20 +641,17 @@
   "login_twitch_choose.import_cookie": "Importar cookies.jar",
   "login_twitch_choose.cookie_hint": "Sube el cookies.jar desde la carpeta de datos de tu TwitchDropsMiner.",
   "login_twitch_choose.cancel": "cancelar",
-
   "login_twitch_cookie.error.parse_form": "No se pudo analizar el formulario de subida",
   "login_twitch_cookie.error.no_file": "No se subió ningún archivo",
   "login_twitch_cookie.error.read_file": "No se pudo leer el archivo subido",
   "login_twitch_cookie.error.parse_pickle": "No se pudo analizar el archivo como pickle o cookies.txt — comprueba el formato",
   "login_twitch_cookie.error.no_auth_token": "No se encontró auth-token en el archivo de cookies — el archivo debe contener un auth-token de Twitch",
   "login_twitch_cookie.error.persist": "No se pudo guardar la sesión — revisa los registros del servidor",
-
   "oidc.session_expired": "la sesión de inicio caducó, inténtalo de nuevo",
   "oidc.denied_by_provider": "inicio de sesión denegado por el proveedor",
   "oidc.auth_failed": "falló la autorización",
   "oidc.signin_failed": "falló el inicio de sesión",
   "oidc.account_not_allowed": "cuenta no permitida",
-
   "time.days": "días",
   "time.days_short": "d",
   "time.hours": "h",
@@ -700,7 +660,6 @@
   "time.seconds": "s",
   "time.ago": "hace",
   "time.ended": "terminó",
-
   "error.missing_param": "falta un parámetro requerido",
   "error.bad_image_path": "ruta de imagen no válida",
   "error.kick_unavailable": "backend de Kick no disponible",
@@ -720,7 +679,6 @@
   "error.csrf_reload": "recarga la página para obtener un token nuevo y vuelve a enviar",
   "error.csrf_https_no_secure": "la petición parece HTTPS pero GRUB_SECURE_COOKIES=0 — define GRUB_SECURE_COOKIES=1 al servir sobre HTTPS / detrás de un proxy con terminación TLS",
   "error.csrf_secure_http": "GRUB_SECURE_COOKIES=1 pero esta petición llegó por HTTP plano — el navegador descarta la cookie de sesión/CSRF; sirve sobre HTTPS (define X-Forwarded-Proto en tu proxy) o pon GRUB_SECURE_COOKIES=0",
-
   "state.watching": "viendo",
   "state.claiming": "reclamando",
   "state.scanning_channels": "escaneando canales",
@@ -729,5 +687,12 @@
   "state.awaiting_connect": "esperando conexión",
   "state.needs_login": "requiere inicio de sesión",
   "state.no_games_yet": "aún sin juegos",
-  "state.stopped": "detenido"
+  "state.stopped": "detenido",
+  "account.channels_title": "Lista blanca de canales",
+  "account.channels_desc": "Minar drops en estos canales incluso si el juego no está en tu lista. Deja vacío para ver cualquier canal.",
+  "account.channels_empty": "Sin canales añadidos — se vigilarán todos los canales elegibles.",
+  "account.channel_remove": "Eliminar canal",
+  "account.channel_add": "Añadir canal",
+  "account.channel_add_desc": "Añade un canal por nombre exacto (p. ej. xqc)",
+  "account.channel_placeholder": "nombre del canal"
 }

@@ -280,6 +280,8 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/accounts/{id}/games", accs.games)
 	authed.Post("/accounts/{id}/games/add", accs.addGame)
 	authed.Post("/accounts/{id}/games/use-global", accs.useGlobal)
+	authed.Post("/accounts/{id}/channels/add", accs.addChannel)
+	authed.Post("/accounts/{id}/channels/remove", accs.removeChannel)
 	authed.Post("/accounts/{id}/reload", accs.reloadOne)
 	authed.Post("/accounts/{id}/toggle", accs.toggleEnabled)
 	authed.Post("/accounts/{id}/delete", accs.delete)

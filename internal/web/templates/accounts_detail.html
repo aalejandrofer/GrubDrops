@@ -114,6 +114,33 @@
       </div>
     </form>
   </section>
+
+  <section class="settings-card">
+    <header class="section-h"><h3>{{t "account.channels_title"}}</h3></header>
+    <p class="hint" style="margin:0 0 14px;">{{t "account.channels_desc"}}</p>
+    {{if .Channels}}
+    <div class="chips">
+      {{range .Channels}}
+      <form method="post" action="/accounts/{{$.Account.ID}}/channels/remove" style="display:inline" onsubmit="this.querySelector('button').disabled=true">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <input type="hidden" name="channel" value="{{.}}">
+        <button class="chip" type="submit" title="{{t "account.channel_remove"}}">{{.}} ✕</button>
+      </form>
+      {{end}}
+    </div>
+    {{else}}
+    <p class="hint" style="font-size:12px;">{{t "account.channels_empty"}}</p>
+    {{end}}
+    <form method="post" action="/accounts/{{.Account.ID}}/channels/add" class="add-by-name">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <div class="kvedit"><div class="row">
+        <span class="k">{{t "account.channel_add"}}</span>
+        <span class="d">{{t "account.channel_add_desc"}}</span>
+        <span class="v grow"><input type="text" name="channel" placeholder="{{t "account.channel_placeholder"}}" required></span>
+        <button class="btn-linear" type="submit">{{t "account.add"}} →</button>
+      </div></div>
+    </form>
+  </section>
   </div>{{/* .settings-stack */}}
 </div>
 

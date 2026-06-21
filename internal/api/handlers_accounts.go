@@ -177,6 +177,7 @@ type accountDetailPage struct {
 	Account       gen.Account
 	AllGames      []gameRow
 	SelectedGames []gameRow // ordered by rank
+	Channels      []string  // per-account channel whitelist, ordered by rank
 }
 
 type gameRow struct {
@@ -215,9 +216,16 @@ func (d accountsDeps) detail(w http.ResponseWriter, r *http.Request) {
 		selected = append(selected, gameRow{ID: p.ID, Name: p.Name, Slug: p.Slug, Selected: true, Rank: int(p.Rank)})
 	}
 
+	var channels []string
+	if chRows, err := d.q.ListAccountChannels(r.Context(), id); err == nil {
+		for _, rch := range chRows {
+			channels = append(channels, rch.Channel)
+		}
+	}
+
 	render(w, r, d.t, "accounts_detail.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
-		Page:   accountDetailPage{Account: row, AllGames: allRows, SelectedGames: selected},
+		Page:   accountDetailPage{Account: row, AllGames: allRows, SelectedGames: selected, Channels: channels},
 		Active: "accounts",
 	})
 }
@@ -521,6 +529,47 @@ func (d accountsDeps) toggleEnabled(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+// addChannel handles POST /accounts/:id/channels/add — opts the account
+// into a channel so null-game drops on that channel get mined.
+func (d accountsDeps) addChannel(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	ch := strings.ToLower(strings.TrimSpace(r.FormValue("channel")))
+	if ch != "" {
+		if err := d.q.AddAccountChannel(r.Context(), gen.AddAccountChannelParams{
+			AccountID: id, Channel: ch, Rank: 0,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		d.applyReload(r.Context())
+	}
+	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
+}
+
+// removeChannel handles POST /accounts/:id/channels/remove.
+func (d accountsDeps) removeChannel(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	ch := strings.ToLower(strings.TrimSpace(r.FormValue("channel")))
+	if ch != "" {
+		if err := d.q.RemoveAccountChannel(r.Context(), gen.RemoveAccountChannelParams{
+			AccountID: id, Channel: ch,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		d.applyReload(r.Context())
+	}
+	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
 
 func genID() string {
