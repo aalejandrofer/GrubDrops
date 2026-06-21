@@ -1,10 +1,10 @@
 ---
 name: Feature request
-about: Suggest an idea
+about: Suggest a new platform, drop source, or miner improvement
 labels: enhancement
 ---
 
-**Problem / motivation**
+**What are you trying to achieve**
 
 **Proposed solution**
 

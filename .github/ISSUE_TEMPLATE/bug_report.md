@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Something isn't working
+about: A drop won't mine, claim, or the miner is misbehaving
 labels: bug
 ---
 
@@ -16,6 +16,9 @@ labels: bug
 - GrubDrops version / commit:
 - Deploy: Docker / `go run` / other
 
-**Logs** (scrub any tokens/cookies)
+**Logs** (optional, if any)
+
+Grab them from the Logs tab in the web UI, or `docker logs grubdrops`.
+Scrub any tokens/cookies before pasting.
 ```
 ```
