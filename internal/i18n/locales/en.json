@@ -732,8 +732,8 @@
   "state.stopped": "stopped",
 
   "account.channels_title": "Channel Whitelist",
-  "account.channels_desc": "Mine drops on these channels even when the game is not in your game whitelist. Leave empty to watch any channel.",
-  "account.channels_empty": "No channels added yet — all eligible channels will be watched.",
+  "account.channels_desc": "Mine drops on these channels even when the drop has no game category. Used to claim category-less drops (e.g. Kick Football drops); your game whitelist still governs everything else.",
+  "account.channels_empty": "No channels added yet.",
   "account.channel_add": "Add channel",
   "account.channel_add_desc": "Add a channel by exact name (e.g. xqc)",
   "account.channel_placeholder": "channel name",

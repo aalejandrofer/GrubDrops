@@ -6,6 +6,12 @@ All notable changes to GrubDrops.
 
 ### Added
 
+- **Channel whitelist for category-less drops.** Opt an account into a
+  Kick/Twitch channel so drops with no game category (e.g. Kick Football
+  drops) get mined — they previously fell through the game-only whitelist and
+  were never picked. New "Discoverable — no game category" section on `/drops`
+  with a per-account WHITELIST+, plus a Channel Whitelist editor on the account
+  detail page. Campaigns are matched by game OR by a whitelisted channel. (#20)
 - **Spanish UI translation.** Full `es` locale (688 keys, parity with English),
   selectable in the nav and Settings ▸ General language switcher and
   auto-detected from `Accept-Language`. Added a locale-parity unit test that
