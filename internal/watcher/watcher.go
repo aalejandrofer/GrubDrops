@@ -65,6 +65,14 @@ type Config struct {
 	// table stores both. The check should be lenient.
 	AllowGame func(game string) bool
 
+	// AllowChannel returns true if a campaign whose AllowedChannels
+	// include one of the account's whitelisted channels should be
+	// mined, even when its Game is not whitelisted (or empty). This is
+	// how null-game drops (Kick Football drops with no category) are
+	// opted into per account. Nil when the account has no channel
+	// whitelist.
+	AllowChannel func(channels []string) bool
+
 	// ExcludeGame, when set and returning true for a game, prevents
 	// that game's campaigns from being mined even if AllowGame
 	// permits them. Useful for temporarily skipping a game without
@@ -812,10 +820,12 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 	// here so they never reach the mining loop. (They DID reach the
 	// persister above so /drops Discoverable can list them.)
 	var whitelisted []platform.Campaign
-	if w.cfg.AllowGame != nil {
+	if w.cfg.AllowGame != nil || w.cfg.AllowChannel != nil {
 		whitelisted = make([]platform.Campaign, 0, len(campaigns))
 		for _, c := range campaigns {
-			if w.cfg.AllowGame(c.Game) {
+			gameOK := w.cfg.AllowGame != nil && w.cfg.AllowGame(c.Game)
+			chanOK := w.cfg.AllowChannel != nil && w.cfg.AllowChannel(c.AllowedChannels)
+			if gameOK || chanOK {
 				whitelisted = append(whitelisted, c)
 			}
 		}

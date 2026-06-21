@@ -378,6 +378,10 @@ func run() error {
 				"account", a.ID, "err", err)
 			return scheduler.NewEntry(a.ID, nopRunner{}), nil
 		}
+		allowChannel, err := loadAccountChannels(ctx, q, a.ID)
+		if err != nil {
+			return scheduler.Entry{}, err
+		}
 		if !hasAnyGame(allow) {
 			logger.Info("account has empty game whitelist, idle until games are picked",
 				"account", a.ID)
@@ -416,6 +420,7 @@ func run() error {
 			HeartbeatInterval:     60 * time.Second,
 			ProgressNotifyStepPct: progressStep,
 			AllowGame:             allow, GameRank: rank,
+			AllowChannel:  allowChannel,
 			PriorityMode:  priorityMode,
 			Persister:     campaignPersister,
 			ClaimRecorder: claimRecorder,
@@ -790,6 +795,33 @@ func loadAccountWhitelist(ctx context.Context, q *gen.Queries, accountID string)
 
 func hasAnyGame(allow func(string) bool) bool {
 	return allow != nil
+}
+
+// loadAccountChannels materialises the per-account channel whitelist
+// into a match closure the watcher consumes. Returns a nil closure when
+// the account has no channel rows (so the watcher's filter ignores it).
+// Used to mine null-game drops the user has opted an account into.
+func loadAccountChannels(ctx context.Context, q *gen.Queries, accountID string) (func([]string) bool, error) {
+	rows, err := q.ListAccountChannels(ctx, accountID)
+	if err != nil {
+		return nil, fmt.Errorf("list account channels: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	set := make(map[string]struct{}, len(rows))
+	for _, r := range rows {
+		set[strings.ToLower(strings.TrimSpace(r.Channel))] = struct{}{}
+	}
+	allow := func(channels []string) bool {
+		for _, ch := range channels {
+			if _, ok := set[strings.ToLower(strings.TrimSpace(ch))]; ok {
+				return true
+			}
+		}
+		return false
+	}
+	return allow, nil
 }
 
 // parseDuration parses a Go duration string (e.g. "5m", "30s") with a

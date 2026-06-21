@@ -974,3 +974,64 @@ func TestWatcher_NotifySwept_SiblingNotifiesCurrentExcludedAndDeduped(t *testing
 	require.Equal(t, []string{"Kick + Rust Wallpaper Pattern"}, drops,
 		"only the sibling notifies: currentBenefit excluded, sibling deduped to one")
 }
+
+// nullGameBackend returns a single ACTIVE campaign with no game and one
+// participating channel — the Kick "Football Drop" shape. ListEligibleChannels
+// is inherited from MockBackend (returns a live stream), so a campaign that
+// passes the filter will accrue heartbeats.
+type nullGameBackend struct{ *platformtest.MockBackend }
+
+func (n *nullGameBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	return []platform.Campaign{{
+		ID: "c-football", Game: "", Status: "active", Name: "Football Drop",
+		AllowedChannels: []string{"adrianozendejas32"},
+		Benefits: []platform.DropBenefit{
+			{ID: "drop1", CampaignID: "c-football", Name: "Jersey", RequiredMinutes: 2},
+		},
+	}}, nil
+}
+
+func TestWatcher_MinesNullGameWhenChannelWhitelisted(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	backend := &nullGameBackend{platformtest.New()}
+	w := New(Config{
+		AccountID:    "acc1",
+		Backend:      backend,
+		Session:      platform.Session{AccessToken: "tok"},
+		Notifier:     &recordingNotifier{},
+		TickInterval: 5 * time.Millisecond,
+		AllowGame:    func(g string) bool { return g == "Rust" }, // null game NOT whitelisted
+		AllowChannel: func(chs []string) bool {
+			for _, c := range chs {
+				if c == "adrianozendejas32" {
+					return true
+				}
+			}
+			return false
+		},
+	})
+	_ = w.Run(ctx)
+	assert.Greater(t, backend.Heartbeats(), int64(0),
+		"null-game campaign with a whitelisted channel must be mined")
+}
+
+func TestWatcher_SkipsNullGameWhenChannelNotWhitelisted(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+
+	backend := &nullGameBackend{platformtest.New()}
+	w := New(Config{
+		AccountID:    "acc1",
+		Backend:      backend,
+		Session:      platform.Session{AccessToken: "tok"},
+		Notifier:     &recordingNotifier{},
+		TickInterval: 5 * time.Millisecond,
+		AllowGame:    func(g string) bool { return g == "Rust" },
+		AllowChannel: func(chs []string) bool { return false },
+	})
+	_ = w.Run(ctx)
+	assert.Equal(t, int64(0), backend.Heartbeats(),
+		"null-game campaign with no matching channel must not be mined")
+}
