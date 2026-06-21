@@ -277,6 +277,7 @@
   "drops_table.mark_linked_confirm": "Mark this campaign linked and reload watchers so the bot starts mining it?",
   "drops_table.mark_linked_title": "I've linked this account — mark it linked so the bot attempts to mine it.",
   "drops_table.no_item_details": "No item details available for this campaign.",
+  "drops_table.null_game": "Discoverable — no game category",
   "drops_table.discoverable": "Discoverable — not whitelisted",
   "drops_table.all_whitelisted": "All discovered campaigns are on at least one whitelist.",
   "drops_table.no_game": "no game",

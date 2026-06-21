@@ -277,6 +277,7 @@
   "drops_table.mark_linked_confirm": "¿Marcar esta campaña como vinculada y recargar los vigilantes para que el bot empiece a minarla?",
   "drops_table.mark_linked_title": "He vinculado esta cuenta — márcala como vinculada para que el bot intente minarla.",
   "drops_table.no_item_details": "No hay detalles de ítems disponibles para esta campaña.",
+  "drops_table.null_game": "Descubrible — sin categoría de juego",
   "drops_table.discoverable": "Descubrible — no en lista blanca",
   "drops_table.all_whitelisted": "Todas las campañas descubiertas están en al menos una lista blanca.",
   "drops_table.no_game": "sin juego",

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"log/slog"
 	"math"
 	"net/http"
@@ -158,6 +159,10 @@ type dropsRow struct {
 	ActionOnly bool
 	Collectors []collectMark
 
+	// Channels are the campaign's participating channel slugs (parsed
+	// from raw_json). Used by the null-game section's WHITELIST+ form.
+	Channels []string
+
 	// Linked is true when the account can earn this campaign (external
 	// account connected, or none required). False = whitelisted but the
 	// required account isn't linked → shown in a separate "not linked"
@@ -199,10 +204,15 @@ type dropsPage struct {
 	CurrentCount  int
 	UpcomingCount int
 	Rows          []dropsRow
-	UnlinkedRows  []dropsRow     // whitelisted but the account isn't linked (Current tab only)
-	UnlistedRows  []dropsRow     // campaigns whose Game is not on any account whitelist
-	Accounts      []dropsAccount // for the "add to whitelist" dropdown on unlisted rows
-	CSRFToken     string         // mirrors templateData.CSRFToken for inline form
+	UnlinkedRows  []dropsRow // whitelisted but the account isn't linked (Current tab only)
+	UnlistedRows  []dropsRow // campaigns whose Game is not on any account whitelist
+	// NullGameRows are ACTIVE campaigns with no game category (e.g. Kick
+	// Football drops). They can't be game-whitelisted, so they get a
+	// dedicated section whose WHITELIST+ opts an account into the
+	// campaign's channel. Only populated for the current tab.
+	NullGameRows []dropsRow
+	Accounts     []dropsAccount // for the "add to whitelist" dropdown on unlisted rows
+	CSRFToken    string         // mirrors templateData.CSRFToken for inline form
 	// NoWhitelist is true when no game is whitelisted anywhere (per-account or
 	// global). Discovery only crawls whitelisted games, so an empty whitelist
 	// means the page is silently empty — a cold-start trap. The template shows
@@ -369,6 +379,23 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Partition null-game rows (active campaigns with no game category
+	// and at least one channel) out of unlistedRows for the current tab.
+	// They get a dedicated section with a per-account channel whitelist
+	// button instead of the game whitelist button.
+	var nullGameRows []dropsRow
+	if tab == tabCurrent {
+		kept := unlistedRows[:0]
+		for _, row := range unlistedRows {
+			if strings.TrimSpace(row.Game) == "" && len(row.Channels) > 0 {
+				nullGameRows = append(nullGameRows, row)
+			} else {
+				kept = append(kept, row)
+			}
+		}
+		unlistedRows = kept
+	}
+
 	// Populate accounts dropdown for the inline "add to whitelist"
 	// affordance on unlisted rows. Best-effort: empty dropdown disables
 	// the button server-side.
@@ -388,6 +415,7 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		CurrentCount:  len(currentRows),
 		UpcomingCount: len(upcomingRows),
 		UnlistedRows:  unlistedRows,
+		NullGameRows:  nullGameRows,
 		Accounts:      accountsForPick,
 		CSRFToken:     csrfToken(r),
 		NoWhitelist:   !hasWhitelist,
@@ -471,6 +499,7 @@ func (d *dropsDeps) collectAll(
 			CampaignName: c.Name,
 			Kind:         c.Kind,
 			sortKey:      c.EndsAt,
+			Channels:     channelsFromRawJSON(c.RawJson),
 		}
 		if passesWhitelist(allow, hasWhitelist, c.Game) {
 			past = append(past, row)
@@ -504,6 +533,7 @@ func (d *dropsDeps) collectAll(
 			rankKey:      rankFor(ranks, c.Game),
 			Linked:       c.AccountLinked != 0,
 			LinkURL:      c.AccountLinkUrl,
+			Channels:     channelsFromRawJSON(c.RawJson),
 		}
 		if passesWhitelist(allow, hasWhitelist, c.Game) {
 			current = append(current, row)
@@ -529,6 +559,7 @@ func (d *dropsDeps) collectAll(
 			CampaignName: c.Name,
 			Kind:         c.Kind,
 			sortKey:      c.StartsAt,
+			Channels:     channelsFromRawJSON(c.RawJson),
 		}
 		if passesWhitelist(allow, hasWhitelist, c.Game) {
 			upcoming = append(upcoming, row)
@@ -782,6 +813,56 @@ func (d *dropsDeps) markLinked(w http.ResponseWriter, r *http.Request) {
 	if d.reload != nil {
 		if err := d.reload(r.Context()); err != nil {
 			slog.Warn("scheduler reload after link override failed", "campaign", campaignID, "err", err)
+		}
+	}
+	http.Redirect(w, r, "/drops", http.StatusSeeOther)
+}
+
+// channelsFromRawJSON extracts the persisted allowed_channels list from a
+// campaign row's raw_json (written by the campaign persister). Returns nil
+// on any parse miss.
+func channelsFromRawJSON(raw string) []string {
+	if raw == "" || raw == "{}" {
+		return nil
+	}
+	var meta struct {
+		AllowedChannels []string `json:"allowed_channels"`
+	}
+	if err := json.Unmarshal([]byte(raw), &meta); err != nil {
+		return nil
+	}
+	return meta.AllowedChannels
+}
+
+// addChannelWhitelist takes (account_id, channel[]) from the null-game
+// section on /drops and opts that account into the channel(s). Null-game
+// drops (Kick Football drops with no category) are mined when one of
+// their AllowedChannels is on an account's channel whitelist.
+func (d *dropsDeps) addChannelWhitelist(w http.ResponseWriter, r *http.Request) {
+	accID := r.FormValue("account_id")
+	if accID == "" {
+		http.Redirect(w, r, "/drops", http.StatusSeeOther)
+		return
+	}
+	if _, err := d.q.GetAccount(r.Context(), accID); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	seen := map[string]struct{}{}
+	for _, raw := range r.Form["channel"] {
+		ch := strings.ToLower(strings.TrimSpace(raw))
+		if ch == "" {
+			continue
+		}
+		if _, dup := seen[ch]; dup {
+			continue
+		}
+		seen[ch] = struct{}{}
+		if err := d.q.AddAccountChannel(r.Context(), gen.AddAccountChannelParams{
+			AccountID: accID, Channel: ch, Rank: 0,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 	}
 	http.Redirect(w, r, "/drops", http.StatusSeeOther)

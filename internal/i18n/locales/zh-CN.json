@@ -277,6 +277,7 @@
   "drops_table.mark_linked_confirm": "标记此活动已关联并重新加载监视器，让机器人开始挖取？",
   "drops_table.mark_linked_title": "我已关联此账号 — 标记为已关联以便机器人尝试挖取。",
   "drops_table.no_item_details": "此活动没有可用的物品详情。",
+  "drops_table.null_game": "可发现 — 无游戏分类",
   "drops_table.discoverable": "可发现 — 未加入白名单",
   "drops_table.all_whitelisted": "所有已发现的活动都已在至少一个白名单中。",
   "drops_table.no_game": "无游戏",
