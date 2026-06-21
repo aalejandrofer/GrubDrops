@@ -732,8 +732,8 @@
   "state.stopped": "detenido",
 
   "account.channels_title": "Lista blanca de canales",
-  "account.channels_desc": "Minar drops en estos canales incluso si el juego no está en tu lista. Deja vacío para ver cualquier canal.",
-  "account.channels_empty": "Sin canales añadidos — se vigilarán todos los canales elegibles.",
+  "account.channels_desc": "Mina drops en estos canales aunque el drop no tenga categoría de juego. Sirve para reclamar drops sin categoría (p. ej. los Football drops de Kick); tu lista de juegos sigue gobernando todo lo demás.",
+  "account.channels_empty": "Aún no hay canales añadidos.",
   "account.channel_add": "Añadir canal",
   "account.channel_add_desc": "Añade un canal por nombre exacto (p. ej. xqc)",
   "account.channel_placeholder": "nombre del canal",

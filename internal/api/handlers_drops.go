@@ -457,6 +457,11 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		d.attachCollection(r.Context(), &page.Rows[i])
 	}
 
+	// Same for the null-game section so its rows show collected ticks too.
+	for i := range page.NullGameRows {
+		d.attachCollection(r.Context(), &page.NullGameRows[i])
+	}
+
 	// HTMX partial — used when the user clicks a tab. We just swap the
 	// table body so the page chrome stays put.
 	if r.Header.Get("HX-Request") == "true" {

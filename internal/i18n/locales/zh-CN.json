@@ -732,8 +732,8 @@
   "state.stopped": "已停止",
 
   "account.channels_title": "频道白名单",
-  "account.channels_desc": "即使游戏不在游戏白名单中，也可在这些频道上挖取掉落物。留空表示观看所有合适的频道。",
-  "account.channels_empty": "尚未添加频道 — 将观看所有合适的频道。",
+  "account.channels_desc": "即使掉落物没有游戏分类，也可在这些频道上挖取。用于领取无分类的掉落物（例如 Kick 的 Football 掉落物）；其余仍由你的游戏白名单决定。",
+  "account.channels_empty": "尚未添加频道。",
   "account.channel_add": "添加频道",
   "account.channel_add_desc": "按确切名称添加频道（例如 xqc）",
   "account.channel_placeholder": "频道名称",
