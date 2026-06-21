@@ -1,6 +1,7 @@
 {
   "lang.code": "en",
   "lang.name": "English",
+
   "nav.console": "Console",
   "nav.drops": "Drops",
   "nav.history": "History",
@@ -9,6 +10,7 @@
   "nav.toggle_theme": "Toggle light / dark",
   "nav.toggle_theme_aria": "Toggle light or dark theme",
   "nav.github_aria": "GitHub repository",
+
   "settings_subnav.general": "General",
   "settings_subnav.accounts": "Accounts",
   "settings_subnav.priority": "Drop Priority",
@@ -17,6 +19,7 @@
   "settings_subnav.health": "Health",
   "settings_subnav.experimental": "Experimental",
   "settings_subnav.proxy": "Proxy",
+
   "dashboard.title": "Console · GrubDrops",
   "dashboard.welcome": "// welcome",
   "dashboard.heading": "Console",
@@ -47,6 +50,7 @@
   "dashboard.action_device_code": "Switch to device-code login →",
   "dashboard.action_connect": "Connect account →",
   "dashboard.action_add_games": "Add games →",
+
   "dashboard_modal.account": "account",
   "dashboard_modal.close": "Close",
   "dashboard_modal.close_aria": "Close",
@@ -69,6 +73,7 @@
   "dashboard_modal.no_events": "No events tagged with this account yet.",
   "dashboard_modal.edit_account": "Edit account",
   "dashboard_modal.re_auth": "Re-authenticate",
+
   "campaign_modal.connected": "connected",
   "campaign_modal.not_connected": "not connected",
   "campaign_modal.linked_title": "external account linked — drop can be issued",
@@ -89,7 +94,9 @@
   "campaign_modal.no_eligible_accounts": "No account has this campaign's game whitelisted.",
   "campaign_modal.also_seen_by": "Also seen by",
   "campaign_modal.raw_json": "Raw campaign JSON",
+
   "events.no_events": "No events yet.",
+
   "event.kind.auth": "auth",
   "event.kind.claim": "claim",
   "event.kind.discovery": "discovery",
@@ -100,6 +107,7 @@
   "event.kind.progress": "progress",
   "event.kind.state": "state",
   "event.kind.watch": "watch",
+
   "event.kick_ws_start_failed_fallback": "kick auto: WS start failed, falling back to Chrome sidecar",
   "event.kick_sidecar_absent_autocreate": "kick sidecar absent, auto-creating",
   "event.kick_sidecar_probe_failed": "kick sidecar existence probe failed; assuming up",
@@ -189,6 +197,7 @@
   "event.watcher_benefit_never_appeared": "watcher: benefit never appeared in inventory (claimed or ghost); skipping",
   "event.watcher_integrity_blocked_needs_auth": "watcher: integrity blocked, marking account needs_auth",
   "event.watcher_no_whitelisted_games": "watcher: no whitelisted games match active campaigns, sleeping",
+
   "mining.twitch": "TWITCH",
   "mining.no_twitch": "no twitch accounts",
   "mining.kick": "KICK",
@@ -221,6 +230,7 @@
   "mining.last_poll": "last poll",
   "mining.state": "state",
   "mining.next": "next",
+
   "tele.watch_time": "Watch time",
   "tele.hm": "h:m",
   "tele.lifetime": "lifetime",
@@ -235,6 +245,7 @@
   "tele.drops": "drops",
   "tele.whitelist_total": "whitelist total",
   "tele.next_claim": "Next claim",
+
   "drops.title": "Drops · GrubDrops",
   "drops.twitch_inventory": "Twitch Inventory",
   "drops.kick_inventory": "Kick Inventory",
@@ -243,6 +254,7 @@
   "drops.past": "Past",
   "drops.current": "Current",
   "drops.upcoming": "Upcoming",
+
   "drops_table.no_games_tag": "no games",
   "drops_table.no_games_title": "No games whitelisted yet.",
   "drops_table.no_games_desc": "drops discovery only crawls games you opt into, so nothing shows up until you add one. Add a game to the global priority list, or per account, and discovery will start populating this page.",
@@ -273,6 +285,7 @@
   "drops_table.global": "Global",
   "drops_table.whitelist_add": "whitelist +",
   "drops_table.no_accounts": "no accounts",
+
   "campaign_items.item": "item",
   "campaign_items.collected": "collected",
   "campaign_items.type": "type",
@@ -281,6 +294,7 @@
   "campaign_items.m_watch": "m watch",
   "campaign_items.action_required": "action required",
   "campaign_items.no_items": "No items recorded for this campaign yet.",
+
   "history.title": "History · GrubDrops",
   "history.cooking": "// cooking",
   "history.heading": "History",
@@ -292,12 +306,14 @@
   "history.campaign": "campaign",
   "history.title_key": "title",
   "history.source": "source",
+
   "login.title": "Login · GrubDrops",
   "login.sso": "Continue with SSO",
   "login.sso_disabled_title": "SSO not configured",
   "login.or": "or",
   "login.password": "Password",
   "login.log_in": "Log in",
+
   "setup.title": "Setup · GrubDrops",
   "setup.first_run": "// first-run setup",
   "setup.create_admin": "Create admin password",
@@ -306,6 +322,7 @@
   "setup.confirm": "Confirm",
   "setup.min_chars": "min 8 chars",
   "setup.create_btn": "Create admin",
+
   "accounts.title": "Accounts · GrubDrops",
   "accounts.settings_accounts": "// settings / accounts",
   "accounts.heading": "Accounts",
@@ -329,6 +346,7 @@
   "accounts.disabled": "disabled",
   "accounts.enable": "enable",
   "accounts.disable": "disable",
+
   "account.title": "Account · GrubDrops",
   "account.edit": "// accounts / edit",
   "account.heading": "Account",
@@ -365,6 +383,7 @@
   "account.use_global_list": "use global list",
   "account.use_global_desc": "clears the account override — watcher reads Settings → Global priority",
   "account.use_global_btn": "Use global",
+
   "new_account.title": "New account · GrubDrops",
   "new_account.heading": "// accounts / new",
   "new_account.h1": "New account",
@@ -378,11 +397,13 @@
   "new_account.display_name_placeholder": "e.g. TTik3r",
   "new_account.back": "back",
   "new_account.create": "Create",
+
   "settings.title": "Settings · GrubDrops",
   "settings.config": "// config",
   "settings.heading": "Settings",
   "settings.language": "Language",
   "settings.add_account": "+ Add account",
+
   "priority.global_list": "Global priority list",
   "priority.selected_drag": "Selected · drag to reorder",
   "priority.remove": "remove",
@@ -400,6 +421,7 @@
   "priority.ordered": "Ordered — top whitelist first",
   "priority.ending_soonest": "Ending soonest — claim expiring first",
   "priority.save": "Save",
+
   "notify.heading": "Notifications",
   "notify.discord": "Discord",
   "notify.webhook": "discord webhook",
@@ -415,6 +437,7 @@
   "notify.progress_step_desc": "when \"progress\" is on, notify at 0% (start), every N%, 100% · 50 = start/50/100 · 0 = off · applies on reload",
   "notify.send_test": "Send test",
   "notify.save": "Save",
+
   "security.sso": "Single sign-on (SSO)",
   "security.enabled": "● enabled",
   "security.disabled": "○ disabled",
@@ -434,6 +457,7 @@
   "security.new_password": "new password",
   "security.confirm_password": "confirm new password",
   "security.change_password": "Change password",
+
   "runtime.heading": "Runtime",
   "runtime.reload_meta": "Reload required to update tick/discovery",
   "runtime.tick_interval": "tick interval",
@@ -445,6 +469,7 @@
   "runtime.disc_desc_bold": "looks for new drops",
   "runtime.disc_desc_suffix": "— re-scans the campaign catalog",
   "runtime.save": "Save",
+
   "logging.heading": "Logging",
   "logging.meta": "verbosity + retention",
   "logging.level": "log level",
@@ -457,7 +482,9 @@
   "logging.retention": "log retention",
   "logging.retention_desc": "how long log history is kept",
   "logging.save": "Save",
+
   "experimental.heading": "Experimental",
+
   "proxy.heading": "Proxy Settings",
   "proxy.meta": "Network proxy",
   "proxy.enabled": "Enable Proxy",
@@ -485,6 +512,7 @@
   "experimental.browser_verified": "Chrome sidecar (verified)",
   "experimental.ws_only": "WebSocket only (experimental)",
   "experimental.save": "Save",
+
   "health.heading": "Heartbeat Health Checker",
   "health.transport": "transport health",
   "health.status": "Status",
@@ -496,6 +524,7 @@
   "health.none_running": "none running",
   "health.commit": "commit",
   "health.version": "version",
+
   "canary.twitch": "twitch",
   "canary.not_configured": "not configured",
   "canary.no_result": "no result yet",
@@ -511,6 +540,7 @@
   "canary.interval": "interval",
   "canary.interval_desc": "how often the canary runs (0 = disabled)",
   "canary.save": "Save",
+
   "login_kick.title": "Kick login · GrubDrops",
   "login_kick.authorize": "// kick · authorize",
   "login_kick.authorize_h1": "Authorize",
@@ -533,6 +563,7 @@
   "login_kick.cancel": "cancel",
   "login_kick.authorize_btn": "Authorize",
   "login_kick.error.persist": "failed to persist session",
+
   "login_twitch.title": "Twitch login · GrubDrops",
   "login_twitch.device_code": "// twitch · device-code",
   "login_twitch.authorize_h1": "Authorize",
@@ -541,6 +572,7 @@
   "login_twitch.waiting": "waiting for authorization…",
   "login_twitch.cancel": "cancel",
   "login_twitch.polling": "polling 3s",
+
   "login_twitch_paste.title": "Twitch login · GrubDrops",
   "login_twitch_paste.authorize": "// twitch · authorize",
   "login_twitch_paste.authorize_h1": "Authorize",
@@ -569,12 +601,14 @@
   "login_twitch_paste.raw_paste_desc": "(optional — name=value lines, overrides empty fields above)",
   "login_twitch_paste.cancel": "cancel",
   "login_twitch_paste.authorize_btn": "Authorize",
+
   "twitch_status.waiting": "still waiting…",
   "twitch_status.authorized": "authorized — redirecting",
   "twitch_status.expired_prefix": "code expired —",
   "twitch_status.return_accounts": "return to accounts",
   "twitch_status.re_add": "and re-add",
   "twitch_status.error": "error — check logs",
+
   "flash.settings_saved": "settings saved",
   "flash.settings_saved_reload": "settings saved — reload watchers (or restart) to apply the new cadence",
   "flash.notifications_saved": "notifications saved",
@@ -610,10 +644,12 @@
   "flash.kick_cookies_persisted": "Kick cookies persisted — watcher will verify shortly",
   "flash.kick_session_verified": "Kick session verified ✓",
   "flash.twitch_cookie_imported": "Twitch cookie imported successfully ✓",
+
   "notify.no_notifier": "no notifier configured",
   "notify.no_webhook": "no webhook configured — set a global or per-account webhook and Save first",
   "notify.test_failed": "test failed",
   "notify.test_sent": "test sent ✓ — check Discord",
+
   "login_twitch_cookie.title": "Migrate from TwitchDropsMiner · GrubDrops",
   "login_twitch_cookie.authorize": "// twitch · migrate",
   "login_twitch_cookie.authorize_h1": "Import cookies for",
@@ -625,6 +661,7 @@
   "login_twitch_cookie.required": "required",
   "login_twitch_cookie.cancel": "cancel",
   "login_twitch_cookie.import_btn": "Import",
+
   "login_twitch_choose.title": "Twitch login · GrubDrops",
   "login_twitch_choose.authorize": "// twitch · authorize",
   "login_twitch_choose.authorize_h1": "Authorize",
@@ -641,17 +678,20 @@
   "login_twitch_choose.import_cookie": "Import cookies.jar",
   "login_twitch_choose.cookie_hint": "Upload the cookies.jar from your TwitchDropsMiner data folder.",
   "login_twitch_choose.cancel": "cancel",
+
   "login_twitch_cookie.error.parse_form": "Failed to parse upload form",
   "login_twitch_cookie.error.no_file": "No file uploaded",
   "login_twitch_cookie.error.read_file": "Failed to read uploaded file",
   "login_twitch_cookie.error.parse_pickle": "Failed to parse the file as a pickle or cookies.txt — check the format",
   "login_twitch_cookie.error.no_auth_token": "No auth-token found in cookie file — the file must contain a Twitch auth-token",
   "login_twitch_cookie.error.persist": "Failed to save session — check server logs",
+
   "oidc.session_expired": "login session expired, try again",
   "oidc.denied_by_provider": "sign-in denied by provider",
   "oidc.auth_failed": "authorization failed",
   "oidc.signin_failed": "sign-in failed",
   "oidc.account_not_allowed": "account not allowed",
+
   "time.days": "days",
   "time.days_short": "d",
   "time.hours": "h",
@@ -660,6 +700,7 @@
   "time.seconds": "s",
   "time.ago": "ago",
   "time.ended": "ended",
+
   "error.missing_param": "missing required parameter",
   "error.bad_image_path": "invalid image path",
   "error.kick_unavailable": "Kick backend unavailable",
@@ -679,6 +720,7 @@
   "error.csrf_reload": "reload the page to get a fresh token and resubmit",
   "error.csrf_https_no_secure": "request looks like HTTPS but GRUB_SECURE_COOKIES=0 — set GRUB_SECURE_COOKIES=1 when serving over HTTPS / behind a TLS-terminating proxy",
   "error.csrf_secure_http": "GRUB_SECURE_COOKIES=1 but this request arrived over plain HTTP — the session/CSRF cookie is dropped by the browser; either serve over HTTPS (set X-Forwarded-Proto on your proxy) or set GRUB_SECURE_COOKIES=0",
+
   "state.watching": "watching",
   "state.claiming": "claiming",
   "state.scanning_channels": "scanning channels",
@@ -688,11 +730,12 @@
   "state.needs_login": "needs login",
   "state.no_games_yet": "no games yet",
   "state.stopped": "stopped",
+
   "account.channels_title": "Channel Whitelist",
   "account.channels_desc": "Mine drops on these channels even when the game is not in your game whitelist. Leave empty to watch any channel.",
   "account.channels_empty": "No channels added yet — all eligible channels will be watched.",
-  "account.channel_remove": "Remove channel",
   "account.channel_add": "Add channel",
   "account.channel_add_desc": "Add a channel by exact name (e.g. xqc)",
-  "account.channel_placeholder": "channel name"
+  "account.channel_placeholder": "channel name",
+  "account.channel_remove": "Remove channel"
 }

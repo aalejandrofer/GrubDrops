@@ -1,6 +1,7 @@
 {
   "lang.code": "zh-CN",
   "lang.name": "中文",
+
   "nav.console": "控制台",
   "nav.drops": "掉宝",
   "nav.history": "历史",
@@ -9,6 +10,7 @@
   "nav.toggle_theme": "切换亮色 / 暗色",
   "nav.toggle_theme_aria": "切换亮色或暗色主题",
   "nav.github_aria": "GitHub 仓库",
+
   "settings_subnav.general": "通用",
   "settings_subnav.accounts": "账号",
   "settings_subnav.priority": "掉宝优先级",
@@ -17,6 +19,7 @@
   "settings_subnav.health": "健康检查",
   "settings_subnav.experimental": "实验性",
   "settings_subnav.proxy": "代理",
+
   "dashboard.title": "控制台 · GrubDrops",
   "dashboard.welcome": "// 欢迎",
   "dashboard.heading": "控制台",
@@ -47,6 +50,7 @@
   "dashboard.action_device_code": "切换到设备代码登录 →",
   "dashboard.action_connect": "关联账号 →",
   "dashboard.action_add_games": "添加游戏 →",
+
   "dashboard_modal.account": "账号",
   "dashboard_modal.close": "关闭",
   "dashboard_modal.close_aria": "关闭",
@@ -69,6 +73,7 @@
   "dashboard_modal.no_events": "还没有与此账号关联的事件。",
   "dashboard_modal.edit_account": "编辑账号",
   "dashboard_modal.re_auth": "重新认证",
+
   "campaign_modal.connected": "已关联",
   "campaign_modal.not_connected": "未关联",
   "campaign_modal.linked_title": "外部账号已关联 — 可以发放掉宝",
@@ -89,7 +94,9 @@
   "campaign_modal.no_eligible_accounts": "没有账号将此活动的游戏加入白名单。",
   "campaign_modal.also_seen_by": "也被以下账号发现",
   "campaign_modal.raw_json": "原始活动 JSON",
+
   "events.no_events": "暂无事件。",
+
   "event.kind.auth": "认证",
   "event.kind.claim": "领取",
   "event.kind.discovery": "发现",
@@ -100,6 +107,7 @@
   "event.kind.progress": "进度",
   "event.kind.state": "状态",
   "event.kind.watch": "观看",
+
   "event.kick_ws_start_failed_fallback": "Kick 自动：WebSocket 启动失败，回退到 Chrome 边车",
   "event.kick_sidecar_absent_autocreate": "Kick 边车不存在，正在自动创建",
   "event.kick_sidecar_probe_failed": "Kick 边车存在性探测失败；假定已启动",
@@ -189,6 +197,7 @@
   "event.watcher_benefit_never_appeared": "观看器：奖励从未出现在库存中（已领取或为幽灵）；正在跳过",
   "event.watcher_integrity_blocked_needs_auth": "观看器：完整性被拦截，正在将账号标记为需要认证",
   "event.watcher_no_whitelisted_games": "观看器：没有白名单游戏匹配当前活动，正在休眠",
+
   "mining.twitch": "TWITCH",
   "mining.no_twitch": "没有 Twitch 账号",
   "mining.kick": "KICK",
@@ -221,6 +230,7 @@
   "mining.last_poll": "上次轮询",
   "mining.state": "状态",
   "mining.next": "下一个",
+
   "tele.watch_time": "观看时间",
   "tele.hm": "时:分",
   "tele.lifetime": "累计",
@@ -235,6 +245,7 @@
   "tele.drops": "个",
   "tele.whitelist_total": "白名单总数",
   "tele.next_claim": "下次领取",
+
   "drops.title": "掉宝 · GrubDrops",
   "drops.twitch_inventory": "Twitch 库存",
   "drops.kick_inventory": "Kick 库存",
@@ -243,6 +254,7 @@
   "drops.past": "过去",
   "drops.current": "当前",
   "drops.upcoming": "即将到来",
+
   "drops_table.no_games_tag": "没有游戏",
   "drops_table.no_games_title": "还没有白名单游戏。",
   "drops_table.no_games_desc": "掉宝发现只会爬取你主动添加的游戏，所以在你添加之前什么都不会显示。添加游戏到全局优先级列表或单个账号，发现就会开始填充此页面。",
@@ -273,6 +285,7 @@
   "drops_table.global": "全局",
   "drops_table.whitelist_add": "加入白名单 +",
   "drops_table.no_accounts": "没有账号",
+
   "campaign_items.item": "物品",
   "campaign_items.collected": "已收集",
   "campaign_items.type": "类型",
@@ -281,6 +294,7 @@
   "campaign_items.m_watch": "分钟观看",
   "campaign_items.action_required": "需要操作",
   "campaign_items.no_items": "此活动还没有记录的物品。",
+
   "history.title": "历史 · GrubDrops",
   "history.cooking": "// 记录",
   "history.heading": "历史",
@@ -292,12 +306,14 @@
   "history.campaign": "活动",
   "history.title_key": "标题",
   "history.source": "来源",
+
   "login.title": "登录 · GrubDrops",
   "login.sso": "使用 SSO 登录",
   "login.sso_disabled_title": "SSO 未配置",
   "login.or": "或",
   "login.password": "密码",
   "login.log_in": "登录",
+
   "setup.title": "设置 · GrubDrops",
   "setup.first_run": "// 首次运行设置",
   "setup.create_admin": "创建管理员密码",
@@ -306,6 +322,7 @@
   "setup.confirm": "确认",
   "setup.min_chars": "最少 8 个字符",
   "setup.create_btn": "创建管理员",
+
   "accounts.title": "账号 · GrubDrops",
   "accounts.settings_accounts": "// 设置 / 账号",
   "accounts.heading": "账号",
@@ -329,6 +346,7 @@
   "accounts.disabled": "已禁用",
   "accounts.enable": "启用",
   "accounts.disable": "禁用",
+
   "account.title": "账号 · GrubDrops",
   "account.edit": "// 账号 / 编辑",
   "account.heading": "账号",
@@ -365,6 +383,7 @@
   "account.use_global_list": "使用全局列表",
   "account.use_global_desc": "清除账号覆盖 — 监视器读取 设置 → 全局优先级",
   "account.use_global_btn": "使用全局",
+
   "new_account.title": "新账号 · GrubDrops",
   "new_account.heading": "// 账号 / 新建",
   "new_account.h1": "新账号",
@@ -378,11 +397,13 @@
   "new_account.display_name_placeholder": "例如 TTik3r",
   "new_account.back": "返回",
   "new_account.create": "创建",
+
   "settings.title": "设置 · GrubDrops",
   "settings.config": "// 配置",
   "settings.heading": "设置",
   "settings.language": "语言",
   "settings.add_account": "+ 添加账号",
+
   "priority.global_list": "全局优先级列表",
   "priority.selected_drag": "已选择 · 拖拽重新排序",
   "priority.remove": "移除",
@@ -400,6 +421,7 @@
   "priority.ordered": "有序 — 白名单顶部优先",
   "priority.ending_soonest": "即将结束 — 优先领取即将过期的",
   "priority.save": "保存",
+
   "notify.heading": "通知",
   "notify.discord": "Discord",
   "notify.webhook": "Discord Webhook",
@@ -415,6 +437,7 @@
   "notify.progress_step_desc": "当\"进度\"开启时，在 0%（开始）、每 N%、100% 时通知 · 50 = 开始/50/100 · 0 = 关闭 · 重新加载后生效",
   "notify.send_test": "发送测试",
   "notify.save": "保存",
+
   "security.sso": "单点登录 (SSO)",
   "security.enabled": "● 已启用",
   "security.disabled": "○ 已禁用",
@@ -434,6 +457,7 @@
   "security.new_password": "新密码",
   "security.confirm_password": "确认新密码",
   "security.change_password": "修改密码",
+
   "runtime.heading": "运行时",
   "runtime.reload_meta": "重新加载以应用 tick/发现设置",
   "runtime.tick_interval": "tick 间隔",
@@ -445,6 +469,7 @@
   "runtime.disc_desc_bold": "寻找新掉宝",
   "runtime.disc_desc_suffix": "一次 — 重新扫描活动目录",
   "runtime.save": "保存",
+
   "logging.heading": "日志",
   "logging.meta": "详细程度 + 保留",
   "logging.level": "日志级别",
@@ -457,7 +482,9 @@
   "logging.retention": "日志保留",
   "logging.retention_desc": "日志历史保留时长",
   "logging.save": "保存",
+
   "experimental.heading": "实验性",
+
   "proxy.heading": "代理设置",
   "proxy.meta": "网络代理",
   "proxy.enabled": "启用代理",
@@ -485,6 +512,7 @@
   "experimental.browser_verified": "Chrome 边车（已验证）",
   "experimental.ws_only": "仅 WebSocket（实验性）",
   "experimental.save": "保存",
+
   "health.heading": "心跳健康检查器",
   "health.transport": "传输健康",
   "health.status": "状态",
@@ -496,6 +524,7 @@
   "health.none_running": "无运行中",
   "health.commit": "提交",
   "health.version": "版本",
+
   "canary.twitch": "Twitch",
   "canary.not_configured": "未配置",
   "canary.no_result": "暂无结果",
@@ -511,6 +540,7 @@
   "canary.interval": "间隔",
   "canary.interval_desc": "金丝雀运行频率（0 = 禁用）",
   "canary.save": "保存",
+
   "login_kick.title": "Kick 登录 · GrubDrops",
   "login_kick.authorize": "// kick · 授权",
   "login_kick.authorize_h1": "授权",
@@ -533,6 +563,7 @@
   "login_kick.cancel": "取消",
   "login_kick.authorize_btn": "授权",
   "login_kick.error.persist": "保存会话失败",
+
   "login_twitch.title": "Twitch 登录 · GrubDrops",
   "login_twitch.device_code": "// twitch · 设备代码",
   "login_twitch.authorize_h1": "授权",
@@ -541,6 +572,7 @@
   "login_twitch.waiting": "等待授权中…",
   "login_twitch.cancel": "取消",
   "login_twitch.polling": "轮询中 3s",
+
   "login_twitch_paste.title": "Twitch 登录 · GrubDrops",
   "login_twitch_paste.authorize": "// twitch · 授权",
   "login_twitch_paste.authorize_h1": "授权",
@@ -569,12 +601,14 @@
   "login_twitch_paste.raw_paste_desc": "（可选 — name=value 行，覆盖上面的空字段）",
   "login_twitch_paste.cancel": "取消",
   "login_twitch_paste.authorize_btn": "授权",
+
   "twitch_status.waiting": "仍在等待…",
   "twitch_status.authorized": "已授权 — 跳转中",
   "twitch_status.expired_prefix": "代码已过期 —",
   "twitch_status.return_accounts": "返回账号",
   "twitch_status.re_add": "并重新添加",
   "twitch_status.error": "错误 — 查看日志",
+
   "flash.settings_saved": "设置已保存",
   "flash.settings_saved_reload": "设置已保存 — 重新加载监视器（或重启）以应用新频率",
   "flash.notifications_saved": "通知已保存",
@@ -610,10 +644,12 @@
   "flash.kick_cookies_persisted": "Kick Cookies 已保存 — 监视器将很快验证",
   "flash.kick_session_verified": "Kick 会话已验证 ✓",
   "flash.twitch_cookie_imported": "Twitch Cookie 导入成功 ✓",
+
   "notify.no_notifier": "未配置通知器",
   "notify.no_webhook": "未配置 Webhook — 请先设置全局或每个账号的 Webhook 并保存",
   "notify.test_failed": "测试失败",
   "notify.test_sent": "测试已发送 ✓ — 请检查 Discord",
+
   "login_twitch_cookie.title": "从 TwitchDropsMiner 迁移 · GrubDrops",
   "login_twitch_cookie.authorize": "// twitch · 迁移",
   "login_twitch_cookie.authorize_h1": "导入 Cookie：",
@@ -625,6 +661,7 @@
   "login_twitch_cookie.required": "必填",
   "login_twitch_cookie.cancel": "取消",
   "login_twitch_cookie.import_btn": "导入",
+
   "login_twitch_choose.title": "Twitch 登录 · GrubDrops",
   "login_twitch_choose.authorize": "// twitch · 授权",
   "login_twitch_choose.authorize_h1": "授权",
@@ -641,17 +678,20 @@
   "login_twitch_choose.import_cookie": "导入 cookies.jar",
   "login_twitch_choose.cookie_hint": "上传 TwitchDropsMiner 数据文件夹中的 cookies.jar。",
   "login_twitch_choose.cancel": "取消",
+
   "login_twitch_cookie.error.parse_form": "解析上传表单失败",
   "login_twitch_cookie.error.no_file": "未上传文件",
   "login_twitch_cookie.error.read_file": "读取上传文件失败",
   "login_twitch_cookie.error.parse_pickle": "无法将文件解析为 pickle 或 cookies.txt — 请检查格式",
   "login_twitch_cookie.error.no_auth_token": "Cookie 文件中未找到 auth-token — 文件必须包含 Twitch auth-token",
   "login_twitch_cookie.error.persist": "保存会话失败 — 请检查服务器日志",
+
   "oidc.session_expired": "登录会话已过期，请重试",
   "oidc.denied_by_provider": "登录被提供商拒绝",
   "oidc.auth_failed": "授权失败",
   "oidc.signin_failed": "登录失败",
   "oidc.account_not_allowed": "账号不允许",
+
   "time.days": "天",
   "time.days_short": "天",
   "time.hours": "时",
@@ -660,6 +700,7 @@
   "time.seconds": "秒",
   "time.ago": "前",
   "time.ended": "已结束",
+
   "error.missing_param": "缺少必需参数",
   "error.bad_image_path": "无效的图片路径",
   "error.kick_unavailable": "Kick 后端不可用",
@@ -679,6 +720,7 @@
   "error.csrf_reload": "请刷新页面获取新令牌后重新提交",
   "error.csrf_https_no_secure": "请求看起来是 HTTPS 但 GRUB_SECURE_COOKIES=0 — 在 HTTPS/反向代理后请设置 GRUB_SECURE_COOKIES=1",
   "error.csrf_secure_http": "GRUB_SECURE_COOKIES=1 但此请求通过明文 HTTP 到达 — 会话/CSRF cookie 会被浏览器丢弃；请通过 HTTPS 提供服务（在代理上设置 X-Forwarded-Proto）或设置 GRUB_SECURE_COOKIES=0",
+
   "state.watching": "观看中",
   "state.claiming": "领取中",
   "state.scanning_channels": "扫描频道中",
@@ -688,11 +730,12 @@
   "state.needs_login": "需要登录",
   "state.no_games_yet": "还没有游戏",
   "state.stopped": "已停止",
+
   "account.channels_title": "频道白名单",
   "account.channels_desc": "即使游戏不在游戏白名单中，也可在这些频道上挖取掉落物。留空表示观看所有合适的频道。",
   "account.channels_empty": "尚未添加频道 — 将观看所有合适的频道。",
-  "account.channel_remove": "删除频道",
   "account.channel_add": "添加频道",
   "account.channel_add_desc": "按确切名称添加频道（例如 xqc）",
-  "account.channel_placeholder": "频道名称"
+  "account.channel_placeholder": "频道名称",
+  "account.channel_remove": "删除频道"
 }
