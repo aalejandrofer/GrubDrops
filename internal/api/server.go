@@ -193,7 +193,7 @@ func NewRouter(d Deps) http.Handler {
 			lang = "en"
 		}
 		// Validate language is supported
-		if lang != "en" && lang != "zh-CN" {
+		if lang != "en" && lang != "zh-CN" && lang != "es" {
 			lang = "en"
 		}
 		http.SetCookie(w, &http.Cookie{

@@ -29,7 +29,7 @@ var (
 )
 
 // Supported lists the BCP-47 tags the UI exposes.
-var Supported = []string{"en", "zh-CN"}
+var Supported = []string{"en", "zh-CN", "es"}
 
 const defaultLang = "en"
 

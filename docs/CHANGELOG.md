@@ -4,6 +4,13 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Added
+
+- **Spanish UI translation.** Full `es` locale (688 keys, parity with English),
+  selectable in the nav and Settings ▸ General language switcher and
+  auto-detected from `Accept-Language`. Added a locale-parity unit test that
+  fails if any supported locale drifts from the English key set.
+
 ### Fixed
 
 - **Hardened the Twitch reward-claim eval script against injection** (CodeQL
