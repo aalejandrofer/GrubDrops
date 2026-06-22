@@ -13,6 +13,26 @@ gofmt -w .            # CI has a gofmt gate that fails fast; always format Go
 docker build -f deploy/Dockerfile.miner .   # build the miner image
 ```
 
+### SPA (frontend migration in progress)
+
+The Svelte+Vite SPA lives in `web/` and compiles into the Go binary via
+`go:embed` (`internal/web/spa/dist`). Node is build-time only.
+
+```bash
+cd web && npm install        # once
+cd web && npm run build      # build SPA into internal/web/spa/dist (before `go build`)
+cd web && npm test           # Vitest component tests
+cd web && npm run dev        # hot-reload dev server on :5173, proxies /api + /static to :8080
+```
+
+Local dev loop: run the Go binary on :8080 (see "Run locally"), then `npm run dev`
+in `web/` and open http://localhost:5173. To serve the SPA dashboard from the Go
+binary itself, set `GRUB_SPA_DASHBOARD=1`.
+
+**Migration status:** a strangler port from html/template+HTMX to the SPA is in
+progress (spec: `docs/superpowers/specs/2026-06-22-spa-migration-foundation-design.md`).
+The "stay Go/HTMX, no JS port" rule is intentionally suspended for this work.
+
 - The CI gofmt gate fails the build if any Go file is unformatted. Run `gofmt -w`
   before every push.
 - Always `go build ./...` **and** `go test ./...` after edits, including changes
