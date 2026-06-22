@@ -52,3 +52,13 @@ docs/superpowers/
 
 # Claude Code worktrees (nested git repos used by agents — never commit)
 .claude/worktrees/
+
+# SPA build
+web/node_modules/
+# Allow the committed placeholder files inside spa/dist (dist/ is otherwise ignored)
+!internal/web/spa/dist/
+!internal/web/spa/dist/index.html
+!internal/web/spa/dist/.gitkeep
+internal/web/spa/dist/assets/
+internal/web/spa/dist/*.js
+internal/web/spa/dist/*.css
