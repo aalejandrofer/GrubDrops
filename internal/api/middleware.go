@@ -27,11 +27,19 @@ const (
 // have no XFF and connect from loopback themselves) are allowed
 // through without a session. Intended for `curl localhost:8080` from
 // the homelab host for debugging — leave disabled in normal operation.
+//
+// GRUB_AUTHBYPASS=true is a BIGGER hammer: it disables auth for EVERY
+// request (no login at all). Intended only for staging/dev where the app
+// is otherwise unreachable behind a proxy. NEVER set it in production.
 func RequireAdmin(sm *scs.SessionManager) func(http.Handler) http.Handler {
 	bypassLocal := os.Getenv("GRUB_AUTH_BYPASS_LOCAL") == "1"
+	bypassAll := envTrue("GRUB_AUTHBYPASS")
+	if bypassAll {
+		slog.Warn("GRUB_AUTHBYPASS is set — ALL authentication is DISABLED; every request is treated as admin. Never use this in production.", "kind", "auth")
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if bypassLocal && isLoopbackRequest(r) {
+			if bypassAll || (bypassLocal && isLoopbackRequest(r)) {
 				ctx := context.WithValue(r.Context(), ctxAdminAuthed, true)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
@@ -149,6 +157,16 @@ func firstField(s string) string {
 		return s[:i]
 	}
 	return s
+}
+
+// envTrue reports whether an env var is set to a truthy value
+// (1/true/yes/on, case-insensitive).
+func envTrue(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(name))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
 }
 
 func csrfToken(r *http.Request) string {
