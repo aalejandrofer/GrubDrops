@@ -4,8 +4,15 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-06-22
+
 ### Added
 
+- **Priority is now a top-level nav item** (`/priority`), moved out of Settings
+  and placed between Drops and History.
+- **Toast notifications** — actions (whitelist, force-watch, link override,
+  settings saves) now confirm with a bottom-right toast instead of an
+  easy-to-miss inline banner.
 - **Channel-points force-watch (per account).** When an account has no drops
   to mine, it can keep watching configured channels 24/7 to farm channel
   points. Managed on the account page (toggle + channel list); lowest
@@ -26,6 +33,12 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- **Auto-clean stale drop channels.** Channels whitelisted for a category-less
+  drop are removed automatically once that campaign ends (a sweep on the
+  discovery cadence), so the list doesn't accumulate dead channels.
+- **Dashboard mining-row polish.** The "scanning channels" status no longer
+  overlaps the state pill, the force-watch row shows the channel in green, and
+  placeholder dashes were removed for a cleaner read.
 - **Hardened the Twitch reward-claim eval script against injection** (CodeQL
   critical). Game names and drop titles were concatenated into the chromedp
   eval as JS literals, where a crafted value could break out of the script.
