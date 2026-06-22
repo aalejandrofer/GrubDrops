@@ -505,7 +505,7 @@
     gap: 12px;
     align-items: center;
     padding: 9px 14px;
-    border-top: 1px dashed var(--line);
+    /* border-top lives on .account-row-d; don't double it on the summary. */
     text-decoration: none;
     color: inherit;
     transition: background 0.12s;

@@ -62,7 +62,6 @@
     <span class="state-pill pill-{{.State}}">
       {{if eq .State "watching"}}{{t "mining.watching"}}
       {{else if eq .State "claiming"}}{{t "mining.claiming"}}
-      {{else if eq .State "force_watch"}}{{t "mining.watching"}}
       {{else if eq .State "needs_auth"}}{{t "mining.needs_login"}}
       {{else if eq .State "sleeping"}}{{t "mining.sleeping"}}
       {{else if eq .State "awaiting_connect"}}{{t "mining.awaiting_connect"}}
