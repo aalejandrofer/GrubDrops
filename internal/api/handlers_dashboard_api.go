@@ -1,11 +1,25 @@
 package api
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 
 	"github.com/aalejandrofer/grubdrops/internal/web"
 )
+
+// apiPage serves the dashboard snapshot as JSON for the SPA. It reuses
+// the same collectPage projection the html/template dashboard renders,
+// so the SPA and the legacy page show identical data. JSON keys are the
+// exported Go field names of dashPage (PascalCase).
+func (d dashboardDeps) apiPage(w http.ResponseWriter, r *http.Request) {
+	page := d.collectPage(r)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := json.NewEncoder(w).Encode(page); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
 
 // spaFileServer serves the embedded SPA build output (JS/CSS under
 // /assets, plus index.html). Mounted at /assets/* in the router. CSS/JS

@@ -234,6 +234,7 @@ func NewRouter(d Deps) http.Handler {
 	} else {
 		authed.Get("/", dash.page)
 	}
+	authed.Get("/api/dashboard", dash.apiPage)
 	authed.Get("/dashboard/cards", dash.cards)
 	authed.Get("/dashboard/telemetry", dash.telemetry)
 	authed.Get("/dashboard/events", dash.events)
