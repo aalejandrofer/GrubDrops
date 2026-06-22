@@ -896,6 +896,26 @@ func startDiscovery(
 	scraper := discovery.New(persister, discovery.NewQueriesWhitelist(q), providers...)
 	logger.Info("discovery scraper started", "interval", interval, "providers", len(providers))
 	go scraper.Run(ctx, interval)
+
+	// Auto-clean stale drop channels (account_channels whose null-game
+	// campaign has ended). Runs on the discovery cadence, just after each
+	// scrape has had a chance to refresh the campaigns table.
+	go func() {
+		t := time.NewTicker(interval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if n, err := store.SweepStaleDropChannels(ctx, q, time.Now().Unix()); err != nil {
+					slog.Warn("drop-channel sweep failed", "err", err)
+				} else if n > 0 {
+					slog.Info("drop-channel sweep removed stale channels", "kind", "discovery", "removed", n)
+				}
+			}
+		}
+	}()
 }
 
 // kickSidecarLister returns a closure the Status panel calls to list the

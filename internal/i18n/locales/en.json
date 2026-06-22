@@ -757,5 +757,8 @@
   "account.force_disable": "Disable",
   "account.force_empty": "No channels yet — add one below.",
   "account.force_add": "Add channel",
-  "account.force_add_desc": "Add a channel to watch for points (e.g. xqc)"
+  "account.force_add_desc": "Add a channel to watch for points (e.g. xqc)",
+  "account.force_reorder": "Channels · drag to reorder",
+  "account.force_priority_hint": "Top of the list is watched first when idle.",
+  "account.force_save": "Save order"
 }

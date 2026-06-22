@@ -70,6 +70,38 @@ func (q *Queries) ListAccountChannels(ctx context.Context, accountID string) ([]
 	return items, nil
 }
 
+const listAllAccountChannels = `-- name: ListAllAccountChannels :many
+SELECT account_id, channel FROM account_channels
+`
+
+type ListAllAccountChannelsRow struct {
+	AccountID string `json:"account_id"`
+	Channel   string `json:"channel"`
+}
+
+func (q *Queries) ListAllAccountChannels(ctx context.Context) ([]ListAllAccountChannelsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAllAccountChannels)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAllAccountChannelsRow
+	for rows.Next() {
+		var i ListAllAccountChannelsRow
+		if err := rows.Scan(&i.AccountID, &i.Channel); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeAccountChannel = `-- name: RemoveAccountChannel :exec
 DELETE FROM account_channels WHERE account_id = ? AND channel = ?
 `

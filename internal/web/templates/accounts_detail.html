@@ -116,33 +116,6 @@
   </section>
 
   <section class="settings-card">
-    <header class="section-h"><h3>{{t "account.channels_title"}}</h3></header>
-    <p class="hint" style="margin:0 0 14px;">{{t "account.channels_desc"}}</p>
-    {{if .Channels}}
-    <div class="chips">
-      {{range .Channels}}
-      <form method="post" action="/accounts/{{$.Page.Account.ID}}/channels/remove" style="display:inline" onsubmit="this.querySelector('button').disabled=true">
-        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-        <input type="hidden" name="channel" value="{{.}}">
-        <button class="chip" type="submit" title="{{t "account.channel_remove"}}">{{.}} ✕</button>
-      </form>
-      {{end}}
-    </div>
-    {{else}}
-    <p class="hint" style="font-size:12px;">{{t "account.channels_empty"}}</p>
-    {{end}}
-    <form method="post" action="/accounts/{{.Account.ID}}/channels/add" class="add-by-name">
-      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-      <div class="kvedit"><div class="row">
-        <span class="k">{{t "account.channel_add"}}</span>
-        <span class="d">{{t "account.channel_add_desc"}}</span>
-        <span class="v grow"><input type="text" name="channel" placeholder="{{t "account.channel_placeholder"}}" required></span>
-        <button class="btn-linear" type="submit">{{t "account.add"}} →</button>
-      </div></div>
-    </form>
-  </section>
-
-  <section class="settings-card">
     <header class="section-h"><h3>{{t "account.force_title"}}</h3></header>
     <p class="hint" style="margin:0 0 14px;">{{t "account.force_desc"}}</p>
     <p class="hint" style="margin:0 0 14px;color:var(--accent);">⚠ {{t "account.force_warning"}}</p>
@@ -155,19 +128,25 @@
         <button class="btn-linear" type="submit">{{if .ForceWatchEnabled}}{{t "account.force_disable"}}{{else}}{{t "account.force_enable"}}{{end}} →</button>
       </div></div>
     </form>
-    {{if .ForceChannels}}
-    <div class="chips" style="margin-top:14px;">
-      {{range .ForceChannels}}
-      <form method="post" action="/accounts/{{$.Page.Account.ID}}/force-channels/remove" style="display:inline" onsubmit="this.querySelector('button').disabled=true">
-        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-        <input type="hidden" name="channel" value="{{.}}">
-        <button class="chip" type="submit" title="{{t "account.channel_remove"}}">{{.}} ✕</button>
-      </form>
-      {{end}}
-    </div>
-    {{else}}
-    <p class="hint" style="font-size:12px;margin-top:14px;">{{t "account.force_empty"}}</p>
-    {{end}}
+    <form method="post" action="/accounts/{{.Account.ID}}/force-channels" id="force-form">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <div class="kicker" style="margin-top:14px;">{{t "account.force_reorder"}}</div>
+      <ul id="force-list" class="rank-list">
+        {{range .ForceChannels}}
+        <li draggable="true" data-channel="{{.}}">
+          <span>{{.}}</span>
+          <button type="button" class="rank-rm" onclick="fcRemove(this)">{{t "account.remove"}} ×</button>
+        </li>
+        {{end}}
+        {{if not .ForceChannels}}
+        <li class="rank-empty">{{t "account.force_empty"}}</li>
+        {{end}}
+      </ul>
+      <div class="row">
+        <span class="hint">{{t "account.force_priority_hint"}}</span>
+        <button class="btn-linear" type="submit">{{t "account.force_save"}} →</button>
+      </div>
+    </form>
     <form method="post" action="/accounts/{{.Account.ID}}/force-channels/add" class="add-by-name">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
       <div class="kvedit"><div class="row">
@@ -285,6 +264,73 @@
 
   sel.querySelectorAll('li[data-game-id]').forEach(bindDrag);
 
+  form.addEventListener('formdata', addInputs);
+  form.addEventListener('submit', addInputs);
+})();
+</script>
+
+<script>
+// Force-watch channel list: drag to reorder (top = watched first), remove
+// client-side, and persist the order on save (the reorder handler rewrites
+// the list from the submitted channel[] order).
+(function() {
+  const list = document.getElementById('force-list');
+  const form = document.getElementById('force-form');
+  if (!list || !form) return;
+
+  function addInputs() {
+    form.querySelectorAll('input[name="channel"]').forEach(n => n.remove());
+    list.querySelectorAll('li[data-channel]').forEach(li => {
+      const i = document.createElement('input');
+      i.type = 'hidden';
+      i.name = 'channel';
+      i.value = li.dataset.channel;
+      form.appendChild(i);
+    });
+  }
+  function clearCues() {
+    list.querySelectorAll('.drag-over-top, .drag-over-bot').forEach(n =>
+      n.classList.remove('drag-over-top', 'drag-over-bot'));
+  }
+  window.fcRemove = function(btn) {
+    const li = btn.closest('li');
+    if (li) li.remove();
+  };
+
+  let dragSrc = null;
+  function bind(li) {
+    if (li.dataset.dragBound === '1') return;
+    li.dataset.dragBound = '1';
+    li.addEventListener('dragstart', function(e) {
+      dragSrc = li;
+      try { e.dataTransfer.effectAllowed = 'move'; } catch (_) {}
+      li.classList.add('dragging');
+    });
+    li.addEventListener('dragend', function() {
+      li.classList.remove('dragging'); clearCues(); dragSrc = null;
+    });
+    li.addEventListener('dragover', function(e) {
+      if (!dragSrc || dragSrc === li) return;
+      e.preventDefault();
+      const rect = li.getBoundingClientRect();
+      const before = (e.clientY - rect.top) < rect.height / 2;
+      clearCues();
+      li.classList.add(before ? 'drag-over-top' : 'drag-over-bot');
+    });
+    li.addEventListener('dragleave', function() {
+      li.classList.remove('drag-over-top', 'drag-over-bot');
+    });
+    li.addEventListener('drop', function(e) {
+      if (!dragSrc || dragSrc === li) return;
+      e.preventDefault(); e.stopPropagation();
+      const rect = li.getBoundingClientRect();
+      const before = (e.clientY - rect.top) < rect.height / 2;
+      list.insertBefore(dragSrc, before ? li : li.nextSibling);
+      clearCues();
+    });
+  }
+  list.querySelectorAll('li[data-channel]').forEach(bind);
+  list.addEventListener('dragover', function(e) { if (dragSrc) e.preventDefault(); });
   form.addEventListener('formdata', addInputs);
   form.addEventListener('submit', addInputs);
 })();

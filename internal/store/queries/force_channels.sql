@@ -11,3 +11,6 @@ ON CONFLICT(account_id, channel) DO UPDATE SET rank = excluded.rank;
 
 -- name: RemoveForceChannel :exec
 DELETE FROM account_force_channels WHERE account_id = ? AND channel = ?;
+
+-- name: ClearForceChannels :exec
+DELETE FROM account_force_channels WHERE account_id = ?;

@@ -757,5 +757,8 @@
   "account.force_disable": "禁用",
   "account.force_empty": "还没有频道——在下方添加一个。",
   "account.force_add": "添加频道",
-  "account.force_add_desc": "添加一个用于挖积分的频道（例如 xqc）"
+  "account.force_add_desc": "添加一个用于挖积分的频道（例如 xqc）",
+  "account.force_reorder": "频道 · 拖动排序",
+  "account.force_priority_hint": "列表顶部在空闲时最先观看。",
+  "account.force_save": "保存顺序"
 }

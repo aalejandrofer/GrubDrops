@@ -32,6 +32,15 @@ func (q *Queries) AddForceChannel(ctx context.Context, arg AddForceChannelParams
 	return err
 }
 
+const clearForceChannels = `-- name: ClearForceChannels :exec
+DELETE FROM account_force_channels WHERE account_id = ?
+`
+
+func (q *Queries) ClearForceChannels(ctx context.Context, accountID string) error {
+	_, err := q.db.ExecContext(ctx, clearForceChannels, accountID)
+	return err
+}
+
 const listForceChannels = `-- name: ListForceChannels :many
 SELECT channel, rank
 FROM account_force_channels

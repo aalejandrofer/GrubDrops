@@ -14,3 +14,6 @@ DELETE FROM account_channels WHERE account_id = ? AND channel = ?;
 
 -- name: ClearAccountChannels :exec
 DELETE FROM account_channels WHERE account_id = ?;
+
+-- name: ListAllAccountChannels :many
+SELECT account_id, channel FROM account_channels;

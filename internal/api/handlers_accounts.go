@@ -637,6 +637,47 @@ func (d accountsDeps) removeForceChannel(w http.ResponseWriter, r *http.Request)
 	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
 
+// forceChannelsReorder handles POST /accounts/:id/force-channels — rewrites
+// the force-watch channel list from the ordered channel[] field. Position in
+// the slice becomes the rank (rank 0 = the channel watched first when idle).
+func (d accountsDeps) forceChannelsReorder(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := d.q.ClearForceChannels(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	now := time.Now().Unix()
+	rank := 0
+	seen := map[string]struct{}{}
+	for _, raw := range r.Form["channel"] {
+		ch := strings.ToLower(strings.TrimSpace(raw))
+		if ch == "" {
+			continue
+		}
+		if _, dup := seen[ch]; dup {
+			continue
+		}
+		seen[ch] = struct{}{}
+		if err := d.q.AddForceChannel(r.Context(), gen.AddForceChannelParams{
+			AccountID: id, Channel: ch, Rank: int64(rank), CreatedAt: now,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		rank++
+	}
+	d.applyReload(r.Context())
+	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
+}
+
 // forceWatchToggle handles POST /accounts/:id/force-watch — flips the
 // channel-points 24/7 idle-mining toggle for the account.
 func (d accountsDeps) forceWatchToggle(w http.ResponseWriter, r *http.Request) {

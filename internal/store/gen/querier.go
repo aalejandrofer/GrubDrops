@@ -17,6 +17,7 @@ type Querier interface {
 	AdminExists(ctx context.Context) (bool, error)
 	ClearAccountChannels(ctx context.Context, accountID string) error
 	ClearAccountGames(ctx context.Context, accountID string) error
+	ClearForceChannels(ctx context.Context, accountID string) error
 	ClearGlobalGames(ctx context.Context) error
 	// Distinct benefits already claimed by any account in this campaign.
 	// The dashboard divides this by len(Benefits) to render the
@@ -55,6 +56,7 @@ type Querier interface {
 	// Drives the per-account connect chips on the not-linked table.
 	ListAccountLinksForCampaign(ctx context.Context, campaignID string) ([]ListAccountLinksForCampaignRow, error)
 	ListActiveCampaignsForPlatform(ctx context.Context, arg ListActiveCampaignsForPlatformParams) ([]Campaign, error)
+	ListAllAccountChannels(ctx context.Context) ([]ListAllAccountChannelsRow, error)
 	ListAllAccounts(ctx context.Context) ([]Account, error)
 	ListAllGames(ctx context.Context) ([]Game, error)
 	ListBenefitsForCampaign(ctx context.Context, campaignID string) ([]Benefit, error)
