@@ -3500,13 +3500,21 @@
   100% { opacity: 0; transform: translate(-50%, -8px); }
 }
 
-/* Removable whitelist chip (✓ login ✕) in the drops null-game + promoted rows. */
+/* Removable whitelist chip (✓ login ✕) in the drops null-game + promoted rows.
+   Sized to the row text, compact, with a little left gap from the name. */
 button.chip-rm {
   cursor: pointer;
-  font: inherit;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  line-height: 1.2;
+  padding: 1px 5px;
+  margin-left: 5px;
+  border-radius: 3px;
   background: rgba(111, 181, 107, 0.06);
   border: 1px solid rgba(111, 181, 107, 0.4);
   color: var(--green, #6fb56b);
+  white-space: nowrap;
+  vertical-align: middle;
 }
 button.chip-rm:hover {
   background: rgba(212, 99, 30, 0.1);
