@@ -205,6 +205,7 @@ kick.com 会话以从浏览器导出的 `cookies.txt` 文件形式交给 GrubDro
 | `GRUB_DISCORD_WEBHOOK` | 无 | 可选的全局 Discord webhook。 |
 | `GRUB_SECURE_COOKIES` | `0` | 安全会话 cookie + CSRF 同源方案。通过纯 HTTP（`http://pi:8080`）访问时保持 `0`；仅当通过 HTTPS 访问时（直接访问，或位于设置 `X-Forwarded-Proto: https` 的 TLS 终结代理之后）才设为 `1`。见下方说明。 |
 | `GRUB_LOG_LEVEL` | `info` | `debug`、`info`、`warn`、`error`。 |
+| `GRUB_AUTHBYPASS` | `false` | 为真值（`1`/`true`）时**禁用所有鉴权**。仅用于 staging/开发，且需置于可信代理之后。启动时会记录警告。切勿在生产环境启用。 |
 
 > **自托管 / "invalid CSRF token"：** `GRUB_SECURE_COOKIES` 必须与你
 > 访问该应用的方式相匹配。通过**纯 HTTP**（默认方式，例如位于
