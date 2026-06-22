@@ -208,6 +208,8 @@ valor por defecto mostrado.
 | `GRUB_SECURE_COOKIES` | `0` | Cookies de sesión seguras + esquema CSRF de mismo origen. Déjala en `0` para HTTP plano (`http://pi:8080`); ponla en `1` solo cuando se acceda por HTTPS (directamente o detrás de un proxy que termina TLS y que establece `X-Forwarded-Proto: https`). Ver nota más abajo. |
 | `GRUB_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
 | `GRUB_AUTHBYPASS` | `false` | **Desactiva toda la autenticación** cuando es verdadero (`1`/`true`). Solo para staging/desarrollo, tras un proxy de confianza. Registra un aviso al arrancar. Nunca lo actives en producción. |
+| `GRUB_TWITCH_BROWSER` | `0` | `1` enruta Twitch por el sidecar de navegador en lugar de HTTP directo. Experimental; se recomienda la ruta HTTP directa por defecto. |
+| `GRUB_CANARY_INTERVAL` | valor de Estado | Sustituye la cadencia del canario de acumulación (p. ej. `6h`); usa el valor de Ajustes ▸ Estado si no se define. |
 
 > **Autoalojamiento / "invalid CSRF token":** `GRUB_SECURE_COOKIES` debe coincidir con cómo
 > accedes a la aplicación. Por **HTTP plano** (el valor por defecto, p. ej. una Raspberry Pi en
