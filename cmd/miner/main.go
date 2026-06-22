@@ -602,6 +602,7 @@ func run() error {
 		OIDC:              oidcProvider,
 		SecureCookies:     cfg.SecureCookies,
 		Location:          cfg.Location,
+		SPADashboard:      os.Getenv("GRUB_SPA_DASHBOARD") == "1",
 	}
 
 	// Set process-wide timezone so time.Now() / Claims Today use TZ.

@@ -114,6 +114,11 @@ type Deps struct {
 	// KickActivePath reports an account's live Kick watch path ("ws"|"chrome")
 	// so the dashboard can tag each row. Nil when no Kick backend is configured.
 	KickActivePath func(accountID string) string
+	// SPADashboard, when true, serves the Svelte SPA at "/" instead of
+	// the html/template dashboard. Gated by GRUB_SPA_DASHBOARD (default
+	// off) so prod keeps the live HTMX dashboard until the SPA live-state
+	// pass lands. Local-dev only for now.
+	SPADashboard bool
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -128,6 +133,10 @@ func NewRouter(d Deps) http.Handler {
 	// Static assets shipped via internal/web/static/. Cache aggressively
 	// since file names change on rebuild.
 	r.Handle("/static/*", http.StripPrefix("/static/", staticHandler()))
+
+	// SPA build output (content-hashed JS/CSS). Served at /assets/* to
+	// match Vite's default assetsDir.
+	r.Handle("/assets/*", spaFileServer())
 
 	if d.Session == nil {
 		// Skeleton mode (used by TestHealthz) — no business routes.
@@ -220,7 +229,11 @@ func NewRouter(d Deps) http.Handler {
 	// Authed area
 	authed := chi.NewRouter()
 	authed.Use(RequireAdmin(d.Session))
-	authed.Get("/", dash.page)
+	if d.SPADashboard {
+		authed.Get("/", spaIndex)
+	} else {
+		authed.Get("/", dash.page)
+	}
 	authed.Get("/dashboard/cards", dash.cards)
 	authed.Get("/dashboard/telemetry", dash.telemetry)
 	authed.Get("/dashboard/events", dash.events)
