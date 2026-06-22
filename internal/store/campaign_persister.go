@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/gameslug"
@@ -82,6 +84,23 @@ func (p *CampaignPersister) PersistCampaigns(ctx context.Context, camps []platfo
 		if c.AccountLinkChecked && !c.AccountLinked {
 			linked = 0
 		}
+		rawJSON := "{}"
+		if len(c.AllowedChannels) > 0 {
+			chans := make([]string, 0, len(c.AllowedChannels))
+			for _, ch := range c.AllowedChannels {
+				ch = strings.ToLower(strings.TrimSpace(ch))
+				if ch != "" {
+					chans = append(chans, ch)
+				}
+			}
+			if len(chans) > 0 {
+				if b, err := json.Marshal(struct {
+					AllowedChannels []string `json:"allowed_channels"`
+				}{AllowedChannels: chans}); err == nil {
+					rawJSON = string(b)
+				}
+			}
+		}
 		if err := p.Q.UpsertCampaign(ctx, gen.UpsertCampaignParams{
 			ID:             c.ID,
 			Platform:       c.Platform,
@@ -90,7 +109,7 @@ func (p *CampaignPersister) PersistCampaigns(ctx context.Context, camps []platfo
 			StartsAt:       startsAt,
 			EndsAt:         endsAt,
 			Status:         status,
-			RawJson:        "{}",
+			RawJson:        rawJSON,
 			DiscoveredAt:   now,
 			Kind:           kind,
 			AccountLinked:  linked,

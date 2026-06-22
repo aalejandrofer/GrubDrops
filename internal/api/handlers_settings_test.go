@@ -196,15 +196,19 @@ func renderSettingsTab(t *testing.T, active string, page settingsPageData) strin
 func TestSettingsTabs_SubnavHasAllLinks(t *testing.T) {
 	out := renderSettingsTab(t, "settings", settingsPageData{})
 	for _, want := range []string{
-		`href="/settings"`, `href="/settings/priority"`,
+		`href="/settings"`,
 		`href="/settings/notifications"`, `href="/settings/security"`,
 		`href="/settings/accounts"`, `href="/settings/experimental"`,
 		`href="/settings/health"`,
-		"General", "Drop Priority", "Notifications", "Security", "Accounts", "Experimental", "Health",
+		"General", "Notifications", "Security", "Accounts", "Experimental", "Health",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("subnav missing %q", want)
 		}
+	}
+	// Drop Priority moved out of Settings to the top-level /priority nav item.
+	if strings.Contains(out, `href="/settings/priority"`) {
+		t.Errorf("settings subnav should no longer link to priority (moved to /priority)")
 	}
 }
 

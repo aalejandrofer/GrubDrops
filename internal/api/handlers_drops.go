@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"log/slog"
 	"math"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/aalejandrofer/grubdrops/internal/gameslug"
@@ -26,6 +28,7 @@ type dropsDeps struct {
 	reload   func(context.Context) error
 	sessions *store.SessionStore
 	registry *platform.Registry
+	sm       *scs.SessionManager // flash messages after whitelist actions
 }
 
 // lazyFetchBenefits backfills a campaign's benefits the first time its
@@ -158,6 +161,14 @@ type dropsRow struct {
 	ActionOnly bool
 	Collectors []collectMark
 
+	// Channels are the campaign's participating channel slugs (parsed
+	// from raw_json). Used by the null-game section's WHITELIST+ form.
+	Channels []string
+	// WhitelistedBy lists the accounts that already whitelist one of this
+	// campaign's channels — shown as removable ✓ chips on null-game rows
+	// so the user sees (and can revoke) which accounts mine it.
+	WhitelistedBy []whitelistChip
+
 	// Linked is true when the account can earn this campaign (external
 	// account connected, or none required). False = whitelisted but the
 	// required account isn't linked → shown in a separate "not linked"
@@ -170,6 +181,13 @@ type dropsRow struct {
 	// unlinked — drives the mineable-row connect nudge.
 	ConnectChips []connectChip
 	NeedsConnect bool
+}
+
+// whitelistChip is one account that already whitelists a null-game drop's
+// channel, shown as a removable ✓ chip.
+type whitelistChip struct {
+	Login     string
+	AccountID string
 }
 
 // connectChip is one account's link state on a not-linked campaign row.
@@ -199,10 +217,15 @@ type dropsPage struct {
 	CurrentCount  int
 	UpcomingCount int
 	Rows          []dropsRow
-	UnlinkedRows  []dropsRow     // whitelisted but the account isn't linked (Current tab only)
-	UnlistedRows  []dropsRow     // campaigns whose Game is not on any account whitelist
-	Accounts      []dropsAccount // for the "add to whitelist" dropdown on unlisted rows
-	CSRFToken     string         // mirrors templateData.CSRFToken for inline form
+	UnlinkedRows  []dropsRow // whitelisted but the account isn't linked (Current tab only)
+	UnlistedRows  []dropsRow // campaigns whose Game is not on any account whitelist
+	// NullGameRows are ACTIVE campaigns with no game category (e.g. Kick
+	// Football drops). They can't be game-whitelisted, so they get a
+	// dedicated section whose WHITELIST+ opts an account into the
+	// campaign's channel. Only populated for the current tab.
+	NullGameRows []dropsRow
+	Accounts     []dropsAccount // for the "add to whitelist" dropdown on unlisted rows
+	CSRFToken    string         // mirrors templateData.CSRFToken for inline form
 	// NoWhitelist is true when no game is whitelisted anywhere (per-account or
 	// global). Discovery only crawls whitelisted games, so an empty whitelist
 	// means the page is silently empty — a cold-start trap. The template shows
@@ -212,8 +235,9 @@ type dropsPage struct {
 }
 
 type dropsAccount struct {
-	ID    string
-	Label string // "@login (platform)"
+	ID       string
+	Label    string // "@login (platform)"
+	Platform string // "twitch" | "kick" — so the null-game dropdown only offers matching accounts
 }
 
 // allowedGamesUnion returns the effective whitelist union across
@@ -371,15 +395,70 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 
 	// Populate accounts dropdown for the inline "add to whitelist"
 	// affordance on unlisted rows. Best-effort: empty dropdown disables
-	// the button server-side.
+	// the button server-side. Also load each account's channel whitelist
+	// so the null-game section can show which accounts already mine a drop.
 	var accountsForPick []dropsAccount
+	type acctChannels struct {
+		id       string
+		login    string
+		platform string
+		chans    map[string]bool
+	}
+	var allAccts []acctChannels
 	if accs, err := d.q.ListAllAccounts(r.Context()); err == nil {
 		for _, a := range accs {
 			accountsForPick = append(accountsForPick, dropsAccount{
-				ID:    a.ID,
-				Label: a.DisplayName + " (" + a.Platform + ")",
+				ID:       a.ID,
+				Label:    a.DisplayName + " (" + a.Platform + ")",
+				Platform: a.Platform,
 			})
+			cm := map[string]bool{}
+			if rows, err := d.q.ListAccountChannels(r.Context(), a.ID); err == nil {
+				for _, rc := range rows {
+					cm[strings.ToLower(strings.TrimSpace(rc.Channel))] = true
+				}
+			}
+			allAccts = append(allAccts, acctChannels{id: a.ID, login: a.DisplayName, platform: a.Platform, chans: cm})
 		}
+	}
+
+	// Partition null-game rows (active campaigns with no game category
+	// and at least one channel) out of unlistedRows for the current tab.
+	// They get a dedicated section with a per-account channel whitelist
+	// button instead of the game whitelist button.
+	var nullGameRows []dropsRow
+	var nullGamePromoted []dropsRow // fully whitelisted → shown in the Whitelisted table
+	if tab == tabCurrent {
+		kept := unlistedRows[:0]
+		for _, row := range unlistedRows {
+			if strings.TrimSpace(row.Game) == "" && len(row.Channels) > 0 {
+				// Which accounts already whitelist one of this campaign's
+				// channels (matching platform) → ✓ chips on the row.
+				matching := 0
+				for _, ac := range allAccts {
+					if ac.platform != row.Platform {
+						continue
+					}
+					matching++
+					for _, ch := range row.Channels {
+						if ac.chans[strings.ToLower(strings.TrimSpace(ch))] {
+							row.WhitelistedBy = append(row.WhitelistedBy, whitelistChip{Login: ac.login, AccountID: ac.id})
+							break
+						}
+					}
+				}
+				// Once every matching-platform account whitelists this drop,
+				// it is fully adopted — promote it to the Whitelisted table.
+				if matching > 0 && len(row.WhitelistedBy) >= matching {
+					nullGamePromoted = append(nullGamePromoted, row)
+				} else {
+					nullGameRows = append(nullGameRows, row)
+				}
+			} else {
+				kept = append(kept, row)
+			}
+		}
+		unlistedRows = kept
 	}
 
 	page := dropsPage{
@@ -388,6 +467,7 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		CurrentCount:  len(currentRows),
 		UpcomingCount: len(upcomingRows),
 		UnlistedRows:  unlistedRows,
+		NullGameRows:  nullGameRows,
 		Accounts:      accountsForPick,
 		CSRFToken:     csrfToken(r),
 		NoWhitelist:   !hasWhitelist,
@@ -413,6 +493,9 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 				page.UnlinkedRows = append(page.UnlinkedRows, row)
 			}
 		}
+		// Null-game drops every matching account has whitelisted are fully
+		// adopted — show them in the Whitelisted (mining) table.
+		page.Rows = append(page.Rows, nullGamePromoted...)
 	case tabUpcoming:
 		page.Rows = upcomingRows
 	}
@@ -429,15 +512,24 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		d.attachCollection(r.Context(), &page.Rows[i])
 	}
 
+	// Same for the null-game section so its rows show collected ticks too.
+	for i := range page.NullGameRows {
+		d.attachCollection(r.Context(), &page.NullGameRows[i])
+	}
+
 	// HTMX partial — used when the user clicks a tab. We just swap the
 	// table body so the page chrome stays put.
 	if r.Header.Get("HX-Request") == "true" {
 		renderPartial(w, r, d.t, "drops_table", page)
 		return
 	}
+	flash := ""
+	if d.sm != nil {
+		flash = d.sm.PopString(r.Context(), "flash")
+	}
 	render(w, r, d.t, "drops.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "drops",
-		Page: page,
+		Flash: flash, Page: page,
 	})
 }
 
@@ -471,6 +563,7 @@ func (d *dropsDeps) collectAll(
 			CampaignName: c.Name,
 			Kind:         c.Kind,
 			sortKey:      c.EndsAt,
+			Channels:     channelsFromRawJSON(c.RawJson),
 		}
 		if passesWhitelist(allow, hasWhitelist, c.Game) {
 			past = append(past, row)
@@ -504,6 +597,7 @@ func (d *dropsDeps) collectAll(
 			rankKey:      rankFor(ranks, c.Game),
 			Linked:       c.AccountLinked != 0,
 			LinkURL:      c.AccountLinkUrl,
+			Channels:     channelsFromRawJSON(c.RawJson),
 		}
 		if passesWhitelist(allow, hasWhitelist, c.Game) {
 			current = append(current, row)
@@ -529,6 +623,7 @@ func (d *dropsDeps) collectAll(
 			CampaignName: c.Name,
 			Kind:         c.Kind,
 			sortKey:      c.StartsAt,
+			Channels:     channelsFromRawJSON(c.RawJson),
 		}
 		if passesWhitelist(allow, hasWhitelist, c.Game) {
 			upcoming = append(upcoming, row)
@@ -735,6 +830,7 @@ func (d *dropsDeps) addWhitelist(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		d.whitelistAddedFeedback(r)
 		http.Redirect(w, r, "/drops", http.StatusSeeOther)
 		return
 	}
@@ -752,7 +848,22 @@ func (d *dropsDeps) addWhitelist(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	d.whitelistAddedFeedback(r)
 	http.Redirect(w, r, "/drops", http.StatusSeeOther)
+}
+
+// whitelistAddedFeedback reloads the scheduler (so a freshly whitelisted
+// game takes effect immediately instead of waiting for the next discovery
+// cycle) and sets a success flash. Shared by the game-whitelist redirects.
+func (d *dropsDeps) whitelistAddedFeedback(r *http.Request) {
+	if d.reload != nil {
+		if err := d.reload(r.Context()); err != nil {
+			slog.Warn("reload after whitelist add failed", "err", err)
+		}
+	}
+	if d.sm != nil {
+		d.sm.Put(r.Context(), "flash", "flash.game_added")
+	}
 }
 
 // markLinked handles the manual "I've linked it" toggle on a not-linked
@@ -767,7 +878,8 @@ func (d *dropsDeps) markLinked(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := store.LinkOverridePrefix + campaignID
-	if r.FormValue("unlink") == "1" {
+	unlink := r.FormValue("unlink") == "1"
+	if unlink {
 		_ = d.q.DeleteKV(r.Context(), key)
 	} else {
 		if err := d.q.UpsertSettingString(r.Context(), gen.UpsertSettingStringParams{
@@ -783,6 +895,120 @@ func (d *dropsDeps) markLinked(w http.ResponseWriter, r *http.Request) {
 		if err := d.reload(r.Context()); err != nil {
 			slog.Warn("scheduler reload after link override failed", "campaign", campaignID, "err", err)
 		}
+	}
+	if d.sm != nil {
+		if unlink {
+			d.sm.Put(r.Context(), "flash", "flash.marked_unlinked")
+		} else {
+			d.sm.Put(r.Context(), "flash", "flash.marked_linked")
+		}
+	}
+	http.Redirect(w, r, "/drops", http.StatusSeeOther)
+}
+
+// channelsFromRawJSON extracts the persisted allowed_channels list from a
+// campaign row's raw_json (written by the campaign persister). Returns nil
+// on any parse miss.
+func channelsFromRawJSON(raw string) []string {
+	if raw == "" || raw == "{}" {
+		return nil
+	}
+	var meta struct {
+		AllowedChannels []string `json:"allowed_channels"`
+	}
+	if err := json.Unmarshal([]byte(raw), &meta); err != nil {
+		return nil
+	}
+	return meta.AllowedChannels
+}
+
+// addChannelWhitelist takes (account_id, channel[]) from the null-game
+// section on /drops and opts that account into the channel(s). Null-game
+// drops (Kick Football drops with no category) are mined when one of
+// their AllowedChannels is on an account's channel whitelist.
+func (d *dropsDeps) addChannelWhitelist(w http.ResponseWriter, r *http.Request) {
+	accID := r.FormValue("account_id")
+	if accID == "" {
+		http.Redirect(w, r, "/drops", http.StatusSeeOther)
+		return
+	}
+	if _, err := d.q.GetAccount(r.Context(), accID); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	seen := map[string]struct{}{}
+	added := 0
+	for _, raw := range r.Form["channel"] {
+		ch := strings.ToLower(strings.TrimSpace(raw))
+		if ch == "" {
+			continue
+		}
+		if _, dup := seen[ch]; dup {
+			continue
+		}
+		seen[ch] = struct{}{}
+		if err := d.q.AddAccountChannel(r.Context(), gen.AddAccountChannelParams{
+			AccountID: accID, Channel: ch, Rank: 0,
+		}); err != nil {
+			if d.sm != nil {
+				d.sm.Put(r.Context(), "flash", "flash.channel_whitelist_failed")
+			}
+			http.Redirect(w, r, "/drops", http.StatusSeeOther)
+			return
+		}
+		added++
+	}
+	// Reload the scheduler so the watcher re-picks immediately and starts
+	// mining the channel without waiting for the next discovery cycle.
+	if added > 0 && d.reload != nil {
+		if err := d.reload(r.Context()); err != nil {
+			slog.Warn("reload after channel whitelist failed", "err", err)
+		}
+	}
+	if d.sm != nil {
+		if added > 0 {
+			d.sm.Put(r.Context(), "flash", "flash.channel_whitelisted")
+		} else {
+			d.sm.Put(r.Context(), "flash", "flash.channel_whitelist_none")
+		}
+	}
+	http.Redirect(w, r, "/drops", http.StatusSeeOther)
+}
+
+// removeChannelWhitelist un-whitelists a null-game drop's channel(s) for one
+// account (the ✕ on a ✓ chip), then reloads so the watcher drops it.
+func (d *dropsDeps) removeChannelWhitelist(w http.ResponseWriter, r *http.Request) {
+	accID := r.FormValue("account_id")
+	if accID == "" {
+		http.Redirect(w, r, "/drops", http.StatusSeeOther)
+		return
+	}
+	removed := 0
+	seen := map[string]struct{}{}
+	for _, raw := range r.Form["channel"] {
+		ch := strings.ToLower(strings.TrimSpace(raw))
+		if ch == "" {
+			continue
+		}
+		if _, dup := seen[ch]; dup {
+			continue
+		}
+		seen[ch] = struct{}{}
+		if err := d.q.RemoveAccountChannel(r.Context(), gen.RemoveAccountChannelParams{
+			AccountID: accID, Channel: ch,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		removed++
+	}
+	if removed > 0 && d.reload != nil {
+		if err := d.reload(r.Context()); err != nil {
+			slog.Warn("reload after channel whitelist remove failed", "err", err)
+		}
+	}
+	if d.sm != nil {
+		d.sm.Put(r.Context(), "flash", "flash.channel_whitelist_removed")
 	}
 	http.Redirect(w, r, "/drops", http.StatusSeeOther)
 }

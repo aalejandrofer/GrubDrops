@@ -24,8 +24,6 @@
   </div>
   {{template "settings_subnav" .}}
 
-  {{if .Flash}}<div class="flash-ok">{{t .Flash}}</div>{{end}}
-
   <section class="settings-block">
     <header class="section-h"><h3>{{t "accounts.configured"}}</h3><span class="meta">{{len .Page}} {{t "accounts.total"}}</span></header>
     {{if not .Page}}

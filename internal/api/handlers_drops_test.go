@@ -31,8 +31,8 @@ func TestDropsTable_ColdStartCTA(t *testing.T) {
 	if !strings.Contains(strings.ToLower(out), "no games whitelisted") {
 		t.Errorf("cold-start panel missing the 'no games whitelisted' explanation")
 	}
-	if !strings.Contains(out, `href="/settings/priority"`) {
-		t.Errorf("cold-start panel must link to where games are added")
+	if !strings.Contains(out, `href="/priority"`) {
+		t.Errorf("cold-start panel must link to the Priority page where games are added")
 	}
 }
 

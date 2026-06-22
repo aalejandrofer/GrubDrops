@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
@@ -87,4 +88,38 @@ func TestCampaignPersister_NoopOnNilOrEmpty(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	q := gen.New(db)
 	require.NoError(t, NewCampaignPersister(q).PersistCampaigns(context.Background(), nil))
+}
+
+func TestCampaignPersister_PersistsAllowedChannels(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "drops.db")
+	db, err := Open(context.Background(), path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	q := gen.New(db)
+	p := NewCampaignPersister(q)
+	now := time.Now()
+
+	camps := []platform.Campaign{{
+		ID: "c-football", Platform: "kick", Game: "", Name: "Football Drop",
+		Status: "active", StartsAt: now.Add(-time.Hour), EndsAt: now.Add(time.Hour),
+		AllowedChannels: []string{"Adrianozendejas32"},
+		Benefits: []platform.DropBenefit{
+			{ID: "b1", CampaignID: "c-football", Name: "Jersey", RequiredMinutes: 600},
+		},
+	}}
+	require.NoError(t, p.PersistCampaigns(context.Background(), camps))
+
+	cur, err := q.ListCurrentCampaigns(context.Background(), gen.ListCurrentCampaignsParams{
+		StartsAt: now.Unix(), EndsAt: now.Unix(), Limit: 10,
+	})
+	require.NoError(t, err)
+	require.Len(t, cur, 1)
+
+	var meta struct {
+		AllowedChannels []string `json:"allowed_channels"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(cur[0].RawJson), &meta))
+	// Stored lowercased.
+	assert.Equal(t, []string{"adrianozendejas32"}, meta.AllowedChannels)
 }

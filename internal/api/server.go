@@ -193,7 +193,7 @@ func NewRouter(d Deps) http.Handler {
 			lang = "en"
 		}
 		// Validate language is supported
-		if lang != "en" && lang != "zh-CN" {
+		if lang != "en" && lang != "zh-CN" && lang != "es" {
 			lang = "en"
 		}
 		http.SetCookie(w, &http.Cookie{
@@ -280,6 +280,12 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/accounts/{id}/games", accs.games)
 	authed.Post("/accounts/{id}/games/add", accs.addGame)
 	authed.Post("/accounts/{id}/games/use-global", accs.useGlobal)
+	authed.Post("/accounts/{id}/channels/add", accs.addChannel)
+	authed.Post("/accounts/{id}/channels/remove", accs.removeChannel)
+	authed.Post("/accounts/{id}/force-channels", accs.forceChannelsReorder)
+	authed.Post("/accounts/{id}/force-channels/add", accs.addForceChannel)
+	authed.Post("/accounts/{id}/force-channels/remove", accs.removeForceChannel)
+	authed.Post("/accounts/{id}/force-watch", accs.forceWatchToggle)
 	authed.Post("/accounts/{id}/reload", accs.reloadOne)
 	authed.Post("/accounts/{id}/toggle", accs.toggleEnabled)
 	authed.Post("/accounts/{id}/delete", accs.delete)
@@ -320,11 +326,12 @@ func NewRouter(d Deps) http.Handler {
 		version:     d.Version,
 		oidc:        d.OIDC,
 	}
-	dropsH := &dropsDeps{q: d.Q, t: d.Templates, reload: d.Reload, sessions: d.Sessions, registry: d.Registry, loc: d.Location}
+	dropsH := &dropsDeps{q: d.Q, t: d.Templates, reload: d.Reload, sessions: d.Sessions, registry: d.Registry, loc: d.Location, sm: d.Session}
 	historyH := &historyDeps{q: d.Q, ring: d.LogRing, t: d.Templates, loc: d.Location}
 
 	authed.Get("/settings", settingsH.get)
-	authed.Get("/settings/priority", settingsH.getPriority)
+	authed.Get("/priority", settingsH.getPriority)          // top-level nav item, moved out of Settings
+	authed.Get("/settings/priority", settingsH.getPriority) // legacy path, kept so old links/redirects still resolve
 	authed.Get("/settings/notifications", settingsH.getNotifications)
 	authed.Get("/settings/security", settingsH.getSecurity)
 	authed.Get("/settings/experimental", settingsH.getExperimental)
@@ -346,6 +353,8 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/drops", dropsH.list)
 	authed.Get("/drops/campaigns/{id}/items", dropsH.items)
 	authed.Post("/drops/whitelist/add", dropsH.addWhitelist)
+	authed.Post("/drops/whitelist/channel", dropsH.addChannelWhitelist)
+	authed.Post("/drops/whitelist/channel/remove", dropsH.removeChannelWhitelist)
 	authed.Post("/drops/link", dropsH.markLinked)
 	imgH := &imageProxyDeps{registry: d.Registry}
 	authed.Get("/img/kick", imgH.kick)

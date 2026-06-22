@@ -7,7 +7,7 @@
       <strong>{{t "drops_table.no_games_title"}}</strong>
       — {{t "drops_table.no_games_desc"}}
     </span>
-    <a class="btn sm alert-cta" href="/settings/priority">{{t "drops_table.add_game"}} →</a>
+    <a class="btn sm alert-cta" href="/priority">{{t "drops_table.add_game"}} →</a>
   </div>
   {{end}}
   <div class="drops-grid">
@@ -15,7 +15,7 @@
     <section class="drops-pane">
       <header class="drops-pane-h">
         <h3>{{t "drops_table.whitelisted"}}</h3>
-        <span class="meta">{{len .Rows}} · {{.Tab}}</span>
+        <span class="meta">{{len .Rows}}</span>
       </header>
       {{if not .Rows}}
       <div class="empty">
@@ -39,7 +39,7 @@
             <span class="chev" aria-hidden="true">›</span>
             <span class="t">{{.When}}</span>
             <span class="lvl" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">●</span>
-            <span class="body"><em style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{.Platform}}</em>{{if eq .Kind "reward"}} · {{t "drops_table.reward"}}{{end}} · <span style="color:var(--muted);">{{.Game}}</span> · {{.CampaignName}}{{if .BenefitName}} · <strong>{{.BenefitName}}</strong>{{end}}</span>
+            <span class="body"><em style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{.Platform}}</em>{{if eq .Kind "reward"}} · {{t "drops_table.reward"}}{{end}} · <span style="color:var(--muted);">{{if .Game}}{{.Game}}{{else}}{{t "drops_table.no_game"}}{{end}}</span> · {{.CampaignName}}{{if .BenefitName}} · <strong>{{.BenefitName}}</strong>{{end}}{{$chans := .Channels}}{{range .WhitelistedBy}} <form method="post" action="/drops/whitelist/channel/remove" style="display:inline" onclick="event.stopPropagation()" onsubmit="this.querySelector('button').disabled=true"><input type="hidden" name="csrf_token" value="{{$.CSRFToken}}"><input type="hidden" name="account_id" value="{{.AccountID}}">{{range $chans}}<input type="hidden" name="channel" value="{{.}}">{{end}}<button type="submit" class="conn-chip ok chip-rm" title="{{.Login}} — {{t "drops_table.channel_remove"}}">{{.Login}} ✕</button></form>{{end}}</span>
             <span class="ac collect{{if .NeedsConnect}} link-actions{{end}}">
               {{range .ConnectChips}}{{if not .Linked}}<a class="conn-chip need" href="{{.LinkURL}}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="{{t "drops_table.connect_account"}} {{.Login}}">{{.Login}} →</a>{{end}}{{end}}
               {{if eq $.Tab "upcoming"}}<span style="color:var(--dim)">—</span>{{else if .ActionOnly}}<span class="collect-box" title="{{t "drops_table.action_only"}}"><span class="tk cross">✗</span></span>{{else if .Collectors}}<span class="collect-box">{{range .Collectors}}<span class="tk{{if not .Full}} partial{{end}}" title="{{if .Full}}{{.Login}} {{t "drops_table.collected_all"}}{{else}}{{.Login}} {{t "drops_table.partially_collected"}}{{end}}">✓</span>{{end}}</span>{{else}}<span style="color:var(--dim)">—</span>{{end}}</span>
@@ -89,6 +89,53 @@
                 <button class="btn sm linked-btn" type="submit" title="{{t "drops_table.mark_linked_title"}}">✓</button>
               </form>
               {{end}}
+            </span>
+          </summary>
+          <div class="ev-detail-slot">
+            {{if .CampaignID}}
+            <div class="ev-detail" style="color:var(--muted);font-size:11px;">{{t "drops_table.loading"}}</div>
+            {{else}}
+            <div class="ev-detail" style="color:var(--muted);font-size:11px;">{{t "drops_table.no_item_details"}}</div>
+            {{end}}
+          </div>
+        </details>
+        {{end}}
+      </div>
+    </section>
+    {{end}}
+
+    {{if .NullGameRows}}
+    <section class="drops-pane">
+      <header class="drops-pane-h">
+        <h3>{{t "drops_table.null_game"}}</h3>
+        <span class="meta">{{len .NullGameRows}}</span>
+      </header>
+      <div class="events drops-rows scroll-cap">
+        {{$accts := .Accounts}}
+        {{$csrf := .CSRFToken}}
+        {{range .NullGameRows}}
+        <details class="ev kind-discovery ev-linkrow"
+                 {{if .CampaignID}}hx-get="/drops/campaigns/{{.CampaignID}}/items"
+                 hx-target="find .ev-detail-slot"
+                 hx-trigger="toggle once from:closest details"
+                 hx-swap="innerHTML"{{end}}>
+          <summary>
+            <span class="chev" aria-hidden="true">›</span>
+            <span class="t">{{if .When}}{{.When}}{{else}}—{{end}}</span>
+            <span class="lvl" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">●</span>
+            <span class="body"><em style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{.Platform}}</em> · <span style="color:var(--muted);">{{t "drops_table.no_game"}}</span> · {{.CampaignName}}{{$chans := .Channels}}{{range .WhitelistedBy}} <form method="post" action="/drops/whitelist/channel/remove" style="display:inline" onclick="event.stopPropagation()" onsubmit="this.querySelector('button').disabled=true"><input type="hidden" name="csrf_token" value="{{$csrf}}"><input type="hidden" name="account_id" value="{{.AccountID}}">{{range $chans}}<input type="hidden" name="channel" value="{{.}}">{{end}}<button type="submit" class="conn-chip ok chip-rm" title="{{.Login}} — {{t "drops_table.channel_remove"}}">{{.Login}} ✕</button></form>{{end}}</span>
+            {{$rowPlat := .Platform}}
+            <span class="ac whitelist-add" onclick="event.stopPropagation()">
+              {{if $accts}}
+              <form method="post" action="/drops/whitelist/channel" class="disc-add-form" onsubmit="this.querySelector('button').disabled=true">
+                <input type="hidden" name="csrf_token" value="{{$csrf}}">
+                {{range .Channels}}<input type="hidden" name="channel" value="{{.}}">{{end}}
+                <select name="account_id" onclick="event.stopPropagation()" title="{{t "drops_table.whitelist_add"}}">
+                  {{range $accts}}{{if eq .Platform $rowPlat}}<option value="{{.ID}}">{{.Label}}</option>{{end}}{{end}}
+                </select>
+                <button class="btn sm" type="submit" onclick="event.stopPropagation()">{{t "drops_table.whitelist_add"}}</button>
+              </form>
+              {{else}}<span style="color:var(--muted);">{{t "drops_table.no_accounts"}}</span>{{end}}
             </span>
           </summary>
           <div class="ev-detail-slot">

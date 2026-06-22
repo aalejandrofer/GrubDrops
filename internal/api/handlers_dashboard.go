@@ -711,6 +711,12 @@ func mineCardFromSnap(a gen.Account, s watcher.Snapshot, lang string) dashMineCa
 		c.DropMins, c.DropReq = s.RequiredMinutes, max1(s.RequiredMinutes)
 		c.DropPercent = 100
 		c.DropETA = i18n.T(lang, "mining.claiming_ellipsis")
+	case "force_watch":
+		c.StateSub = "mining.force_watching"
+		c.Uptime = formatShort(time.Since(s.StartedAt), lang)
+		c.Channel = s.Channel
+		c.ChannelInitial = initial(s.Channel)
+		c.ChannelURL = channelURL(a.Platform, s.Channel)
 	case "pick_stream":
 		c.StateSub = "mining.scanning_channels"
 		c.DropName = s.BenefitName

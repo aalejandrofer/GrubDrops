@@ -177,6 +177,11 @@ type accountDetailPage struct {
 	Account       gen.Account
 	AllGames      []gameRow
 	SelectedGames []gameRow // ordered by rank
+	Channels      []string  // per-account channel whitelist, ordered by rank
+	// ForceChannels are permanent channel-points channels (watched 24/7
+	// when idle); ForceWatchEnabled is the per-account toggle.
+	ForceChannels     []string
+	ForceWatchEnabled bool
 }
 
 type gameRow struct {
@@ -215,9 +220,31 @@ func (d accountsDeps) detail(w http.ResponseWriter, r *http.Request) {
 		selected = append(selected, gameRow{ID: p.ID, Name: p.Name, Slug: p.Slug, Selected: true, Rank: int(p.Rank)})
 	}
 
+	var channels []string
+	if chRows, err := d.q.ListAccountChannels(r.Context(), id); err == nil {
+		for _, rch := range chRows {
+			channels = append(channels, rch.Channel)
+		}
+	}
+
+	var forceChannels []string
+	if fcRows, err := d.q.ListForceChannels(r.Context(), id); err == nil {
+		for _, rch := range fcRows {
+			forceChannels = append(forceChannels, rch.Channel)
+		}
+	}
+	forceEnabled := false
+	if v, err := d.q.GetSettingString(r.Context(), ForceWatchEnabledKey(id)); err == nil && string(v) == "1" {
+		forceEnabled = true
+	}
+
 	render(w, r, d.t, "accounts_detail.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
-		Page:   accountDetailPage{Account: row, AllGames: allRows, SelectedGames: selected},
+		Flash: d.sm.PopString(r.Context(), "flash"),
+		Page: accountDetailPage{
+			Account: row, AllGames: allRows, SelectedGames: selected, Channels: channels,
+			ForceChannels: forceChannels, ForceWatchEnabled: forceEnabled,
+		},
 		Active: "accounts",
 	})
 }
@@ -521,6 +548,166 @@ func (d accountsDeps) toggleEnabled(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+// addChannel handles POST /accounts/:id/channels/add — opts the account
+// into a channel so null-game drops on that channel get mined.
+func (d accountsDeps) addChannel(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	ch := strings.ToLower(strings.TrimSpace(r.FormValue("channel")))
+	if ch != "" {
+		if err := d.q.AddAccountChannel(r.Context(), gen.AddAccountChannelParams{
+			AccountID: id, Channel: ch, Rank: 0,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		d.applyReload(r.Context())
+	}
+	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
+}
+
+// removeChannel handles POST /accounts/:id/channels/remove.
+func (d accountsDeps) removeChannel(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	ch := strings.ToLower(strings.TrimSpace(r.FormValue("channel")))
+	if ch != "" {
+		if err := d.q.RemoveAccountChannel(r.Context(), gen.RemoveAccountChannelParams{
+			AccountID: id, Channel: ch,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		d.applyReload(r.Context())
+	}
+	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
+}
+
+// ForceWatchEnabledKey is the per-account KV flag toggling channel-points
+// force-watch (watch a configured channel 24/7 when idle). Shared with the
+// watcher's force-watch source in cmd/miner.
+func ForceWatchEnabledKey(accountID string) string { return "force_watch:" + accountID }
+
+// addForceChannel handles POST /accounts/:id/force-channels/add — adds a
+// permanent channel-points channel (watched 24/7 when idle).
+func (d accountsDeps) addForceChannel(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	ch := strings.ToLower(strings.TrimSpace(r.FormValue("channel")))
+	if ch != "" {
+		now := time.Now().Unix()
+		if err := d.q.AddForceChannel(r.Context(), gen.AddForceChannelParams{
+			AccountID: id, Channel: ch, Rank: 0, CreatedAt: now,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		d.applyReload(r.Context())
+		d.sm.Put(r.Context(), "flash", "flash.force_channel_added")
+	}
+	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
+}
+
+// removeForceChannel handles POST /accounts/:id/force-channels/remove.
+func (d accountsDeps) removeForceChannel(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	ch := strings.ToLower(strings.TrimSpace(r.FormValue("channel")))
+	if ch != "" {
+		if err := d.q.RemoveForceChannel(r.Context(), gen.RemoveForceChannelParams{
+			AccountID: id, Channel: ch,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		d.applyReload(r.Context())
+		d.sm.Put(r.Context(), "flash", "flash.force_channel_removed")
+	}
+	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
+}
+
+// forceChannelsReorder handles POST /accounts/:id/force-channels — rewrites
+// the force-watch channel list from the ordered channel[] field. Position in
+// the slice becomes the rank (rank 0 = the channel watched first when idle).
+func (d accountsDeps) forceChannelsReorder(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := d.q.ClearForceChannels(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	now := time.Now().Unix()
+	rank := 0
+	seen := map[string]struct{}{}
+	for _, raw := range r.Form["channel"] {
+		ch := strings.ToLower(strings.TrimSpace(raw))
+		if ch == "" {
+			continue
+		}
+		if _, dup := seen[ch]; dup {
+			continue
+		}
+		seen[ch] = struct{}{}
+		if err := d.q.AddForceChannel(r.Context(), gen.AddForceChannelParams{
+			AccountID: id, Channel: ch, Rank: int64(rank), CreatedAt: now,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		rank++
+	}
+	d.applyReload(r.Context())
+	d.sm.Put(r.Context(), "flash", "flash.force_saved")
+	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
+}
+
+// forceWatchToggle handles POST /accounts/:id/force-watch — flips the
+// channel-points 24/7 idle-mining toggle for the account.
+func (d accountsDeps) forceWatchToggle(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	val := []byte("")
+	enabled := r.FormValue("enabled") == "1"
+	if enabled {
+		val = []byte("1")
+	}
+	if err := d.q.UpsertSettingString(r.Context(), gen.UpsertSettingStringParams{
+		Key: ForceWatchEnabledKey(id), Value: val,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	d.applyReload(r.Context())
+	if enabled {
+		d.sm.Put(r.Context(), "flash", "flash.force_watch_enabled")
+	} else {
+		d.sm.Put(r.Context(), "flash", "flash.force_watch_disabled")
+	}
+	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
 
 func genID() string {

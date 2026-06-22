@@ -10,10 +10,14 @@ import (
 )
 
 type Querier interface {
+	AddAccountChannel(ctx context.Context, arg AddAccountChannelParams) error
 	AddAccountGame(ctx context.Context, arg AddAccountGameParams) error
+	AddForceChannel(ctx context.Context, arg AddForceChannelParams) error
 	AddGlobalGame(ctx context.Context, arg AddGlobalGameParams) error
 	AdminExists(ctx context.Context) (bool, error)
+	ClearAccountChannels(ctx context.Context, accountID string) error
 	ClearAccountGames(ctx context.Context, accountID string) error
+	ClearForceChannels(ctx context.Context, accountID string) error
 	ClearGlobalGames(ctx context.Context) error
 	// Distinct benefits already claimed by any account in this campaign.
 	// The dashboard divides this by len(Benefits) to render the
@@ -46,11 +50,13 @@ type Querier interface {
 	GetSession(ctx context.Context, accountID string) (Session, error)
 	GetSettingString(ctx context.Context, key string) ([]byte, error)
 	InsertClaim(ctx context.Context, arg InsertClaimParams) error
+	ListAccountChannels(ctx context.Context, accountID string) ([]ListAccountChannelsRow, error)
 	ListAccountGames(ctx context.Context, accountID string) ([]ListAccountGamesRow, error)
 	// Per-account link state for a campaign, joined with the account handle.
 	// Drives the per-account connect chips on the not-linked table.
 	ListAccountLinksForCampaign(ctx context.Context, campaignID string) ([]ListAccountLinksForCampaignRow, error)
 	ListActiveCampaignsForPlatform(ctx context.Context, arg ListActiveCampaignsForPlatformParams) ([]Campaign, error)
+	ListAllAccountChannels(ctx context.Context) ([]ListAllAccountChannelsRow, error)
 	ListAllAccounts(ctx context.Context) ([]Account, error)
 	ListAllGames(ctx context.Context) ([]Game, error)
 	ListBenefitsForCampaign(ctx context.Context, campaignID string) ([]Benefit, error)
@@ -61,6 +67,7 @@ type Querier interface {
 	// Whitelist filtering is applied in Go.
 	ListCurrentCampaigns(ctx context.Context, arg ListCurrentCampaignsParams) ([]Campaign, error)
 	ListEnabledAccounts(ctx context.Context) ([]Account, error)
+	ListForceChannels(ctx context.Context, accountID string) ([]ListForceChannelsRow, error)
 	ListGlobalGames(ctx context.Context) ([]ListGlobalGamesRow, error)
 	ListKVByPrefix(ctx context.Context, dollar_1 sql.NullString) ([]Kv, error)
 	// Campaigns that have ended. Whitelist filtering is applied in Go.
@@ -70,7 +77,9 @@ type Querier interface {
 	// Campaigns announced but not yet started. Whitelist filtering is
 	// applied in Go.
 	ListUpcomingCampaigns(ctx context.Context, arg ListUpcomingCampaignsParams) ([]Campaign, error)
+	RemoveAccountChannel(ctx context.Context, arg RemoveAccountChannelParams) error
 	RemoveAccountGame(ctx context.Context, arg RemoveAccountGameParams) error
+	RemoveForceChannel(ctx context.Context, arg RemoveForceChannelParams) error
 	SetAccountEnabled(ctx context.Context, arg SetAccountEnabledParams) error
 	// Lifetime watch minutes: sum of per-benefit progress. Persistent, so it
 	// survives restarts (unlike the heartbeat log ring used for today's count).

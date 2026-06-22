@@ -500,12 +500,12 @@
      is in the watching state — keeps the column rhythm consistent. */
   .account-row {
     display: grid;
-    grid-template-columns: 28px minmax(140px, 1fr) minmax(180px, 2fr) auto auto;
+    grid-template-columns: 28px minmax(120px, 1fr) minmax(0, 2fr) max-content max-content;
     grid-template-areas: "av who activity pill reload";
     gap: 12px;
     align-items: center;
     padding: 9px 14px;
-    border-top: 1px dashed var(--line);
+    /* border-top lives on .account-row-d; don't double it on the summary. */
     text-decoration: none;
     color: inherit;
     transition: background 0.12s;
@@ -819,11 +819,11 @@
     border: 1px solid var(--line);
     border-radius: 3px;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    padding: 3px 4px;
-    max-width: 96px;
+    font-size: 9.5px;
+    padding: 2px 4px;
+    max-width: 160px;
   }
-  .whitelist-add .btn.sm { white-space: nowrap; font-size: 10px; padding: 3px 6px; }
+  .whitelist-add .btn.sm { white-space: nowrap; font-size: 9.5px; padding: 2px 6px; }
   /* COLLECTED marks — one chip per account that claimed the benefit. */
   .drop-item-collected { display: flex; flex-wrap: wrap; gap: 5px; }
   .cmark {
@@ -948,7 +948,8 @@
     letter-spacing: 0.12em;
     border-radius: 2px;
   }
-  .pill-watching   { color: var(--green);  border-color: rgba(111, 181, 107, 0.45); background: rgba(111, 181, 107, 0.06); }
+  .pill-watching,
+  .pill-force_watch { color: var(--green);  border-color: rgba(111, 181, 107, 0.45); background: rgba(111, 181, 107, 0.06); }
   .pill-claiming   { color: var(--amber);  border-color: rgba(225, 176, 74, 0.45);  background: rgba(225, 176, 74, 0.06); }
   .pill-pick_stream,
   .pill-pick_campaign { color: var(--blue); border-color: rgba(111, 141, 181, 0.45); background: rgba(111, 141, 181, 0.06); }
@@ -3398,8 +3399,8 @@
     grid-template-areas:
       "chev t lvl ac"
       "chev body body body";
-    row-gap: 2px;
-    padding: 6px 12px 6px 14px;
+    row-gap: 1px;
+    padding: 3px 12px 3px 14px;
   }
   .ev .chev { grid-area: chev; }
   .ev .t    { grid-area: t; }
@@ -3473,3 +3474,50 @@
 }
 .lang-dd-menu li:hover { background: var(--surface-2); }
 .lang-dd-menu li.selected { color: var(--accent); }
+
+/* Flash toast — transient feedback after an action (whitelist add, etc.).
+   Fixed bottom-right, fades out on its own so it reads as a popup. */
+.toast {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 1000;
+  padding: 9px 16px;
+  background: var(--surface-2, #1a1a1a);
+  color: var(--green, #6fb56b);
+  border: 1px solid rgba(111, 181, 107, 0.45);
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+  animation: toast-life 4s ease forwards;
+  pointer-events: none;
+}
+@keyframes toast-life {
+  0%   { opacity: 0; transform: translateY(8px); }
+  10%  { opacity: 1; transform: translateY(0); }
+  80%  { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(8px); }
+}
+
+/* Removable whitelist chip (✓ login ✕) in the drops null-game + promoted rows.
+   Sized to the row text, compact, with a little left gap from the name. */
+button.chip-rm {
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  line-height: 1.2;
+  padding: 1px 5px;
+  margin-left: 5px;
+  border-radius: 3px;
+  background: rgba(111, 181, 107, 0.06);
+  border: 1px solid rgba(111, 181, 107, 0.4);
+  color: var(--green, #6fb56b);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+button.chip-rm:hover {
+  background: rgba(212, 99, 30, 0.1);
+  border-color: rgba(212, 99, 30, 0.5);
+  color: var(--accent, #d4631e);
+}

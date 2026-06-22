@@ -9,6 +9,7 @@
     <nav class="nav">
       <a href="/" class="{{if eq .Active "dashboard"}}active{{end}}">{{t "nav.console"}}</a>
       <a href="/drops" class="{{if eq .Active "drops"}}active{{end}}">{{t "nav.drops"}}</a>
+      <a href="/priority" class="{{if eq .Active "priority"}}active{{end}}">{{t "nav.priority"}}</a>
       <a href="/history" class="{{if eq .Active "history"}}active{{end}}">{{t "nav.history"}}</a>
       <a href="/settings" class="{{if or (eq .Active "settings") (eq .Active "accounts")}}active{{end}}">{{t "nav.settings"}}</a>
     </nav>
@@ -30,11 +31,12 @@
       <span class="clock">—</span>
       <div class="lang-dd" id="lang-dd">
         <button type="button" class="lang-dd-btn" id="lang-dd-btn" aria-haspopup="listbox" aria-expanded="false">
-          {{if eq .Lang "zh-CN"}}中文{{else}}EN{{end}} <span class="lang-dd-arrow">▾</span>
+          {{if eq .Lang "zh-CN"}}中文{{else if eq .Lang "es"}}ES{{else}}EN{{end}} <span class="lang-dd-arrow">▾</span>
         </button>
         <ul class="lang-dd-menu" id="lang-dd-menu" role="listbox" hidden>
           <li role="option" data-lang="en" class="{{if eq .Lang "en"}}selected{{end}}">EN — English</li>
           <li role="option" data-lang="zh-CN" class="{{if eq .Lang "zh-CN"}}selected{{end}}">中文 — Chinese</li>
+          <li role="option" data-lang="es" class="{{if eq .Lang "es"}}selected{{end}}">ES — Spanish</li>
         </ul>
       </div>
     </div>
