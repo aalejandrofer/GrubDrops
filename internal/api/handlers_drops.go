@@ -419,16 +419,19 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 	// They get a dedicated section with a per-account channel whitelist
 	// button instead of the game whitelist button.
 	var nullGameRows []dropsRow
+	var nullGamePromoted []dropsRow // fully whitelisted → shown in the Whitelisted table
 	if tab == tabCurrent {
 		kept := unlistedRows[:0]
 		for _, row := range unlistedRows {
 			if strings.TrimSpace(row.Game) == "" && len(row.Channels) > 0 {
 				// Which accounts already whitelist one of this campaign's
 				// channels (matching platform) → ✓ chips on the row.
+				matching := 0
 				for _, ac := range allAccts {
 					if ac.platform != row.Platform {
 						continue
 					}
+					matching++
 					for _, ch := range row.Channels {
 						if ac.chans[strings.ToLower(strings.TrimSpace(ch))] {
 							row.WhitelistedBy = append(row.WhitelistedBy, ac.login)
@@ -436,7 +439,13 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 						}
 					}
 				}
-				nullGameRows = append(nullGameRows, row)
+				// Once every matching-platform account whitelists this drop,
+				// it is fully adopted — promote it to the Whitelisted table.
+				if matching > 0 && len(row.WhitelistedBy) >= matching {
+					nullGamePromoted = append(nullGamePromoted, row)
+				} else {
+					nullGameRows = append(nullGameRows, row)
+				}
 			} else {
 				kept = append(kept, row)
 			}

@@ -31,6 +31,7 @@
 </head>
 <body>
 {{if .AuthedAdmin}}{{template "nav" .}}{{end}}
+{{if .Flash}}<div class="toast" role="status">{{t .Flash}}</div>{{end}}
 <main>
 {{block "content" .}}{{end}}
 </main>

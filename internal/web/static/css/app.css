@@ -500,7 +500,7 @@
      is in the watching state — keeps the column rhythm consistent. */
   .account-row {
     display: grid;
-    grid-template-columns: 28px minmax(140px, 1fr) minmax(180px, 2fr) auto auto;
+    grid-template-columns: 28px minmax(120px, 1fr) minmax(0, 2fr) max-content max-content;
     grid-template-areas: "av who activity pill reload";
     gap: 12px;
     align-items: center;
@@ -3473,3 +3473,29 @@
 }
 .lang-dd-menu li:hover { background: var(--surface-2); }
 .lang-dd-menu li.selected { color: var(--accent); }
+
+/* Flash toast — transient feedback after an action (whitelist add, etc.).
+   Fixed top-center, fades out on its own so it reads as a popup. */
+.toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 9px 16px;
+  background: var(--surface-2, #1a1a1a);
+  color: var(--green, #6fb56b);
+  border: 1px solid rgba(111, 181, 107, 0.45);
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+  animation: toast-life 4s ease forwards;
+  pointer-events: none;
+}
+@keyframes toast-life {
+  0%   { opacity: 0; transform: translate(-50%, -8px); }
+  10%  { opacity: 1; transform: translate(-50%, 0); }
+  80%  { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -8px); }
+}
