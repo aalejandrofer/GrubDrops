@@ -202,6 +202,7 @@ default shown.
 | `GRUB_DISCORD_WEBHOOK` | none | Global Discord webhook. |
 | `GRUB_SECURE_COOKIES` | `0` | `1` marks cookies `Secure` (HTTPS only); keep `0` for plain HTTP — see note. |
 | `GRUB_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
+| `GRUB_AUTHBYPASS` | `false` | **Disables all auth** when truthy (`1`/`true`). Staging/dev only, behind a trusted proxy. Logs a startup warning. Never set in production. |
 
 > **"Invalid CSRF token"?** `GRUB_SECURE_COOKIES` must match your scheme: `0`
 > over plain HTTP, `1` over HTTPS (proxy must forward `X-Forwarded-Proto: https`).
