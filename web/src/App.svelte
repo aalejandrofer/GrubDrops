@@ -1,6 +1,5 @@
 <script lang="ts">
+  import Dashboard from './routes/Dashboard.svelte';
 </script>
 
-<main>
-  <p data-testid="spa-boot">GrubDrops SPA</p>
-</main>
+<Dashboard />
