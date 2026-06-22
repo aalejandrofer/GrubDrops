@@ -9,6 +9,7 @@
     <nav class="nav">
       <a href="/" class="{{if eq .Active "dashboard"}}active{{end}}">{{t "nav.console"}}</a>
       <a href="/drops" class="{{if eq .Active "drops"}}active{{end}}">{{t "nav.drops"}}</a>
+      <a href="/priority" class="{{if eq .Active "priority"}}active{{end}}">{{t "nav.priority"}}</a>
       <a href="/history" class="{{if eq .Active "history"}}active{{end}}">{{t "nav.history"}}</a>
       <a href="/settings" class="{{if or (eq .Active "settings") (eq .Active "accounts")}}active{{end}}">{{t "nav.settings"}}</a>
     </nav>

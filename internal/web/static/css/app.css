@@ -819,11 +819,11 @@
     border: 1px solid var(--line);
     border-radius: 3px;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    padding: 3px 4px;
-    max-width: 96px;
+    font-size: 9.5px;
+    padding: 2px 4px;
+    max-width: 160px;
   }
-  .whitelist-add .btn.sm { white-space: nowrap; font-size: 10px; padding: 3px 6px; }
+  .whitelist-add .btn.sm { white-space: nowrap; font-size: 9.5px; padding: 2px 6px; }
   /* COLLECTED marks — one chip per account that claimed the benefit. */
   .drop-item-collected { display: flex; flex-wrap: wrap; gap: 5px; }
   .cmark {
@@ -3398,8 +3398,8 @@
     grid-template-areas:
       "chev t lvl ac"
       "chev body body body";
-    row-gap: 2px;
-    padding: 6px 12px 6px 14px;
+    row-gap: 1px;
+    padding: 3px 12px 3px 14px;
   }
   .ev .chev { grid-area: chev; }
   .ev .t    { grid-area: t; }

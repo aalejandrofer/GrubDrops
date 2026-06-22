@@ -326,7 +326,8 @@ func NewRouter(d Deps) http.Handler {
 	historyH := &historyDeps{q: d.Q, ring: d.LogRing, t: d.Templates, loc: d.Location}
 
 	authed.Get("/settings", settingsH.get)
-	authed.Get("/settings/priority", settingsH.getPriority)
+	authed.Get("/priority", settingsH.getPriority)          // top-level nav item, moved out of Settings
+	authed.Get("/settings/priority", settingsH.getPriority) // legacy path, kept so old links/redirects still resolve
 	authed.Get("/settings/notifications", settingsH.getNotifications)
 	authed.Get("/settings/security", settingsH.getSecurity)
 	authed.Get("/settings/experimental", settingsH.getExperimental)

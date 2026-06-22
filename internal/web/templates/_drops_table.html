@@ -7,7 +7,7 @@
       <strong>{{t "drops_table.no_games_title"}}</strong>
       — {{t "drops_table.no_games_desc"}}
     </span>
-    <a class="btn sm alert-cta" href="/settings/priority">{{t "drops_table.add_game"}} →</a>
+    <a class="btn sm alert-cta" href="/priority">{{t "drops_table.add_game"}} →</a>
   </div>
   {{end}}
   <div class="drops-grid">
@@ -15,7 +15,7 @@
     <section class="drops-pane">
       <header class="drops-pane-h">
         <h3>{{t "drops_table.whitelisted"}}</h3>
-        <span class="meta">{{len .Rows}} · {{.Tab}}</span>
+        <span class="meta">{{len .Rows}}</span>
       </header>
       {{if not .Rows}}
       <div class="empty">
@@ -123,14 +123,15 @@
             <span class="chev" aria-hidden="true">›</span>
             <span class="t">{{if .When}}{{.When}}{{else}}—{{end}}</span>
             <span class="lvl" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">●</span>
-            <span class="body"><em style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{.Platform}}</em> · <span style="color:var(--muted);">{{t "drops_table.no_game"}}</span> · {{.CampaignName}}</span>
+            <span class="body"><em style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{.Platform}}</em> · <span style="color:var(--muted);">{{t "drops_table.no_game"}}</span> · {{.CampaignName}}{{range .WhitelistedBy}} <span class="conn-chip ok" title="{{.}} {{t "drops_table.channel_active"}}">✓ {{.}}</span>{{end}}</span>
+            {{$rowPlat := .Platform}}
             <span class="ac whitelist-add" onclick="event.stopPropagation()">
               {{if $accts}}
               <form method="post" action="/drops/whitelist/channel" class="disc-add-form" onsubmit="this.querySelector('button').disabled=true">
                 <input type="hidden" name="csrf_token" value="{{$csrf}}">
                 {{range .Channels}}<input type="hidden" name="channel" value="{{.}}">{{end}}
                 <select name="account_id" onclick="event.stopPropagation()" title="{{t "drops_table.whitelist_add"}}">
-                  {{range $accts}}<option value="{{.ID}}">{{.Label}}</option>{{end}}
+                  {{range $accts}}{{if eq .Platform $rowPlat}}<option value="{{.ID}}">{{.Label}}</option>{{end}}{{end}}
                 </select>
                 <button class="btn sm" type="submit" onclick="event.stopPropagation()">{{t "drops_table.whitelist_add"}}</button>
               </form>

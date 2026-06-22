@@ -6,11 +6,17 @@
 <div class="shell">
   <div class="ph">
     <div>
+      {{if eq .Active "priority"}}
+      <div class="kicker">{{t "nav.priority"}}</div>
+      <h1>{{t "priority.heading"}}</h1>
+      {{else}}
       <div class="kicker">{{t "settings.config"}}</div>
       <h1>{{t "settings.heading"}}</h1>
+      {{end}}
     </div>
+    {{if ne .Active "priority"}}
     <div class="actions">
-      {{if or (eq .Active "settings") (eq .Active "") (eq .Active "priority") (eq .Active "experimental") (eq .Active "proxy")}}
+      {{if or (eq .Active "settings") (eq .Active "") (eq .Active "experimental") (eq .Active "proxy")}}
       <form method="post" action="/accounts/apply" class="inline-form"
             onsubmit="return confirm('{{t "accounts.reload_confirm"}}');">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
@@ -19,8 +25,9 @@
       {{end}}
       <a class="btn primary" href="/accounts/new">{{t "settings.add_account"}}</a>
     </div>
+    {{end}}
   </div>
-  {{template "settings_subnav" .}}
+  {{if ne .Active "priority"}}{{template "settings_subnav" .}}{{end}}
 
   {{if .Flash}}<div class="flash-ok">{{t .Flash}}</div>{{end}}
 

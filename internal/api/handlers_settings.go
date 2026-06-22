@@ -365,7 +365,7 @@ func (d *settingsDeps) postPriorityMode(w http.ResponseWriter, r *http.Request) 
 		d.onUpdate()
 	}
 	d.sm.Put(ctx, "flash", "flash.priority_mode_saved")
-	http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
+	http.Redirect(w, r, "/priority", http.StatusSeeOther)
 }
 
 // postExperimental saves the Experimental tab: the Kick watch path toggle.
@@ -476,17 +476,17 @@ func (d *settingsDeps) globalGamesAdd(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	lang := i18n.DetectLang(r)
 	if d.q == nil {
-		http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
+		http.Redirect(w, r, "/priority", http.StatusSeeOther)
 		return
 	}
 	name := strings.TrimSpace(r.FormValue("name"))
 	if name == "" {
-		http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
+		http.Redirect(w, r, "/priority", http.StatusSeeOther)
 		return
 	}
 	slug := gameslug.Slug(name)
 	if slug == "" {
-		http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
+		http.Redirect(w, r, "/priority", http.StatusSeeOther)
 		return
 	}
 	// Canonical id (gameslug.ID, '-'→'_') so it matches discovery's row; plain
@@ -517,7 +517,7 @@ func (d *settingsDeps) globalGamesAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	d.applyReload(ctx)
 	d.sm.Put(ctx, "flash", i18n.T(lang, "flash.added_to_global_priority"))
-	http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
+	http.Redirect(w, r, "/priority", http.StatusSeeOther)
 }
 
 // changePassword handles POST /settings/password — verifies the current
@@ -572,7 +572,7 @@ func (d *settingsDeps) globalGamesPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if d.q == nil {
-		http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
+		http.Redirect(w, r, "/priority", http.StatusSeeOther)
 		return
 	}
 	ids := r.Form["game_ids[]"]
@@ -593,7 +593,7 @@ func (d *settingsDeps) globalGamesPost(w http.ResponseWriter, r *http.Request) {
 	}
 	d.applyReload(ctx)
 	d.sm.Put(ctx, "flash", "flash.global_priority_saved")
-	http.Redirect(w, r, "/settings/priority", http.StatusSeeOther)
+	http.Redirect(w, r, "/priority", http.StatusSeeOther)
 }
 
 // applyReload calls the scheduler reload hook if wired. Logs but
