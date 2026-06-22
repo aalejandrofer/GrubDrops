@@ -285,6 +285,7 @@
   "drops_table.no_game": "sin juego",
   "drops_table.channel_active": "ya en la lista de esta cuenta",
   "drops_table.channel_remove": "clic para quitar de la lista",
+  "drops_table.campaigns": "campañas",
   "drops_table.no_game_title": "esta campaña no reporta juego — nada que añadir a la lista blanca",
   "drops_table.global": "Global",
   "drops_table.whitelist_add": "lista blanca +",

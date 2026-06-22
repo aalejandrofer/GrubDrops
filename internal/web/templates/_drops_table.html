@@ -154,28 +154,23 @@
     <section class="drops-pane">
       <header class="drops-pane-h">
         <h3>{{t "drops_table.discoverable"}}</h3>
-        <span class="meta">{{len .UnlistedRows}}</span>
+        <span class="meta">{{len .UnlistedGroups}}</span>
       </header>
-      {{if not .UnlistedRows}}
+      {{if not .UnlistedGroups}}
       <div class="empty">{{t "drops_table.all_whitelisted"}}</div>
       {{else}}
       <div class="events drops-rows scroll-cap">
         {{$accts := .Accounts}}
         {{$csrf := .CSRFToken}}
-        {{range .UnlistedRows}}
-        <details class="ev kind-{{if eq .Kind "reward"}}auth{{else}}discovery{{end}} ev-linkrow"
-                 {{if .CampaignID}}hx-get="/drops/campaigns/{{.CampaignID}}/items"
-                 hx-target="find .ev-detail-slot"
-                 hx-trigger="toggle once from:closest details"
-                 hx-swap="innerHTML"{{end}}>
+        {{range .UnlistedGroups}}
+        <details class="ev kind-discovery ev-linkrow">
           <summary>
             <span class="chev" aria-hidden="true">›</span>
-            <span class="t">{{if .When}}{{.When}}{{else}}—{{end}}</span>
+            <span class="t">—</span>
             <span class="lvl" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">●</span>
-            <span class="body"><em style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{.Platform}}</em>{{if eq .Kind "reward"}} · {{t "drops_table.reward"}}{{end}} · <span style="color:var(--muted);">{{.Game}}</span> · {{.CampaignName}}</span>
+            <span class="body"><em style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}muted{{end}})">{{.Platform}}</em> · <span style="color:var(--muted);">{{if .Game}}{{.Game}}{{else}}{{t "drops_table.no_game"}}{{end}}</span> · {{len .Rows}} {{t "drops_table.campaigns"}}</span>
             <span class="ac whitelist-add" onclick="event.stopPropagation()">
-              {{if not .Game}}<span style="color:var(--muted);" title="{{t "drops_table.no_game_title"}}">{{t "drops_table.no_game"}}</span>
-              {{else if $accts}}
+              {{if and .Game $accts}}
               <form method="post" action="/drops/whitelist/add" class="disc-add-form" onsubmit="this.querySelector('button').disabled=true">
                 <input type="hidden" name="csrf_token" value="{{$csrf}}">
                 <input type="hidden" name="name" value="{{.Game}}">
@@ -185,14 +180,12 @@
                 </select>
                 <button class="btn sm" type="submit" onclick="event.stopPropagation()">{{t "drops_table.whitelist_add"}}</button>
               </form>
-              {{else}}<span style="color:var(--muted);">{{t "drops_table.no_accounts"}}</span>{{end}}
+              {{else if not $accts}}<span style="color:var(--muted);">{{t "drops_table.no_accounts"}}</span>{{end}}
             </span>
           </summary>
-          <div class="ev-detail-slot">
-            {{if .CampaignID}}
-            <div class="ev-detail" style="color:var(--muted);font-size:11px;">{{t "drops_table.loading"}}</div>
-            {{else}}
-            <div class="ev-detail" style="color:var(--muted);font-size:11px;">{{t "drops_table.no_item_details"}}</div>
+          <div class="ev-detail">
+            {{range .Rows}}
+            <div class="disc-camp">{{if .When}}{{.When}} · {{end}}{{.CampaignName}}</div>
             {{end}}
           </div>
         </details>
