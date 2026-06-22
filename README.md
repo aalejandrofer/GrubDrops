@@ -202,7 +202,7 @@ default shown.
 | `GRUB_DISCORD_WEBHOOK` | none | Global Discord webhook. |
 | `GRUB_SECURE_COOKIES` | `0` | `1` marks cookies `Secure` (HTTPS only); keep `0` for plain HTTP — see note. |
 | `GRUB_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
-| `GRUB_AUTHBYPASS` | `false` | **Disables all auth** when truthy (`1`/`true`). Staging/dev only, behind a trusted proxy. Logs a startup warning. Never set in production. |
+| `GRUB_AUTHBYPASS` | `false` | **Disables all auth** when truthy (`1`/`true`). |
 | `GRUB_TWITCH_BROWSER` | `0` | `1` routes Twitch through the browser sidecar instead of direct HTTP. Experimental; the default direct-HTTP path is recommended. |
 | `GRUB_CANARY_INTERVAL` | Health-tab value | Overrides the accrual-canary run cadence (e.g. `6h`); falls back to the Settings ▸ Health value. |
 
