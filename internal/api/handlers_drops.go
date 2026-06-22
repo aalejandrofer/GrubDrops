@@ -164,10 +164,10 @@ type dropsRow struct {
 	// Channels are the campaign's participating channel slugs (parsed
 	// from raw_json). Used by the null-game section's WHITELIST+ form.
 	Channels []string
-	// WhitelistedBy lists the logins of accounts that already whitelist
-	// one of this campaign's channels — shown as ✓ chips on null-game
-	// rows so the user can see which accounts are already mining it.
-	WhitelistedBy []string
+	// WhitelistedBy lists the accounts that already whitelist one of this
+	// campaign's channels — shown as removable ✓ chips on null-game rows
+	// so the user sees (and can revoke) which accounts mine it.
+	WhitelistedBy []whitelistChip
 
 	// Linked is true when the account can earn this campaign (external
 	// account connected, or none required). False = whitelisted but the
@@ -181,6 +181,13 @@ type dropsRow struct {
 	// unlinked — drives the mineable-row connect nudge.
 	ConnectChips []connectChip
 	NeedsConnect bool
+}
+
+// whitelistChip is one account that already whitelists a null-game drop's
+// channel, shown as a removable ✓ chip.
+type whitelistChip struct {
+	Login     string
+	AccountID string
 }
 
 // connectChip is one account's link state on a not-linked campaign row.
@@ -392,6 +399,7 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 	// so the null-game section can show which accounts already mine a drop.
 	var accountsForPick []dropsAccount
 	type acctChannels struct {
+		id       string
 		login    string
 		platform string
 		chans    map[string]bool
@@ -410,7 +418,7 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 					cm[strings.ToLower(strings.TrimSpace(rc.Channel))] = true
 				}
 			}
-			allAccts = append(allAccts, acctChannels{login: a.DisplayName, platform: a.Platform, chans: cm})
+			allAccts = append(allAccts, acctChannels{id: a.ID, login: a.DisplayName, platform: a.Platform, chans: cm})
 		}
 	}
 
@@ -434,7 +442,7 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 					matching++
 					for _, ch := range row.Channels {
 						if ac.chans[strings.ToLower(strings.TrimSpace(ch))] {
-							row.WhitelistedBy = append(row.WhitelistedBy, ac.login)
+							row.WhitelistedBy = append(row.WhitelistedBy, whitelistChip{Login: ac.login, AccountID: ac.id})
 							break
 						}
 					}
@@ -485,6 +493,9 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 				page.UnlinkedRows = append(page.UnlinkedRows, row)
 			}
 		}
+		// Null-game drops every matching account has whitelisted are fully
+		// adopted — show them in the Whitelisted (mining) table.
+		page.Rows = append(page.Rows, nullGamePromoted...)
 	case tabUpcoming:
 		page.Rows = upcomingRows
 	}
@@ -952,6 +963,44 @@ func (d *dropsDeps) addChannelWhitelist(w http.ResponseWriter, r *http.Request) 
 		} else {
 			d.sm.Put(r.Context(), "flash", "flash.channel_whitelist_none")
 		}
+	}
+	http.Redirect(w, r, "/drops", http.StatusSeeOther)
+}
+
+// removeChannelWhitelist un-whitelists a null-game drop's channel(s) for one
+// account (the ✕ on a ✓ chip), then reloads so the watcher drops it.
+func (d *dropsDeps) removeChannelWhitelist(w http.ResponseWriter, r *http.Request) {
+	accID := r.FormValue("account_id")
+	if accID == "" {
+		http.Redirect(w, r, "/drops", http.StatusSeeOther)
+		return
+	}
+	removed := 0
+	seen := map[string]struct{}{}
+	for _, raw := range r.Form["channel"] {
+		ch := strings.ToLower(strings.TrimSpace(raw))
+		if ch == "" {
+			continue
+		}
+		if _, dup := seen[ch]; dup {
+			continue
+		}
+		seen[ch] = struct{}{}
+		if err := d.q.RemoveAccountChannel(r.Context(), gen.RemoveAccountChannelParams{
+			AccountID: accID, Channel: ch,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		removed++
+	}
+	if removed > 0 && d.reload != nil {
+		if err := d.reload(r.Context()); err != nil {
+			slog.Warn("reload after channel whitelist remove failed", "err", err)
+		}
+	}
+	if d.sm != nil {
+		d.sm.Put(r.Context(), "flash", "flash.channel_whitelist_removed")
 	}
 	http.Redirect(w, r, "/drops", http.StatusSeeOther)
 }

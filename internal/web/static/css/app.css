@@ -3499,3 +3499,17 @@
   80%  { opacity: 1; transform: translate(-50%, 0); }
   100% { opacity: 0; transform: translate(-50%, -8px); }
 }
+
+/* Removable whitelist chip (✓ login ✕) in the drops null-game + promoted rows. */
+button.chip-rm {
+  cursor: pointer;
+  font: inherit;
+  background: rgba(111, 181, 107, 0.06);
+  border: 1px solid rgba(111, 181, 107, 0.4);
+  color: var(--green, #6fb56b);
+}
+button.chip-rm:hover {
+  background: rgba(212, 99, 30, 0.1);
+  border-color: rgba(212, 99, 30, 0.5);
+  color: var(--accent, #d4631e);
+}

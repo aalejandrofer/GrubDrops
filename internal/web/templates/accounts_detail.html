@@ -121,7 +121,7 @@
     {{if .Channels}}
     <div class="chips">
       {{range .Channels}}
-      <form method="post" action="/accounts/{{$.Account.ID}}/channels/remove" style="display:inline" onsubmit="this.querySelector('button').disabled=true">
+      <form method="post" action="/accounts/{{$.Page.Account.ID}}/channels/remove" style="display:inline" onsubmit="this.querySelector('button').disabled=true">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
         <input type="hidden" name="channel" value="{{.}}">
         <button class="chip" type="submit" title="{{t "account.channel_remove"}}">{{.}} ✕</button>
@@ -132,7 +132,7 @@
     <p class="hint" style="font-size:12px;">{{t "account.channels_empty"}}</p>
     {{end}}
     <form method="post" action="/accounts/{{.Account.ID}}/channels/add" class="add-by-name">
-      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
       <div class="kvedit"><div class="row">
         <span class="k">{{t "account.channel_add"}}</span>
         <span class="d">{{t "account.channel_add_desc"}}</span>
