@@ -285,7 +285,6 @@
   "drops_table.no_game": "no game",
   "drops_table.channel_active": "already whitelisted on this account",
   "drops_table.channel_remove": "click to remove from whitelist",
-  "drops_table.campaigns": "campaigns",
   "drops_table.no_game_title": "this campaign reports no game — nothing to whitelist",
   "drops_table.global": "Global",
   "drops_table.whitelist_add": "whitelist +",

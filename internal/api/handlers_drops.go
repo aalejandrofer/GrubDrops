@@ -224,12 +224,8 @@ type dropsPage struct {
 	// dedicated section whose WHITELIST+ opts an account into the
 	// campaign's channel. Only populated for the current tab.
 	NullGameRows []dropsRow
-	// UnlistedGroups collapses the Discoverable list by game: one expandable
-	// group per (platform, game) with a single WHITELIST+ (whitelisting is
-	// by game, so per-campaign rows were redundant). Shrinks a long list.
-	UnlistedGroups []unlistedGroup
-	Accounts       []dropsAccount // for the "add to whitelist" dropdown on unlisted rows
-	CSRFToken      string         // mirrors templateData.CSRFToken for inline form
+	Accounts     []dropsAccount // for the "add to whitelist" dropdown on unlisted rows
+	CSRFToken    string         // mirrors templateData.CSRFToken for inline form
 	// NoWhitelist is true when no game is whitelisted anywhere (per-account or
 	// global). Discovery only crawls whitelisted games, so an empty whitelist
 	// means the page is silently empty — a cold-start trap. The template shows
@@ -242,14 +238,6 @@ type dropsAccount struct {
 	ID       string
 	Label    string // "@login (platform)"
 	Platform string // "twitch" | "kick" — so the null-game dropdown only offers matching accounts
-}
-
-// unlistedGroup is one (platform, game) bucket of Discoverable campaigns,
-// rendered as a single collapsible row with one game-level WHITELIST+.
-type unlistedGroup struct {
-	Game     string
-	Platform string
-	Rows     []dropsRow
 }
 
 // allowedGamesUnion returns the effective whitelist union across
@@ -473,34 +461,16 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		unlistedRows = kept
 	}
 
-	// Group the remaining Discoverable rows by (platform, game) so the list
-	// collapses to one whitelist-able row per game. Order is preserved by
-	// first appearance.
-	var unlistedGroups []unlistedGroup
-	groupIdx := map[string]int{}
-	for _, row := range unlistedRows {
-		key := row.Platform + "\x00" + row.Game
-		if i, ok := groupIdx[key]; ok {
-			unlistedGroups[i].Rows = append(unlistedGroups[i].Rows, row)
-			continue
-		}
-		groupIdx[key] = len(unlistedGroups)
-		unlistedGroups = append(unlistedGroups, unlistedGroup{
-			Game: row.Game, Platform: row.Platform, Rows: []dropsRow{row},
-		})
-	}
-
 	page := dropsPage{
-		Tab:            tab,
-		PastCount:      len(pastRows),
-		CurrentCount:   len(currentRows),
-		UpcomingCount:  len(upcomingRows),
-		UnlistedRows:   unlistedRows,
-		UnlistedGroups: unlistedGroups,
-		NullGameRows:   nullGameRows,
-		Accounts:       accountsForPick,
-		CSRFToken:      csrfToken(r),
-		NoWhitelist:    !hasWhitelist,
+		Tab:           tab,
+		PastCount:     len(pastRows),
+		CurrentCount:  len(currentRows),
+		UpcomingCount: len(upcomingRows),
+		UnlistedRows:  unlistedRows,
+		NullGameRows:  nullGameRows,
+		Accounts:      accountsForPick,
+		CSRFToken:     csrfToken(r),
+		NoWhitelist:   !hasWhitelist,
 	}
 	switch tab {
 	case tabPast:

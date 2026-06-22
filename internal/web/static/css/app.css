@@ -3521,6 +3521,3 @@ button.chip-rm:hover {
   border-color: rgba(212, 99, 30, 0.5);
   color: var(--accent, #d4631e);
 }
-
-/* Grouped Discoverable: campaign names listed under a game group. */
-.disc-camp { padding: 2px 0 2px 38px; color: var(--muted); font-size: 11px; }

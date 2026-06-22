@@ -285,7 +285,6 @@
   "drops_table.no_game": "无游戏",
   "drops_table.channel_active": "该账户已加入白名单",
   "drops_table.channel_remove": "点击从白名单移除",
-  "drops_table.campaigns": "个活动",
   "drops_table.no_game_title": "此活动未报告游戏 — 无法加入白名单",
   "drops_table.global": "全局",
   "drops_table.whitelist_add": "加入白名单 +",
