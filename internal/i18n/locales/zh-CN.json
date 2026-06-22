@@ -746,5 +746,16 @@
   "account.channel_add": "添加频道",
   "account.channel_add_desc": "按确切名称添加频道（例如 xqc）",
   "account.channel_placeholder": "频道名称",
-  "account.channel_remove": "删除频道"
+  "account.channel_remove": "删除频道",
+  "account.force_title": "频道积分（强制观看）",
+  "account.force_desc": "当此账号没有可挖的掉宝时，持续观看下列频道以积累频道积分。优先级最低——白名单中的直播掉宝始终优先。",
+  "account.force_warning": "全天候观看属于异常行为；Twitch/Kick 可能会标记从不停止的账号。",
+  "account.force_toggle": "频道积分挖取",
+  "account.force_on": "已启用——空闲时观看。",
+  "account.force_off": "已禁用。",
+  "account.force_enable": "启用",
+  "account.force_disable": "禁用",
+  "account.force_empty": "还没有频道——在下方添加一个。",
+  "account.force_add": "添加频道",
+  "account.force_add_desc": "添加一个用于挖积分的频道（例如 xqc）"
 }

@@ -6,6 +6,13 @@ All notable changes to GrubDrops.
 
 ### Added
 
+- **Channel-points force-watch (per account).** When an account has no drops
+  to mine, it can keep watching configured channels 24/7 to farm channel
+  points. Managed on the account page (toggle + channel list); lowest
+  priority, so a live whitelisted drop always preempts it. Warns that 24/7
+  watching may be flagged by Twitch/Kick.
+- **`GRUB_AUTHBYPASS` env flag** — disables all auth (staging/dev only) so the
+  UI is reachable without login behind a proxy. Logs a loud startup warning.
 - **Channel whitelist for category-less drops.** Opt an account into a
   Kick/Twitch channel so drops with no game category (e.g. Kick Football
   drops) get mined — they previously fell through the game-only whitelist and

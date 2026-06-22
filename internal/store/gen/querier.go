@@ -12,6 +12,7 @@ import (
 type Querier interface {
 	AddAccountChannel(ctx context.Context, arg AddAccountChannelParams) error
 	AddAccountGame(ctx context.Context, arg AddAccountGameParams) error
+	AddForceChannel(ctx context.Context, arg AddForceChannelParams) error
 	AddGlobalGame(ctx context.Context, arg AddGlobalGameParams) error
 	AdminExists(ctx context.Context) (bool, error)
 	ClearAccountChannels(ctx context.Context, accountID string) error
@@ -64,6 +65,7 @@ type Querier interface {
 	// Whitelist filtering is applied in Go.
 	ListCurrentCampaigns(ctx context.Context, arg ListCurrentCampaignsParams) ([]Campaign, error)
 	ListEnabledAccounts(ctx context.Context) ([]Account, error)
+	ListForceChannels(ctx context.Context, accountID string) ([]ListForceChannelsRow, error)
 	ListGlobalGames(ctx context.Context) ([]ListGlobalGamesRow, error)
 	ListKVByPrefix(ctx context.Context, dollar_1 sql.NullString) ([]Kv, error)
 	// Campaigns that have ended. Whitelist filtering is applied in Go.
@@ -75,6 +77,7 @@ type Querier interface {
 	ListUpcomingCampaigns(ctx context.Context, arg ListUpcomingCampaignsParams) ([]Campaign, error)
 	RemoveAccountChannel(ctx context.Context, arg RemoveAccountChannelParams) error
 	RemoveAccountGame(ctx context.Context, arg RemoveAccountGameParams) error
+	RemoveForceChannel(ctx context.Context, arg RemoveForceChannelParams) error
 	SetAccountEnabled(ctx context.Context, arg SetAccountEnabledParams) error
 	// Lifetime watch minutes: sum of per-benefit progress. Persistent, so it
 	// survives restarts (unlike the heartbeat log ring used for today's count).

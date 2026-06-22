@@ -141,6 +141,43 @@
       </div></div>
     </form>
   </section>
+
+  <section class="settings-card">
+    <header class="section-h"><h3>{{t "account.force_title"}}</h3></header>
+    <p class="hint" style="margin:0 0 14px;">{{t "account.force_desc"}}</p>
+    <p class="hint" style="margin:0 0 14px;color:var(--accent);">⚠ {{t "account.force_warning"}}</p>
+    <form method="post" action="/accounts/{{.Account.ID}}/force-watch">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <input type="hidden" name="enabled" value="{{if .ForceWatchEnabled}}0{{else}}1{{end}}">
+      <div class="kvedit"><div class="row">
+        <span class="k">{{t "account.force_toggle"}}</span>
+        <span class="d">{{if .ForceWatchEnabled}}{{t "account.force_on"}}{{else}}{{t "account.force_off"}}{{end}}</span>
+        <button class="btn-linear" type="submit">{{if .ForceWatchEnabled}}{{t "account.force_disable"}}{{else}}{{t "account.force_enable"}}{{end}} →</button>
+      </div></div>
+    </form>
+    {{if .ForceChannels}}
+    <div class="chips" style="margin-top:14px;">
+      {{range .ForceChannels}}
+      <form method="post" action="/accounts/{{$.Page.Account.ID}}/force-channels/remove" style="display:inline" onsubmit="this.querySelector('button').disabled=true">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <input type="hidden" name="channel" value="{{.}}">
+        <button class="chip" type="submit" title="{{t "account.channel_remove"}}">{{.}} ✕</button>
+      </form>
+      {{end}}
+    </div>
+    {{else}}
+    <p class="hint" style="font-size:12px;margin-top:14px;">{{t "account.force_empty"}}</p>
+    {{end}}
+    <form method="post" action="/accounts/{{.Account.ID}}/force-channels/add" class="add-by-name">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <div class="kvedit"><div class="row">
+        <span class="k">{{t "account.force_add"}}</span>
+        <span class="d">{{t "account.force_add_desc"}}</span>
+        <span class="v grow"><input type="text" name="channel" placeholder="{{t "account.channel_placeholder"}}" required></span>
+        <button class="btn-linear" type="submit">{{t "account.add"}} →</button>
+      </div></div>
+    </form>
+  </section>
   </div>{{/* .settings-stack */}}
 </div>
 

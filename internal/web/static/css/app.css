@@ -3475,12 +3475,11 @@
 .lang-dd-menu li.selected { color: var(--accent); }
 
 /* Flash toast — transient feedback after an action (whitelist add, etc.).
-   Fixed top-center, fades out on its own so it reads as a popup. */
+   Fixed bottom-right, fades out on its own so it reads as a popup. */
 .toast {
   position: fixed;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: 16px;
+  right: 16px;
   z-index: 1000;
   padding: 9px 16px;
   background: var(--surface-2, #1a1a1a);
@@ -3494,10 +3493,10 @@
   pointer-events: none;
 }
 @keyframes toast-life {
-  0%   { opacity: 0; transform: translate(-50%, -8px); }
-  10%  { opacity: 1; transform: translate(-50%, 0); }
-  80%  { opacity: 1; transform: translate(-50%, 0); }
-  100% { opacity: 0; transform: translate(-50%, -8px); }
+  0%   { opacity: 0; transform: translateY(8px); }
+  10%  { opacity: 1; transform: translateY(0); }
+  80%  { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(8px); }
 }
 
 /* Removable whitelist chip (✓ login ✕) in the drops null-game + promoted rows.

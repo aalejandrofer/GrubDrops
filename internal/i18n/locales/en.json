@@ -746,5 +746,16 @@
   "account.channel_add": "Add channel",
   "account.channel_add_desc": "Add a channel by exact name (e.g. xqc)",
   "account.channel_placeholder": "channel name",
-  "account.channel_remove": "Remove channel"
+  "account.channel_remove": "Remove channel",
+  "account.force_title": "Channel Points (force-watch)",
+  "account.force_desc": "When this account has no drops to mine, keep watching the channels below to farm channel points. Lowest priority — a live whitelisted drop always takes over.",
+  "account.force_warning": "Watching 24/7 is unusual behaviour; Twitch/Kick may flag an account that never stops.",
+  "account.force_toggle": "Channel-points mining",
+  "account.force_on": "Enabled — watches when idle.",
+  "account.force_off": "Disabled.",
+  "account.force_enable": "Enable",
+  "account.force_disable": "Disable",
+  "account.force_empty": "No channels yet — add one below.",
+  "account.force_add": "Add channel",
+  "account.force_add_desc": "Add a channel to watch for points (e.g. xqc)"
 }

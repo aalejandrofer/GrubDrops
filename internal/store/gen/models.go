@@ -37,6 +37,13 @@ type AccountChannel struct {
 	Rank      int64  `json:"rank"`
 }
 
+type AccountForceChannel struct {
+	AccountID string `json:"account_id"`
+	Channel   string `json:"channel"`
+	Rank      int64  `json:"rank"`
+	CreatedAt int64  `json:"created_at"`
+}
+
 type AccountGame struct {
 	AccountID string `json:"account_id"`
 	GameID    string `json:"game_id"`

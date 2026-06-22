@@ -1035,3 +1035,59 @@ func TestWatcher_SkipsNullGameWhenChannelNotWhitelisted(t *testing.T) {
 	assert.Equal(t, int64(0), backend.Heartbeats(),
 		"null-game campaign with no matching channel must not be mined")
 }
+
+// idleBackend never returns campaigns, so the watcher goes idle — the
+// trigger condition for force-watch (channel-points) to kick in.
+type idleBackend struct{ *platformtest.MockBackend }
+
+func (idleBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	return nil, nil
+}
+
+// fakeForce is a ForceWatchSource that always offers the same channel.
+type fakeForce struct{ channel string }
+
+func (f fakeForce) Next(_ context.Context, _ string) (ForceTask, bool) {
+	if f.channel == "" {
+		return ForceTask{}, false
+	}
+	return ForceTask{Channel: f.channel}, true
+}
+
+func TestWatcher_ForceWatchesWhenIdle(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	backend := &idleBackend{platformtest.New()}
+	w := New(Config{
+		AccountID:    "acc1",
+		Backend:      backend,
+		Session:      platform.Session{AccessToken: "tok"},
+		Notifier:     &recordingNotifier{},
+		TickInterval: 5 * time.Millisecond,
+		AllowGame:    func(string) bool { return false }, // nothing mineable
+		ForceWatcher: fakeForce{channel: "xqc"},
+	})
+	_ = w.Run(ctx)
+	assert.Greater(t, backend.Heartbeats(), int64(0),
+		"idle account with a force-watch channel must watch it for channel points")
+}
+
+func TestWatcher_NoForceWatchWhenDisabled(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+
+	backend := &idleBackend{platformtest.New()}
+	w := New(Config{
+		AccountID:    "acc1",
+		Backend:      backend,
+		Session:      platform.Session{AccessToken: "tok"},
+		Notifier:     &recordingNotifier{},
+		TickInterval: 5 * time.Millisecond,
+		AllowGame:    func(string) bool { return false },
+		ForceWatcher: fakeForce{channel: ""}, // disabled / no channel
+	})
+	_ = w.Run(ctx)
+	assert.Equal(t, int64(0), backend.Heartbeats(),
+		"idle account with force-watch disabled must not watch anything")
+}

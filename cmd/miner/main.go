@@ -425,6 +425,7 @@ func run() error {
 			Persister:     campaignPersister,
 			ClaimRecorder: claimRecorder,
 			ForceLinked:   forceLinked,
+			ForceWatcher:  forceWatchStore{q: q},
 		})
 		return scheduler.NewEntry(a.ID, w), nil
 	}
@@ -822,6 +823,24 @@ func loadAccountChannels(ctx context.Context, q *gen.Queries, accountID string) 
 		return false
 	}
 	return allow, nil
+}
+
+// forceWatchStore adapts the per-account force-watch channel list to
+// watcher.ForceWatchSource: when channel-points mining is enabled for an
+// account and at least one force channel is configured, the watcher
+// force-watches the highest-priority one while idle.
+type forceWatchStore struct{ q *gen.Queries }
+
+func (f forceWatchStore) Next(ctx context.Context, accountID string) (watcher.ForceTask, bool) {
+	v, err := f.q.GetSettingString(ctx, api.ForceWatchEnabledKey(accountID))
+	if err != nil || string(v) != "1" {
+		return watcher.ForceTask{}, false
+	}
+	rows, err := f.q.ListForceChannels(ctx, accountID)
+	if err != nil || len(rows) == 0 {
+		return watcher.ForceTask{}, false
+	}
+	return watcher.ForceTask{Channel: rows[0].Channel}, true
 }
 
 // parseDuration parses a Go duration string (e.g. "5m", "30s") with a

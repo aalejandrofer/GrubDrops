@@ -112,6 +112,27 @@ type Config struct {
 	// to mine and the live progress check confirms it. Best-effort — if the
 	// account truly isn't linked the watch just accrues no progress.
 	ForceLinked func(campaignID string) bool
+
+	// ForceWatcher supplies the account's force-watch channel (channel-points
+	// 24/7 idle mining) when the account is otherwise idle. Nil disables the
+	// feature. LOWEST priority: only consulted from the idle branch, and the
+	// watch yields back to mining periodically so a live whitelisted drop
+	// always wins.
+	ForceWatcher ForceWatchSource
+}
+
+// ForceTask is a channel to force-watch while idle. Watched indefinitely
+// (no fixed duration) until a real drop preempts it or it is removed.
+type ForceTask struct {
+	Channel string
+}
+
+// ForceWatchSource is the watcher's view of the per-account force-watch
+// channel list. Implemented by a store-backed adapter in cmd/miner.
+type ForceWatchSource interface {
+	// Next returns a channel to force-watch for the account when idle, if
+	// the feature is enabled and a channel is configured.
+	Next(ctx context.Context, accountID string) (ForceTask, bool)
 }
 
 type Watcher struct {
@@ -123,6 +144,8 @@ type Watcher struct {
 	currentCampaign *platform.Campaign
 	currentBenefit  *platform.DropBenefit
 	currentStream   *platform.Stream
+	// forceTask is the active force-watch task (StateForceWatch), or nil.
+	forceTask       *ForceTask
 	handle          *platform.WatchHandle
 	watchStartedAt  time.Time
 	lastPollAt      time.Time // last inventory/progress poll (for the "last poll" UI)
@@ -579,10 +602,16 @@ func (w *Watcher) Run(ctx context.Context) error {
 		if err == nil {
 			backoff = 0
 		} else if errors.Is(err, errIdle) {
-			// Idle (sleeping / awaiting connect): wait the recheck
-			// cooldown, then re-discover. Cancellable so Reload/shutdown
-			// still tears the watcher down promptly.
+			// Idle (sleeping / awaiting connect): nothing to mine right now.
+			// As the LOWEST-priority fallback, run a queued force-watch task
+			// (channel-points / manual watch) if one is pending — a real
+			// whitelisted drop always wins because force-watch only starts
+			// from this idle branch and yields back to pickCampaign
+			// periodically.
 			backoff = 0
+			if w.maybeStartForceTask(ctx) {
+				continue
+			}
 			w.setState(ctx, StatePickCampaign)
 			timer := time.NewTimer(recheckInterval)
 			select {
@@ -669,6 +698,12 @@ var errIdle = errors.New("idle; recheck later")
 // the watcher's view and the persisted /drops view converge.
 const recheckInterval = 5 * time.Minute
 
+// forceWatchYieldInterval is how long a force-watch task runs before
+// yielding back to mining to check whether a real whitelisted drop has
+// gone live (force-watch is the lowest priority). The task resumes from
+// the idle branch with its accrued minutes if nothing else is mineable.
+const forceWatchYieldInterval = 5 * time.Minute
+
 // Watch-loop network cadences are derived per-watcher from TickInterval and
 // HeartbeatInterval — the beacon (watch ping) and inventory poll both run on
 // heartbeatEveryTicks() (default once a minute, configurable), and the
@@ -712,6 +747,8 @@ func (w *Watcher) step(ctx context.Context) error {
 	switch w.State() {
 	case StateIdle, StatePickCampaign:
 		return w.pickCampaign(ctx)
+	case StateForceWatch:
+		return w.forceWatch(ctx)
 	case StatePickStream:
 		return w.pickStream(ctx)
 	case StateWatching:
@@ -730,6 +767,99 @@ func (w *Watcher) step(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unknown state %s", w.State())
 	}
+}
+
+// maybeStartForceTask enters StateForceWatch when the account is idle and a
+// force-watch channel is configured (channel-points mining). Returns true
+// when a force-watch started so the idle branch yields this tick.
+func (w *Watcher) maybeStartForceTask(ctx context.Context) bool {
+	if w.cfg.ForceWatcher == nil {
+		return false
+	}
+	w.mu.Lock()
+	busy := w.forceTask != nil
+	w.mu.Unlock()
+	if busy {
+		return false
+	}
+	task, ok := w.cfg.ForceWatcher.Next(ctx, w.cfg.AccountID)
+	if !ok {
+		return false
+	}
+	w.mu.Lock()
+	t := task
+	w.forceTask = &t
+	w.mu.Unlock()
+	w.setState(ctx, StateForceWatch)
+	return true
+}
+
+// forceWatch holds an idle channel-points watch: start a watch on the
+// force-watch channel and heartbeat it, with no benefit/claim logic. It
+// runs indefinitely but yields back to mining every forceWatchYieldInterval
+// so a newly-live whitelisted drop preempts it (force-watch is lowest
+// priority).
+func (w *Watcher) forceWatch(ctx context.Context) error {
+	w.mu.Lock()
+	task := w.forceTask
+	handle := w.handle
+	started := w.watchStartedAt
+	w.mu.Unlock()
+	if task == nil {
+		w.setState(ctx, StatePickCampaign)
+		return nil
+	}
+
+	// First tick: start the watch.
+	if handle == nil {
+		s := platform.Stream{Channel: task.Channel}
+		h, err := w.cfg.Backend.StartWatch(ctx, w.cfg.Session, s)
+		if err != nil {
+			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+				return fmt.Errorf("force watch start: %w", err)
+			}
+			slog.Warn("force-watch StartWatch failed; back to mining",
+				"kind", "error", "account", w.cfg.AccountID, "channel", task.Channel, "err", err)
+			w.mu.Lock()
+			w.forceTask = nil
+			w.mu.Unlock()
+			w.setState(ctx, StatePickCampaign)
+			return nil
+		}
+		w.mu.Lock()
+		w.currentStream = &s
+		w.handle = &h
+		w.watchStartedAt = time.Now()
+		w.tickCount = 0
+		w.mu.Unlock()
+		slog.Info("force-watch started (channel points)", "kind", "state",
+			"account", w.cfg.AccountID, "channel", task.Channel)
+		if cs, ok := w.cfg.Backend.(platform.ChannelSubscriber); ok && s.ChannelID != "" {
+			cs.SubscribeChannel(w.cfg.AccountID, s.ChannelID)
+		}
+		return nil
+	}
+
+	// Subsequent ticks: keep the watch alive.
+	if err := w.cfg.Backend.Heartbeat(ctx, *handle); err != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			return fmt.Errorf("force watch heartbeat: %w", err)
+		}
+		slog.Warn("force-watch heartbeat error", "kind", "error", "account", w.cfg.AccountID, "err", err)
+	}
+
+	// Periodically yield back to mining so a newly-live whitelisted drop
+	// preempts us. If still idle, the idle branch restarts force-watch.
+	if time.Since(started) >= forceWatchYieldInterval {
+		w.stopCurrentWatch(ctx)
+		w.mu.Lock()
+		w.forceTask = nil
+		w.mu.Unlock()
+		slog.Info("force-watch yielding to re-check for drops", "kind", "state",
+			"account", w.cfg.AccountID, "channel", task.Channel)
+		w.setState(ctx, StatePickCampaign)
+	}
+	return nil
 }
 
 func (w *Watcher) pickCampaign(ctx context.Context) error {

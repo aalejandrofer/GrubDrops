@@ -746,5 +746,16 @@
   "account.channel_add": "Añadir canal",
   "account.channel_add_desc": "Añade un canal por nombre exacto (p. ej. xqc)",
   "account.channel_placeholder": "nombre del canal",
-  "account.channel_remove": "Eliminar canal"
+  "account.channel_remove": "Eliminar canal",
+  "account.force_title": "Puntos de canal (force-watch)",
+  "account.force_desc": "Cuando esta cuenta no tiene drops que minar, sigue viendo los canales de abajo para acumular puntos de canal. Prioridad más baja: un drop en directo de la lista blanca siempre tiene preferencia.",
+  "account.force_warning": "Ver 24/7 es un comportamiento inusual; Twitch/Kick podrían marcar una cuenta que nunca para.",
+  "account.force_toggle": "Minado de puntos de canal",
+  "account.force_on": "Activado — ve cuando está inactiva.",
+  "account.force_off": "Desactivado.",
+  "account.force_enable": "Activar",
+  "account.force_disable": "Desactivar",
+  "account.force_empty": "Aún no hay canales — añade uno abajo.",
+  "account.force_add": "Añadir canal",
+  "account.force_add_desc": "Añade un canal para ver por puntos (p. ej. xqc)"
 }
