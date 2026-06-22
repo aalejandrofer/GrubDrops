@@ -218,6 +218,7 @@
   "mining.awaiting_connect": "esperando conexión",
   "mining.scanning": "escaneando",
   "mining.scanning_channels": "escaneando canales",
+  "mining.force_watching": "viendo",
   "mining.picking": "eligiendo",
   "mining.idle": "inactivo",
   "mining.reload_account": "Recargar esta cuenta",

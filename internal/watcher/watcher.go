@@ -832,7 +832,7 @@ func (w *Watcher) forceWatch(ctx context.Context) error {
 		w.watchStartedAt = time.Now()
 		w.tickCount = 0
 		w.mu.Unlock()
-		slog.Info("force-watch started (channel points)", "kind", "state",
+		slog.Info("force-watch started", "kind", "state",
 			"account", w.cfg.AccountID, "channel", task.Channel)
 		if cs, ok := w.cfg.Backend.(platform.ChannelSubscriber); ok && s.ChannelID != "" {
 			cs.SubscribeChannel(w.cfg.AccountID, s.ChannelID)

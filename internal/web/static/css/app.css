@@ -948,7 +948,8 @@
     letter-spacing: 0.12em;
     border-radius: 2px;
   }
-  .pill-watching   { color: var(--green);  border-color: rgba(111, 181, 107, 0.45); background: rgba(111, 181, 107, 0.06); }
+  .pill-watching,
+  .pill-force_watch { color: var(--green);  border-color: rgba(111, 181, 107, 0.45); background: rgba(111, 181, 107, 0.06); }
   .pill-claiming   { color: var(--amber);  border-color: rgba(225, 176, 74, 0.45);  background: rgba(225, 176, 74, 0.06); }
   .pill-pick_stream,
   .pill-pick_campaign { color: var(--blue); border-color: rgba(111, 141, 181, 0.45); background: rgba(111, 141, 181, 0.06); }

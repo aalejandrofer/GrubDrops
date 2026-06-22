@@ -35,7 +35,7 @@ func RequireAdmin(sm *scs.SessionManager) func(http.Handler) http.Handler {
 	bypassLocal := os.Getenv("GRUB_AUTH_BYPASS_LOCAL") == "1"
 	bypassAll := envTrue("GRUB_AUTHBYPASS")
 	if bypassAll {
-		slog.Warn("GRUB_AUTHBYPASS is set — ALL authentication is DISABLED; every request is treated as admin. Never use this in production.", "kind", "auth")
+		slog.Warn("GRUB_AUTHBYPASS is set — ALL authentication is DISABLED; every request is treated as admin.", "kind", "auth")
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

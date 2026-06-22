@@ -218,6 +218,7 @@
   "mining.awaiting_connect": "等待关联",
   "mining.scanning": "扫描中",
   "mining.scanning_channels": "正在扫描频道",
+  "mining.force_watching": "观看中",
   "mining.picking": "选择中",
   "mining.idle": "空闲",
   "mining.reload_account": "重新加载此账号",
