@@ -240,6 +240,7 @@ func (d accountsDeps) detail(w http.ResponseWriter, r *http.Request) {
 
 	render(w, r, d.t, "accounts_detail.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
+		Flash: d.sm.PopString(r.Context(), "flash"),
 		Page: accountDetailPage{
 			Account: row, AllGames: allRows, SelectedGames: selected, Channels: channels,
 			ForceChannels: forceChannels, ForceWatchEnabled: forceEnabled,
@@ -613,6 +614,7 @@ func (d accountsDeps) addForceChannel(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		d.applyReload(r.Context())
+		d.sm.Put(r.Context(), "flash", "flash.force_channel_added")
 	}
 	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
@@ -633,6 +635,7 @@ func (d accountsDeps) removeForceChannel(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		d.applyReload(r.Context())
+		d.sm.Put(r.Context(), "flash", "flash.force_channel_removed")
 	}
 	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
@@ -675,6 +678,7 @@ func (d accountsDeps) forceChannelsReorder(w http.ResponseWriter, r *http.Reques
 		rank++
 	}
 	d.applyReload(r.Context())
+	d.sm.Put(r.Context(), "flash", "flash.force_saved")
 	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
 
@@ -687,7 +691,8 @@ func (d accountsDeps) forceWatchToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	val := []byte("")
-	if r.FormValue("enabled") == "1" {
+	enabled := r.FormValue("enabled") == "1"
+	if enabled {
 		val = []byte("1")
 	}
 	if err := d.q.UpsertSettingString(r.Context(), gen.UpsertSettingStringParams{
@@ -697,6 +702,11 @@ func (d accountsDeps) forceWatchToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.applyReload(r.Context())
+	if enabled {
+		d.sm.Put(r.Context(), "flash", "flash.force_watch_enabled")
+	} else {
+		d.sm.Put(r.Context(), "flash", "flash.force_watch_disabled")
+	}
 	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }
 

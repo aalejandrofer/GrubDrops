@@ -878,7 +878,8 @@ func (d *dropsDeps) markLinked(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := store.LinkOverridePrefix + campaignID
-	if r.FormValue("unlink") == "1" {
+	unlink := r.FormValue("unlink") == "1"
+	if unlink {
 		_ = d.q.DeleteKV(r.Context(), key)
 	} else {
 		if err := d.q.UpsertSettingString(r.Context(), gen.UpsertSettingStringParams{
@@ -893,6 +894,13 @@ func (d *dropsDeps) markLinked(w http.ResponseWriter, r *http.Request) {
 	if d.reload != nil {
 		if err := d.reload(r.Context()); err != nil {
 			slog.Warn("scheduler reload after link override failed", "campaign", campaignID, "err", err)
+		}
+	}
+	if d.sm != nil {
+		if unlink {
+			d.sm.Put(r.Context(), "flash", "flash.marked_unlinked")
+		} else {
+			d.sm.Put(r.Context(), "flash", "flash.marked_linked")
 		}
 	}
 	http.Redirect(w, r, "/drops", http.StatusSeeOther)
