@@ -45,7 +45,8 @@
         <span class="drop">{{if .DropName}}{{.DropName}}{{else}}{{t "mining.drop"}}{{end}}</span>
         <span class="meta">{{t "mining.claim_in_flight"}}</span>
       {{else if eq .State "pick_stream"}}
-        <span class="meta">{{t "mining.scanning_channels"}}{{if .DropCampaign}} · {{.DropCampaign}}{{end}}</span>
+        {{if .DropCampaign}}<span class="drop">{{.DropCampaign}}</span>{{end}}
+        <span class="meta">{{t "mining.scanning_channels"}}</span>
       {{else if eq .State "needs_auth"}}
         <span class="meta">{{t "mining.login_required"}}</span>
       {{else if eq .State "sleeping"}}
