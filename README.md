@@ -13,7 +13,7 @@
   <img alt="UI" src="https://img.shields.io/badge/UI-HTMX%20%2B%20Go%20templates-2c2c2c">
   <img alt="Storage" src="https://img.shields.io/badge/DB-SQLite-003B57?logo=sqlite&logoColor=white">
   <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-Docker-2496ED?logo=docker&logoColor=white">
-  <a href="https://github.com/aalejandrofer/GrubDrops/releases"><img alt="Latest release" src="https://img.shields.io/badge/release-v1.2.5-2c2c2c?logo=github"></a>
+  <a href="https://github.com/aalejandrofer/GrubDrops/releases"><img alt="Latest release" src="https://img.shields.io/badge/release-v1.3.0-2c2c2c?logo=github"></a>
   <a href="https://github.com/aalejandrofer/GrubDrops/pkgs/container/grubdrops"><img alt="ghcr.io image" src="https://img.shields.io/badge/ghcr.io-grubdrops-2496ED?logo=github"></a>
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
 </p>
@@ -42,7 +42,7 @@ image and a single SQLite file.
 - 🔔 **Discord notifications**, toggle per event type.
 - 🧪 **Browserless Kick by default**: Kick now starts on a WebSocket watch path (no Chrome, no Docker — light enough for any Pi) and **falls back to the Chrome sidecar automatically** if WS stops accruing. Force a specific path in Settings → Experimental.
 - 🔒 **Your credentials stay yours**: Twitch uses the official device-code login, Kick uses a session you export. No passwords sent to GrubDrops.
-- 🌐 **Multi-language support**: English and Chinese (中文) built-in. Add new languages by copying a JSON file.
+- 🌐 **Multi-language support**: English, Spanish, and Chinese built-in. Add new languages by copying a JSON file.
 - 🕐 **Timezone auto-detection**: Set `TZ` env var for server-side times; browser automatically shows local time.
 - 🌍 **Proxy support**: HTTP/HTTPS/SOCKS5 proxy for all external requests. Configure in Settings → Proxy.
 
@@ -94,7 +94,7 @@ services:
       GRUB_MASTER_KEY: ${GRUB_MASTER_KEY:?run: head -c32 /dev/urandom | base64}
       GRUB_DB_PATH: /data/miner.db
       GRUB_SECURE_COOKIES: "0"   # plain-HTTP localhost; set 1 behind HTTPS
-      TZ: Asia/Shanghai           # server-side timezone
+      TZ: Europe/London           # server-side timezone
     volumes:
       - ./data:/data
       - /var/run/docker.sock:/var/run/docker.sock # Kick only, if WS Breaks
