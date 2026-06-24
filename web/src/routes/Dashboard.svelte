@@ -3,6 +3,7 @@
   import { fetchDashboard } from '../lib/api';
   import { pollingResource, type PollingResource } from '../lib/poll.svelte';
   import type { DashboardSnapshot } from '../lib/types';
+  import AccountModal from './AccountModal.svelte';
 
   let {
     snapshot = null,
@@ -19,6 +20,8 @@
   // the error state only shows on a first-load failure with no data yet.
   const display = $derived(snapshot ?? poll?.current ?? null);
   const error = $derived(snapshot ? null : poll?.error ?? null);
+
+  let selected = $state<string | null>(null);
 </script>
 
 {#if display}
@@ -33,28 +36,40 @@
     <div class="col twitch">
       <h3>TWITCH</h3>
       {#each display.Mining.Twitch ?? [] as card (card.ID)}
-        <article class="mine-card">
+        <button
+          class="mine-card"
+          onclick={() => (selected = card.ID)}
+          aria-label="Open details for {card.Name}"
+        >
           <span class="name">{card.Name}</span>
           <span class="state">{card.State}</span>
           <span class="channel">{card.Channel}</span>
           <span class="drop">{card.DropName} {card.DropPercent}%</span>
-        </article>
+        </button>
       {/each}
     </div>
     <div class="col kick">
       <h3>KICK · {display.Mining.KickWatchMode}</h3>
       {#each display.Mining.Kick ?? [] as card (card.ID)}
-        <article class="mine-card">
+        <button
+          class="mine-card"
+          onclick={() => (selected = card.ID)}
+          aria-label="Open details for {card.Name}"
+        >
           <span class="name">{card.Name}</span>
           <span class="state">{card.State}</span>
           <span class="channel">{card.Channel}</span>
           <span class="drop">{card.DropName} {card.DropPercent}%</span>
-        </article>
+        </button>
       {/each}
     </div>
   </section>
 
   <footer class="dash-footer">updated {display.UpdatedAt} · uptime {display.Uptime}</footer>
+
+  {#if selected}
+    <AccountModal accountId={selected} onClose={() => (selected = null)} />
+  {/if}
 {:else if error}
   <p class="error">{error.message}</p>
 {:else}
