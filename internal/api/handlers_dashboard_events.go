@@ -121,10 +121,11 @@ var eventMsgKeys = map[string]string{
 // `kindFilter` is one of "" / "all" / "claim" / "progress" / "state" /
 // "discovery" / "error" / "auth"; anything else is treated as "all".
 // `accountFilter` is the account ID to keep ("" or "all" = keep all).
-func eventsFromRing(ring *mlog.Ring, kindFilter, accountFilter, lang string, accs []gen.Account, loc *time.Location) []dashEvent {
+func eventsFromRing(ring *mlog.Ring, kindFilter, accountFilter, levelFilter, lang string, accs []gen.Account, loc *time.Location) []dashEvent {
 	if ring == nil {
 		return nil
 	}
+	levelFilter = strings.ToUpper(strings.TrimSpace(levelFilter))
 	// Build account_id -> @login map so events render the human handle
 	// instead of acc_XXXXXXXX... — matches how upstream
 	// TwitchDropsMiner labels output.
@@ -143,6 +144,9 @@ func eventsFromRing(ring *mlog.Ring, kindFilter, accountFilter, lang string, acc
 			kind = classifyEvent(l.Msg, l.Level)
 		}
 		if kindFilter != "" && kindFilter != "all" && kind != kindFilter {
+			continue
+		}
+		if levelFilter != "" && levelFilter != "ALL" && !strings.EqualFold(l.Level, levelFilter) {
 			continue
 		}
 		accID := fieldStr(l.Fields, "account")

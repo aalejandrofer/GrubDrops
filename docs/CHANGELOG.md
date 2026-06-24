@@ -4,6 +4,20 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Added
+
+- **Live-events feed level filter.** A new All / Info / Warn / Error dropdown
+  next to the account filter, so you can narrow the feed to just warnings or
+  errors.
+
+### Changed
+
+- **Successful Twitch GQL responses dropped to debug.** Every successful API
+  call was logged at info, and the per-channel live-check fan-out alone is
+  hundreds per minute, which drowned the live-events feed. Every failure mode
+  (5xx, 429, integrity, decode, application error, partial) is still logged
+  loudly, so the feed loses no signal.
+
 ## [1.3.2] — 2026-06-24
 
 ### Added

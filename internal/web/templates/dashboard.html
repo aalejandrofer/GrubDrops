@@ -95,6 +95,12 @@
         <a data-kind="auth" href="#">{{t "dashboard.filter_auth"}}</a>
         <a data-kind="error" href="#">{{t "dashboard.filter_errors"}}</a>
       </div>
+      <select name="level" id="ev-level" class="ev-account">
+        <option value="all">{{t "dashboard.level_all"}}</option>
+        <option value="INFO">{{t "dashboard.level_info"}}</option>
+        <option value="WARN">{{t "dashboard.level_warn"}}</option>
+        <option value="ERROR">{{t "dashboard.level_error"}}</option>
+      </select>
       <select name="account" id="ev-account" class="ev-account">
         <option value="all">{{t "dashboard.all_accounts"}}</option>
         {{range .EventAccounts}}<option value="{{.ID}}" style="color:var(--{{if eq .Platform "twitch"}}purple{{else if eq .Platform "kick"}}kick{{else}}text{{end}})">{{.Label}}{{if .Platform}} · {{.Platform}}{{end}}</option>{{end}}
