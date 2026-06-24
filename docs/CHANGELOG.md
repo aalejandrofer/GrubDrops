@@ -4,6 +4,22 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Multi-tier campaigns with the same reward now mine every tier.** When a
+  Twitch campaign granted the same item at escalating watch-time thresholds
+  (e.g. 60m / 180m / 360m / 540m), claiming the first tier marked its reward
+  as owned, and the watcher then treated all the higher tiers as claimed too —
+  going idle and showing every tier as collected when only one item was
+  received. The owned-reward skip now applies only to drops that have left the
+  in-progress inventory, so live tiers sharing a reward keep mining. (#24)
+
+### Changed
+
+- **Tiers within a campaign are mined lowest-required-minutes first**, so a
+  claim lands at the earliest threshold and each higher tier builds on the
+  watch-time already banked.
+
 ## [1.3.0] — 2026-06-22
 
 ### Added

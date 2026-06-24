@@ -1091,3 +1091,68 @@ func TestWatcher_NoForceWatchWhenDisabled(t *testing.T) {
 	assert.Equal(t, int64(0), backend.Heartbeats(),
 		"idle account with force-watch disabled must not watch anything")
 }
+
+// multiTierBackend models a single Twitch campaign with four drops that
+// grant the SAME reward at escalating watch-time thresholds (60/180/360/540m,
+// issue #24). The first tier (t60) is claimed; its reward shows up as an
+// OWNED gameEventDrops marker keyed by the shared RewardID. The remaining
+// tiers stay in dropCampaignsInProgress (tracked, unclaimed). The watcher
+// must keep mining the next unclaimed tier instead of treating the whole
+// campaign as done because one tier's reward is owned.
+type multiTierBackend struct {
+	*platformtest.MockBackend
+}
+
+func (m *multiTierBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	mk := func(id string, mins int) platform.DropBenefit {
+		return platform.DropBenefit{ID: id, CampaignID: "r6s", Name: "Esports Pack 2026 Stage 1", RequiredMinutes: mins, RewardID: "rewardX"}
+	}
+	return []platform.Campaign{{
+		ID: "r6s", Game: "Rainbow Six Siege", Status: "active", AccountLinked: true,
+		Benefits: []platform.DropBenefit{
+			mk("t360", 360), mk("t540", 540), mk("t60", 60), mk("t180", 180),
+		},
+	}}, nil
+}
+
+func (m *multiTierBackend) InventoryProgress(_ context.Context, _ platform.Session) ([]platform.Progress, error) {
+	return []platform.Progress{
+		{BenefitID: "t60", MinutesWatched: 60, Claimed: true}, // tier 1 claimed in-progress row
+		{BenefitID: "t180", MinutesWatched: 0, Claimed: false},
+		{BenefitID: "t360", MinutesWatched: 0, Claimed: false},
+		{BenefitID: "t540", MinutesWatched: 0, Claimed: false},
+		{BenefitID: "rewardX", Claimed: true}, // gameEventDrops OWNED marker (shared reward)
+	}, nil
+}
+
+func (m *multiTierBackend) ListEligibleChannels(_ context.Context, _ platform.Session, _ platform.Campaign) ([]platform.Stream, error) {
+	return []platform.Stream{{Channel: "r6streamer", DropsEnabled: true}}, nil
+}
+
+// TestWatcher_MultiTierSameReward_ContinuesAfterFirstClaim is the #24
+// regression: after the 60m tier is claimed, the watcher must pick the
+// next unclaimed tier (the lowest remaining, 180m) and keep mining — not
+// go idle because the shared reward is already owned.
+func TestWatcher_MultiTierSameReward_ContinuesAfterFirstClaim(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	backend := &multiTierBackend{MockBackend: platformtest.New()}
+	w := New(Config{
+		AccountID:    "acc_r6s",
+		Backend:      backend,
+		Session:      platform.Session{AccessToken: "tok"},
+		Notifier:     &recordingNotifier{},
+		TickInterval: 2 * time.Millisecond,
+		AllowGame:    func(g string) bool { return g == "Rainbow Six Siege" },
+	})
+
+	go func() { _ = w.Run(ctx) }()
+
+	require.Eventually(t, func() bool {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		return w.currentBenefit != nil && w.currentBenefit.ID == "t180"
+	}, time.Second, 5*time.Millisecond,
+		"watcher must mine the lowest unclaimed tier (t180) after the 60m tier's reward is owned, not go idle")
+}

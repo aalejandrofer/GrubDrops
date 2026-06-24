@@ -898,7 +898,15 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 		}
 	}
 	claimed := map[string]bool{}
+	// tracked = drop ids that appear in the IN-PROGRESS inventory
+	// (dropCampaignsInProgress). gameEventDrops owned-markers are keyed by
+	// REWARD id, which never collides with a drop id, so they don't land
+	// here. A drop being tracked means we have explicit per-drop claim
+	// state for it and must NOT skip it on the shared-reward owned marker
+	// (issue #24: tiered drops granting the same reward share one RewardID).
+	tracked := map[string]bool{}
 	for _, p := range progress {
+		tracked[p.BenefitID] = true
 		if p.Claimed {
 			claimed[p.BenefitID] = true
 		}
@@ -933,7 +941,8 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 	}); ok && len(claimed) > 0 {
 		for _, c := range campaigns {
 			for _, b := range c.Benefits {
-				if !claimed[b.ID] && !(b.RewardID != "" && claimed[b.RewardID]) {
+				owned := b.RewardID != "" && claimed[b.RewardID] && !tracked[b.ID]
+				if !claimed[b.ID] && !owned {
 					continue
 				}
 				if wrote, err := rec.RecordClaimIfNew(ctx, w.cfg.AccountID, b); err == nil && wrote {
@@ -1166,13 +1175,24 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 		if noStream {
 			continue
 		}
-		for _, b := range c.Benefits {
-			// claimed[] is keyed by drop id (in-progress isClaimed) AND by
-			// benefit id (gameEventDrops owned). Check both so a drop whose
-			// reward the account already holds is skipped immediately,
-			// instead of being re-picked and watched until the slow
-			// no-progress fallback gives up.
-			if claimed[b.ID] || (b.RewardID != "" && claimed[b.RewardID]) {
+		// Mine a campaign's tiers lowest-required-minutes first, so a
+		// claim lands at the earliest possible threshold and each higher
+		// tier builds on the watch-time already banked (issue #24: 60 →
+		// 180 → 360 → 540). Stable sort keeps backend order for ties.
+		benefits := append([]platform.DropBenefit(nil), c.Benefits...)
+		sort.SliceStable(benefits, func(i, j int) bool {
+			return benefits[i].RequiredMinutes < benefits[j].RequiredMinutes
+		})
+		for _, b := range benefits {
+			// claimed[b.ID]: this exact drop's reward was claimed (in-progress
+			// IsClaimed). claimed[b.RewardID]: the account OWNS this reward
+			// (gameEventDrops marker). Skip on the owned marker ONLY when the
+			// drop has fallen out of the in-progress inventory (!tracked) —
+			// e.g. a reward owned from a prior season. A live campaign whose
+			// tiers all grant the same reward shares one RewardID and keeps
+			// the unclaimed tiers tracked, so skipping them on the owned
+			// marker is the #24 bug (only tier 1 was actually claimed).
+			if claimed[b.ID] || (!tracked[b.ID] && b.RewardID != "" && claimed[b.RewardID]) {
 				continue
 			}
 			// Per-watcher skip set: synth benefits we already burnt
