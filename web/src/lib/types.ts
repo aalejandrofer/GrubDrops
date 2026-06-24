@@ -122,6 +122,22 @@ export interface DropsPage {
   NoWhitelist: boolean;
 }
 
+export interface AccountListRow {
+  ID: string;
+  Platform: string;
+  DisplayName: string;
+  Enabled: boolean;
+  AvatarURL: string;
+  AccountInitial: string;
+  State: string;
+  StateTier: string;
+  StateLabel: string;
+  AuthChecked: boolean;
+  AuthOK: boolean;
+  AuthMsg: string;
+  AuthWhen: string;
+}
+
 export interface SettingsOIDC {
   Enabled: boolean;
   ProviderName: string;

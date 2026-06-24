@@ -12,6 +12,7 @@
   import SettingsProxy from './routes/SettingsProxy.svelte';
   import SettingsSecurity from './routes/SettingsSecurity.svelte';
   import SettingsHealth from './routes/SettingsHealth.svelte';
+  import AccountsList from './routes/AccountsList.svelte';
 
   let teardown: (() => void) | undefined;
   onMount(() => { teardown = startRouter(); });
@@ -37,5 +38,7 @@
     <SettingsShell active="security">{#snippet children()}<SettingsSecurity />{/snippet}</SettingsShell>
   {:else if currentPath() === '/settings/health'}
     <SettingsShell active="health">{#snippet children()}<SettingsHealth />{/snippet}</SettingsShell>
+  {:else if currentPath() === '/accounts' || currentPath() === '/settings/accounts'}
+    <AccountsList />
   {/if}
 </AppShell>
