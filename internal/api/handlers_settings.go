@@ -137,7 +137,10 @@ type settingsPageData struct {
 	ProxyEnabled bool
 }
 
-func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active string) {
+// settingsViewData builds the settings page model shared by the HTML
+// renderTab and the JSON apiSettings handler. Reads r for language
+// (canary views). No flash/Active — those stay render concerns.
+func (d *settingsDeps) settingsViewData(r *http.Request) settingsPageData {
 	lang := i18n.DetectLang(r)
 	ctx := r.Context()
 	url, _ := d.s.GlobalDiscordWebhook(ctx)
@@ -160,7 +163,6 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 		uptime = formatUptime(time.Since(d.startedAt), lang)
 	}
 
-	flash := d.sm.PopString(ctx, "flash")
 	// Build global priority list + game pool. Failures are non-fatal:
 	// settings page still renders with empty lists.
 	var globalGames, allGames []settingsGameRow
@@ -200,43 +202,47 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 	proxyURL, _ := d.s.ProxyURL(ctx)
 	proxyEnabled, _ := d.s.ProxyEnabled(ctx)
 
+	return settingsPageData{
+		GlobalDiscordWebhook: url,
+		NotifyAvatarURL:      avatarURL,
+		LogRetentionDays:     days,
+		LogLevel:             level,
+		LogLevelEnv:          d.logLevelEnv,
+		TickIntervalSec:      tick,
+		DiscoveryIntervalMin: discIv,
+		PriorityMode:         prio,
+		KickWatchMode:        kickWatch,
+		GlobalGames:          globalGames,
+		AllGames:             allGames,
+		NotifyClaim:          nc,
+		NotifyProgress:       np,
+		NotifyAuth:           na,
+		NotifyError:          ne,
+		NotifyCanary:         ncan,
+		ProgressNotifyStep:   progStep,
+		Uptime:               uptime,
+		GoVersion:            runtime.Version(),
+		Goroutines:           runtime.NumGoroutine(),
+		BrowserURL:           d.browserURL,
+		Sidecars:             sidecars,
+		GitCommit:            d.gitCommit,
+		Version:              d.version,
+		OIDC:                 ssoStatus,
+		CanaryTwitch:         canaryTwitchView,
+		CanaryKick:           canaryKickView,
+		CanaryTwitchChannel:  canaryTwitchCh,
+		CanaryKickChannel:    canaryKickCh,
+		CanaryIntervalSec:    canaryIntervalSec,
+		ProxyURL:             proxyURL,
+		ProxyEnabled:         proxyEnabled,
+	}
+}
+
+func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active string) {
+	page := d.settingsViewData(r)
+	flash := d.sm.PopString(r.Context(), "flash")
 	render(w, r, d.t, "settings.html", templateData{
-		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: active,
-		Page: settingsPageData{
-			GlobalDiscordWebhook: url,
-			NotifyAvatarURL:      avatarURL,
-			LogRetentionDays:     days,
-			LogLevel:             level,
-			LogLevelEnv:          d.logLevelEnv,
-			TickIntervalSec:      tick,
-			DiscoveryIntervalMin: discIv,
-			PriorityMode:         prio,
-			KickWatchMode:        kickWatch,
-			GlobalGames:          globalGames,
-			AllGames:             allGames,
-			NotifyClaim:          nc,
-			NotifyProgress:       np,
-			NotifyAuth:           na,
-			NotifyError:          ne,
-			NotifyCanary:         ncan,
-			ProgressNotifyStep:   progStep,
-			Uptime:               uptime,
-			GoVersion:            runtime.Version(),
-			Goroutines:           runtime.NumGoroutine(),
-			BrowserURL:           d.browserURL,
-			Sidecars:             sidecars,
-			GitCommit:            d.gitCommit,
-			Version:              d.version,
-			OIDC:                 ssoStatus,
-			CanaryTwitch:         canaryTwitchView,
-			CanaryKick:           canaryKickView,
-			CanaryTwitchChannel:  canaryTwitchCh,
-			CanaryKickChannel:    canaryKickCh,
-			CanaryIntervalSec:    canaryIntervalSec,
-			ProxyURL:             proxyURL,
-			ProxyEnabled:         proxyEnabled,
-		},
-		Flash: flash,
+		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: active, Page: page, Flash: flash,
 	})
 }
 
@@ -358,7 +364,7 @@ func (d *settingsDeps) postNotifications(w http.ResponseWriter, r *http.Request)
 // postPriorityMode saves the Drop Priority tab's mode selector.
 func (d *settingsDeps) postPriorityMode(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	if saveErr(w, d.s.SetPriorityMode(ctx, r.FormValue("priority_mode"))) {
+	if saveErr(w, d.doSetPriorityMode(ctx, r.FormValue("priority_mode"))) {
 		return
 	}
 	if d.onUpdate != nil {
@@ -484,31 +490,7 @@ func (d *settingsDeps) globalGamesAdd(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/priority", http.StatusSeeOther)
 		return
 	}
-	slug := gameslug.Slug(name)
-	if slug == "" {
-		http.Redirect(w, r, "/priority", http.StatusSeeOther)
-		return
-	}
-	// Canonical id (gameslug.ID, '-'→'_') so it matches discovery's row; plain
-	// "g_"+slug keeps hyphens and collides on the UNIQUE slug for multi-word games.
-	gameID := gameslug.ID(name)
-	if err := d.q.UpsertGame(ctx, gen.UpsertGameParams{
-		ID: gameID, Name: name, Slug: slug, Priority: 0,
-	}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	existing, _ := d.q.ListGlobalGames(ctx)
-	rank := int64(len(existing))
-	for _, e := range existing {
-		if e.ID == gameID {
-			rank = e.Rank
-			break
-		}
-	}
-	if err := d.q.AddGlobalGame(ctx, gen.AddGlobalGameParams{
-		GameID: gameID, Rank: rank,
-	}); err != nil {
+	if err := d.doAddGlobalGame(ctx, name); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -576,17 +558,9 @@ func (d *settingsDeps) globalGamesPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ids := r.Form["game_ids[]"]
-	if err := d.q.ClearGlobalGames(ctx); err != nil {
+	if err := d.doSetGlobalGamesOrder(ctx, ids); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
-	}
-	for i, gid := range ids {
-		if err := d.q.AddGlobalGame(ctx, gen.AddGlobalGameParams{
-			GameID: gid, Rank: int64(i),
-		}); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
 	}
 	if d.onUpdate != nil {
 		d.onUpdate()
@@ -594,6 +568,53 @@ func (d *settingsDeps) globalGamesPost(w http.ResponseWriter, r *http.Request) {
 	d.applyReload(ctx)
 	d.sm.Put(ctx, "flash", "flash.global_priority_saved")
 	http.Redirect(w, r, "/priority", http.StatusSeeOther)
+}
+
+// doSetGlobalGamesOrder replaces the global priority list atomically.
+func (d *settingsDeps) doSetGlobalGamesOrder(ctx context.Context, ids []string) error {
+	if d.q == nil {
+		return nil
+	}
+	if err := d.q.ClearGlobalGames(ctx); err != nil {
+		return err
+	}
+	for i, gid := range ids {
+		if err := d.q.AddGlobalGame(ctx, gen.AddGlobalGameParams{GameID: gid, Rank: int64(i)}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// doAddGlobalGame slugs and upserts one game then appends it to the
+// global priority list at the next available rank slot.
+func (d *settingsDeps) doAddGlobalGame(ctx context.Context, name string) error {
+	name = strings.TrimSpace(name)
+	if d.q == nil || name == "" {
+		return nil
+	}
+	slug := gameslug.Slug(name)
+	if slug == "" {
+		return nil
+	}
+	gameID := gameslug.ID(name)
+	if err := d.q.UpsertGame(ctx, gen.UpsertGameParams{ID: gameID, Name: name, Slug: slug, Priority: 0}); err != nil {
+		return err
+	}
+	existing, _ := d.q.ListGlobalGames(ctx)
+	rank := int64(len(existing))
+	for _, e := range existing {
+		if e.ID == gameID {
+			rank = e.Rank
+			break
+		}
+	}
+	return d.q.AddGlobalGame(ctx, gen.AddGlobalGameParams{GameID: gameID, Rank: rank})
+}
+
+// doSetPriorityMode persists the priority mode setting.
+func (d *settingsDeps) doSetPriorityMode(ctx context.Context, mode string) error {
+	return d.s.SetPriorityMode(ctx, mode)
 }
 
 // applyReload calls the scheduler reload hook if wired. Logs but
