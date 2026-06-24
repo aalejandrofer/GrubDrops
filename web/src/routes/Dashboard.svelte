@@ -4,6 +4,11 @@
   import { pollingResource, type PollingResource } from '../lib/poll.svelte';
   import type { DashboardSnapshot } from '../lib/types';
   import AccountModal from './AccountModal.svelte';
+  import AlertsBanner from './AlertsBanner.svelte';
+  import NextClaims from './NextClaims.svelte';
+  import ActiveCampaigns from './ActiveCampaigns.svelte';
+  import EventsDrawer from './EventsDrawer.svelte';
+  import LiveChannels from './LiveChannels.svelte';
 
   let {
     snapshot = null,
@@ -25,12 +30,20 @@
 </script>
 
 {#if display}
+  <div class="page-head">
+    <div><div class="kicker">Dashboard</div><div class="sub">uptime {display.Uptime}</div></div>
+  </div>
+
+  <AlertsBanner alerts={display.Alerts} />
+
   <section class="dash-telemetry">
     <div class="tile"><span class="label">Watch time</span><span class="value">{display.Tele.WatchTimeTotal}</span></div>
     <div class="tile"><span class="label">Claims total</span><span class="value">{display.Tele.ClaimsTotal}</span></div>
     <div class="tile"><span class="label">Active campaigns</span><span class="value">{display.Tele.ActiveCamps}</span></div>
     <div class="tile"><span class="label">Next claim</span><span class="value"><span class="eta">{display.Tele.NextClaimETA}</span> <span class="name">{display.Tele.NextClaimName}</span></span></div>
   </section>
+
+  <NextClaims claims={display.NextClaims} />
 
   <section class="mining-columns">
     <div class="col twitch">
@@ -64,6 +77,10 @@
       {/each}
     </div>
   </section>
+
+  <ActiveCampaigns camps={display.ActiveCamps} />
+  <EventsDrawer events={display.Events} accounts={display.EventAccounts} />
+  <LiveChannels channels={display.LiveChannels} />
 
   <footer class="dash-footer">updated {display.UpdatedAt} · uptime {display.Uptime}</footer>
 

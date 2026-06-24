@@ -22,13 +22,19 @@ function snap(claims: number, nextName: string): DashboardSnapshot {
     },
     Mining: {
       Twitch: [
-        { ID: 'a1', Name: 'acc-one', Platform: 'twitch', State: 'watching', StateSub: 'live', Channel: 'somechan', DropName: 'Helmet', DropPercent: 42, Enabled: true },
+        { ID: 'a1', Name: 'acc-one', Platform: 'twitch', State: 'watching', StateSub: 'live', Channel: 'somechan', DropName: 'Helmet', DropPercent: 42, DropETA: '', Enabled: true },
       ],
       Kick: null,
       KickWatchMode: 'browser',
     },
     UpdatedAt: '1.2s ago',
     Uptime: '17h 42m',
+    Alerts: null,
+    NextClaims: null,
+    ActiveCamps: null,
+    Events: null,
+    EventAccounts: null,
+    LiveChannels: null,
   };
 }
 
@@ -59,6 +65,21 @@ test('polls and re-renders updated telemetry on the next tick', async () => {
 
   expect(await screen.findByText('First Drop')).toBeTruthy();
   expect(await screen.findByText('Second Drop', {}, { timeout: 1000 })).toBeTruthy();
+});
+
+test('renders all dashboard regions from a snapshot', () => {
+  const s = snap(2, 'Drop');
+  s.Alerts = [{ Kind: 'needs_auth', Account: '@a', URL: '/x', Action: 'Re-auth' }];
+  s.ActiveCamps = [{ ID: 'c1', Name: 'Camp One', Platform: 'twitch', Game: 'G', Kind: 'drop', Drops: 1, Channels: 1, EndsIn: '12h', EndsUrgent: false, Claimed: 0, Total: 1 }];
+  s.Events = [{ ID: 'e1', Time: '14:01', Kind: 'claim', Color: 'green', BodyHTML: '<b>Got it</b>', Account: 'acc', Platform: 'twitch', Details: null }];
+  s.LiveChannels = [{ Login: 'streamer', Platform: 'kick', URL: 'https://kick.com/streamer', Initial: 'S', Game: 'G', Campaign: 'C', Views: '1k', ViewerN: 1000 }];
+  s.NextClaims = [{ ID: 'a1', Name: 'acc', Platform: 'twitch', State: 'watching', StateSub: '', Channel: 'c', DropName: 'Helmet', DropPercent: 50, DropETA: '00:30', Enabled: true }];
+
+  render(Dashboard, { props: { snapshot: s } });
+  expect(screen.getByText('Re-auth')).toBeTruthy();
+  expect(screen.getByText('Camp One')).toBeTruthy();
+  expect(screen.getByText('Got it')).toBeTruthy();
+  expect(screen.getByText('streamer')).toBeTruthy();
 });
 
 test('clicking a mining card opens AccountModal with account detail', async () => {
