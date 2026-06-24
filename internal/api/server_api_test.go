@@ -106,6 +106,18 @@ func TestAPICampaignDetail_UnknownIs404JSON(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), `"code":`)
 }
 
+func TestSPARoutesServeShellWhenEnabled(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	h := NewRouter(Deps{Session: scsNew(), SecureCookies: false, SPADashboard: true})
+	for _, p := range spaRoutes {
+		req := httptest.NewRequest(http.MethodGet, p, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code, "path %s", p)
+		assert.Contains(t, rec.Body.String(), `id="app"`, "path %s serves SPA shell", p)
+	}
+}
+
 func TestAPIReloadAll_RequiresCSRF(t *testing.T) {
 	t.Setenv("GRUB_AUTHBYPASS", "true")
 	s, q := newTestSettings(t)

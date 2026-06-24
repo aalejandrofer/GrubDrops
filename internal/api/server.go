@@ -22,6 +22,12 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/web"
 )
 
+// spaRoutes are the paths the SPA renders client-side. When the SPA flag is
+// on, Go serves the SPA shell (spaIndex) for each so deep-links/refreshes
+// work; the client router takes over. Mirrors web/src/lib/router.svelte.ts's
+// spaPaths. Grows as pages are ported.
+var spaRoutes = []string{"/"}
+
 // applyRedirectTarget picks the post-/accounts/apply landing page from
 // the Referer header. The dashboard also has a Reload button, so we
 // avoid the old behavior of always bouncing the user to /accounts:
@@ -208,7 +214,9 @@ func NewRouter(d Deps) http.Handler {
 	authed := chi.NewRouter()
 	authed.Use(RequireAdmin(d.Session))
 	if d.SPADashboard {
-		authed.Get("/", spaIndex)
+		for _, p := range spaRoutes {
+			authed.Get(p, spaIndex)
+		}
 	} else {
 		authed.Get("/", dash.page)
 	}
