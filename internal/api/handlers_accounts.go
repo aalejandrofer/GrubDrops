@@ -746,6 +746,73 @@ func genID() string {
 	return "acc_" + hex.EncodeToString(b[:])
 }
 
+// accountListJSON is the SAFE, display-only projection for GET /api/accounts.
+// It deliberately omits gen.Account's secret/sensitive fields (WebhookUrl,
+// ProxyUrl, FingerprintJson) — never marshal the embedded Account.
+type accountListJSON struct {
+	ID             string `json:"ID"`
+	Platform       string `json:"Platform"`
+	DisplayName    string `json:"DisplayName"`
+	Enabled        bool   `json:"Enabled"`
+	AvatarURL      string `json:"AvatarURL"`
+	AccountInitial string `json:"AccountInitial"`
+	State          string `json:"State"`
+	StateTier      string `json:"StateTier"`
+	StateLabel     string `json:"StateLabel"`
+	AuthChecked    bool   `json:"AuthChecked"`
+	AuthOK         bool   `json:"AuthOK"`
+	AuthMsg        string `json:"AuthMsg"`
+	AuthWhen       string `json:"AuthWhen"`
+}
+
+func (d accountsDeps) apiAccounts(w http.ResponseWriter, r *http.Request) {
+	rows, err := d.q.ListAllAccounts(r.Context())
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	stateByID := map[string]string{}
+	if d.sch != nil {
+		for _, s := range d.sch.Snapshot() {
+			stateByID[s.AccountID] = s.State
+		}
+	}
+	out := make([]accountListJSON, 0, len(rows))
+	for _, a := range rows {
+		st := stateByID[a.ID]
+		if st == "" {
+			st = "stopped"
+		}
+		row := accountListJSON{
+			ID: a.ID, Platform: a.Platform, DisplayName: a.DisplayName,
+			Enabled: a.Enabled == 1, AvatarURL: avatarSrc(a.Platform, a.AvatarUrl),
+			AccountInitial: initial(a.DisplayName),
+			State:          st, StateTier: tierForState(a.Enabled == 1, st), StateLabel: stateLabel(st),
+		}
+		if res, ok := authcheck.Load(r.Context(), d.q, a.ID); ok {
+			row.AuthChecked = true
+			row.AuthOK = res.OK
+			row.AuthMsg = res.Msg
+			loc := d.loc
+			if loc == nil {
+				loc = time.UTC
+			}
+			row.AuthWhen = time.Unix(res.CheckedAt, 0).In(loc).Format("2006-01-02 15:04 MST")
+		}
+		out = append(out, row)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (d accountsDeps) apiCheckAuth(w http.ResponseWriter, r *http.Request) {
+	if d.authCheck == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "message": "auth check unavailable"})
+		return
+	}
+	d.authCheck(r.Context())
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 // Reloader is implemented by main; the apply endpoint calls Reload to
 // rebuild watchers without restarting the process.
 type Reloader interface {

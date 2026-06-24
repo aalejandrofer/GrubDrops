@@ -26,7 +26,7 @@ import (
 // on, Go serves the SPA shell (spaIndex) for each so deep-links/refreshes
 // work; the client router takes over. Mirrors web/src/lib/router.svelte.ts's
 // spaPaths. Grows as pages are ported.
-var spaRoutes = []string{"/", "/drops", "/priority", "/settings", "/settings/notifications", "/settings/security", "/settings/health", "/settings/experimental", "/settings/proxy"}
+var spaRoutes = []string{"/", "/drops", "/priority", "/settings", "/settings/notifications", "/settings/security", "/settings/health", "/settings/experimental", "/settings/proxy", "/accounts", "/settings/accounts"}
 
 // applyRedirectTarget picks the post-/accounts/apply landing page from
 // the Referer header. The dashboard also has a Reload button, so we
@@ -225,8 +225,10 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/dashboard/events", dash.events)
 	authed.Get("/dashboard/campaign/{id}", dash.campaignDetail)
 	authed.Get("/dashboard/account/{id}", dash.accountDetail)
-	authed.Get("/accounts", accs.list)
-	authed.Get("/settings/accounts", accs.list) // canonical path; /accounts kept as alias
+	if !d.SPADashboard {
+		authed.Get("/accounts", accs.list)
+		authed.Get("/settings/accounts", accs.list) // canonical path; /accounts kept as alias
+	}
 	authed.Post("/accounts/check-auth", accs.checkAuth)
 	authed.Get("/accounts/new", accs.newGet)
 	authed.Post("/accounts/new", accs.newPost)
@@ -403,6 +405,8 @@ func NewRouter(d Deps) http.Handler {
 		gr.Get("/dashboard", dash.apiPage)
 		gr.Get("/dashboard/account/{id}", dash.apiAccountDetail)
 		gr.Get("/dashboard/campaign/{id}", dash.apiCampaignDetail)
+		gr.Get("/accounts", accs.apiAccounts)
+		gr.Post("/accounts/check-auth", accs.apiCheckAuth)
 		gr.Post("/accounts/{id}/toggle", accs.apiToggle)
 		gr.Post("/accounts/{id}/reload", accs.apiReload)
 		gr.Post("/accounts/{id}/force-watch", accs.apiForceWatch)

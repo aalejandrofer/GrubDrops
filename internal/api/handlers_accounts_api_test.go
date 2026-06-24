@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/stretchr/testify/assert"
@@ -62,4 +63,49 @@ func TestAPIToggle_RequiresCSRF(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusForbidden, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"code":"csrf"`)
+}
+
+func TestAPIAccounts_SafeProjectionNoSecrets(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	ctx := context.Background()
+	q, id := seedAccount(t, ctx, true)
+	s, _ := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false, Location: time.UTC})
+	req := httptest.NewRequest(http.MethodGet, "/api/accounts", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+	body := rec.Body.String()
+	assert.Contains(t, body, id)               // the account is present
+	assert.NotContains(t, body, "webhook_url") // NO secret webhook
+	assert.NotContains(t, body, "WebhookUrl")
+	assert.NotContains(t, body, "fingerprint_json")
+	assert.NotContains(t, body, "FingerprintJson")
+	assert.NotContains(t, body, "proxy_url")
+}
+
+func TestAPICheckAuth_RequireCSRF(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false})
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts/check-auth", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"code":"csrf"`)
+}
+
+func TestAccountsRoute_SuppressedWhenSPAOn(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false, SPADashboard: true})
+	for _, p := range []string{"/accounts", "/settings/accounts"} {
+		req := httptest.NewRequest(http.MethodGet, p, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		require.Equalf(t, http.StatusOK, rec.Code, "path %s", p)
+		assert.Containsf(t, rec.Body.String(), `id="app"`, "path %s", p)
+	}
 }
