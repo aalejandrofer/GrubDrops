@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { fetchDashboard } from '../lib/api';
+  import { fetchDashboard, apiSend } from '../lib/api';
   import { pollingResource, type PollingResource } from '../lib/poll.svelte';
   import type { DashboardSnapshot } from '../lib/types';
   import AccountModal from './AccountModal.svelte';
+  import CampaignModal from './CampaignModal.svelte';
   import AlertsBanner from './AlertsBanner.svelte';
   import NextClaims from './NextClaims.svelte';
   import ActiveCampaigns from './ActiveCampaigns.svelte';
@@ -27,11 +28,26 @@
   const error = $derived(snapshot ? null : poll?.error ?? null);
 
   let selected = $state<string | null>(null);
+  let selectedCampaign = $state<string | null>(null);
+  let reloading = $state(false);
+
+  async function reloadAll() {
+    reloading = true;
+    try {
+      await apiSend('/api/accounts/apply', 'POST');
+    } finally {
+      reloading = false;
+    }
+  }
 </script>
 
 {#if display}
   <div class="page-head">
     <div><div class="kicker">Dashboard</div><div class="sub">uptime {display.Uptime}</div></div>
+    <div class="actions">
+      <button type="button" class="btn" onclick={reloadAll} disabled={reloading}>Reload</button>
+      <a class="btn primary" href="/accounts/new">Add account</a>
+    </div>
   </div>
 
   <AlertsBanner alerts={display.Alerts} />
@@ -78,7 +94,7 @@
     </div>
   </section>
 
-  <ActiveCampaigns camps={display.ActiveCamps} />
+  <ActiveCampaigns camps={display.ActiveCamps} onSelect={(id) => (selectedCampaign = id)} />
   <EventsDrawer events={display.Events} accounts={display.EventAccounts} />
   <LiveChannels channels={display.LiveChannels} />
 
@@ -86,6 +102,10 @@
 
   {#if selected}
     <AccountModal accountId={selected} onClose={() => (selected = null)} />
+  {/if}
+
+  {#if selectedCampaign}
+    <CampaignModal campaignId={selectedCampaign} onClose={() => (selectedCampaign = null)} />
   {/if}
 {:else if error}
   <p class="error">{error.message}</p>

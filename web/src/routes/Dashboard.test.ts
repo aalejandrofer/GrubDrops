@@ -111,3 +111,13 @@ test('clicking a mining card opens AccountModal with account detail', async () =
   const heading = dialog.querySelector('h2');
   expect(heading?.textContent?.trim()).toBe('acc-one');
 });
+
+test('Reload button posts to /api/accounts/apply', async () => {
+  const fetchMock = vi.fn(async () =>
+    new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  render(Dashboard, { props: { snapshot: snap(1, 'D') } }); // snap() includes empty regions
+  await fireEvent.click(screen.getByRole('button', { name: /reload/i }));
+  expect(fetchMock.mock.calls.some(([u, i]) => String(u).includes('/api/accounts/apply') && (i as RequestInit)?.method === 'POST')).toBe(true);
+});
