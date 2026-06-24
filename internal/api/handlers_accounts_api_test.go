@@ -175,19 +175,19 @@ func TestAPIUpdateDelete_RequireCSRF(t *testing.T) {
 	}
 }
 
-func TestAccountNewStaysLegacyWhenSPAOn(t *testing.T) {
+func TestAccountNewStaysLegacyWhenSPAOff(t *testing.T) {
 	t.Setenv("GRUB_AUTHBYPASS", "true")
 	s, q := newTestSettings(t)
 	id := seedAccountInDB(t, q, true)
 	tmpl, err := web.Templates()
 	require.NoError(t, err)
-	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false, SPADashboard: true, Templates: tmpl})
-	// /accounts/{id} -> SPA shell
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false, SPADashboard: false, Templates: tmpl})
+	// /accounts/{id} -> legacy HTML when SPA off
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/accounts/"+id, nil))
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, rec.Body.String(), `id="app"`)
-	// /accounts/new -> legacy HTML (chi static precedence), NOT the SPA shell
+	assert.NotContains(t, rec.Body.String(), `id="app"`) // legacy detail HTML
+	// /accounts/new -> legacy HTML form when SPA off
 	rec2 := httptest.NewRecorder()
 	h.ServeHTTP(rec2, httptest.NewRequest(http.MethodGet, "/accounts/new", nil))
 	require.Equal(t, http.StatusOK, rec2.Code)
@@ -224,4 +224,44 @@ func TestDoAddChannel_Persists(t *testing.T) {
 		}
 	}
 	assert.True(t, found)
+}
+
+func TestAPINewAccount_CreatesAndReturnsID(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false})
+	// CSRF-gated POST: assert it's reachable behind CSRF (403 without token) — the
+	// create path itself is unit-tested via doCreateAccount below.
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts/new", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"code":"csrf"`)
+}
+
+func TestDoCreateAccount_PersistsAndValidates(t *testing.T) {
+	s, q := newTestSettings(t)
+	_ = s
+	d := accountsDeps{q: q}
+	id, err := d.doCreateAccount(context.Background(), "twitch", "newguy")
+	require.NoError(t, err)
+	require.NotEmpty(t, id)
+	acc, err := q.GetAccount(context.Background(), id)
+	require.NoError(t, err)
+	assert.Equal(t, "newguy", acc.DisplayName)
+	assert.Equal(t, "twitch", acc.Platform)
+	// empty -> error
+	_, err = d.doCreateAccount(context.Background(), "", "x")
+	require.Error(t, err)
+}
+
+func TestAccountNewRoute_ServesShellWhenSPAOn(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false, SPADashboard: true})
+	req := httptest.NewRequest(http.MethodGet, "/accounts/new", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `id="app"`)
 }

@@ -8,6 +8,29 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// apiNewAccount decodes {"platform","display_name"} and creates a new account,
+// returning {"ok":true,"id":"<new-id>"} on success.
+func (d accountsDeps) apiNewAccount(w http.ResponseWriter, r *http.Request) {
+	var b struct {
+		Platform    string `json:"platform"`
+		DisplayName string `json:"display_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "bad_request", "invalid body")
+		return
+	}
+	id, err := d.doCreateAccount(r.Context(), b.Platform, b.DisplayName)
+	if err != nil {
+		if errors.Is(err, errAccountFieldsRequired) {
+			writeAPIError(w, http.StatusBadRequest, "bad_request", "platform and display name are required")
+			return
+		}
+		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
+}
+
 // apiAccountDetailPage serves the per-account detail data as JSON for the SPA
 // account detail page. Returns 404 JSON if the account is not found.
 // Includes WebhookURL (admin-editable) but never ProxyUrl or FingerprintJson.

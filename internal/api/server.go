@@ -230,7 +230,11 @@ func NewRouter(d Deps) http.Handler {
 		authed.Get("/settings/accounts", accs.list) // canonical path; /accounts kept as alias
 	}
 	authed.Post("/accounts/check-auth", accs.checkAuth)
-	authed.Get("/accounts/new", accs.newGet)
+	if !d.SPADashboard {
+		authed.Get("/accounts/new", accs.newGet)
+	} else {
+		authed.Get("/accounts/new", spaIndex)
+	}
 	authed.Post("/accounts/new", accs.newPost)
 	if !d.SPADashboard {
 		authed.Get("/accounts/{id}", accs.detail)
@@ -410,6 +414,7 @@ func NewRouter(d Deps) http.Handler {
 		gr.Get("/dashboard/account/{id}", dash.apiAccountDetail)
 		gr.Get("/dashboard/campaign/{id}", dash.apiCampaignDetail)
 		gr.Get("/accounts", accs.apiAccounts)
+		gr.Post("/accounts/new", accs.apiNewAccount)
 		gr.Post("/accounts/check-auth", accs.apiCheckAuth)
 		gr.Get("/accounts/{id}", accs.apiAccountDetailPage)
 		gr.Post("/accounts/{id}/update", accs.apiUpdateAccount)

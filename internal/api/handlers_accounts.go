@@ -211,26 +211,40 @@ func (d accountsDeps) newGet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (d accountsDeps) newPost(w http.ResponseWriter, r *http.Request) {
-	platform := r.FormValue("platform")
-	display := strings.TrimSpace(r.FormValue("display_name"))
-	if platform == "" || display == "" {
-		render(w, r, d.t, "accounts_new.html", templateData{
-			AuthedAdmin: true, CSRFToken: csrfToken(r),
-			Flash: "flash.platform_name_required", Active: "accounts",
-		})
-		return
+var errAccountFieldsRequired = errors.New("platform and display name required")
+
+// doCreateAccount validates + creates an account, returning its new id.
+// Shared by the legacy newPost handler and the JSON apiNewAccount.
+func (d accountsDeps) doCreateAccount(ctx context.Context, platform, displayName string) (string, error) {
+	platform = strings.TrimSpace(platform)
+	displayName = strings.TrimSpace(displayName)
+	if platform == "" || displayName == "" {
+		return "", errAccountFieldsRequired
 	}
 	id := genID()
 	now := time.Now().Unix()
-	if _, err := d.q.CreateAccount(r.Context(), gen.CreateAccountParams{
-		ID: id, Platform: platform, DisplayName: display,
+	if _, err := d.q.CreateAccount(ctx, gen.CreateAccountParams{
+		ID: id, Platform: platform, DisplayName: displayName,
 		Status: "idle", FingerprintJson: "{}", Enabled: 1,
 		CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+func (d accountsDeps) newPost(w http.ResponseWriter, r *http.Request) {
+	platform := r.FormValue("platform")
+	display := r.FormValue("display_name")
+	id, err := d.doCreateAccount(r.Context(), platform, display)
+	if err != nil {
+		flash := err.Error()
+		if errors.Is(err, errAccountFieldsRequired) {
+			flash = "flash.platform_name_required"
+		}
 		render(w, r, d.t, "accounts_new.html", templateData{
 			AuthedAdmin: true, CSRFToken: csrfToken(r),
-			Flash: err.Error(), Active: "accounts",
+			Flash: flash, Active: "accounts",
 		})
 		return
 	}
