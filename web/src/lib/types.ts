@@ -18,6 +18,7 @@ export interface MineCard {
   Channel: string;
   DropName: string;
   DropPercent: number;
+  DropETA: string;
   Enabled: boolean;
 }
 
@@ -27,11 +28,39 @@ export interface MiningColumns {
   KickWatchMode: string;
 }
 
+export interface DashAlert { Kind: string; Account: string; URL: string; Action: string; }
+
+export interface DashCampaign {
+  ID: string; Name: string; Platform: string; Game: string; Kind: string;
+  Drops: number; Channels: number; EndsIn: string; EndsUrgent: boolean;
+  Claimed: number; Total: number;
+}
+
+export interface DashLiveChannel {
+  Login: string; Platform: string; URL: string; Initial: string;
+  Game: string; Campaign: string; Views: string; ViewerN: number;
+}
+
+export interface DashEventField { Key: string; Value: string; }
+
+export interface DashEvent {
+  ID: string; Time: string; Kind: string; Color: string; BodyHTML: string;
+  Account: string; Platform: string; Details: DashEventField[] | null;
+}
+
+export interface DashEventAccount { ID: string; Label: string; Platform: string; }
+
 export interface DashboardSnapshot {
   Tele: Telemetry;
   Mining: MiningColumns;
   UpdatedAt: string;
   Uptime: string;
+  NextClaims: MineCard[] | null;
+  ActiveCamps: DashCampaign[] | null;
+  LiveChannels: DashLiveChannel[] | null;
+  Events: DashEvent[] | null;
+  EventAccounts: DashEventAccount[] | null;
+  Alerts: DashAlert[] | null;
 }
 
 export interface ApiErrorEnvelope {
