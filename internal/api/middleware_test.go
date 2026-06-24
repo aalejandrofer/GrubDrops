@@ -60,3 +60,31 @@ func TestRequireAdminAPI_BypassAll(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
 }
+
+func TestCSRFFailureJSONForAPI(t *testing.T) {
+	csrf := CSRF(false)
+	// A POST without a token fails nosurf; for an /api/ path we expect JSON 403.
+	h := scs.New().LoadAndSave(csrf(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts/x/toggle", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+	assert.Contains(t, rec.Body.String(), `"code":"csrf"`)
+}
+
+func TestCSRFFailurePlainForHTML(t *testing.T) {
+	csrf := CSRF(false)
+	h := scs.New().LoadAndSave(csrf(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+	req := httptest.NewRequest(http.MethodPost, "/settings", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	assert.NotContains(t, rec.Header().Get("Content-Type"), "application/json")
+}

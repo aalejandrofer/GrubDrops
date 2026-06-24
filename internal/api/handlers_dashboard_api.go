@@ -7,6 +7,11 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/web"
 )
 
+// spaSecureCookies mirrors Deps.SecureCookies for the SPA's readable CSRF
+// cookie (spaIndex is a free function with no access to Deps). Set once in
+// NewRouter.
+var spaSecureCookies bool
+
 // apiPage serves the dashboard snapshot as JSON for the SPA. It reuses
 // the same collectPage projection the html/template dashboard renders,
 // so the SPA and the legacy page show identical data. JSON keys are the
@@ -37,7 +42,19 @@ func spaFileServer() http.Handler {
 
 // spaIndex writes the SPA shell (index.html). The client-side router
 // then renders the requested view. Used for routes opted into the SPA.
-func spaIndex(w http.ResponseWriter, _ *http.Request) {
+func spaIndex(w http.ResponseWriter, r *http.Request) {
+	// Hand the SPA a readable CSRF token so its fetch writes can echo it in
+	// the X-CSRF-Token header. Not HttpOnly (JS must read it); nosurf still
+	// verifies the masked token against the session, so readability here does
+	// not weaken CSRF.
+	http.SetCookie(w, &http.Cookie{
+		Name:     "csrftoken",
+		Value:    csrfToken(r),
+		Path:     "/",
+		HttpOnly: false,
+		Secure:   spaSecureCookies,
+		SameSite: http.SameSiteLaxMode,
+	})
 	f, err := web.SPA().Open("index.html")
 	if err != nil {
 		http.Error(w, "spa index missing", http.StatusInternalServerError)

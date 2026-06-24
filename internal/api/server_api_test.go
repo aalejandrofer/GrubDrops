@@ -53,3 +53,28 @@ func TestAPILang_Public_SetsCookieAndRedirects(t *testing.T) {
 	// a 401 would mean it was wrongly placed behind RequireAdminAPI.
 	assert.NotEqual(t, http.StatusUnauthorized, rec.Code)
 }
+
+func scsNew() *scs.SessionManager { return scs.New() }
+
+func TestSPAIndexSetsCSRFCookie(t *testing.T) {
+	h := buildAPIRouter(t) // from #1 task 3: Deps{Session: scs.New()}
+	// GET / with SPA enabled would require Deps.SPADashboard; instead test the
+	// spaIndex handler is reached on the SPA route. Here we assert via a direct
+	// request to the SPA shell route when SPADashboard is on.
+	t.Setenv("GRUB_AUTHBYPASS", "true") // bypass admin so GET / serves the shell
+	h2 := NewRouter(Deps{Session: scsNew(), SecureCookies: false, SPADashboard: true})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	h2.ServeHTTP(rec, req)
+
+	var found *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "csrftoken" {
+			found = c
+		}
+	}
+	require.NotNil(t, found, "spaIndex must set a csrftoken cookie")
+	assert.False(t, found.HttpOnly, "csrftoken must be readable by JS")
+	assert.NotEmpty(t, found.Value)
+	_ = h
+}

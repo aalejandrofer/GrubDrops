@@ -137,6 +137,10 @@ func CSRF(secureCookies bool) func(http.Handler) http.Handler {
 				"treated_as_https", https,
 				"secure_cookies", secureCookies,
 			)
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				writeAPIError(w, http.StatusForbidden, "csrf", i18n.T(i18n.DetectLang(r), "error.csrf_invalid"))
+				return
+			}
 			// Surface the most likely self-host misconfiguration so the next
 			// person can diagnose it without reading the source.
 			lang := i18n.DetectLang(r)

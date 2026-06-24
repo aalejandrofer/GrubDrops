@@ -194,6 +194,7 @@ func NewRouter(d Deps) http.Handler {
 
 	withSession := func(h http.Handler) http.Handler { return d.Session.LoadAndSave(h) }
 	csrf := CSRF(d.SecureCookies)
+	spaSecureCookies = d.SecureCookies
 
 	// Public (no auth required, but still session + CSRF)
 	r.Method(http.MethodGet, "/setup", withSession(csrf(http.HandlerFunc(setup.get))))
