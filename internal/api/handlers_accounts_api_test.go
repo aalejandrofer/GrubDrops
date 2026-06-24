@@ -193,3 +193,35 @@ func TestAccountNewStaysLegacyWhenSPAOn(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec2.Code)
 	assert.NotContains(t, rec2.Body.String(), `id="app"`) // legacy new-account HTML form
 }
+
+func TestAPIAccountDetailMutations_RequireCSRF(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false, Reload: func(c context.Context) error { return nil }})
+	for _, p := range []string{
+		"/api/accounts/x/games", "/api/accounts/x/games/add", "/api/accounts/x/games/use-global",
+		"/api/accounts/x/channels/add", "/api/accounts/x/channels/remove",
+		"/api/accounts/x/force-channels", "/api/accounts/x/force-channels/add", "/api/accounts/x/force-channels/remove",
+	} {
+		req := httptest.NewRequest(http.MethodPost, p, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		require.Equalf(t, http.StatusForbidden, rec.Code, "path %s", p)
+		assert.Containsf(t, rec.Body.String(), `"code":"csrf"`, "path %s", p)
+	}
+}
+
+func TestDoAddChannel_Persists(t *testing.T) {
+	ctx := context.Background()
+	q, id := seedAccount(t, ctx, true)
+	d := accountsDeps{q: q}
+	require.NoError(t, d.doAddChannel(ctx, id, "somechan"))
+	rows, _ := q.ListAccountChannels(ctx, id)
+	found := false
+	for _, r := range rows {
+		if r.Channel == "somechan" {
+			found = true
+		}
+	}
+	assert.True(t, found)
+}

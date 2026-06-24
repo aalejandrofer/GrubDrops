@@ -417,6 +417,14 @@ func NewRouter(d Deps) http.Handler {
 		gr.Post("/accounts/{id}/toggle", accs.apiToggle)
 		gr.Post("/accounts/{id}/reload", accs.apiReload)
 		gr.Post("/accounts/{id}/force-watch", accs.apiForceWatch)
+		gr.Post("/accounts/{id}/games", accs.apiAccountGames)
+		gr.Post("/accounts/{id}/games/add", accs.apiAccountGameAdd)
+		gr.Post("/accounts/{id}/games/use-global", accs.apiAccountGamesUseGlobal)
+		gr.Post("/accounts/{id}/channels/add", accs.apiAccountChannelAdd)
+		gr.Post("/accounts/{id}/channels/remove", accs.apiAccountChannelRemove)
+		gr.Post("/accounts/{id}/force-channels", accs.apiAccountForceChannels)
+		gr.Post("/accounts/{id}/force-channels/add", accs.apiAccountForceChannelAdd)
+		gr.Post("/accounts/{id}/force-channels/remove", accs.apiAccountForceChannelRemove)
 		gr.Post("/accounts/apply", func(w http.ResponseWriter, r *http.Request) {
 			if d.Reload == nil {
 				writeAPIError(w, http.StatusServiceUnavailable, "unavailable", "reload unavailable")

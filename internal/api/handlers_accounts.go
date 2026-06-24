@@ -921,3 +921,132 @@ func (d accountsDeps) apiCheckAuth(w http.ResponseWriter, r *http.Request) {
 type Reloader interface {
 	Reload(ctx context.Context) error
 }
+
+// doSetAccountGames clears the per-account game whitelist and rewrites it
+// from the given ordered slice of game IDs. Position in the slice becomes
+// the rank.
+func (d accountsDeps) doSetAccountGames(ctx context.Context, id string, ids []string) error {
+	if err := d.q.ClearAccountGames(ctx, id); err != nil {
+		return err
+	}
+	for i, gid := range ids {
+		if err := d.q.AddAccountGame(ctx, gen.AddAccountGameParams{
+			AccountID: id, GameID: gid, Rank: int64(i),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// doAddAccountGame upserts a game by free-text name and appends it to the
+// account's whitelist at the end of the rank order.
+func (d accountsDeps) doAddAccountGame(ctx context.Context, id, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil
+	}
+	slug := gameslug.Slug(name)
+	if slug == "" {
+		return nil
+	}
+	gameID := gameslug.ID(name)
+	if err := d.q.UpsertGame(ctx, gen.UpsertGameParams{
+		ID: gameID, Name: name, Slug: slug, Priority: 0,
+	}); err != nil {
+		return err
+	}
+	existing, _ := d.q.ListAccountGames(ctx, id)
+	rank := int64(len(existing))
+	for _, e := range existing {
+		if e.ID == gameID {
+			rank = e.Rank
+			break
+		}
+	}
+	return d.q.AddAccountGame(ctx, gen.AddAccountGameParams{
+		AccountID: id, GameID: gameID, Rank: rank,
+	})
+}
+
+// doUseGlobalGames clears the per-account game whitelist so the watcher
+// falls back to the global priority list.
+func (d accountsDeps) doUseGlobalGames(ctx context.Context, id string) error {
+	return d.q.ClearAccountGames(ctx, id)
+}
+
+// doAddChannel adds a channel to the per-account channel whitelist (lowercased,
+// trimmed). No-op for empty channel.
+func (d accountsDeps) doAddChannel(ctx context.Context, id, channel string) error {
+	ch := strings.ToLower(strings.TrimSpace(channel))
+	if ch == "" {
+		return nil
+	}
+	return d.q.AddAccountChannel(ctx, gen.AddAccountChannelParams{
+		AccountID: id, Channel: ch, Rank: 0,
+	})
+}
+
+// doRemoveChannel removes a channel from the per-account channel whitelist.
+// No-op for empty channel.
+func (d accountsDeps) doRemoveChannel(ctx context.Context, id, channel string) error {
+	ch := strings.ToLower(strings.TrimSpace(channel))
+	if ch == "" {
+		return nil
+	}
+	return d.q.RemoveAccountChannel(ctx, gen.RemoveAccountChannelParams{
+		AccountID: id, Channel: ch,
+	})
+}
+
+// doSetForceChannels clears the force-watch channel list and rewrites it
+// from the given ordered slice, deduplicating entries. Position becomes rank.
+func (d accountsDeps) doSetForceChannels(ctx context.Context, id string, channels []string) error {
+	if err := d.q.ClearForceChannels(ctx, id); err != nil {
+		return err
+	}
+	now := time.Now().Unix()
+	rank := 0
+	seen := map[string]struct{}{}
+	for _, raw := range channels {
+		ch := strings.ToLower(strings.TrimSpace(raw))
+		if ch == "" {
+			continue
+		}
+		if _, dup := seen[ch]; dup {
+			continue
+		}
+		seen[ch] = struct{}{}
+		if err := d.q.AddForceChannel(ctx, gen.AddForceChannelParams{
+			AccountID: id, Channel: ch, Rank: int64(rank), CreatedAt: now,
+		}); err != nil {
+			return err
+		}
+		rank++
+	}
+	return nil
+}
+
+// doAddForceChannel adds a channel to the per-account force-watch list.
+// No-op for empty channel.
+func (d accountsDeps) doAddForceChannel(ctx context.Context, id, channel string) error {
+	ch := strings.ToLower(strings.TrimSpace(channel))
+	if ch == "" {
+		return nil
+	}
+	return d.q.AddForceChannel(ctx, gen.AddForceChannelParams{
+		AccountID: id, Channel: ch, Rank: 0, CreatedAt: time.Now().Unix(),
+	})
+}
+
+// doRemoveForceChannel removes a channel from the per-account force-watch list.
+// No-op for empty channel.
+func (d accountsDeps) doRemoveForceChannel(ctx context.Context, id, channel string) error {
+	ch := strings.ToLower(strings.TrimSpace(channel))
+	if ch == "" {
+		return nil
+	}
+	return d.q.RemoveForceChannel(ctx, gen.RemoveForceChannelParams{
+		AccountID: id, Channel: ch,
+	})
+}

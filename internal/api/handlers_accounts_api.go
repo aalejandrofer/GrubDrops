@@ -132,3 +132,134 @@ func (d dashboardDeps) apiCampaignDetail(w http.ResponseWriter, r *http.Request)
 	}
 	writeJSON(w, http.StatusOK, detail)
 }
+
+// apiAccountGames decodes {"game_ids": []} and rewrites the per-account game
+// whitelist. Returns 400 on JSON decode error (anti-wipe guard).
+func (d accountsDeps) apiAccountGames(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var b struct {
+		GameIDs []string `json:"game_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "bad_request", "invalid body")
+		return
+	}
+	if err := d.doSetAccountGames(r.Context(), id, b.GameIDs); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	// No auto-reload: whitelist edits take effect on the next manual Apply.
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// apiAccountGameAdd decodes {"name": "..."} and appends the game to the
+// per-account whitelist.
+func (d accountsDeps) apiAccountGameAdd(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var b struct {
+		Name string `json:"name"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&b)
+	if err := d.doAddAccountGame(r.Context(), id, b.Name); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	// No auto-reload: whitelist edits take effect on the next manual Apply.
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// apiAccountGamesUseGlobal clears the per-account game whitelist so the watcher
+// falls back to the global priority list.
+func (d accountsDeps) apiAccountGamesUseGlobal(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := d.doUseGlobalGames(r.Context(), id); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	// No auto-reload: whitelist edits take effect on the next manual Apply.
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// apiAccountChannelAdd decodes {"channel": "..."} and opts the account into
+// a channel whitelist entry.
+func (d accountsDeps) apiAccountChannelAdd(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var b struct {
+		Channel string `json:"channel"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&b)
+	if err := d.doAddChannel(r.Context(), id, b.Channel); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	d.applyReload(r.Context())
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// apiAccountChannelRemove decodes {"channel": "..."} and removes the channel
+// from the per-account whitelist.
+func (d accountsDeps) apiAccountChannelRemove(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var b struct {
+		Channel string `json:"channel"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&b)
+	if err := d.doRemoveChannel(r.Context(), id, b.Channel); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	d.applyReload(r.Context())
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// apiAccountForceChannels decodes {"channels": []} and rewrites the
+// per-account force-watch channel list. Returns 400 on JSON decode error
+// (anti-wipe guard).
+func (d accountsDeps) apiAccountForceChannels(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var b struct {
+		Channels []string `json:"channels"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "bad_request", "invalid body")
+		return
+	}
+	if err := d.doSetForceChannels(r.Context(), id, b.Channels); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	d.applyReload(r.Context())
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// apiAccountForceChannelAdd decodes {"channel": "..."} and adds it to the
+// per-account force-watch channel list.
+func (d accountsDeps) apiAccountForceChannelAdd(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var b struct {
+		Channel string `json:"channel"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&b)
+	if err := d.doAddForceChannel(r.Context(), id, b.Channel); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	d.applyReload(r.Context())
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// apiAccountForceChannelRemove decodes {"channel": "..."} and removes it from
+// the per-account force-watch channel list.
+func (d accountsDeps) apiAccountForceChannelRemove(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var b struct {
+		Channel string `json:"channel"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&b)
+	if err := d.doRemoveForceChannel(r.Context(), id, b.Channel); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	d.applyReload(r.Context())
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
