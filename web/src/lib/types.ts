@@ -87,3 +87,12 @@ export interface AccountDetail {
   EligibleCampaigns: AccountCampaignRow[] | null;
   UpcomingCampaigns: AccountCampaignRow[] | null;
 }
+
+export interface CampaignBenefit { ID: string; Name: string; RequiredMinutes: number; ImageURL: string; }
+export interface CampaignDetail {
+  ID: string; Name: string; Platform: string; Game: string; Status: string; Kind: string;
+  StartsAt: string; EndsAt: string; EndsIn: string; EndsUrgent: boolean;
+  Benefits: CampaignBenefit[] | null;
+  EligibleAccounts: string[] | null; SourceAccounts: string[] | null;
+  AccountLinked: boolean; AccountLinkURL: string;
+}
