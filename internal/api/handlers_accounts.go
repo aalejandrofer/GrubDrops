@@ -431,30 +431,8 @@ func (d accountsDeps) update(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	display := r.FormValue("display_name")
 	webhook := r.FormValue("webhook_url")
-	enabled := int64(0)
-	if r.FormValue("enabled") == "1" {
-		enabled = 1
-	}
-	now := time.Now().Unix()
-	if display != "" {
-		if err := d.q.UpdateAccountDisplayName(r.Context(), gen.UpdateAccountDisplayNameParams{
-			DisplayName: display, UpdatedAt: now, ID: id,
-		}); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-	if err := d.q.SetAccountEnabled(r.Context(), gen.SetAccountEnabledParams{
-		Enabled: enabled, UpdatedAt: now, ID: id,
-	}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if err := d.q.UpdateAccountWebhook(r.Context(), gen.UpdateAccountWebhookParams{
-		WebhookUrl: sql.NullString{String: webhook, Valid: webhook != ""},
-		UpdatedAt:  now,
-		ID:         id,
-	}); err != nil {
+	enabled := r.FormValue("enabled") == "1"
+	if err := d.doUpdateAccount(r.Context(), id, display, webhook, enabled); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -744,6 +722,131 @@ func genID() string {
 	var b [12]byte
 	_, _ = rand.Read(b[:])
 	return "acc_" + hex.EncodeToString(b[:])
+}
+
+// accountDetailGame is a single game row in the per-account detail response.
+type accountDetailGame struct {
+	ID       string `json:"ID"`
+	Name     string `json:"Name"`
+	Slug     string `json:"Slug"`
+	Selected bool   `json:"Selected"`
+	Rank     int    `json:"Rank"`
+}
+
+// accountDetailJSON is the SAFE, display-only projection for GET /api/accounts/{id}.
+// It deliberately omits gen.Account's secret/sensitive fields (ProxyUrl,
+// FingerprintJson) — never marshal the embedded Account.
+// WebhookURL IS included: it's admin-editable on the single-account page.
+type accountDetailJSON struct {
+	ID                string              `json:"ID"`
+	Platform          string              `json:"Platform"`
+	DisplayName       string              `json:"DisplayName"`
+	Status            string              `json:"Status"`
+	Enabled           bool                `json:"Enabled"`
+	AvatarURL         string              `json:"AvatarURL"`
+	WebhookURL        string              `json:"WebhookURL"`
+	AllGames          []accountDetailGame `json:"AllGames"`
+	SelectedGames     []accountDetailGame `json:"SelectedGames"`
+	Channels          []string            `json:"Channels"`
+	ForceChannels     []string            `json:"ForceChannels"`
+	ForceWatchEnabled bool                `json:"ForceWatchEnabled"`
+}
+
+// accountDetailData loads the per-account detail data and returns
+// (accountDetailJSON, true) on success or (zero, false) when the account is
+// not found. Mirrors the legacy detail handler's list assembly exactly so the
+// SPA and HTML views stay in sync.
+func (d accountsDeps) accountDetailData(r interface{ Context() context.Context }, id string) (accountDetailJSON, bool) {
+	ctx := r.Context()
+	row, err := d.q.GetAccount(ctx, id)
+	if err != nil {
+		return accountDetailJSON{}, false
+	}
+	all, _ := d.q.ListAllGames(ctx)
+	picked, _ := d.q.ListAccountGames(ctx, id)
+
+	rankByID := make(map[string]int, len(picked))
+	for _, p := range picked {
+		rankByID[p.ID] = int(p.Rank)
+	}
+
+	allRows := make([]accountDetailGame, 0, len(all))
+	for _, g := range all {
+		rk, ok := rankByID[g.ID]
+		allRows = append(allRows, accountDetailGame{
+			ID: g.ID, Name: g.Name, Slug: g.Slug,
+			Selected: ok, Rank: rk,
+		})
+	}
+	selected := make([]accountDetailGame, 0, len(picked))
+	for _, p := range picked {
+		selected = append(selected, accountDetailGame{
+			ID: p.ID, Name: p.Name, Slug: p.Slug, Selected: true, Rank: int(p.Rank),
+		})
+	}
+
+	var channels []string
+	if chRows, err := d.q.ListAccountChannels(ctx, id); err == nil {
+		for _, rch := range chRows {
+			channels = append(channels, rch.Channel)
+		}
+	}
+	var forceChannels []string
+	if fcRows, err := d.q.ListForceChannels(ctx, id); err == nil {
+		for _, rch := range fcRows {
+			forceChannels = append(forceChannels, rch.Channel)
+		}
+	}
+	forceEnabled := false
+	if v, err := d.q.GetSettingString(ctx, ForceWatchEnabledKey(id)); err == nil && string(v) == "1" {
+		forceEnabled = true
+	}
+
+	return accountDetailJSON{
+		ID:                row.ID,
+		Platform:          row.Platform,
+		DisplayName:       row.DisplayName,
+		Status:            row.Status,
+		Enabled:           row.Enabled == 1,
+		AvatarURL:         avatarSrc(row.Platform, row.AvatarUrl),
+		WebhookURL:        row.WebhookUrl.String,
+		AllGames:          allRows,
+		SelectedGames:     selected,
+		Channels:          channels,
+		ForceChannels:     forceChannels,
+		ForceWatchEnabled: forceEnabled,
+	}, true
+}
+
+// doUpdateAccount is the core logic for updating an account's display name,
+// enabled flag, and webhook URL. Extracted from the legacy update handler so
+// both the HTML redirect handler and the JSON API handler can share it.
+func (d accountsDeps) doUpdateAccount(ctx context.Context, id, displayName, webhook string, enabled bool) error {
+	now := time.Now().Unix()
+	if displayName != "" {
+		if err := d.q.UpdateAccountDisplayName(ctx, gen.UpdateAccountDisplayNameParams{
+			DisplayName: displayName, UpdatedAt: now, ID: id,
+		}); err != nil {
+			return err
+		}
+	}
+	enabledVal := int64(0)
+	if enabled {
+		enabledVal = 1
+	}
+	if err := d.q.SetAccountEnabled(ctx, gen.SetAccountEnabledParams{
+		Enabled: enabledVal, UpdatedAt: now, ID: id,
+	}); err != nil {
+		return err
+	}
+	if err := d.q.UpdateAccountWebhook(ctx, gen.UpdateAccountWebhookParams{
+		WebhookUrl: sql.NullString{String: webhook, Valid: webhook != ""},
+		UpdatedAt:  now,
+		ID:         id,
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // accountListJSON is the SAFE, display-only projection for GET /api/accounts.

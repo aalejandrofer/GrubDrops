@@ -232,7 +232,11 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/accounts/check-auth", accs.checkAuth)
 	authed.Get("/accounts/new", accs.newGet)
 	authed.Post("/accounts/new", accs.newPost)
-	authed.Get("/accounts/{id}", accs.detail)
+	if !d.SPADashboard {
+		authed.Get("/accounts/{id}", accs.detail)
+	} else {
+		authed.Get("/accounts/{id}", spaIndex)
+	}
 	authed.Get("/accounts/{id}/login", func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
 		acc, err := d.Q.GetAccount(r.Context(), id)
@@ -407,6 +411,9 @@ func NewRouter(d Deps) http.Handler {
 		gr.Get("/dashboard/campaign/{id}", dash.apiCampaignDetail)
 		gr.Get("/accounts", accs.apiAccounts)
 		gr.Post("/accounts/check-auth", accs.apiCheckAuth)
+		gr.Get("/accounts/{id}", accs.apiAccountDetailPage)
+		gr.Post("/accounts/{id}/update", accs.apiUpdateAccount)
+		gr.Post("/accounts/{id}/delete", accs.apiDeleteAccount)
 		gr.Post("/accounts/{id}/toggle", accs.apiToggle)
 		gr.Post("/accounts/{id}/reload", accs.apiReload)
 		gr.Post("/accounts/{id}/force-watch", accs.apiForceWatch)

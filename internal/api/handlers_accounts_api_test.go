@@ -14,6 +14,7 @@ import (
 
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/web"
 )
 
 // seedAccount opens a fresh DB, inserts one account row, and returns the
@@ -108,4 +109,87 @@ func TestAccountsRoute_SuppressedWhenSPAOn(t *testing.T) {
 		require.Equalf(t, http.StatusOK, rec.Code, "path %s", p)
 		assert.Containsf(t, rec.Body.String(), `id="app"`, "path %s", p)
 	}
+}
+
+// seedAccountInDB inserts an account row into the DB backing q and returns the
+// account ID. Used by tests that need a pre-seeded account without creating a
+// fresh DB (i.e. when the caller already has *gen.Queries from newTestSettings).
+func seedAccountInDB(t *testing.T, q *gen.Queries, enabled bool) string {
+	t.Helper()
+	ctx := context.Background()
+	const id = "acc_detail_seed"
+	enabledVal := int64(0)
+	if enabled {
+		enabledVal = 1
+	}
+	_, err := q.CreateAccount(ctx, gen.CreateAccountParams{
+		ID:              id,
+		Platform:        "twitch",
+		DisplayName:     "DetailTest",
+		Status:          "idle",
+		FingerprintJson: "{}",
+		Enabled:         enabledVal,
+		CreatedAt:       1,
+		UpdatedAt:       1,
+	})
+	require.NoError(t, err)
+	return id
+}
+
+func TestAPIAccountDetail_SafeAndNoProxyFingerprint(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	id := seedAccountInDB(t, q, true)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false, Location: time.UTC})
+	req := httptest.NewRequest(http.MethodGet, "/api/accounts/"+id, nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	body := rec.Body.String()
+	assert.Contains(t, body, `"DisplayName"`)
+	assert.NotContains(t, body, "proxy_url")
+	assert.NotContains(t, body, "fingerprint_json")
+	assert.NotContains(t, body, "FingerprintJson")
+}
+
+func TestAPIAccountDetail_Unknown404(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false, Location: time.UTC})
+	req := httptest.NewRequest(http.MethodGet, "/api/accounts/nope", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestAPIUpdateDelete_RequireCSRF(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false, Reload: func(c context.Context) error { return nil }})
+	for _, p := range []string{"/api/accounts/x/update", "/api/accounts/x/delete"} {
+		req := httptest.NewRequest(http.MethodPost, p, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		require.Equalf(t, http.StatusForbidden, rec.Code, "path %s", p)
+		assert.Containsf(t, rec.Body.String(), `"code":"csrf"`, "path %s", p)
+	}
+}
+
+func TestAccountNewStaysLegacyWhenSPAOn(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	id := seedAccountInDB(t, q, true)
+	tmpl, err := web.Templates()
+	require.NoError(t, err)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false, SPADashboard: true, Templates: tmpl})
+	// /accounts/{id} -> SPA shell
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/accounts/"+id, nil))
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `id="app"`)
+	// /accounts/new -> legacy HTML (chi static precedence), NOT the SPA shell
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, httptest.NewRequest(http.MethodGet, "/accounts/new", nil))
+	require.Equal(t, http.StatusOK, rec2.Code)
+	assert.NotContains(t, rec2.Body.String(), `id="app"`) // legacy new-account HTML form
 }

@@ -8,6 +8,54 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// apiAccountDetailPage serves the per-account detail data as JSON for the SPA
+// account detail page. Returns 404 JSON if the account is not found.
+// Includes WebhookURL (admin-editable) but never ProxyUrl or FingerprintJson.
+func (d accountsDeps) apiAccountDetailPage(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	detail, ok := d.accountDetailData(r, id)
+	if !ok {
+		writeAPIError(w, http.StatusNotFound, "not_found", "account not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, detail)
+}
+
+// apiUpdateAccount decodes {"display_name","webhook_url","enabled"} and
+// applies the update via doUpdateAccount, returning {"ok":true} on success.
+func (d accountsDeps) apiUpdateAccount(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var body struct {
+		DisplayName string `json:"display_name"`
+		WebhookURL  string `json:"webhook_url"`
+		Enabled     bool   `json:"enabled"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := d.doUpdateAccount(r.Context(), id, body.DisplayName, body.WebhookURL, body.Enabled); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	// Targeted reload under the long-lived root context (same reasoning as
+	// the legacy update handler: request context cancels on response).
+	if d.reloadAccount != nil {
+		ctx := d.reloadCtx(r.Context())
+		d.reloadAccount(ctx, id)
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// apiDeleteAccount deletes the account (mirroring the legacy delete handler)
+// and fires a scheduler reload, returning {"ok":true} on success.
+func (d accountsDeps) apiDeleteAccount(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := d.purgeAccount(r.Context(), id); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	d.applyReload(r.Context())
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 // apiAccountDetail serves the per-account detail modal data as JSON for the
 // SPA, reusing the same projection the HTML modal renders.
 func (d dashboardDeps) apiAccountDetail(w http.ResponseWriter, r *http.Request) {
