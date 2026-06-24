@@ -125,3 +125,39 @@ func TestExperimentalTabRoute_SuppressedWhenSPAOn(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), `id="app"`)
 }
+
+func TestAPISecurityHealth_RequireCSRF(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false, RunCanary: func(c context.Context) error { return nil }})
+	for _, p := range []string{"/api/settings/password", "/api/settings/canary", "/api/settings/canary/run"} {
+		req := httptest.NewRequest(http.MethodPost, p, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		require.Equalf(t, http.StatusForbidden, rec.Code, "path %s", p)
+		assert.Containsf(t, rec.Body.String(), `"code":"csrf"`, "path %s", p)
+	}
+}
+
+func TestDoSaveCanary_Persists(t *testing.T) {
+	s, _ := newTestSettings(t)
+	d := &settingsDeps{s: s}
+	require.NoError(t, d.doSaveCanary(context.Background(), "alveussanctuary", "xqc", 7200))
+	tw, _ := s.CanaryTwitchChannel(context.Background())
+	assert.Equal(t, "alveussanctuary", tw)
+	iv, _ := s.CanaryIntervalSec(context.Background())
+	assert.Equal(t, 7200, iv)
+}
+
+func TestSecurityHealthRoutes_SuppressedWhenSPAOn(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false, SPADashboard: true})
+	for _, p := range []string{"/settings/security", "/settings/health"} {
+		req := httptest.NewRequest(http.MethodGet, p, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		require.Equalf(t, http.StatusOK, rec.Code, "path %s", p)
+		assert.Containsf(t, rec.Body.String(), `id="app"`, "path %s", p)
+	}
+}

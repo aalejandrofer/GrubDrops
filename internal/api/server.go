@@ -26,7 +26,7 @@ import (
 // on, Go serves the SPA shell (spaIndex) for each so deep-links/refreshes
 // work; the client router takes over. Mirrors web/src/lib/router.svelte.ts's
 // spaPaths. Grows as pages are ported.
-var spaRoutes = []string{"/", "/drops", "/priority", "/settings", "/settings/notifications", "/settings/experimental", "/settings/proxy"}
+var spaRoutes = []string{"/", "/drops", "/priority", "/settings", "/settings/notifications", "/settings/security", "/settings/health", "/settings/experimental", "/settings/proxy"}
 
 // applyRedirectTarget picks the post-/accounts/apply landing page from
 // the Referer header. The dashboard also has a Reload button, so we
@@ -338,11 +338,15 @@ func NewRouter(d Deps) http.Handler {
 	if !d.SPADashboard {
 		authed.Get("/settings/notifications", settingsH.getNotifications)
 	}
-	authed.Get("/settings/security", settingsH.getSecurity)
+	if !d.SPADashboard {
+		authed.Get("/settings/security", settingsH.getSecurity)
+	}
 	if !d.SPADashboard {
 		authed.Get("/settings/experimental", settingsH.getExperimental)
 	}
-	authed.Get("/settings/health", settingsH.getHealth)
+	if !d.SPADashboard {
+		authed.Get("/settings/health", settingsH.getHealth)
+	}
 	authed.Post("/settings", settingsH.postGeneral)
 	authed.Post("/settings/priority-mode", settingsH.postPriorityMode)
 	authed.Post("/settings/experimental", settingsH.postExperimental)
@@ -428,6 +432,9 @@ func NewRouter(d Deps) http.Handler {
 		gr.Post("/settings/proxy", settingsH.apiProxy)
 		gr.Post("/settings/notify-test", settingsH.apiNotifyTest)
 		gr.Post("/settings/proxy/test", settingsH.apiProxyTest)
+		gr.Post("/settings/password", settingsH.apiChangePassword)
+		gr.Post("/settings/canary", settingsH.apiCanary)
+		gr.Post("/settings/canary/run", settingsH.apiCanaryRun)
 	})
 	r.Mount("/api", withSession(csrf(apiAuthed)))
 

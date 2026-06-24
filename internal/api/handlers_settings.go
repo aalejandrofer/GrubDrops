@@ -725,24 +725,21 @@ func formatRelative(d time.Duration, lang string) string {
 }
 
 // canarySave handles POST /settings/canary — saves the three canary settings.
+// Delegates persistence to doSaveCanary; keeps flash/redirect for the legacy HTML flow.
 func (d *settingsDeps) canarySave(w http.ResponseWriter, r *http.Request) {
 	lang := i18n.DetectLang(r)
 	ctx := r.Context()
-	if saveErr(w, d.s.SetCanaryTwitchChannel(ctx, r.FormValue("canary_twitch_channel"))) {
-		return
-	}
-	if saveErr(w, d.s.SetCanaryKickChannel(ctx, r.FormValue("canary_kick_channel"))) {
-		return
-	}
+	intervalSec := 0
 	if v := r.FormValue("canary_interval_sec"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
 			http.Error(w, i18n.T(lang, "error.invalid_interval"), http.StatusBadRequest)
 			return
 		}
-		if saveErr(w, d.s.SetCanaryIntervalSec(ctx, n)) {
-			return
-		}
+		intervalSec = n
+	}
+	if saveErr(w, d.doSaveCanary(ctx, r.FormValue("canary_twitch_channel"), r.FormValue("canary_kick_channel"), intervalSec)) {
+		return
 	}
 	d.sm.Put(ctx, "flash", "flash.canary_saved")
 	http.Redirect(w, r, "/settings/health", http.StatusSeeOther)
@@ -872,4 +869,22 @@ func (d *settingsDeps) proxyTest(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<span class="proxy-test-result" style="color:var(--green)">✓ %s: %s</span>`, html.EscapeString(i18n.T(lang, "proxy.test_ok")), html.EscapeString(result.IP))
+}
+
+// doSaveCanary persists the canary channel settings.
+// Shared by the legacy canarySave handler and the JSON apiCanary.
+// interval is only set when > 0 so callers that don't supply it leave it unchanged.
+func (d *settingsDeps) doSaveCanary(ctx context.Context, twitchCh, kickCh string, intervalSec int) error {
+	if err := d.s.SetCanaryTwitchChannel(ctx, twitchCh); err != nil {
+		return err
+	}
+	if err := d.s.SetCanaryKickChannel(ctx, kickCh); err != nil {
+		return err
+	}
+	if intervalSec > 0 {
+		if err := d.s.SetCanaryIntervalSec(ctx, intervalSec); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -7,8 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aalejandrofer/grubdrops/internal/auth"
 	"github.com/aalejandrofer/grubdrops/internal/i18n"
 	"github.com/aalejandrofer/grubdrops/internal/netutil"
+	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
 func (d *settingsDeps) apiSettings(w http.ResponseWriter, r *http.Request) {
@@ -233,4 +235,76 @@ func (d *settingsDeps) apiProxyTest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "ip": result.IP})
+}
+
+func (d *settingsDeps) apiChangePassword(w http.ResponseWriter, r *http.Request) {
+	var b struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+		ConfirmPassword string `json:"confirm_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		writeAPIError(w, 400, "bad_request", "invalid body")
+		return
+	}
+	ctx := r.Context()
+	admin, err := d.q.GetAdmin(ctx)
+	if err != nil {
+		writeAPIError(w, 400, "admin_not_configured", "admin not configured")
+		return
+	}
+	if err := auth.VerifyPassword(admin.PasswordHash, b.CurrentPassword); err != nil {
+		writeAPIError(w, 400, "current_password_wrong", "current password is wrong")
+		return
+	}
+	if len(b.NewPassword) < 8 {
+		writeAPIError(w, 400, "new_password_short", "new password must be at least 8 characters")
+		return
+	}
+	if b.NewPassword != b.ConfirmPassword {
+		writeAPIError(w, 400, "new_passwords_mismatch", "new passwords do not match")
+		return
+	}
+	hash, err := auth.HashPassword(b.NewPassword)
+	if err != nil {
+		writeAPIError(w, 400, "hash_failed", err.Error())
+		return
+	}
+	if err := d.q.UpsertAdmin(ctx, gen.UpsertAdminParams{PasswordHash: hash, CreatedAt: time.Now().Unix()}); err != nil {
+		writeAPIError(w, 400, "save_failed", err.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
+func (d *settingsDeps) apiCanary(w http.ResponseWriter, r *http.Request) {
+	var b struct {
+		CanaryTwitchChannel string `json:"canary_twitch_channel"`
+		CanaryKickChannel   string `json:"canary_kick_channel"`
+		CanaryIntervalSec   int    `json:"canary_interval_sec"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		writeAPIError(w, 400, "bad_request", "invalid body")
+		return
+	}
+	if err := d.doSaveCanary(r.Context(), b.CanaryTwitchChannel, b.CanaryKickChannel, b.CanaryIntervalSec); err != nil {
+		writeAPIError(w, 500, "internal", err.Error())
+		return
+	}
+	if d.onUpdate != nil {
+		d.onUpdate()
+	}
+	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
+func (d *settingsDeps) apiCanaryRun(w http.ResponseWriter, r *http.Request) {
+	if d.runCanary == nil {
+		writeJSON(w, 200, map[string]any{"ok": false, "message": "canary runner unavailable"})
+		return
+	}
+	if err := d.runCanary(r.Context()); err != nil {
+		writeJSON(w, 200, map[string]any{"ok": false, "message": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"ok": true})
 }
