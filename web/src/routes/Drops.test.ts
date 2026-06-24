@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, fireEvent } from '@testing-library/svelte';
 import Drops from './Drops.svelte';
 import type { DropsPage } from '../lib/types';
 
@@ -37,4 +37,37 @@ test('shows the cold-start CTA when NoWhitelist', async () => {
   ));
   render(Drops);
   expect(await screen.findByText(/no games whitelisted|whitelist a game|add a game/i)).toBeTruthy();
+});
+
+test('mutation on current rows triggers a refetch (second GET to /api/drops)', async () => {
+  history.replaceState({}, '', '/drops');
+  Object.defineProperty(document, 'cookie', { value: 'csrftoken=t', configurable: true });
+
+  // Row with Linked:false so we get a "Mark linked" button (no mutation in the row).
+  const p = page('current');
+  p.Rows![0].Linked = false;
+  p.Accounts = [{ ID: 'acc1', Label: 'acc1', Platform: 'twitch' }];
+
+  const fetchMock = vi.fn(async (url: string) => {
+    if (String(url).includes('/api/drops')) {
+      return new Response(JSON.stringify(p), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  render(Drops);
+  // Wait for initial render.
+  await screen.findByText('Camp current');
+
+  const initialGetCount = fetchMock.mock.calls.filter(([u]) => String(u).includes('/api/drops?tab')).length;
+
+  const btn = await screen.findByRole('button', { name: /mark linked/i });
+  await fireEvent.click(btn);
+  // Drain microtask queue so the async refetch completes.
+  await new Promise((r) => setTimeout(r, 0));
+
+  const afterGetCount = fetchMock.mock.calls.filter(([u]) => String(u).includes('/api/drops?tab')).length;
+  // A second GET should have been issued (refetch after mutation).
+  expect(afterGetCount).toBeGreaterThan(initialGetCount);
 });
