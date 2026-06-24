@@ -205,7 +205,11 @@ func NewRouter(d Deps) http.Handler {
 	// Public (no auth required, but still session + CSRF)
 	r.Method(http.MethodGet, "/setup", withSession(csrf(http.HandlerFunc(setup.get))))
 	r.Method(http.MethodPost, "/setup", withSession(csrf(http.HandlerFunc(setup.post))))
-	r.Method(http.MethodGet, "/login", withSession(csrf(http.HandlerFunc(authH.loginGet))))
+	if d.SPADashboard {
+		r.Method(http.MethodGet, "/login", withSession(csrf(http.HandlerFunc(spaIndex))))
+	} else {
+		r.Method(http.MethodGet, "/login", withSession(csrf(http.HandlerFunc(authH.loginGet))))
+	}
 	r.Method(http.MethodPost, "/login", withSession(csrf(http.HandlerFunc(authH.loginPost))))
 	r.Method(http.MethodGet, "/auth/oidc/login", withSession(http.HandlerFunc(oidcH.loginRedirect)))
 	r.Method(http.MethodGet, "/auth/oidc/callback", withSession(http.HandlerFunc(oidcH.callback)))
@@ -408,6 +412,10 @@ func NewRouter(d Deps) http.Handler {
 		})
 		http.Redirect(w, r, applyRedirectTarget(r), http.StatusSeeOther)
 	})
+	// Public API routes: reachable pre-auth (outside the RequireAdminAPI group).
+	// Mirror the same placement as POST /lang above.
+	apiAuthed.Post("/login", http.HandlerFunc(authH.apiLogin))
+	apiAuthed.Get("/auth/info", apiAuthInfo(authInfoDeps{oidcEnabled: oidcEnabled, oidcProvider: oidcName, secureCookies: d.SecureCookies}))
 	apiAuthed.Group(func(gr chi.Router) {
 		gr.Use(RequireAdminAPI(d.Session))
 		gr.Get("/dashboard", dash.apiPage)
