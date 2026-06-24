@@ -26,7 +26,7 @@ import (
 // on, Go serves the SPA shell (spaIndex) for each so deep-links/refreshes
 // work; the client router takes over. Mirrors web/src/lib/router.svelte.ts's
 // spaPaths. Grows as pages are ported.
-var spaRoutes = []string{"/", "/drops", "/priority"}
+var spaRoutes = []string{"/", "/drops", "/priority", "/settings"}
 
 // applyRedirectTarget picks the post-/accounts/apply landing page from
 // the Referer header. The dashboard also has a Reload button, so we
@@ -328,7 +328,9 @@ func NewRouter(d Deps) http.Handler {
 	dropsH := &dropsDeps{q: d.Q, t: d.Templates, reload: d.Reload, sessions: d.Sessions, registry: d.Registry, loc: d.Location, sm: d.Session}
 	historyH := &historyDeps{q: d.Q, ring: d.LogRing, t: d.Templates, loc: d.Location}
 
-	authed.Get("/settings", settingsH.get)
+	if !d.SPADashboard {
+		authed.Get("/settings", settingsH.get)
+	}
 	if !d.SPADashboard {
 		authed.Get("/priority", settingsH.getPriority) // top-level nav item; suppressed when SPA serves it
 	}
@@ -411,6 +413,7 @@ func NewRouter(d Deps) http.Handler {
 		gr.Post("/drops/whitelist/channel/remove", dropsH.apiRemoveChannelWhitelist)
 		gr.Post("/drops/link", dropsH.apiMarkLinked)
 		gr.Get("/settings", settingsH.apiSettings)
+		gr.Post("/settings/general", settingsH.apiGeneral)
 		gr.Post("/settings/global-games", settingsH.apiGlobalGamesOrder)
 		gr.Post("/settings/global-games/add", settingsH.apiGlobalGamesAdd)
 		gr.Post("/settings/priority-mode", settingsH.apiPriorityMode)

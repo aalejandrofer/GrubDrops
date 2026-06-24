@@ -11,6 +11,40 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestAPIGeneral_RequireCSRF(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false})
+	req := httptest.NewRequest(http.MethodPost, "/api/settings/general", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"code":"csrf"`)
+}
+
+func TestDoSaveGeneral_PersistsAndDetectsIntervalChange(t *testing.T) {
+	s, _ := newTestSettings(t)
+	d := &settingsDeps{s: s}
+	changed, err := d.doSaveGeneral(context.Background(), 7, "debug", 90, 5)
+	require.NoError(t, err)
+	assert.True(t, changed) // tick/disc differ from defaults
+	got, _ := s.TickIntervalSec(context.Background())
+	assert.Equal(t, 90, got)
+	lvl, _ := s.LogLevel(context.Background())
+	assert.Equal(t, "debug", lvl)
+}
+
+func TestSettingsRoute_SuppressedWhenSPAOn(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false, SPADashboard: true})
+	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `id="app"`)
+}
+
 func TestAPISettings_ReturnsView(t *testing.T) {
 	t.Setenv("GRUB_AUTHBYPASS", "true")
 	s, q := newTestSettings(t)

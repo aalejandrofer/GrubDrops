@@ -44,6 +44,28 @@ func (d *settingsDeps) apiGlobalGamesAdd(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+func (d *settingsDeps) apiGeneral(w http.ResponseWriter, r *http.Request) {
+	var b struct {
+		LogRetentionDays     int    `json:"log_retention_days"`
+		LogLevel             string `json:"log_level"`
+		TickIntervalSec      int    `json:"tick_interval_sec"`
+		DiscoveryIntervalMin int    `json:"discovery_interval_min"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "bad_request", "invalid body")
+		return
+	}
+	changed, err := d.doSaveGeneral(r.Context(), b.LogRetentionDays, b.LogLevel, b.TickIntervalSec, b.DiscoveryIntervalMin)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	if d.onUpdate != nil {
+		d.onUpdate()
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true, "intervals_changed": changed})
+}
+
 func (d *settingsDeps) apiPriorityMode(w http.ResponseWriter, r *http.Request) {
 	var b struct {
 		PriorityMode string `json:"priority_mode"`

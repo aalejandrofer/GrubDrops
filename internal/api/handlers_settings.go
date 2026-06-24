@@ -275,43 +275,67 @@ func saveErr(w http.ResponseWriter, err error) bool {
 	return false
 }
 
+// doSaveGeneral persists the General tab settings and reports whether the
+// tick/discovery intervals changed (so the caller can prompt a reload).
+// Shared by the legacy postGeneral handler and the JSON apiGeneral.
+// Guards mirror the legacy form handler: tick/disc only set when > 0,
+// retention only when >= 0; logLevel always set.
+func (d *settingsDeps) doSaveGeneral(ctx context.Context, retentionDays int, logLevel string, tickSec, discMin int) (bool, error) {
+	if retentionDays >= 0 {
+		if err := d.s.SetLogRetentionDays(ctx, retentionDays); err != nil {
+			return false, err
+		}
+	}
+	if err := d.s.SetLogLevel(ctx, logLevel); err != nil {
+		return false, err
+	}
+	intervalsChanged := false
+	if tickSec > 0 {
+		if cur, _ := d.s.TickIntervalSec(ctx); cur != tickSec {
+			intervalsChanged = true
+		}
+		if err := d.s.SetTickIntervalSec(ctx, tickSec); err != nil {
+			return intervalsChanged, err
+		}
+	}
+	if discMin > 0 {
+		if cur, _ := d.s.DiscoveryIntervalMin(ctx); cur != discMin {
+			intervalsChanged = true
+		}
+		if err := d.s.SetDiscoveryIntervalMin(ctx, discMin); err != nil {
+			return intervalsChanged, err
+		}
+	}
+	return intervalsChanged, nil
+}
+
 // postGeneral saves the General tab: tick/discovery intervals + logging.
 func (d *settingsDeps) postGeneral(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	retentionDays := -1
 	if v := r.FormValue("log_retention_days"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
-			if saveErr(w, d.s.SetLogRetentionDays(ctx, n)) {
-				return
-			}
+			retentionDays = n
 		}
 	}
-	if saveErr(w, d.s.SetLogLevel(ctx, r.FormValue("log_level"))) {
-		return
-	}
-
-	intervalsChanged := false
+	tickSec := 0
 	if v := r.FormValue("tick_interval_sec"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			if cur, _ := d.s.TickIntervalSec(ctx); cur != n {
-				intervalsChanged = true
-			}
-			if saveErr(w, d.s.SetTickIntervalSec(ctx, n)) {
-				return
-			}
+			tickSec = n
 		}
 	}
+	discMin := 0
 	if v := r.FormValue("discovery_interval_min"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			if cur, _ := d.s.DiscoveryIntervalMin(ctx); cur != n {
-				intervalsChanged = true
-			}
-			if saveErr(w, d.s.SetDiscoveryIntervalMin(ctx, n)) {
-				return
-			}
+			discMin = n
 		}
 	}
 	// heartbeat_interval_sec intentionally not accepted: HeartbeatInterval is
 	// locked to 60s (Twitch credits 1 min per beacon; >60s under-credits).
+	intervalsChanged, err := d.doSaveGeneral(ctx, retentionDays, r.FormValue("log_level"), tickSec, discMin)
+	if saveErr(w, err) {
+		return
+	}
 	if d.onUpdate != nil {
 		d.onUpdate()
 	}
