@@ -60,49 +60,78 @@ func newLoginTwitchDeps(d Deps, rootCtx context.Context) *loginTwitchDeps {
 	}
 }
 
-func (d *loginTwitchDeps) get(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+// startDevice supersedes any in-flight poll, starts a device challenge,
+// stores state, and spawns the poll goroutine. Returns the page data or an
+// (errCode, httpStatus). errCode "" means success.
+func (d *loginTwitchDeps) startDevice(r *http.Request, id string) (loginPageData, string, int) {
 	acc, err := d.q.GetAccount(r.Context(), id)
 	if err != nil {
-		http.NotFound(w, r)
-		return
+		return loginPageData{}, "not_found", http.StatusNotFound
 	}
 	backend, ok := d.registry.Get(acc.Platform)
 	if !ok {
-		http.Error(w, i18n.T(i18n.DetectLang(r), "error.no_backend"), http.StatusBadRequest)
-		return
+		return loginPageData{}, "no_backend", http.StatusBadRequest
 	}
-
-	// Supersede any in-flight poll for this account: cancel it so we
-	// don't leave an orphaned goroutine polling a stale device_code
-	// (the source of the endless "device-code still pending" auth-log
-	// loop when the page is opened more than once).
 	if v, ok := d.pending.Load(id); ok {
 		if prev, ok := v.(*twitchLoginState); ok && prev.cancel != nil {
 			prev.cancel()
 		}
 	}
-
 	ch, err := backend.StartDeviceLogin(r.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
+		return loginPageData{}, "device_start", http.StatusBadGateway
 	}
-
 	pollCtx, cancel := context.WithCancel(d.rootCtx)
 	st := &twitchLoginState{challenge: ch, status: "pending", startedAt: time.Now(), cancel: cancel}
 	d.pending.Store(id, st)
 	go d.poll(pollCtx, id, backend, st)
+	return loginPageData{AccountID: id, DisplayName: acc.DisplayName, VerificationURL: ch.VerificationURL, UserCode: ch.UserCode}, "", http.StatusOK
+}
 
+// statusFor returns the current poll status, "error" when no state exists.
+func (d *loginTwitchDeps) statusFor(id string) string {
+	v, ok := d.pending.Load(id)
+	if !ok {
+		return "error"
+	}
+	st := v.(*twitchLoginState)
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	return st.status
+}
+
+func (d *loginTwitchDeps) get(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	page, code, status := d.startDevice(r, id)
+	if code != "" {
+		switch code {
+		case "not_found":
+			http.NotFound(w, r)
+		case "no_backend":
+			http.Error(w, i18n.T(i18n.DetectLang(r), "error.no_backend"), status)
+		default:
+			http.Error(w, code, status)
+		}
+		return
+	}
 	render(w, r, d.t, "login_twitch.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
-		Page: loginPageData{
-			AccountID:       id,
-			DisplayName:     acc.DisplayName,
-			VerificationURL: ch.VerificationURL,
-			UserCode:        ch.UserCode,
-		},
+		Page: page,
 	})
+}
+
+func (d *loginTwitchDeps) apiDeviceStart(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	page, code, status := d.startDevice(r, id)
+	if code != "" {
+		writeAPIError(w, status, code, code)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"user_code": page.UserCode, "verification_url": page.VerificationURL})
+}
+
+func (d *loginTwitchDeps) apiDevicePoll(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": d.statusFor(chi.URLParam(r, "id"))})
 }
 
 func (d *loginTwitchDeps) poll(ctx context.Context, accountID string, backend platform.Backend, st *twitchLoginState) {
@@ -174,15 +203,5 @@ func (d *loginTwitchDeps) poll(ctx context.Context, accountID string, backend pl
 }
 
 func (d *loginTwitchDeps) status(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	v, ok := d.pending.Load(id)
-	if !ok {
-		renderPartial(w, r, d.t, "login_twitch_status", "error")
-		return
-	}
-	st := v.(*twitchLoginState)
-	st.mu.Lock()
-	status := st.status
-	st.mu.Unlock()
-	renderPartial(w, r, d.t, "login_twitch_status", status)
+	renderPartial(w, r, d.t, "login_twitch_status", d.statusFor(chi.URLParam(r, "id")))
 }

@@ -234,6 +234,35 @@ type kickAuthVerifier interface {
 	VerifyAuth(ctx context.Context, s platform.Session) error
 }
 
+func (d *loginKickDeps) apiKickLogin(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+		writeAPIError(w, http.StatusNotFound, "not_found", "account not found")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	var b struct {
+		CookiesTxt string `json:"cookies_txt"`
+		Channel    string `json:"channel"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "bad_request", "invalid body")
+		return
+	}
+	form, err := kickCookiesFromNetscape(b.CookiesTxt)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "cookies", err.Error())
+		return
+	}
+	form.Channels = parseKickChannels(b.Channel)
+	verified, err := d.persistKickSession(r.Context(), id, form)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "persist", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "verified": verified})
+}
+
 func (d *loginKickDeps) renderError(w http.ResponseWriter, r *http.Request, id, name, flash string) {
 	render(w, r, d.t, "login_kick.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),

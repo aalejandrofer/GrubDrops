@@ -249,23 +249,27 @@ func NewRouter(d Deps) http.Handler {
 	} else {
 		authed.Get("/accounts/{id}", spaIndex)
 	}
-	authed.Get("/accounts/{id}/login", func(w http.ResponseWriter, r *http.Request) {
-		id := chi.URLParam(r, "id")
-		acc, err := d.Q.GetAccount(r.Context(), id)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-		switch acc.Platform {
-		case "twitch":
-			// Show choose page with both device-code and cookie import options
-			loginTwitchChoose.get(w, r)
-		case "kick":
-			loginKick.get(w, r)
-		default:
-			http.Error(w, i18n.T(i18n.DetectLang(r), "error.platform_no_login"), http.StatusBadRequest)
-		}
-	})
+	if !d.SPADashboard {
+		authed.Get("/accounts/{id}/login", func(w http.ResponseWriter, r *http.Request) {
+			id := chi.URLParam(r, "id")
+			acc, err := d.Q.GetAccount(r.Context(), id)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			switch acc.Platform {
+			case "twitch":
+				// Show choose page with both device-code and cookie import options
+				loginTwitchChoose.get(w, r)
+			case "kick":
+				loginKick.get(w, r)
+			default:
+				http.Error(w, i18n.T(i18n.DetectLang(r), "error.platform_no_login"), http.StatusBadRequest)
+			}
+		})
+	} else {
+		authed.Get("/accounts/{id}/login", spaIndex)
+	}
 	// Twitch cookie-paste is retired (doesn't authenticate on the direct
 	// backend). Redirect any old paste links to the device-code flow.
 	authed.Get("/accounts/{id}/twitch/paste", func(w http.ResponseWriter, r *http.Request) {
@@ -274,10 +278,18 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/accounts/{id}/twitch/paste", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/accounts/"+chi.URLParam(r, "id")+"/twitch/device", http.StatusSeeOther)
 	})
-	authed.Get("/accounts/{id}/twitch/device", loginTwitch.get)
+	if !d.SPADashboard {
+		authed.Get("/accounts/{id}/twitch/device", loginTwitch.get)
+	} else {
+		authed.Get("/accounts/{id}/twitch/device", spaIndex)
+	}
 	authed.Get("/accounts/{id}/login/poll", loginTwitch.status)
 	// New: Twitch cookie file import
-	authed.Get("/accounts/{id}/twitch/cookie", loginTwitchCookie.get)
+	if !d.SPADashboard {
+		authed.Get("/accounts/{id}/twitch/cookie", loginTwitchCookie.get)
+	} else {
+		authed.Get("/accounts/{id}/twitch/cookie", spaIndex)
+	}
 	authed.Post("/accounts/{id}/twitch/cookie", loginTwitchCookie.post)
 	authed.Post("/accounts/{id}/login", func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
@@ -443,6 +455,10 @@ func NewRouter(d Deps) http.Handler {
 		gr.Post("/accounts/{id}/force-channels", accs.apiAccountForceChannels)
 		gr.Post("/accounts/{id}/force-channels/add", accs.apiAccountForceChannelAdd)
 		gr.Post("/accounts/{id}/force-channels/remove", accs.apiAccountForceChannelRemove)
+		gr.Post("/accounts/{id}/twitch/device", loginTwitch.apiDeviceStart)
+		gr.Get("/accounts/{id}/twitch/poll", loginTwitch.apiDevicePoll)
+		gr.Post("/accounts/{id}/twitch/cookie", loginTwitchCookie.apiCookieImport)
+		gr.Post("/accounts/{id}/kick/login", loginKick.apiKickLogin)
 		gr.Post("/accounts/apply", func(w http.ResponseWriter, r *http.Request) {
 			if d.Reload == nil {
 				writeAPIError(w, http.StatusServiceUnavailable, "unavailable", "reload unavailable")
