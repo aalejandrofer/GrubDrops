@@ -62,3 +62,7 @@ test('isSpaPath: /accounts owned, /accounts/abc owned, /accounts/new owned, /acc
 test('isSpaPath: /login is SPA-owned', () => {
   expect(isSpaPath('/login')).toBe(true);
 });
+
+test('isSpaPath: /setup is SPA-owned', () => {
+  expect(isSpaPath('/setup')).toBe(true);
+});

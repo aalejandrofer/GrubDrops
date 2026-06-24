@@ -67,6 +67,12 @@ export interface ApiErrorEnvelope {
   error: { code: string; message: string };
 }
 
+export interface AuthInfo {
+  oidc_enabled: boolean;
+  oidc_provider: string;
+  admin_exists: boolean;
+}
+
 export interface AccountCampaignRow { ID: string; Name: string; Game: string; EndsIn: string; StartsIn: string; }
 export interface AccountGameRow { Rank: number; Name: string; }
 

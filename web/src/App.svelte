@@ -16,6 +16,7 @@
   import AccountsList from './routes/AccountsList.svelte';
   import AccountDetailPage from './routes/AccountDetailPage.svelte';
   import AccountNew from './routes/AccountNew.svelte';
+  import Setup from './routes/Setup.svelte';
 
   let teardown: (() => void) | undefined;
   onMount(() => { teardown = startRouter(); });
@@ -24,6 +25,8 @@
 
 {#if currentPath() === '/login'}
   <Login />
+{:else if currentPath() === '/setup'}
+  <Setup />
 {:else}
   <AppShell>
     {#snippet children()}
