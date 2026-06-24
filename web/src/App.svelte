@@ -4,6 +4,7 @@
   import AppShell from './routes/AppShell.svelte';
   import Dashboard from './routes/Dashboard.svelte';
   import Drops from './routes/Drops.svelte';
+  import Priority from './routes/Priority.svelte';
 
   let teardown: (() => void) | undefined;
   onMount(() => { teardown = startRouter(); });
@@ -15,5 +16,7 @@
     <Dashboard />
   {:else if currentPath() === '/drops'}
     <Drops />
+  {:else if currentPath() === '/priority'}
+    <Priority />
   {/if}
 </AppShell>

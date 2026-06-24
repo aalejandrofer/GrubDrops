@@ -121,3 +121,10 @@ export interface DropsPage {
   Accounts: DropsAccount[] | null;
   NoWhitelist: boolean;
 }
+
+export interface SettingsGameRow { ID: string; Name: string; Selected: boolean; }
+export interface SettingsView {
+  GlobalGames: SettingsGameRow[] | null;
+  AllGames: SettingsGameRow[] | null;
+  PriorityMode: string;
+}
