@@ -31,6 +31,17 @@ const (
 // GRUB_AUTHBYPASS=true is a BIGGER hammer: it disables auth for EVERY
 // request (no login at all). Intended only for staging/dev where the app
 // is otherwise unreachable behind a proxy. NEVER set it in production.
+// adminAllowed reports whether the request should be treated as an
+// authenticated admin, honoring the bypass flags. Shared by RequireAdmin
+// (redirect on false) and RequireAdminAPI (401 JSON on false) so the two
+// cannot drift.
+func adminAllowed(r *http.Request, sm *scs.SessionManager, bypassAll, bypassLocal bool) bool {
+	if bypassAll || (bypassLocal && isLoopbackRequest(r)) {
+		return true
+	}
+	return sm.GetBool(r.Context(), "admin_authed")
+}
+
 func RequireAdmin(sm *scs.SessionManager) func(http.Handler) http.Handler {
 	bypassLocal := os.Getenv("GRUB_AUTH_BYPASS_LOCAL") == "1"
 	bypassAll := envTrue("GRUB_AUTHBYPASS")
@@ -39,14 +50,27 @@ func RequireAdmin(sm *scs.SessionManager) func(http.Handler) http.Handler {
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if bypassAll || (bypassLocal && isLoopbackRequest(r)) {
-				ctx := context.WithValue(r.Context(), ctxAdminAuthed, true)
-				next.ServeHTTP(w, r.WithContext(ctx))
+			if !adminAllowed(r, sm, bypassAll, bypassLocal) {
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
 			}
-			authed := sm.GetBool(r.Context(), "admin_authed")
-			if !authed {
-				http.Redirect(w, r, "/login", http.StatusSeeOther)
+			ctx := context.WithValue(r.Context(), ctxAdminAuthed, true)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// RequireAdminAPI is the JSON-API counterpart of RequireAdmin: on an
+// unauthenticated request it returns 401 with a JSON error envelope
+// instead of a 302 redirect to /login, so a browser fetch() can detect
+// session expiry rather than silently receiving the login HTML.
+func RequireAdminAPI(sm *scs.SessionManager) func(http.Handler) http.Handler {
+	bypassLocal := os.Getenv("GRUB_AUTH_BYPASS_LOCAL") == "1"
+	bypassAll := envTrue("GRUB_AUTHBYPASS")
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !adminAllowed(r, sm, bypassAll, bypassLocal) {
+				writeAPIError(w, http.StatusUnauthorized, "unauthorized", "login required")
 				return
 			}
 			ctx := context.WithValue(r.Context(), ctxAdminAuthed, true)
