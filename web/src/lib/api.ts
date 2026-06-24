@@ -61,6 +61,10 @@ export function fetchAccounts(): Promise<AccountListRow[]> {
   return apiFetch<AccountListRow[]>('/api/accounts');
 }
 
+export function fetchAuthInfo(): Promise<{ oidc_enabled: boolean; oidc_provider: string }> {
+  return apiFetch<{ oidc_enabled: boolean; oidc_provider: string }>('/api/auth/info');
+}
+
 // apiSend performs a mutating request: it attaches the CSRF token (read from
 // the csrftoken cookie) in the X-CSRF-Token header, posts JSON, and shares
 // apiFetch's 401-redirect / ApiError handling.
