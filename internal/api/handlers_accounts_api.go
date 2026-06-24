@@ -64,3 +64,23 @@ func (d accountsDeps) apiForceWatch(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
+
+// apiCampaignDetail serves the campaign-detail modal data as JSON, reusing
+// the same projection the HTML modal renders.
+func (d dashboardDeps) apiCampaignDetail(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeAPIError(w, http.StatusBadRequest, "bad_request", "missing id")
+		return
+	}
+	if d.sch == nil {
+		writeAPIError(w, http.StatusNotFound, "not_found", "no discovery scheduler")
+		return
+	}
+	detail, ok := d.campaignDetailData(r, id)
+	if !ok {
+		writeAPIError(w, http.StatusNotFound, "not_found", "campaign not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, detail)
+}

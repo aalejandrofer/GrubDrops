@@ -941,25 +941,16 @@ func (d dashboardDeps) events(w http.ResponseWriter, r *http.Request) {
 	renderPartial(w, r, d.t, "dashboard_events", eventsFromRing(d.ring, kind, account, lang, accs, d.loc))
 }
 
-// campaignDetail renders the modal partial for a single discovered
-// campaign. HTMX hits this from each Active Campaigns row; the response
-// is dropped into the dashboard's #modal target.
-func (d dashboardDeps) campaignDetail(w http.ResponseWriter, r *http.Request) {
-	lang := i18n.DetectLang(r)
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		http.Error(w, i18n.T(lang, "error.missing_param"), http.StatusBadRequest)
-		return
-	}
-	if d.sch == nil {
-		http.Error(w, i18n.T(lang, "error.service_unavailable"), http.StatusServiceUnavailable)
-		return
-	}
+// campaignDetailData builds the campaign-detail projection. Returns
+// (detail, true) on success, or (zero, false) when the campaign id is
+// unknown. Caller must ensure d.sch != nil. Shared by the HTML modal
+// handler (campaignDetail) and the JSON endpoint (apiCampaignDetail).
+func (d dashboardDeps) campaignDetailData(r *http.Request, id string) (dashCampaignDetail, bool) {
 	dc, ok := d.sch.FindDiscoveredCampaign(id)
 	if !ok {
-		http.Error(w, i18n.T(lang, "error.not_found"), http.StatusNotFound)
-		return
+		return dashCampaignDetail{}, false
 	}
+	lang := i18n.DetectLang(r)
 
 	// Map account IDs to friendlier "DisplayName (@login)" labels so
 	// the modal lists humans, not opaque UUIDs.
@@ -1025,6 +1016,28 @@ func (d dashboardDeps) campaignDetail(w http.ResponseWriter, r *http.Request) {
 		AccountLinked:    dc.AccountLinked,
 		AccountLinkURL:   dc.AccountLinkURL,
 		RawJSON:          string(rawJSON),
+	}
+	return detail, true
+}
+
+// campaignDetail renders the modal partial for a single discovered
+// campaign. HTMX hits this from each Active Campaigns row; the response
+// is dropped into the dashboard's #modal target.
+func (d dashboardDeps) campaignDetail(w http.ResponseWriter, r *http.Request) {
+	lang := i18n.DetectLang(r)
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, i18n.T(lang, "error.missing_param"), http.StatusBadRequest)
+		return
+	}
+	if d.sch == nil {
+		http.Error(w, i18n.T(lang, "error.service_unavailable"), http.StatusServiceUnavailable)
+		return
+	}
+	detail, ok := d.campaignDetailData(r, id)
+	if !ok {
+		http.Error(w, i18n.T(lang, "error.not_found"), http.StatusNotFound)
+		return
 	}
 	renderPartial(w, r, d.t, "dashboard_campaign_modal", detail)
 }

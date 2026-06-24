@@ -378,9 +378,21 @@ func NewRouter(d Deps) http.Handler {
 		gr.Use(RequireAdminAPI(d.Session))
 		gr.Get("/dashboard", dash.apiPage)
 		gr.Get("/dashboard/account/{id}", dash.apiAccountDetail)
+		gr.Get("/dashboard/campaign/{id}", dash.apiCampaignDetail)
 		gr.Post("/accounts/{id}/toggle", accs.apiToggle)
 		gr.Post("/accounts/{id}/reload", accs.apiReload)
 		gr.Post("/accounts/{id}/force-watch", accs.apiForceWatch)
+		gr.Post("/accounts/apply", func(w http.ResponseWriter, r *http.Request) {
+			if d.Reload == nil {
+				writeAPIError(w, http.StatusServiceUnavailable, "unavailable", "reload unavailable")
+				return
+			}
+			if err := d.Reload(r.Context()); err != nil {
+				writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		})
 	})
 	r.Mount("/api", withSession(csrf(apiAuthed)))
 

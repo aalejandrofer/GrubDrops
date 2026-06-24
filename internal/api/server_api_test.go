@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -90,4 +91,30 @@ func TestAPIAccountDetail_UnknownIs404JSON(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, rec.Code)
 	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 	assert.Contains(t, rec.Body.String(), `"code":"not_found"`)
+}
+
+func TestAPICampaignDetail_UnknownIs404JSON(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	// No scheduler wired -> campaign lookup can't resolve -> 404 JSON.
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false})
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/campaign/nope", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+	assert.Contains(t, rec.Body.String(), `"code":`)
+}
+
+func TestAPIReloadAll_RequiresCSRF(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false,
+		Reload: func(context.Context) error { return nil }})
+	req := httptest.NewRequest(http.MethodPost, "/api/accounts/apply", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	// No CSRF token -> 403 JSON (proves the route exists + is CSRF-protected).
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"code":"csrf"`)
 }
