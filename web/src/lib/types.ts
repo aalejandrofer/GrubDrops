@@ -139,4 +139,15 @@ export interface SettingsView {
   Goroutines: number;
   BrowserURL: string;
   Sidecars: string[] | null;
+  GlobalDiscordWebhook: string;
+  NotifyAvatarURL: string;
+  NotifyClaim: boolean;
+  NotifyProgress: boolean;
+  NotifyAuth: boolean;
+  NotifyError: boolean;
+  NotifyCanary: boolean;
+  ProgressNotifyStep: number;
+  KickWatchMode: string;
+  ProxyURL: string;
+  ProxyEnabled: boolean;
 }
