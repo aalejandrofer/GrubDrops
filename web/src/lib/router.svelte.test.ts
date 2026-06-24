@@ -4,10 +4,11 @@ import { isSpaPath, currentPath, navigate, startRouter } from './router.svelte';
 beforeEach(() => { history.replaceState({}, '', '/'); });
 afterEach(() => { vi.restoreAllMocks(); });
 
-test('isSpaPath: / and /drops owned, /settings not', () => {
+test('isSpaPath: / and /drops owned, /settings owned, /history not', () => {
   expect(isSpaPath('/')).toBe(true);
   expect(isSpaPath('/drops')).toBe(true);
-  expect(isSpaPath('/settings')).toBe(false);
+  expect(isSpaPath('/settings')).toBe(true);
+  expect(isSpaPath('/history')).toBe(false);
 });
 
 test('navigate updates currentPath and pushes history', () => {
@@ -39,7 +40,7 @@ test('startRouter intercepts clicks on owned links, ignores unowned', () => {
 
   // unowned link → NOT intercepted (browser would navigate)
   const unowned = document.createElement('a');
-  unowned.href = '/settings';
+  unowned.href = '/history';
   document.body.appendChild(unowned);
   const ev2 = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
   unowned.dispatchEvent(ev2);

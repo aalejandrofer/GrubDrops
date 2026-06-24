@@ -127,4 +127,16 @@ export interface SettingsView {
   GlobalGames: SettingsGameRow[] | null;
   AllGames: SettingsGameRow[] | null;
   PriorityMode: string;
+  LogRetentionDays: number;
+  LogLevel: string;
+  LogLevelEnv: string;
+  TickIntervalSec: number;
+  DiscoveryIntervalMin: number;
+  Version: string;
+  GitCommit: string;
+  GoVersion: string;
+  Uptime: string;
+  Goroutines: number;
+  BrowserURL: string;
+  Sidecars: string[] | null;
 }
