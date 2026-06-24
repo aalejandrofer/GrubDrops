@@ -6,9 +6,9 @@ All notable changes to GrubDrops.
 
 ### Added
 
-- **Live-events feed level filter.** A new All / Info / Warn / Error dropdown
-  next to the account filter, so you can narrow the feed to just warnings or
-  errors.
+- **Info filter on the live-events feed.** Uncategorized info events had no
+  matching filter chip, so they only showed under "all". Added an "info" chip
+  alongside claims / progress / state / discovery / auth / errors.
 
 ### Changed
 
