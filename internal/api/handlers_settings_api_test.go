@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,4 +47,13 @@ func TestPriorityRoute_SuppressedWhenSPAOn(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), `id="app"`)
+}
+
+func TestAPIGlobalGamesOrder_MalformedBodyIs400(t *testing.T) {
+	d := &settingsDeps{}
+	req := httptest.NewRequest(http.MethodPost, "/api/settings/global-games", strings.NewReader("not json"))
+	rec := httptest.NewRecorder()
+	d.apiGlobalGamesOrder(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"code":"bad_request"`)
 }

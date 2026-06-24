@@ -13,7 +13,10 @@ func (d *settingsDeps) apiGlobalGamesOrder(w http.ResponseWriter, r *http.Reques
 	var b struct {
 		GameIDs []string `json:"game_ids"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&b)
+	if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "bad_request", "invalid body")
+		return
+	}
 	if err := d.doSetGlobalGamesOrder(r.Context(), b.GameIDs); err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
 		return
