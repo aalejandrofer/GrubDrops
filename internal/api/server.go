@@ -404,6 +404,10 @@ func NewRouter(d Deps) http.Handler {
 			writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 		})
 		gr.Get("/drops", dropsH.apiDrops)
+		gr.Post("/drops/whitelist/add", dropsH.apiAddWhitelist)
+		gr.Post("/drops/whitelist/channel", dropsH.apiAddChannelWhitelist)
+		gr.Post("/drops/whitelist/channel/remove", dropsH.apiRemoveChannelWhitelist)
+		gr.Post("/drops/link", dropsH.apiMarkLinked)
 	})
 	r.Mount("/api", withSession(csrf(apiAuthed)))
 

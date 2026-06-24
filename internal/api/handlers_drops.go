@@ -225,7 +225,7 @@ type dropsPage struct {
 	// campaign's channel. Only populated for the current tab.
 	NullGameRows []dropsRow
 	Accounts     []dropsAccount // for the "add to whitelist" dropdown on unlisted rows
-	CSRFToken    string         // mirrors templateData.CSRFToken for inline form
+	CSRFToken    string         `json:"-"` // mirrors templateData.CSRFToken for inline form; excluded from JSON (SPA reads its own csrf cookie)
 	// NoWhitelist is true when no game is whitelisted anywhere (per-account or
 	// global). Discovery only crawls whitelisted games, so an empty whitelist
 	// means the page is silently empty — a cold-start trap. The template shows
@@ -792,6 +792,52 @@ type collectedMark struct {
 	Platform string
 }
 
+// doAddWhitelist is the shared core for addWhitelist and apiAddWhitelist.
+// It performs the slug-and-upsert flow without touching HTTP.
+func (d *dropsDeps) doAddWhitelist(ctx context.Context, accountID, name string) error {
+	// "__global__" adds to the global priority list (applies to every account
+	// that has no per-account override) rather than a single account.
+	global := accountID == "__global__"
+	if !global {
+		if _, err := d.q.GetAccount(ctx, accountID); err != nil {
+			return err
+		}
+	}
+	slug := gameslug.Slug(name)
+	if slug == "" {
+		return nil
+	}
+	// Canonical id (gameslug.ID, '-'→'_') so it matches discovery's row for the
+	// same game; "g_"+slug keeps hyphens and collides on the UNIQUE slug for
+	// multi-word games.
+	gameID := gameslug.ID(name)
+	if err := d.q.UpsertGame(ctx, gen.UpsertGameParams{
+		ID: gameID, Name: name, Slug: slug, Priority: 0,
+	}); err != nil {
+		return err
+	}
+	if global {
+		existing, _ := d.q.ListGlobalGames(ctx)
+		rank := int64(len(existing))
+		for _, e := range existing {
+			if e.ID == gameID {
+				rank = e.Rank
+				break
+			}
+		}
+		return d.q.AddGlobalGame(ctx, gen.AddGlobalGameParams{GameID: gameID, Rank: rank})
+	}
+	existing, _ := d.q.ListAccountGames(ctx, accountID)
+	rank := int64(len(existing))
+	for _, e := range existing {
+		if e.ID == gameID {
+			rank = e.Rank
+			break
+		}
+	}
+	return d.q.AddAccountGame(ctx, gen.AddAccountGameParams{AccountID: accountID, GameID: gameID, Rank: rank})
+}
+
 // addWhitelist takes (account_id, name) from the inline form on the
 // /drops Discoverable table and reuses the same slug-and-upsert flow
 // as the per-account whitelist editor. Redirects back to /drops with
@@ -803,60 +849,7 @@ func (d *dropsDeps) addWhitelist(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/drops", http.StatusSeeOther)
 		return
 	}
-	// "__global__" adds to the global priority list (applies to every account
-	// that has no per-account override) rather than a single account.
-	global := accID == "__global__"
-	if !global {
-		if _, err := d.q.GetAccount(r.Context(), accID); err != nil {
-			http.NotFound(w, r)
-			return
-		}
-	}
-	slug := gameslug.Slug(name)
-	if slug == "" {
-		http.Redirect(w, r, "/drops", http.StatusSeeOther)
-		return
-	}
-	// Canonical id (gameslug.ID, '-'→'_') so it matches discovery's row for the
-	// same game; "g_"+slug keeps hyphens and collides on the UNIQUE slug for
-	// multi-word games.
-	gameID := gameslug.ID(name)
-	if err := d.q.UpsertGame(r.Context(), gen.UpsertGameParams{
-		ID: gameID, Name: name, Slug: slug, Priority: 0,
-	}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if global {
-		existing, _ := d.q.ListGlobalGames(r.Context())
-		rank := int64(len(existing))
-		for _, e := range existing {
-			if e.ID == gameID {
-				rank = e.Rank
-				break
-			}
-		}
-		if err := d.q.AddGlobalGame(r.Context(), gen.AddGlobalGameParams{
-			GameID: gameID, Rank: rank,
-		}); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		d.whitelistAddedFeedback(r)
-		http.Redirect(w, r, "/drops", http.StatusSeeOther)
-		return
-	}
-	existing, _ := d.q.ListAccountGames(r.Context(), accID)
-	rank := int64(len(existing))
-	for _, e := range existing {
-		if e.ID == gameID {
-			rank = e.Rank
-			break
-		}
-	}
-	if err := d.q.AddAccountGame(r.Context(), gen.AddAccountGameParams{
-		AccountID: accID, GameID: gameID, Rank: rank,
-	}); err != nil {
+	if err := d.doAddWhitelist(r.Context(), accID, name); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -878,6 +871,19 @@ func (d *dropsDeps) whitelistAddedFeedback(r *http.Request) {
 	}
 }
 
+// doMarkLinked is the shared core for markLinked and apiMarkLinked.
+// It sets (or clears, when unlink=true) the kv link override without touching HTTP.
+func (d *dropsDeps) doMarkLinked(ctx context.Context, campaignID string, unlink bool) error {
+	key := store.LinkOverridePrefix + campaignID
+	if unlink {
+		_ = d.q.DeleteKV(ctx, key)
+		return nil
+	}
+	return d.q.UpsertSettingString(ctx, gen.UpsertSettingStringParams{
+		Key: key, Value: []byte("1"),
+	})
+}
+
 // markLinked handles the manual "I've linked it" toggle on a not-linked
 // row. Sets (or clears, when unlink=1) the kv override that the watcher's
 // ForceLinked reads, then reloads the scheduler so the campaign starts
@@ -889,17 +895,10 @@ func (d *dropsDeps) markLinked(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/drops", http.StatusSeeOther)
 		return
 	}
-	key := store.LinkOverridePrefix + campaignID
 	unlink := r.FormValue("unlink") == "1"
-	if unlink {
-		_ = d.q.DeleteKV(r.Context(), key)
-	} else {
-		if err := d.q.UpsertSettingString(r.Context(), gen.UpsertSettingStringParams{
-			Key: key, Value: []byte("1"),
-		}); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	if err := d.doMarkLinked(r.Context(), campaignID, unlink); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	// Reload so ForceLinked picks up the change without waiting for the
 	// next discovery cycle. Non-fatal — the change is persisted regardless.
@@ -934,6 +933,55 @@ func channelsFromRawJSON(raw string) []string {
 	return meta.AllowedChannels
 }
 
+// doAddChannelWhitelist is the shared core for addChannelWhitelist and
+// apiAddChannelWhitelist. It deduplicates and inserts channels for accountID,
+// returning the number of channels actually added.
+func (d *dropsDeps) doAddChannelWhitelist(ctx context.Context, accountID string, channels []string) (int, error) {
+	if _, err := d.q.GetAccount(ctx, accountID); err != nil {
+		return 0, err
+	}
+	seen := map[string]struct{}{}
+	added := 0
+	for _, raw := range channels {
+		ch := strings.ToLower(strings.TrimSpace(raw))
+		if ch == "" {
+			continue
+		}
+		if _, dup := seen[ch]; dup {
+			continue
+		}
+		seen[ch] = struct{}{}
+		if err := d.q.AddAccountChannel(ctx, gen.AddAccountChannelParams{AccountID: accountID, Channel: ch, Rank: 0}); err != nil {
+			return added, err
+		}
+		added++
+	}
+	return added, nil
+}
+
+// doRemoveChannelWhitelist is the shared core for removeChannelWhitelist and
+// apiRemoveChannelWhitelist. It removes channels for accountID, returning the
+// number of channels actually removed.
+func (d *dropsDeps) doRemoveChannelWhitelist(ctx context.Context, accountID string, channels []string) (int, error) {
+	removed := 0
+	seen := map[string]struct{}{}
+	for _, raw := range channels {
+		ch := strings.ToLower(strings.TrimSpace(raw))
+		if ch == "" {
+			continue
+		}
+		if _, dup := seen[ch]; dup {
+			continue
+		}
+		seen[ch] = struct{}{}
+		if err := d.q.RemoveAccountChannel(ctx, gen.RemoveAccountChannelParams{AccountID: accountID, Channel: ch}); err != nil {
+			return removed, err
+		}
+		removed++
+	}
+	return removed, nil
+}
+
 // addChannelWhitelist takes (account_id, channel[]) from the null-game
 // section on /drops and opts that account into the channel(s). Null-game
 // drops (Kick Football drops with no category) are mined when one of
@@ -944,31 +992,22 @@ func (d *dropsDeps) addChannelWhitelist(w http.ResponseWriter, r *http.Request) 
 		http.Redirect(w, r, "/drops", http.StatusSeeOther)
 		return
 	}
-	if _, err := d.q.GetAccount(r.Context(), accID); err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	seen := map[string]struct{}{}
-	added := 0
-	for _, raw := range r.Form["channel"] {
-		ch := strings.ToLower(strings.TrimSpace(raw))
-		if ch == "" {
-			continue
-		}
-		if _, dup := seen[ch]; dup {
-			continue
-		}
-		seen[ch] = struct{}{}
-		if err := d.q.AddAccountChannel(r.Context(), gen.AddAccountChannelParams{
-			AccountID: accID, Channel: ch, Rank: 0,
-		}); err != nil {
+	added, err := d.doAddChannelWhitelist(r.Context(), accID, r.Form["channel"])
+	if err != nil {
+		if added == 0 {
+			// GetAccount failed (account not found) or first insert failed.
 			if d.sm != nil {
 				d.sm.Put(r.Context(), "flash", "flash.channel_whitelist_failed")
 			}
 			http.Redirect(w, r, "/drops", http.StatusSeeOther)
 			return
 		}
-		added++
+		// Partial failure: some channels inserted before the error.
+		if d.sm != nil {
+			d.sm.Put(r.Context(), "flash", "flash.channel_whitelist_failed")
+		}
+		http.Redirect(w, r, "/drops", http.StatusSeeOther)
+		return
 	}
 	// Reload the scheduler so the watcher re-picks immediately and starts
 	// mining the channel without waiting for the next discovery cycle.
@@ -995,24 +1034,10 @@ func (d *dropsDeps) removeChannelWhitelist(w http.ResponseWriter, r *http.Reques
 		http.Redirect(w, r, "/drops", http.StatusSeeOther)
 		return
 	}
-	removed := 0
-	seen := map[string]struct{}{}
-	for _, raw := range r.Form["channel"] {
-		ch := strings.ToLower(strings.TrimSpace(raw))
-		if ch == "" {
-			continue
-		}
-		if _, dup := seen[ch]; dup {
-			continue
-		}
-		seen[ch] = struct{}{}
-		if err := d.q.RemoveAccountChannel(r.Context(), gen.RemoveAccountChannelParams{
-			AccountID: accID, Channel: ch,
-		}); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		removed++
+	removed, err := d.doRemoveChannelWhitelist(r.Context(), accID, r.Form["channel"])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	if removed > 0 && d.reload != nil {
 		if err := d.reload(r.Context()); err != nil {
