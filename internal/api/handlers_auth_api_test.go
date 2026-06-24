@@ -166,3 +166,42 @@ func TestAPILogin_IsPublicNotBehindRequireAdminAPI(t *testing.T) {
 
 // Compile-time proof that nosurf is imported (via CookieName reference).
 var _ = nosurf.CookieName
+
+func TestAPISetup_CreatesAdminWhenNone(t *testing.T) {
+	s, q := newTestSettings(t) // fresh DB, no admin
+	sm := scsNew()
+	h := NewRouter(Deps{Q: q, Session: sm, SettingsStore: s, SecureCookies: false})
+	// Get CSRF token via GET /api/auth/info (sets csrftoken cookie).
+	tok, cookies := getCSRFToken(t, h)
+	req := httptest.NewRequest(http.MethodPost, "/api/setup", strings.NewReader(`{"password":"longenough","confirm":"longenough"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-CSRF-Token", tok)
+	req.Header.Set("Origin", "http://example.com")
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"ok":true`)
+	exists, _ := q.AdminExists(context.Background())
+	assert.True(t, exists)
+}
+
+func TestAPISetup_RequireCSRF(t *testing.T) {
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/setup", nil))
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"code":"csrf"`)
+}
+
+func TestAPIAuthInfo_IncludesAdminExists(t *testing.T) {
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/auth/info", nil))
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"admin_exists"`)
+}

@@ -203,7 +203,11 @@ func NewRouter(d Deps) http.Handler {
 	spaSecureCookies = d.SecureCookies
 
 	// Public (no auth required, but still session + CSRF)
-	r.Method(http.MethodGet, "/setup", withSession(csrf(http.HandlerFunc(setup.get))))
+	if d.SPADashboard {
+		r.Method(http.MethodGet, "/setup", withSession(csrf(http.HandlerFunc(spaIndex))))
+	} else {
+		r.Method(http.MethodGet, "/setup", withSession(csrf(http.HandlerFunc(setup.get))))
+	}
 	r.Method(http.MethodPost, "/setup", withSession(csrf(http.HandlerFunc(setup.post))))
 	if d.SPADashboard {
 		r.Method(http.MethodGet, "/login", withSession(csrf(http.HandlerFunc(spaIndex))))
@@ -415,7 +419,8 @@ func NewRouter(d Deps) http.Handler {
 	// Public API routes: reachable pre-auth (outside the RequireAdminAPI group).
 	// Mirror the same placement as POST /lang above.
 	apiAuthed.Post("/login", http.HandlerFunc(authH.apiLogin))
-	apiAuthed.Get("/auth/info", apiAuthInfo(authInfoDeps{oidcEnabled: oidcEnabled, oidcProvider: oidcName, secureCookies: d.SecureCookies}))
+	apiAuthed.Get("/auth/info", apiAuthInfo(authInfoDeps{oidcEnabled: oidcEnabled, oidcProvider: oidcName, secureCookies: d.SecureCookies, q: d.Q}))
+	apiAuthed.Post("/setup", http.HandlerFunc(setup.apiSetup))
 	apiAuthed.Group(func(gr chi.Router) {
 		gr.Use(RequireAdminAPI(d.Session))
 		gr.Get("/dashboard", dash.apiPage)
