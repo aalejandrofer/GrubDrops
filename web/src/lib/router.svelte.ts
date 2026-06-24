@@ -13,8 +13,10 @@ export function currentPath(): string {
 }
 
 export function navigate(to: string): void {
-  history.pushState({}, '', to);
-  path = to;
+  const u = new URL(to, location.href);
+  const full = u.pathname + u.search + u.hash;
+  history.pushState({}, '', full);
+  path = u.pathname; // route-matching uses pathname only
 }
 
 function onPopState(): void {
@@ -32,7 +34,7 @@ function onClick(e: MouseEvent): void {
   if (url.origin !== location.origin) return;
   if (!isSpaPath(url.pathname)) return; // unowned → let the browser navigate (legacy)
   e.preventDefault();
-  navigate(url.pathname);
+  navigate(url.pathname + url.search + url.hash);
 }
 
 // startRouter attaches the popstate + click interceptor; returns a teardown.

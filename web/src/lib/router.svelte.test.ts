@@ -16,6 +16,14 @@ test('navigate updates currentPath and pushes history', () => {
   expect(push).toHaveBeenCalled();
 });
 
+test('navigate preserves query string + hash while currentPath returns only pathname', () => {
+  const push = vi.spyOn(history, 'pushState');
+  navigate('/?filter=x#section');
+  expect(currentPath()).toBe('/');
+  // pushState must be called with the full URL including query + hash
+  expect(push).toHaveBeenCalledWith({}, '', '/?filter=x#section');
+});
+
 test('startRouter intercepts clicks on owned links, ignores unowned', () => {
   const teardown = startRouter();
   const pushSpy = vi.spyOn(history, 'pushState');
