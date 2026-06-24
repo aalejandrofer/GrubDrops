@@ -195,29 +195,6 @@ func NewRouter(d Deps) http.Handler {
 	withSession := func(h http.Handler) http.Handler { return d.Session.LoadAndSave(h) }
 	csrf := CSRF(d.SecureCookies)
 
-	// Language switch: POST /api/lang sets a "lang" cookie (1 year).
-	r.Method(http.MethodPost, "/api/lang", withSession(csrf(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		lang := strings.TrimSpace(r.FormValue("lang"))
-		if lang == "" {
-			lang = "en"
-		}
-		// Validate language is supported
-		if lang != "en" && lang != "zh-CN" && lang != "es" {
-			lang = "en"
-		}
-		http.SetCookie(w, &http.Cookie{
-			Name:     "lang",
-			Value:    lang,
-			Path:     "/",
-			MaxAge:   365 * 24 * 60 * 60,
-			HttpOnly: true,
-			Secure:   d.SecureCookies,
-			SameSite: http.SameSiteLaxMode,
-		})
-		// Redirect back to the referer's local path only (never its host).
-		http.Redirect(w, r, applyRedirectTarget(r), http.StatusSeeOther)
-	}))))
-
 	// Public (no auth required, but still session + CSRF)
 	r.Method(http.MethodGet, "/setup", withSession(csrf(http.HandlerFunc(setup.get))))
 	r.Method(http.MethodPost, "/setup", withSession(csrf(http.HandlerFunc(setup.post))))
@@ -234,7 +211,6 @@ func NewRouter(d Deps) http.Handler {
 	} else {
 		authed.Get("/", dash.page)
 	}
-	authed.Get("/api/dashboard", dash.apiPage)
 	authed.Get("/dashboard/cards", dash.cards)
 	authed.Get("/dashboard/telemetry", dash.telemetry)
 	authed.Get("/dashboard/events", dash.events)
@@ -373,6 +349,35 @@ func NewRouter(d Deps) http.Handler {
 	imgH := &imageProxyDeps{registry: d.Registry}
 	authed.Get("/img/kick", imgH.kick)
 	authed.Get("/history", historyH.get)
+
+	// JSON API mount. Admin-gated routes use RequireAdminAPI so an
+	// unauthenticated fetch() gets 401 JSON instead of a 302 to /login.
+	// POST /api/lang stays public (language switch on the login page).
+	apiAuthed := chi.NewRouter()
+	apiAuthed.Post("/lang", func(w http.ResponseWriter, r *http.Request) {
+		lang := strings.TrimSpace(r.FormValue("lang"))
+		if lang == "" {
+			lang = "en"
+		}
+		if lang != "en" && lang != "zh-CN" && lang != "es" {
+			lang = "en"
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     "lang",
+			Value:    lang,
+			Path:     "/",
+			MaxAge:   365 * 24 * 60 * 60,
+			HttpOnly: true,
+			Secure:   d.SecureCookies,
+			SameSite: http.SameSiteLaxMode,
+		})
+		http.Redirect(w, r, applyRedirectTarget(r), http.StatusSeeOther)
+	})
+	apiAuthed.Group(func(gr chi.Router) {
+		gr.Use(RequireAdminAPI(d.Session))
+		gr.Get("/dashboard", dash.apiPage)
+	})
+	r.Mount("/api", withSession(csrf(apiAuthed)))
 
 	r.Mount("/", withSession(csrf(authed)))
 	return r

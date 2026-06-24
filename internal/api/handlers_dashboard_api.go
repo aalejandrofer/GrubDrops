@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 
@@ -14,11 +13,8 @@ import (
 // exported Go field names of dashPage (PascalCase).
 func (d dashboardDeps) apiPage(w http.ResponseWriter, r *http.Request) {
 	page := d.collectPage(r)
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	if err := json.NewEncoder(w).Encode(page); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	writeJSON(w, http.StatusOK, page)
 }
 
 // spaFileServer serves the embedded SPA build output (JS/CSS under
