@@ -25,7 +25,7 @@
       {#if accounts && accounts.length}
         <select class="ev-account" bind:value={account}>
           <option value="">all accounts</option>
-          {#each accounts as a (a.ID)}<option value={a.ID}>{a.Label}{a.Platform ? ' · ' + a.Platform : ''}</option>{/each}
+          {#each accounts as a (a.ID)}<option value={a.Label}>{a.Label}{a.Platform ? ' · ' + a.Platform : ''}</option>{/each}
         </select>
       {/if}
     </div>

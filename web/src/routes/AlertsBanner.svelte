@@ -5,7 +5,7 @@
 
 {#if alerts && alerts.length}
   <section class="alerts">
-    {#each alerts as a (a.Kind + a.Account + a.URL)}
+    {#each alerts as a (`${a.Kind}|${a.Account}|${a.URL}`)}
       <div class="alert alert-{a.Kind}">
         <span class="alert-tag">{a.Kind}</span>
         <span class="alert-body">{a.Account}</span>
