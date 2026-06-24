@@ -309,6 +309,49 @@ func (d *settingsDeps) doSaveGeneral(ctx context.Context, retentionDays int, log
 	return intervalsChanged, nil
 }
 
+// doSaveNotifications persists the Notifications tab settings.
+// Shared by the legacy postNotifications handler and the JSON apiNotifications.
+// step < 0 means the caller did not supply a step value (leave unchanged).
+func (d *settingsDeps) doSaveNotifications(ctx context.Context, webhook, avatar string, claim, progress, authK, errK, canary bool, step int) error {
+	if err := d.s.SetGlobalDiscordWebhook(ctx, webhook); err != nil {
+		return err
+	}
+	if err := d.s.SetNotifyAvatarURL(ctx, strings.TrimSpace(avatar)); err != nil {
+		return err
+	}
+	if err := d.s.SetNotifyKinds(ctx, claim, progress, authK, errK, canary); err != nil {
+		return err
+	}
+	if step >= 0 {
+		if err := d.s.SetProgressNotifyStepPct(ctx, step); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// doSaveExperimental persists the Experimental tab settings.
+// Shared by the legacy postExperimental handler and the JSON apiExperimental.
+func (d *settingsDeps) doSaveExperimental(ctx context.Context, kickWatchMode string) error {
+	mode := store.KickWatchModeBrowser
+	switch kickWatchMode {
+	case store.KickWatchModeWS:
+		mode = store.KickWatchModeWS
+	case store.KickWatchModeAuto:
+		mode = store.KickWatchModeAuto
+	}
+	return d.s.SetKickWatchMode(ctx, mode)
+}
+
+// doSaveProxy persists the Proxy tab settings.
+// Shared by the legacy postProxy handler and the JSON apiProxy.
+func (d *settingsDeps) doSaveProxy(ctx context.Context, enabled bool, proxyURL string) error {
+	if err := d.s.SetProxyEnabled(ctx, enabled); err != nil {
+		return err
+	}
+	return d.s.SetProxyURL(ctx, strings.TrimSpace(proxyURL))
+}
+
 // postGeneral saves the General tab: tick/discovery intervals + logging.
 func (d *settingsDeps) postGeneral(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -350,27 +393,19 @@ func (d *settingsDeps) postGeneral(w http.ResponseWriter, r *http.Request) {
 // postNotifications saves the Notifications tab: webhook, avatar, notify kinds.
 func (d *settingsDeps) postNotifications(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	if err := d.s.SetGlobalDiscordWebhook(ctx, r.FormValue("discord_webhook")); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if saveErr(w, d.s.SetNotifyAvatarURL(ctx, strings.TrimSpace(r.FormValue("notify_avatar_url")))) {
-		return
-	}
 	on := func(name string) bool { return r.FormValue(name) == "1" }
-	if saveErr(w, d.s.SetNotifyKinds(ctx, on("notify_claim"), on("notify_progress"), on("notify_auth"), on("notify_error"), on("notify_canary"))) {
-		return
-	}
+	step := -1
 	stepChanged := false
 	if v := r.FormValue("progress_notify_step"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			if cur, _ := d.s.ProgressNotifyStepPct(ctx); cur != n {
 				stepChanged = true
 			}
-			if saveErr(w, d.s.SetProgressNotifyStepPct(ctx, n)) {
-				return
-			}
+			step = n
 		}
+	}
+	if saveErr(w, d.doSaveNotifications(ctx, r.FormValue("discord_webhook"), r.FormValue("notify_avatar_url"), on("notify_claim"), on("notify_progress"), on("notify_auth"), on("notify_error"), on("notify_canary"), step)) {
+		return
 	}
 	if d.onUpdate != nil {
 		d.onUpdate()
@@ -403,18 +438,12 @@ func (d *settingsDeps) postPriorityMode(w http.ResponseWriter, r *http.Request) 
 // scheduler reload / restart, not live.
 func (d *settingsDeps) postExperimental(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	mode := store.KickWatchModeBrowser
-	switch r.FormValue("kick_watch_mode") {
-	case store.KickWatchModeWS:
-		mode = store.KickWatchModeWS
-	case store.KickWatchModeAuto:
-		mode = store.KickWatchModeAuto
-	}
+	kickWatchMode := r.FormValue("kick_watch_mode")
 	changed := false
-	if cur, _ := d.s.KickWatchMode(ctx); cur != mode {
+	if cur, _ := d.s.KickWatchMode(ctx); cur != kickWatchMode {
 		changed = true
 	}
-	if saveErr(w, d.s.SetKickWatchMode(ctx, mode)) {
+	if saveErr(w, d.doSaveExperimental(ctx, kickWatchMode)) {
 		return
 	}
 	if d.onUpdate != nil {
@@ -797,10 +826,7 @@ func (d *settingsDeps) postProxy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if saveErr(w, d.s.SetProxyEnabled(ctx, enabled)) {
-		return
-	}
-	if saveErr(w, d.s.SetProxyURL(ctx, proxyURL)) {
+	if saveErr(w, d.doSaveProxy(ctx, enabled, proxyURL)) {
 		return
 	}
 	d.sm.Put(ctx, "flash", "flash.proxy_saved")

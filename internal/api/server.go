@@ -26,7 +26,7 @@ import (
 // on, Go serves the SPA shell (spaIndex) for each so deep-links/refreshes
 // work; the client router takes over. Mirrors web/src/lib/router.svelte.ts's
 // spaPaths. Grows as pages are ported.
-var spaRoutes = []string{"/", "/drops", "/priority", "/settings"}
+var spaRoutes = []string{"/", "/drops", "/priority", "/settings", "/settings/notifications", "/settings/experimental", "/settings/proxy"}
 
 // applyRedirectTarget picks the post-/accounts/apply landing page from
 // the Referer header. The dashboard also has a Reload button, so we
@@ -335,9 +335,13 @@ func NewRouter(d Deps) http.Handler {
 		authed.Get("/priority", settingsH.getPriority) // top-level nav item; suppressed when SPA serves it
 	}
 	authed.Get("/settings/priority", settingsH.getPriority) // legacy path, kept so old links/redirects still resolve
-	authed.Get("/settings/notifications", settingsH.getNotifications)
+	if !d.SPADashboard {
+		authed.Get("/settings/notifications", settingsH.getNotifications)
+	}
 	authed.Get("/settings/security", settingsH.getSecurity)
-	authed.Get("/settings/experimental", settingsH.getExperimental)
+	if !d.SPADashboard {
+		authed.Get("/settings/experimental", settingsH.getExperimental)
+	}
 	authed.Get("/settings/health", settingsH.getHealth)
 	authed.Post("/settings", settingsH.postGeneral)
 	authed.Post("/settings/priority-mode", settingsH.postPriorityMode)
@@ -350,7 +354,9 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/settings/canary", settingsH.canarySave)
 	authed.Post("/settings/canary/run", settingsH.canaryRun)
 	authed.Get("/settings/health/canary-panel", settingsH.canaryPanel)
-	authed.Get("/settings/proxy", settingsH.getProxy)
+	if !d.SPADashboard {
+		authed.Get("/settings/proxy", settingsH.getProxy)
+	}
 	authed.Post("/settings/proxy", settingsH.postProxy)
 	authed.Post("/settings/proxy/test", settingsH.proxyTest)
 	if !d.SPADashboard {
@@ -417,6 +423,11 @@ func NewRouter(d Deps) http.Handler {
 		gr.Post("/settings/global-games", settingsH.apiGlobalGamesOrder)
 		gr.Post("/settings/global-games/add", settingsH.apiGlobalGamesAdd)
 		gr.Post("/settings/priority-mode", settingsH.apiPriorityMode)
+		gr.Post("/settings/notifications", settingsH.apiNotifications)
+		gr.Post("/settings/experimental", settingsH.apiExperimental)
+		gr.Post("/settings/proxy", settingsH.apiProxy)
+		gr.Post("/settings/notify-test", settingsH.apiNotifyTest)
+		gr.Post("/settings/proxy/test", settingsH.apiProxyTest)
 	})
 	r.Mount("/api", withSession(csrf(apiAuthed)))
 

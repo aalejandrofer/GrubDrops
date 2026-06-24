@@ -91,3 +91,37 @@ func TestAPIGlobalGamesOrder_MalformedBodyIs400(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"code":"bad_request"`)
 }
+
+func TestAPISettingsTabs_RequireCSRF(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false})
+	for _, p := range []string{"/api/settings/notifications", "/api/settings/experimental", "/api/settings/proxy", "/api/settings/notify-test", "/api/settings/proxy/test"} {
+		req := httptest.NewRequest(http.MethodPost, p, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		require.Equalf(t, http.StatusForbidden, rec.Code, "path %s", p)
+		assert.Containsf(t, rec.Body.String(), `"code":"csrf"`, "path %s", p)
+	}
+}
+
+func TestDoSaveProxy_Persists(t *testing.T) {
+	s, _ := newTestSettings(t)
+	d := &settingsDeps{s: s}
+	require.NoError(t, d.doSaveProxy(context.Background(), true, "socks5://127.0.0.1:1080"))
+	url, _ := s.ProxyURL(context.Background())
+	assert.Equal(t, "socks5://127.0.0.1:1080", url)
+	en, _ := s.ProxyEnabled(context.Background())
+	assert.True(t, en)
+}
+
+func TestExperimentalTabRoute_SuppressedWhenSPAOn(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false, SPADashboard: true})
+	req := httptest.NewRequest(http.MethodGet, "/settings/experimental", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `id="app"`)
+}
