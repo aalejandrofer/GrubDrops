@@ -378,6 +378,9 @@ func NewRouter(d Deps) http.Handler {
 		gr.Use(RequireAdminAPI(d.Session))
 		gr.Get("/dashboard", dash.apiPage)
 		gr.Get("/dashboard/account/{id}", dash.apiAccountDetail)
+		gr.Post("/accounts/{id}/toggle", accs.apiToggle)
+		gr.Post("/accounts/{id}/reload", accs.apiReload)
+		gr.Post("/accounts/{id}/force-watch", accs.apiForceWatch)
 	})
 	r.Mount("/api", withSession(csrf(apiAuthed)))
 

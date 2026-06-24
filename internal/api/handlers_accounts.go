@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -50,6 +51,74 @@ func (d accountsDeps) applyReload(ctx context.Context) {
 	if err := d.reload(d.rootCtx); err != nil {
 		slog.Warn("accounts: scheduler reload failed after whitelist change", "err", err)
 	}
+}
+
+// errReloadUnavailable is returned by doReloadOne when no reloadAccount hook is
+// wired (e.g. in unit tests or early boot before the scheduler starts).
+var errReloadUnavailable = errors.New("reload unavailable")
+
+// reloadCtx returns the long-lived root context for reloads (NOT a
+// request context, which cancels on response and would tear down the
+// rebuilt watcher), falling back to the passed ctx.
+func (d accountsDeps) reloadCtx(ctx context.Context) context.Context {
+	if d.rootCtx != nil {
+		return d.rootCtx
+	}
+	return ctx
+}
+
+// doToggleEnabled flips the account's enabled flag and fires a targeted
+// watcher reload. Shared by the legacy redirect handler and the JSON API.
+func (d accountsDeps) doToggleEnabled(ctx context.Context, id string) (bool, error) {
+	acc, err := d.q.GetAccount(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	enabled := int64(1)
+	if acc.Enabled == 1 {
+		enabled = 0
+	}
+	if err := d.q.SetAccountEnabled(ctx, gen.SetAccountEnabledParams{
+		Enabled: enabled, UpdatedAt: time.Now().Unix(), ID: id,
+	}); err != nil {
+		return false, err
+	}
+	if d.reloadAccount != nil {
+		d.reloadAccount(d.reloadCtx(ctx), id)
+	}
+	return enabled == 1, nil
+}
+
+// doReloadOne validates the account exists, then triggers a targeted watcher
+// reload. Returns errReloadUnavailable when the reloadAccount hook is not wired.
+func (d accountsDeps) doReloadOne(ctx context.Context, id string) error {
+	if _, err := d.q.GetAccount(ctx, id); err != nil {
+		return err
+	}
+	if d.reloadAccount == nil {
+		return errReloadUnavailable
+	}
+	d.reloadAccount(d.reloadCtx(ctx), id)
+	return nil
+}
+
+// doForceWatch upserts the per-account force-watch enabled flag and fires a
+// full watcher reload so the change takes effect immediately.
+func (d accountsDeps) doForceWatch(ctx context.Context, id string, enabled bool) error {
+	if _, err := d.q.GetAccount(ctx, id); err != nil {
+		return err
+	}
+	val := []byte("")
+	if enabled {
+		val = []byte("1")
+	}
+	if err := d.q.UpsertSettingString(ctx, gen.UpsertSettingStringParams{
+		Key: ForceWatchEnabledKey(id), Value: val,
+	}); err != nil {
+		return err
+	}
+	d.applyReload(ctx)
+	return nil
 }
 
 type accountRow struct {
@@ -470,24 +539,13 @@ func (d accountsDeps) delete(w http.ResponseWriter, r *http.Request) {
 // of the roster keeps running untouched.
 func (d accountsDeps) reloadOne(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	acc, err := d.q.GetAccount(r.Context(), id)
-	if err != nil {
+	if err := d.doReloadOne(r.Context(), id); err != nil {
+		if errors.Is(err, errReloadUnavailable) {
+			http.Error(w, i18n.T(i18n.DetectLang(r), "error.reload_unavailable"), http.StatusServiceUnavailable)
+			return
+		}
 		http.NotFound(w, r)
 		return
-	}
-	if d.reloadAccount == nil {
-		http.Error(w, i18n.T(i18n.DetectLang(r), "error.reload_unavailable"), http.StatusServiceUnavailable)
-		return
-	}
-	ctx := d.rootCtx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	d.reloadAccount(ctx, id)
-
-	name := acc.DisplayName
-	if name == "" {
-		name = acc.ID
 	}
 	d.sm.Put(r.Context(), "flash", i18n.T(i18n.DetectLang(r), "flash.account_reloaded"))
 	// Mirror /accounts/apply: land the user back where they clicked from
@@ -514,29 +572,12 @@ func (d accountsDeps) reloadOne(w http.ResponseWriter, r *http.Request) {
 // which cancels on redirect and would tear the rebuilt watcher down).
 func (d accountsDeps) toggleEnabled(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	acc, err := d.q.GetAccount(r.Context(), id)
+	enabled, err := d.doToggleEnabled(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	enabled := int64(1)
-	if acc.Enabled == 1 {
-		enabled = 0
-	}
-	if err := d.q.SetAccountEnabled(r.Context(), gen.SetAccountEnabledParams{
-		Enabled: enabled, UpdatedAt: time.Now().Unix(), ID: id,
-	}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if d.reloadAccount != nil {
-		ctx := d.rootCtx
-		if ctx == nil {
-			ctx = context.Background()
-		}
-		d.reloadAccount(ctx, id)
-	}
-	if enabled == 1 {
+	if enabled {
 		d.sm.Put(r.Context(), "flash", "flash.account_enabled")
 	} else {
 		d.sm.Put(r.Context(), "flash", "flash.account_disabled")
@@ -686,22 +727,11 @@ func (d accountsDeps) forceChannelsReorder(w http.ResponseWriter, r *http.Reques
 // channel-points 24/7 idle-mining toggle for the account.
 func (d accountsDeps) forceWatchToggle(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+	enabled := r.FormValue("enabled") == "1"
+	if err := d.doForceWatch(r.Context(), id, enabled); err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	val := []byte("")
-	enabled := r.FormValue("enabled") == "1"
-	if enabled {
-		val = []byte("1")
-	}
-	if err := d.q.UpsertSettingString(r.Context(), gen.UpsertSettingStringParams{
-		Key: ForceWatchEnabledKey(id), Value: val,
-	}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	d.applyReload(r.Context())
 	if enabled {
 		d.sm.Put(r.Context(), "flash", "flash.force_watch_enabled")
 	} else {
