@@ -42,6 +42,10 @@ type Querier interface {
 	// live connection; deleting the children first makes the purge correct even if
 	// enforcement is ever off. Run them before DeleteAccount in one transaction.
 	DeleteAccountSession(ctx context.Context, accountID string) error
+	// Remove a stale claim row when inventory says the drop is NOT claimed.
+	// Used by the reconcile prune to undo false positives from shared-reward
+	// tiers that were wrongly marked collected.
+	DeleteClaimFor(ctx context.Context, arg DeleteClaimForParams) error
 	DeleteKV(ctx context.Context, key string) error
 	GetAccount(ctx context.Context, id string) (Account, error)
 	GetAdmin(ctx context.Context) (Admin, error)

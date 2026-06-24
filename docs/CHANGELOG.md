@@ -4,6 +4,16 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.3.2] — 2026-06-24
+
+### Fixed
+
+- **Stale "collected" marks now self-heal.** Drops wrongly marked collected by
+  the pre-v1.3.1 shared-reward bug are cleared automatically: each discovery
+  cycle, the reconcile pass removes any claim record for a drop that inventory
+  still reports as in-progress and unclaimed. No manual database cleanup
+  needed, and it corrects accounts that already had the bad marks. (#24)
+
 ## [1.3.1] — 2026-06-24
 
 ### Fixed

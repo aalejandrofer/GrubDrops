@@ -26,6 +26,12 @@ ON CONFLICT(account_id, benefit_id) DO UPDATE SET
     claimed_at = excluded.claimed_at,
     value_meta_json = excluded.value_meta_json;
 
+-- name: DeleteClaimFor :exec
+-- Remove a stale claim row when inventory says the drop is NOT claimed.
+-- Used by the reconcile prune to undo false positives from shared-reward
+-- tiers that were wrongly marked collected.
+DELETE FROM claims WHERE account_id = ? AND benefit_id = ?;
+
 -- name: CountClaimsFor :one
 -- Claim rows for one account+benefit. Zero means none. Keeps the
 -- inventory-ownership reconcile idempotent.

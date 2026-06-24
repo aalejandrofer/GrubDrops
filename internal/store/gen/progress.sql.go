@@ -68,6 +68,23 @@ func (q *Queries) CountClaimsSince(ctx context.Context, claimedAt int64) (int64,
 	return count, err
 }
 
+const deleteClaimFor = `-- name: DeleteClaimFor :exec
+DELETE FROM claims WHERE account_id = ? AND benefit_id = ?
+`
+
+type DeleteClaimForParams struct {
+	AccountID string `json:"account_id"`
+	BenefitID string `json:"benefit_id"`
+}
+
+// Remove a stale claim row when inventory says the drop is NOT claimed.
+// Used by the reconcile prune to undo false positives from shared-reward
+// tiers that were wrongly marked collected.
+func (q *Queries) DeleteClaimFor(ctx context.Context, arg DeleteClaimForParams) error {
+	_, err := q.db.ExecContext(ctx, deleteClaimFor, arg.AccountID, arg.BenefitID)
+	return err
+}
+
 const getProgress = `-- name: GetProgress :one
 SELECT account_id, benefit_id, minutes_watched, claimed_at, updated_at FROM progress WHERE account_id = ? AND benefit_id = ?
 `

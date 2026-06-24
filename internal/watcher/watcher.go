@@ -939,8 +939,25 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 	if rec, ok := w.cfg.ClaimRecorder.(interface {
 		RecordClaimIfNew(context.Context, string, platform.DropBenefit) (bool, error)
 	}); ok && len(claimed) > 0 {
+		pruner, canPrune := w.cfg.ClaimRecorder.(interface {
+			PruneClaim(context.Context, string, platform.DropBenefit) (bool, error)
+		})
 		for _, c := range campaigns {
 			for _, b := range c.Benefits {
+				// Self-heal false COLLECTED marks: inventory tracks this exact
+				// drop as in-progress AND unclaimed, so any claims row for it
+				// is stale (the pre-v1.3.1 shared-reward bug wrote one for every
+				// tier). Drop it. Only acts when we have per-drop inventory
+				// (tracked) — never on drops that legitimately left the
+				// inventory after a real claim.
+				if canPrune && tracked[b.ID] && !claimed[b.ID] {
+					if pruned, err := pruner.PruneClaim(ctx, w.cfg.AccountID, b); err == nil && pruned {
+						slog.Info("watcher pruned stale claim",
+							"kind", "claim", "account", w.cfg.AccountID,
+							"benefit", b.ID, "benefit_name", b.Name)
+					}
+					continue
+				}
 				owned := b.RewardID != "" && claimed[b.RewardID] && !tracked[b.ID]
 				if !claimed[b.ID] && !owned {
 					continue

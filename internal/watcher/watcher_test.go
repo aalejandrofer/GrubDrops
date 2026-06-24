@@ -1156,3 +1156,78 @@ func TestWatcher_MultiTierSameReward_ContinuesAfterFirstClaim(t *testing.T) {
 	}, time.Second, 5*time.Millisecond,
 		"watcher must mine the lowest unclaimed tier (t180) after the 60m tier's reward is owned, not go idle")
 }
+
+// recordingClaimRecorder captures every RecordClaimIfNew / PruneClaim call so
+// a test can assert the reconcile loop's self-heal decision (issue #24).
+type recordingClaimRecorder struct {
+	mu       sync.Mutex
+	recorded []string
+	pruned   []string
+}
+
+func (r *recordingClaimRecorder) RecordClaim(_ context.Context, _ string, _ platform.DropBenefit) error {
+	return nil
+}
+
+func (r *recordingClaimRecorder) RecordClaimIfNew(_ context.Context, _ string, b platform.DropBenefit) (bool, error) {
+	r.mu.Lock()
+	r.recorded = append(r.recorded, b.ID)
+	r.mu.Unlock()
+	return true, nil
+}
+
+func (r *recordingClaimRecorder) PruneClaim(_ context.Context, _ string, b platform.DropBenefit) (bool, error) {
+	r.mu.Lock()
+	r.pruned = append(r.pruned, b.ID)
+	r.mu.Unlock()
+	return true, nil
+}
+
+func (r *recordingClaimRecorder) snapshot() (recorded, pruned []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.recorded...), append([]string(nil), r.pruned...)
+}
+
+// TestWatcher_ReconcilePrunesStaleClaims is the #24 self-heal: when inventory
+// tracks a drop as in-progress AND unclaimed, any pre-existing claims row for
+// it is stale (the pre-v1.3.1 shared-reward bug wrote one per tier). The
+// reconcile loop must PruneClaim those, and must NOT prune (or re-record) the
+// tier that is genuinely claimed.
+func TestWatcher_ReconcilePrunesStaleClaims(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	rec := &recordingClaimRecorder{}
+	backend := &multiTierBackend{MockBackend: platformtest.New()}
+	w := New(Config{
+		AccountID:     "acc_r6s_prune",
+		Backend:       backend,
+		ClaimRecorder: rec,
+		Session:       platform.Session{AccessToken: "tok"},
+		Notifier:      &recordingNotifier{},
+		TickInterval:  2 * time.Millisecond,
+		AllowGame:     func(g string) bool { return g == "Rainbow Six Siege" },
+	})
+
+	go func() { _ = w.Run(ctx) }()
+
+	require.Eventually(t, func() bool {
+		_, pruned := rec.snapshot()
+		return contains(pruned, "t180") && contains(pruned, "t360") && contains(pruned, "t540")
+	}, time.Second, 5*time.Millisecond,
+		"reconcile must prune stale claims for unclaimed in-progress tiers")
+
+	recorded, pruned := rec.snapshot()
+	assert.NotContains(t, pruned, "t60", "the genuinely claimed tier must not be pruned")
+	assert.NotContains(t, recorded, "t180", "an unclaimed in-progress tier must not be re-recorded as claimed")
+}
+
+func contains(s []string, v string) bool {
+	for _, x := range s {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}

@@ -79,6 +79,27 @@ func (r *ClaimRecorder) RecordClaimIfNew(ctx context.Context, accountID string, 
 	return true, nil
 }
 
+// PruneClaim removes any claim row for (accountID, benefit.ID). Used by the
+// reconcile prune to undo a false-positive COLLECTED mark: when inventory
+// shows the drop is still in progress and unclaimed, no claims row should
+// exist. No-op when nothing is stored.
+func (r *ClaimRecorder) PruneClaim(ctx context.Context, accountID string, b platform.DropBenefit) (bool, error) {
+	if r == nil || r.Q == nil || b.ID == "" {
+		return false, nil
+	}
+	n, err := r.Q.CountClaimsFor(ctx, gen.CountClaimsForParams{AccountID: accountID, BenefitID: b.ID})
+	if err != nil {
+		return false, err
+	}
+	if n == 0 {
+		return false, nil
+	}
+	if err := r.Q.DeleteClaimFor(ctx, gen.DeleteClaimForParams{AccountID: accountID, BenefitID: b.ID}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func newClaimID() string {
 	var b [12]byte
 	_, _ = rand.Read(b[:])
