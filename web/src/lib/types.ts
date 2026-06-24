@@ -189,3 +189,19 @@ export interface SettingsView {
   CanaryKickChannel: string;
   CanaryIntervalSec: number;
 }
+
+export interface GameRow { ID: string; Name: string; Slug: string; Selected: boolean; Rank: number; }
+export interface AccountDetailPageData {
+  ID: string;
+  Platform: string;
+  DisplayName: string;
+  Status: string;
+  Enabled: boolean;
+  AvatarURL: string;
+  WebhookURL: string;
+  AllGames: GameRow[] | null;
+  SelectedGames: GameRow[] | null;
+  Channels: string[] | null;
+  ForceChannels: string[] | null;
+  ForceWatchEnabled: boolean;
+}
