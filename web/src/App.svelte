@@ -10,6 +10,8 @@
   import SettingsNotifications from './routes/SettingsNotifications.svelte';
   import SettingsExperimental from './routes/SettingsExperimental.svelte';
   import SettingsProxy from './routes/SettingsProxy.svelte';
+  import SettingsSecurity from './routes/SettingsSecurity.svelte';
+  import SettingsHealth from './routes/SettingsHealth.svelte';
 
   let teardown: (() => void) | undefined;
   onMount(() => { teardown = startRouter(); });
@@ -31,5 +33,9 @@
     <SettingsShell active="experimental">{#snippet children()}<SettingsExperimental />{/snippet}</SettingsShell>
   {:else if currentPath() === '/settings/proxy'}
     <SettingsShell active="proxy">{#snippet children()}<SettingsProxy />{/snippet}</SettingsShell>
+  {:else if currentPath() === '/settings/security'}
+    <SettingsShell active="security">{#snippet children()}<SettingsSecurity />{/snippet}</SettingsShell>
+  {:else if currentPath() === '/settings/health'}
+    <SettingsShell active="health">{#snippet children()}<SettingsHealth />{/snippet}</SettingsShell>
   {/if}
 </AppShell>

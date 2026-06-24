@@ -122,6 +122,22 @@ export interface DropsPage {
   NoWhitelist: boolean;
 }
 
+export interface SettingsOIDC {
+  Enabled: boolean;
+  ProviderName: string;
+  Issuer: string;
+  CallbackURL: string;
+  AllowedEmails: string[] | null;
+  AllowedGroups: string[] | null;
+}
+
+export interface CanaryView {
+  Configured: boolean;
+  OK: boolean;
+  Detail: string;
+  When: string;
+}
+
 export interface SettingsGameRow { ID: string; Name: string; Selected: boolean; }
 export interface SettingsView {
   GlobalGames: SettingsGameRow[] | null;
@@ -150,4 +166,10 @@ export interface SettingsView {
   KickWatchMode: string;
   ProxyURL: string;
   ProxyEnabled: boolean;
+  OIDC: SettingsOIDC;
+  CanaryTwitch: CanaryView;
+  CanaryKick: CanaryView;
+  CanaryTwitchChannel: string;
+  CanaryKickChannel: string;
+  CanaryIntervalSec: number;
 }
