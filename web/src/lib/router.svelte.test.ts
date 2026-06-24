@@ -4,9 +4,10 @@ import { isSpaPath, currentPath, navigate, startRouter } from './router.svelte';
 beforeEach(() => { history.replaceState({}, '', '/'); });
 afterEach(() => { vi.restoreAllMocks(); });
 
-test('isSpaPath: / owned, /drops not (yet)', () => {
+test('isSpaPath: / and /drops owned, /settings not', () => {
   expect(isSpaPath('/')).toBe(true);
-  expect(isSpaPath('/drops')).toBe(false);
+  expect(isSpaPath('/drops')).toBe(true);
+  expect(isSpaPath('/settings')).toBe(false);
 });
 
 test('navigate updates currentPath and pushes history', () => {
