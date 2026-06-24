@@ -33,3 +33,7 @@ export interface DashboardSnapshot {
   UpdatedAt: string;
   Uptime: string;
 }
+
+export interface ApiErrorEnvelope {
+  error: { code: string; message: string };
+}
