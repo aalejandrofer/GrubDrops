@@ -51,12 +51,19 @@ test('startRouter intercepts clicks on owned links, ignores unowned', () => {
   expect(pushSpy).toBeDefined();
 });
 
-test('isSpaPath: /accounts owned, /accounts/abc owned, /accounts/new owned, /accounts/abc/login NOT owned', () => {
+test('isSpaPath: /accounts owned, /accounts/abc owned, /accounts/new owned, /accounts/abc/login NOW owned', () => {
   expect(isSpaPath('/accounts')).toBe(true);
   expect(isSpaPath('/accounts/abc')).toBe(true);
   expect(isSpaPath('/accounts/new')).toBe(true);
-  expect(isSpaPath('/accounts/abc/login')).toBe(false);
+  expect(isSpaPath('/accounts/abc/login')).toBe(true);
   expect(isSpaPath('/accounts/')).toBe(false);
+});
+
+test('isSpaPath: /accounts/{id}/twitch/device and /twitch/cookie are owned; /twitch/paste and /login/poll are NOT', () => {
+  expect(isSpaPath('/accounts/xyz/twitch/device')).toBe(true);
+  expect(isSpaPath('/accounts/xyz/twitch/cookie')).toBe(true);
+  expect(isSpaPath('/accounts/xyz/twitch/paste')).toBe(false);
+  expect(isSpaPath('/accounts/xyz/login/poll')).toBe(false);
 });
 
 test('isSpaPath: /login is SPA-owned', () => {

@@ -5,9 +5,15 @@ export const spaPaths: string[] = ['/', '/drops', '/priority', '/settings', '/se
 export function isSpaPath(path: string): boolean {
   if (spaPaths.includes(path)) return true;
   // dynamic: /accounts/<id> is SPA-owned — exactly 3 segments, id != '' and id != 'new'
-  // /accounts/<id>/login and other sub-paths are NOT owned (full-nav to legacy)
-  const seg = path.split('/'); // ['', 'accounts', '<id>']
-  return seg.length === 3 && seg[1] === 'accounts' && seg[2] !== '' && seg[2] !== 'new';
+  const seg = path.split('/'); // ['', 'accounts', '<id>'] or ['', 'accounts', '<id>', '<tail>'] etc.
+  if (seg[1] === 'accounts' && seg[2] && seg[2] !== 'new') {
+    if (seg.length === 3) return true; // /accounts/<id>
+    // 4-seg: /accounts/<id>/login
+    if (seg.length === 4 && seg[3] === 'login') return true;
+    // 5-seg: /accounts/<id>/twitch/device or /accounts/<id>/twitch/cookie (not paste)
+    if (seg.length === 5 && seg[3] === 'twitch' && (seg[4] === 'device' || seg[4] === 'cookie')) return true;
+  }
+  return false;
 }
 
 let path = $state(typeof location !== 'undefined' ? location.pathname : '/');

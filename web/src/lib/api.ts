@@ -97,3 +97,23 @@ export async function apiSend<T>(path: string, method: 'POST' | 'PUT' | 'DELETE'
   const text = await res.text();
   return (text ? JSON.parse(text) : undefined) as T;
 }
+
+// apiUpload posts multipart form-data (e.g. a file). Do NOT set Content-Type —
+// the browser sets the multipart boundary. Shares 401/ApiError handling.
+export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+  const headers: Record<string, string> = {};
+  const token = readCookie('csrftoken');
+  if (token) headers['X-CSRF-Token'] = token;
+  const res = await fetch(path, { method: 'POST', credentials: 'include', headers, body: form });
+  if (res.status === 401) { window.location.assign('/login'); return new Promise<T>(() => {}); }
+  if (!res.ok) {
+    let code = 'internal';
+    let message = res.statusText || `request failed (${res.status})`;
+    try {
+      const body = (await res.json()) as ApiErrorEnvelope;
+      if (body?.error?.code) { code = body.error.code; message = body.error.message; }
+    } catch { /* keep defaults */ }
+    throw new ApiError(code, message, res.status);
+  }
+  return (await res.json()) as T;
+}

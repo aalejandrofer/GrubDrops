@@ -16,6 +16,9 @@
   import AccountsList from './routes/AccountsList.svelte';
   import AccountDetailPage from './routes/AccountDetailPage.svelte';
   import AccountNew from './routes/AccountNew.svelte';
+  import AccountLogin from './routes/AccountLogin.svelte';
+  import AccountTwitchDevice from './routes/AccountTwitchDevice.svelte';
+  import AccountTwitchCookie from './routes/AccountTwitchCookie.svelte';
   import Setup from './routes/Setup.svelte';
 
   let teardown: (() => void) | undefined;
@@ -52,6 +55,12 @@
         <AccountsList />
       {:else if currentPath() === '/accounts/new'}
         <AccountNew />
+      {:else if currentPath().split('/').length === 4 && currentPath().split('/')[3] === 'login' && currentPath().startsWith('/accounts/')}
+        <AccountLogin />
+      {:else if currentPath().endsWith('/twitch/device') && currentPath().startsWith('/accounts/')}
+        <AccountTwitchDevice />
+      {:else if currentPath().endsWith('/twitch/cookie') && currentPath().startsWith('/accounts/')}
+        <AccountTwitchCookie />
       {:else if currentPath().startsWith('/accounts/') && currentPath() !== '/accounts/new' && currentPath().split('/').length === 3}
         <AccountDetailPage />
       {/if}

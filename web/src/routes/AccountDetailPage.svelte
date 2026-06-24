@@ -251,8 +251,8 @@
     </section>
 
     <section class="detail-section">
-      <!-- re-auth: /accounts/{id}/login is NOT SPA-owned → full-nav via plain anchor tag (not navigate()) -->
-      <a href={'/accounts/' + id + '/login'}>Login / re-auth</a>
+      <!-- re-auth: /accounts/{id}/login is SPA-owned → use navigate() -->
+      <button type="button" class="btn" onclick={() => navigate('/accounts/' + id + '/login')}>Login / re-auth</button>
     </section>
 
     <section class="danger-zone">
