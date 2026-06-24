@@ -188,6 +188,25 @@ func TestAPISetup_CreatesAdminWhenNone(t *testing.T) {
 	assert.True(t, exists)
 }
 
+func TestAPISetup_409WhenAdminExists(t *testing.T) {
+	s, q := newTestSettings(t)
+	seedAdmin(t, q, "already-here")
+	sm := scsNew()
+	h := NewRouter(Deps{Q: q, Session: sm, SettingsStore: s, SecureCookies: false})
+	tok, cookies := getCSRFToken(t, h)
+	req := httptest.NewRequest(http.MethodPost, "/api/setup", strings.NewReader(`{"password":"longenough","confirm":"longenough"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-CSRF-Token", tok)
+	req.Header.Set("Origin", "http://example.com")
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"code":"admin_configured"`)
+}
+
 func TestAPISetup_RequireCSRF(t *testing.T) {
 	s, q := newTestSettings(t)
 	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false})

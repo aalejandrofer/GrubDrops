@@ -29,6 +29,10 @@ func (d authDeps) apiLogin(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "wrong_password", "incorrect password")
 		return
 	}
+	if err := d.sm.RenewToken(r.Context()); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
 	d.sm.Put(r.Context(), "admin_authed", true)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -66,6 +70,10 @@ func (d setupDeps) apiSetup(w http.ResponseWriter, r *http.Request) {
 		PasswordHash: hash,
 		CreatedAt:    time.Now().Unix(),
 	}); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	if err := d.sm.RenewToken(r.Context()); err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
