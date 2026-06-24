@@ -26,7 +26,7 @@ import (
 // on, Go serves the SPA shell (spaIndex) for each so deep-links/refreshes
 // work; the client router takes over. Mirrors web/src/lib/router.svelte.ts's
 // spaPaths. Grows as pages are ported.
-var spaRoutes = []string{"/"}
+var spaRoutes = []string{"/", "/drops"}
 
 // applyRedirectTarget picks the post-/accounts/apply landing page from
 // the Referer header. The dashboard also has a Reload button, so we
@@ -349,7 +349,9 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/settings/proxy", settingsH.getProxy)
 	authed.Post("/settings/proxy", settingsH.postProxy)
 	authed.Post("/settings/proxy/test", settingsH.proxyTest)
-	authed.Get("/drops", dropsH.list)
+	if !d.SPADashboard {
+		authed.Get("/drops", dropsH.list)
+	}
 	authed.Get("/drops/campaigns/{id}/items", dropsH.items)
 	authed.Post("/drops/whitelist/add", dropsH.addWhitelist)
 	authed.Post("/drops/whitelist/channel", dropsH.addChannelWhitelist)
@@ -401,6 +403,7 @@ func NewRouter(d Deps) http.Handler {
 			}
 			writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 		})
+		gr.Get("/drops", dropsH.apiDrops)
 	})
 	r.Mount("/api", withSession(csrf(apiAuthed)))
 

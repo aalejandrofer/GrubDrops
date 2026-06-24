@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/stretchr/testify/assert"
@@ -129,4 +130,33 @@ func TestAPIReloadAll_RequiresCSRF(t *testing.T) {
 	// No CSRF token -> 403 JSON (proves the route exists + is CSRF-protected).
 	require.Equal(t, http.StatusForbidden, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"code":"csrf"`)
+}
+
+func TestAPIDrops_EmptyDBReturnsPage(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false, Location: time.UTC})
+	req := httptest.NewRequest(http.MethodGet, "/api/drops?tab=current", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+	// Empty DB => no whitelist, empty rows.
+	assert.Contains(t, rec.Body.String(), `"NoWhitelist":true`)
+	assert.Contains(t, rec.Body.String(), `"Tab":`)
+}
+
+func TestDropsRoute_SuppressedWhenSPAOn(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t)
+	// SPA flag on: GET /drops must serve the SPA shell, not the legacy list,
+	// and must NOT panic from double-registration (NewRouter would panic on
+	// construction if both registered — reaching here proves it didn't).
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false, SPADashboard: true, Location: time.UTC})
+	req := httptest.NewRequest(http.MethodGet, "/drops", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `id="app"`)
 }

@@ -375,7 +375,11 @@ func passesWhitelist(allow map[string]struct{}, hasWhitelist bool, game string) 
 	return ok
 }
 
-func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
+// dropsPageData builds the /drops page model for the requested tab. It is
+// the single assembly shared by the HTML handler (list) and the JSON
+// endpoint (apiDrops): tab parse -> collectAll -> group/split -> attach
+// collection. Reads ?tab= from r (default current).
+func (d *dropsDeps) dropsPageData(r *http.Request) (dropsPage, error) {
 	tab := dropTab(r.URL.Query().Get("tab"))
 	switch tab {
 	case tabPast, tabCurrent, tabUpcoming:
@@ -389,8 +393,7 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 
 	pastRows, currentRows, upcomingRows, unlistedRows, err := d.collectAll(r.Context(), allow, hasWhitelist, now, limit, tab)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return dropsPage{}, err
 	}
 
 	// Populate accounts dropdown for the inline "add to whitelist"
@@ -517,6 +520,15 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		d.attachCollection(r.Context(), &page.NullGameRows[i])
 	}
 
+	return page, nil
+}
+
+func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
+	page, err := d.dropsPageData(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	// HTMX partial — used when the user clicks a tab. We just swap the
 	// table body so the page chrome stays put.
 	if r.Header.Get("HX-Request") == "true" {
