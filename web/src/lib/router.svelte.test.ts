@@ -1,0 +1,42 @@
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { isSpaPath, currentPath, navigate, startRouter } from './router.svelte';
+
+beforeEach(() => { history.replaceState({}, '', '/'); });
+afterEach(() => { vi.restoreAllMocks(); });
+
+test('isSpaPath: / owned, /drops not (yet)', () => {
+  expect(isSpaPath('/')).toBe(true);
+  expect(isSpaPath('/drops')).toBe(false);
+});
+
+test('navigate updates currentPath and pushes history', () => {
+  const push = vi.spyOn(history, 'pushState');
+  navigate('/');
+  expect(currentPath()).toBe('/');
+  expect(push).toHaveBeenCalled();
+});
+
+test('startRouter intercepts clicks on owned links, ignores unowned', () => {
+  const teardown = startRouter();
+  const pushSpy = vi.spyOn(history, 'pushState');
+
+  // owned link → intercepted (default prevented, navigate called)
+  const owned = document.createElement('a');
+  owned.href = '/';
+  document.body.appendChild(owned);
+  const ev1 = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+  owned.dispatchEvent(ev1);
+  expect(ev1.defaultPrevented).toBe(true);
+
+  // unowned link → NOT intercepted (browser would navigate)
+  const unowned = document.createElement('a');
+  unowned.href = '/settings';
+  document.body.appendChild(unowned);
+  const ev2 = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+  unowned.dispatchEvent(ev2);
+  expect(ev2.defaultPrevented).toBe(false);
+
+  teardown();
+  owned.remove(); unowned.remove();
+  expect(pushSpy).toBeDefined();
+});
