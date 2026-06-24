@@ -1,4 +1,5 @@
 import type { DashboardSnapshot, ApiErrorEnvelope } from './types';
+import { readCookie } from './csrf';
 
 // ApiError carries the server error envelope's stable code plus the HTTP
 // status, so SPA views can branch on the failure kind.
@@ -46,4 +47,37 @@ export async function apiFetch<T>(path: string): Promise<T> {
 
 export function fetchDashboard(): Promise<DashboardSnapshot> {
   return apiFetch<DashboardSnapshot>('/api/dashboard');
+}
+
+// apiSend performs a mutating request: it attaches the CSRF token (read from
+// the csrftoken cookie) in the X-CSRF-Token header, posts JSON, and shares
+// apiFetch's 401-redirect / ApiError handling.
+export async function apiSend<T>(path: string, method: 'POST' | 'PUT' | 'DELETE', body?: unknown): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const token = readCookie('csrftoken');
+  if (token) headers['X-CSRF-Token'] = token;
+
+  const res = await fetch(path, {
+    method,
+    credentials: 'include',
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  if (res.status === 401) {
+    window.location.assign('/login');
+    return new Promise<T>(() => {});
+  }
+  if (!res.ok) {
+    let code = 'internal';
+    let message = res.statusText || `request failed (${res.status})`;
+    try {
+      const env = (await res.json()) as ApiErrorEnvelope;
+      if (env?.error?.code) { code = env.error.code; message = env.error.message; }
+    } catch { /* keep defaults */ }
+    throw new ApiError(code, message, res.status);
+  }
+  // 200 with a JSON body ({ok:true}) or empty.
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }

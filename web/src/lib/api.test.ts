@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { apiFetch, ApiError } from './api';
+import { apiFetch, ApiError, apiSend } from './api';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -49,4 +49,28 @@ describe('apiFetch', () => {
     expect(assignSpy).toHaveBeenCalledWith('/login');
     expect(settled).toBe(false);
   });
+});
+
+test('apiSend sends X-CSRF-Token from cookie and posts JSON', async () => {
+  vi.stubGlobal('document', { cookie: 'csrftoken=tok42' } as Document);
+  const fetchMock = vi.fn(async () =>
+    new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+
+  await apiSend<{ ok: boolean }>('/api/accounts/x/toggle', 'POST');
+
+  const [, init] = fetchMock.mock.calls[0];
+  const headers = new Headers(init.headers);
+  expect(headers.get('X-CSRF-Token')).toBe('tok42');
+  expect(headers.get('Content-Type')).toContain('application/json');
+  expect(init.method).toBe('POST');
+});
+
+test('apiSend throws ApiError on 403 csrf', async () => {
+  vi.stubGlobal('document', { cookie: 'csrftoken=tok42' } as Document);
+  vi.stubGlobal('fetch', vi.fn(async () =>
+    new Response(JSON.stringify({ error: { code: 'csrf', message: 'bad' } }), { status: 403, headers: { 'Content-Type': 'application/json' } }),
+  ));
+  await expect(apiSend('/api/x', 'POST')).rejects.toMatchObject({ code: 'csrf', status: 403 });
 });

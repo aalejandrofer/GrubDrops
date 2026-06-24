@@ -37,3 +37,24 @@ export interface DashboardSnapshot {
 export interface ApiErrorEnvelope {
   error: { code: string; message: string };
 }
+
+export interface AccountCampaignRow { ID: string; Name: string; Game: string; EndsIn: string; StartsIn: string; }
+export interface AccountGameRow { Rank: number; Name: string; }
+
+export interface AccountDetail {
+  ID: string;
+  Platform: string;
+  DisplayName: string;
+  Enabled: boolean;
+  State: string;
+  StateLabel: string;
+  CurrentCampaign: string;
+  CurrentGame: string;
+  CurrentChannel: string;
+  ProgressPct: number;
+  WatchETA: string;
+  Uptime: string;
+  Games: AccountGameRow[] | null;
+  EligibleCampaigns: AccountCampaignRow[] | null;
+  UpcomingCampaigns: AccountCampaignRow[] | null;
+}
