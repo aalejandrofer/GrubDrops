@@ -295,6 +295,8 @@
   "campaign_items.collected": "已收集",
   "campaign_items.type": "类型",
   "campaign_items.claimed_by": "领取者",
+  "campaign_items.uncollect_hint": "点击标记为未收集",
+  "campaign_items.uncollect_confirm": "将此掉宝标记为未收集？如果平台仍报告你已拥有它，将在下一个发现周期重新标记。",
   "campaign_items.watch_drop": "观看时间掉宝 — 自动挖取",
   "campaign_items.m_watch": "分钟观看",
   "campaign_items.action_required": "需要操作",

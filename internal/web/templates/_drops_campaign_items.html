@@ -15,7 +15,13 @@
     <span class="drop-item-name">{{.Name}}</span>
     <span class="drop-item-collected">
       {{if .Collected}}
-        {{range .Collected}}<span class="cmark cmark-{{.Platform}}" title="{{t "campaign_items.claimed_by"}} {{.Login}}">{{.Login}}</span>{{end}}
+        {{range .Collected}}<button type="button" class="cmark cmark-{{.Platform}} cmark-btn"
+          title="{{t "campaign_items.claimed_by"}} {{.Login}} — {{t "campaign_items.uncollect_hint"}}"
+          hx-post="/drops/claim/remove"
+          hx-vals='{"account_id":"{{.AccountID}}","benefit_id":"{{.BenefitID}}","campaign_id":"{{$.ID}}"}'
+          hx-headers='{"X-CSRF-Token":"{{$.CSRFToken}}"}'
+          hx-confirm="{{t "campaign_items.uncollect_confirm"}}"
+          hx-target="closest .drop-items" hx-swap="outerHTML">{{.Login}}</button>{{end}}
       {{else}}
         <span class="cmark-none">—</span>
       {{end}}

@@ -295,6 +295,8 @@
   "campaign_items.collected": "recogido",
   "campaign_items.type": "tipo",
   "campaign_items.claimed_by": "reclamado por",
+  "campaign_items.uncollect_hint": "haz clic para marcar como no recogido",
+  "campaign_items.uncollect_confirm": "¿Marcar este drop como no recogido? Si la plataforma sigue indicando que lo tienes, se volverá a marcar en el próximo ciclo de descubrimiento.",
   "campaign_items.watch_drop": "drop por tiempo de visionado — minado automáticamente",
   "campaign_items.m_watch": "min visionado",
   "campaign_items.action_required": "requiere acción",

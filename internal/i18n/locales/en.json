@@ -295,6 +295,8 @@
   "campaign_items.collected": "collected",
   "campaign_items.type": "type",
   "campaign_items.claimed_by": "claimed by",
+  "campaign_items.uncollect_hint": "click to mark uncollected",
+  "campaign_items.uncollect_confirm": "Mark this drop as uncollected? If the platform still reports it as owned, it will be re-marked on the next discovery cycle.",
   "campaign_items.watch_drop": "watch-time drop — auto-mined",
   "campaign_items.m_watch": "m watch",
   "campaign_items.action_required": "action required",

@@ -762,6 +762,7 @@ type campaignDetailRow struct {
 	When         string
 	Status       string
 	Benefits     []campaignBenefitRow
+	CSRFToken    string // for the inline "mark uncollected" action on each mark
 }
 
 type campaignBenefitRow struct {
@@ -774,10 +775,13 @@ type campaignBenefitRow struct {
 }
 
 // collectedMark is one account that claimed a benefit, carrying the
-// platform so the mark can be colored (purple=Twitch, green=Kick).
+// platform so the mark can be colored (purple=Twitch, green=Kick) and the
+// account+benefit id so the mark can be clicked to manually un-collect it.
 type collectedMark struct {
-	Login    string
-	Platform string
+	Login     string
+	Platform  string
+	AccountID string
+	BenefitID string
 }
 
 // addWhitelist takes (account_id, name) from the inline form on the
@@ -1173,8 +1177,33 @@ func (d *dropsDeps) attachCollection(ctx context.Context, row *dropsRow) {
 	}
 }
 
+// removeClaim manually un-collects a single (account, benefit): a
+// best-effort escape hatch if the v1.3.2 self-heal misses a stale
+// COLLECTED mark. It just deletes the claims row — if Twitch/Kick still
+// reports the drop owned, the next discovery reconcile re-marks it; the
+// un-mark only sticks for false/orphan rows. Re-renders the campaign's
+// item list so the mark disappears (or returns) on the HTMX swap.
+func (d *dropsDeps) removeClaim(w http.ResponseWriter, r *http.Request) {
+	accountID := strings.TrimSpace(r.FormValue("account_id"))
+	benefitID := strings.TrimSpace(r.FormValue("benefit_id"))
+	campaignID := strings.TrimSpace(r.FormValue("campaign_id"))
+	if accountID == "" || benefitID == "" || campaignID == "" {
+		http.Error(w, "missing account_id, benefit_id, or campaign_id", http.StatusBadRequest)
+		return
+	}
+	if err := d.q.DeleteClaimFor(r.Context(), gen.DeleteClaimForParams{AccountID: accountID, BenefitID: benefitID}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	slog.Info("manual claim un-collect", "kind", "claim", "account", accountID, "benefit", benefitID, "campaign", campaignID)
+	d.renderCampaignItems(w, r, campaignID)
+}
+
 func (d *dropsDeps) items(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	d.renderCampaignItems(w, r, chi.URLParam(r, "id"))
+}
+
+func (d *dropsDeps) renderCampaignItems(w http.ResponseWriter, r *http.Request, id string) {
 	camp, err := d.q.GetCampaign(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
@@ -1196,6 +1225,7 @@ func (d *dropsDeps) items(w http.ResponseWriter, r *http.Request) {
 		CampaignName: camp.Name,
 		Kind:         camp.Kind,
 		Status:       camp.Status,
+		CSRFToken:    csrfToken(r),
 	}
 	if camp.EndsAt > 0 {
 		detail.When = time.Unix(camp.EndsAt, 0).In(d.loc).Format("2006-01-02 15:04 MST")
@@ -1205,8 +1235,10 @@ func (d *dropsDeps) items(w http.ResponseWriter, r *http.Request) {
 	if claims, err := d.q.ListClaimsForCampaign(r.Context(), id); err == nil {
 		for _, c := range claims {
 			collectedByBenefit[c.BenefitID] = append(collectedByBenefit[c.BenefitID], collectedMark{
-				Login:    c.DisplayName,
-				Platform: c.Platform,
+				Login:     c.DisplayName,
+				Platform:  c.Platform,
+				AccountID: c.AccountID,
+				BenefitID: c.BenefitID,
 			})
 		}
 	}

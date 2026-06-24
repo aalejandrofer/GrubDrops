@@ -6,6 +6,13 @@ All notable changes to GrubDrops.
 
 ## [1.3.2] — 2026-06-24
 
+### Added
+
+- **Manually mark a drop as uncollected.** Click a COLLECTED mark on the
+  `/drops` item list and confirm to clear it — a backup escape hatch if the
+  self-heal ever misses a stale mark. Best-effort: if the platform still
+  reports the drop as owned, it gets re-marked on the next discovery cycle. (#24)
+
 ### Fixed
 
 - **Stale "collected" marks now self-heal.** Drops wrongly marked collected by
