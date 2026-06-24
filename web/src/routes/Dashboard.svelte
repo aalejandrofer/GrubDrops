@@ -1,27 +1,27 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy } from 'svelte';
   import { fetchDashboard } from '../lib/api';
+  import { pollingResource, type PollingResource } from '../lib/poll.svelte';
   import type { DashboardSnapshot } from '../lib/types';
 
-  let { snapshot = null }: { snapshot?: DashboardSnapshot | null } = $props();
-  let fetched = $state<DashboardSnapshot | null>(null);
-  let error = $state<string | null>(null);
+  let {
+    snapshot = null,
+    intervalMs = 10000,
+  }: { snapshot?: DashboardSnapshot | null; intervalMs?: number } = $props();
 
-  const display = $derived(snapshot ?? fetched);
+  // An injected snapshot (tests) renders statically and never polls.
+  const poll: PollingResource<DashboardSnapshot> | null = snapshot
+    ? null
+    : pollingResource(fetchDashboard, intervalMs);
+  onDestroy(() => poll?.stop());
 
-  onMount(async () => {
-    if (snapshot) return; // test-injected
-    try {
-      fetched = await fetchDashboard();
-    } catch (e) {
-      error = (e as Error).message;
-    }
-  });
+  // Last good snapshot wins over a transient poll error (no blanking);
+  // the error state only shows on a first-load failure with no data yet.
+  const display = $derived(snapshot ?? poll?.current ?? null);
+  const error = $derived(snapshot ? null : poll?.error ?? null);
 </script>
 
-{#if error}
-  <p class="error">{error}</p>
-{:else if display}
+{#if display}
   <section class="dash-telemetry">
     <div class="tile"><span class="label">Watch time</span><span class="value">{display.Tele.WatchTimeTotal}</span></div>
     <div class="tile"><span class="label">Claims total</span><span class="value">{display.Tele.ClaimsTotal}</span></div>
@@ -55,6 +55,8 @@
   </section>
 
   <footer class="dash-footer">updated {display.UpdatedAt} · uptime {display.Uptime}</footer>
+{:else if error}
+  <p class="error">{error.message}</p>
 {:else}
   <p class="loading">Loading…</p>
 {/if}
