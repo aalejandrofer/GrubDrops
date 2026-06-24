@@ -4,6 +4,8 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-06-24
+
 ### Fixed
 
 - **Multi-tier campaigns with the same reward now mine every tier.** When a
