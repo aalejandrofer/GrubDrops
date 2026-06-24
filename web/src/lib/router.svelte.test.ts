@@ -51,10 +51,10 @@ test('startRouter intercepts clicks on owned links, ignores unowned', () => {
   expect(pushSpy).toBeDefined();
 });
 
-test('isSpaPath: /accounts owned, /accounts/abc owned, /accounts/new not owned, /accounts/abc/login NOT owned', () => {
+test('isSpaPath: /accounts owned, /accounts/abc owned, /accounts/new owned, /accounts/abc/login NOT owned', () => {
   expect(isSpaPath('/accounts')).toBe(true);
   expect(isSpaPath('/accounts/abc')).toBe(true);
-  expect(isSpaPath('/accounts/new')).toBe(false);
+  expect(isSpaPath('/accounts/new')).toBe(true);
   expect(isSpaPath('/accounts/abc/login')).toBe(false);
   expect(isSpaPath('/accounts/')).toBe(false);
 });

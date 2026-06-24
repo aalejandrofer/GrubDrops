@@ -1,6 +1,6 @@
 // SPA-owned paths (client-routed). Grows as pages are ported. A path NOT
 // here is left to a full browser navigation (strangler: legacy HTMX page).
-export const spaPaths: string[] = ['/', '/drops', '/priority', '/settings', '/settings/notifications', '/settings/experimental', '/settings/proxy', '/settings/security', '/settings/health', '/accounts', '/settings/accounts'];
+export const spaPaths: string[] = ['/', '/drops', '/priority', '/settings', '/settings/notifications', '/settings/experimental', '/settings/proxy', '/settings/security', '/settings/health', '/accounts', '/settings/accounts', '/accounts/new'];
 
 export function isSpaPath(path: string): boolean {
   if (spaPaths.includes(path)) return true;

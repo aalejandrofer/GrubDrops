@@ -14,6 +14,7 @@
   import SettingsHealth from './routes/SettingsHealth.svelte';
   import AccountsList from './routes/AccountsList.svelte';
   import AccountDetailPage from './routes/AccountDetailPage.svelte';
+  import AccountNew from './routes/AccountNew.svelte';
 
   let teardown: (() => void) | undefined;
   onMount(() => { teardown = startRouter(); });
@@ -41,6 +42,8 @@
     <SettingsShell active="health">{#snippet children()}<SettingsHealth />{/snippet}</SettingsShell>
   {:else if currentPath() === '/accounts' || currentPath() === '/settings/accounts'}
     <AccountsList />
+  {:else if currentPath() === '/accounts/new'}
+    <AccountNew />
   {:else if currentPath().startsWith('/accounts/') && currentPath() !== '/accounts/new' && currentPath().split('/').length === 3}
     <AccountDetailPage />
   {/if}
