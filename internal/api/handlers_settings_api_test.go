@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -147,6 +148,41 @@ func TestDoSaveCanary_Persists(t *testing.T) {
 	assert.Equal(t, "alveussanctuary", tw)
 	iv, _ := s.CanaryIntervalSec(context.Background())
 	assert.Equal(t, 7200, iv)
+}
+
+// TestAPICanaryRun_DetachesAndReturnsImmediately verifies that apiCanaryRun
+// returns 200 {ok:true} without blocking on the probe (the runner is invoked
+// asynchronously in a background goroutine).
+func TestAPICanaryRun_DetachesAndReturnsImmediately(t *testing.T) {
+	invoked := make(chan struct{}, 1)
+	d := &settingsDeps{
+		runCanary: func(ctx context.Context) error {
+			invoked <- struct{}{}
+			return nil
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/settings/canary/run", nil)
+	rec := httptest.NewRecorder()
+	d.apiCanaryRun(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"ok":true`)
+	// Runner must be called asynchronously within a short window.
+	select {
+	case <-invoked:
+	case <-time.After(2 * time.Second):
+		t.Fatal("canary runner was not invoked within 2s")
+	}
+}
+
+// TestAPICanaryRun_NilRunner returns ok:false without panicking.
+func TestAPICanaryRun_NilRunner(t *testing.T) {
+	d := &settingsDeps{}
+	req := httptest.NewRequest(http.MethodPost, "/api/settings/canary/run", nil)
+	rec := httptest.NewRecorder()
+	d.apiCanaryRun(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"ok":false`)
+	assert.Contains(t, rec.Body.String(), "canary runner unavailable")
 }
 
 func TestSecurityHealthRoutes_SuppressedWhenSPAOn(t *testing.T) {

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -302,9 +303,17 @@ func (d *settingsDeps) apiCanaryRun(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"ok": false, "message": "canary runner unavailable"})
 		return
 	}
-	if err := d.runCanary(r.Context()); err != nil {
-		writeJSON(w, 200, map[string]any{"ok": false, "message": err.Error()})
-		return
-	}
+	// Detach from the request context: use a bounded background context so
+	// the probe completes and persists regardless of the HTTP connection
+	// lifecycle (proxy timeout, user navigation). 90s is enough for two
+	// Twitch beacons at 5s + the Kick window (45s) with headroom.
+	runCtx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	go func() {
+		defer cancel()
+		if err := d.runCanary(runCtx); err != nil {
+			slog.Warn("canary run-now failed", "err", err)
+		}
+	}()
+	// Return immediately; the SPA re-fetches /api/settings to pick up results.
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
