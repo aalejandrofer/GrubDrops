@@ -78,3 +78,16 @@ func TestSPAIndexSetsCSRFCookie(t *testing.T) {
 	assert.NotEmpty(t, found.Value)
 	_ = h
 }
+
+func TestAPIAccountDetail_UnknownIs404JSON(t *testing.T) {
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	s, q := newTestSettings(t) // migrated in-memory queries; mirror existing usage
+	h := NewRouter(Deps{Q: q, Session: scsNew(), SettingsStore: s, SecureCookies: false})
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/account/nope", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+	assert.Contains(t, rec.Body.String(), `"code":"not_found"`)
+}

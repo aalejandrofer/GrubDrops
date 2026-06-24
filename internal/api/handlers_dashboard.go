@@ -1081,17 +1081,15 @@ type dashAccountCampaignRow struct {
 	StartsIn string // for upcoming only
 }
 
-func (d dashboardDeps) accountDetail(w http.ResponseWriter, r *http.Request) {
+// accountDetailData builds the per-account detail projection. Returns
+// (detail, true) on success, or (zero, false) if the account is unknown.
+// Shared by the HTML modal handler (accountDetail) and the JSON endpoint
+// (apiAccountDetail).
+func (d dashboardDeps) accountDetailData(r *http.Request, id string) (dashAccountDetail, bool) {
 	lang := i18n.DetectLang(r)
-	id := chi.URLParam(r, "id")
-	if id == "" {
-		http.Error(w, i18n.T(lang, "error.missing_param"), http.StatusBadRequest)
-		return
-	}
 	acc, err := d.q.GetAccount(r.Context(), id)
 	if err != nil {
-		http.NotFound(w, r)
-		return
+		return dashAccountDetail{}, false
 	}
 
 	// Pull watcher snapshot if present.
@@ -1139,35 +1137,30 @@ func (d dashboardDeps) accountDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Per-account campaign eligibility from discovery cache.
-	now := time.Now()
-	if d.sch == nil {
-		render(w, r, d.t, "dashboard_account_modal.html", templateData{
-			AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "dashboard",
-			Page: detail,
-		})
-		return
-	}
-	for _, dc := range d.sch.DiscoverySnapshot() {
-		// Match by source/eligible account ID.
-		var matches bool
-		for _, aid := range dc.EligibleAccounts {
-			if aid == id {
-				matches = true
-				break
+	if d.sch != nil {
+		now := time.Now()
+		for _, dc := range d.sch.DiscoverySnapshot() {
+			// Match by source/eligible account ID.
+			var matches bool
+			for _, aid := range dc.EligibleAccounts {
+				if aid == id {
+					matches = true
+					break
+				}
 			}
-		}
-		if !matches {
-			continue
-		}
-		row := dashAccountCampaignRow{ID: dc.ID, Name: dc.Name, Game: dc.Game}
-		if !dc.EndsAt.IsZero() {
-			row.EndsIn = formatEndsIn(dc.EndsAt.Sub(now), lang)
-		}
-		if !dc.StartsAt.IsZero() && dc.StartsAt.After(now) {
-			row.StartsIn = formatEndsIn(dc.StartsAt.Sub(now), lang)
-			detail.UpcomingCampaigns = append(detail.UpcomingCampaigns, row)
-		} else {
-			detail.EligibleCampaigns = append(detail.EligibleCampaigns, row)
+			if !matches {
+				continue
+			}
+			row := dashAccountCampaignRow{ID: dc.ID, Name: dc.Name, Game: dc.Game}
+			if !dc.EndsAt.IsZero() {
+				row.EndsIn = formatEndsIn(dc.EndsAt.Sub(now), lang)
+			}
+			if !dc.StartsAt.IsZero() && dc.StartsAt.After(now) {
+				row.StartsIn = formatEndsIn(dc.StartsAt.Sub(now), lang)
+				detail.UpcomingCampaigns = append(detail.UpcomingCampaigns, row)
+			} else {
+				detail.EligibleCampaigns = append(detail.EligibleCampaigns, row)
+			}
 		}
 	}
 
@@ -1180,6 +1173,27 @@ func (d dashboardDeps) accountDetail(w http.ResponseWriter, r *http.Request) {
 		detail.RecentEvents = all
 	}
 
+	return detail, true
+}
+
+func (d dashboardDeps) accountDetail(w http.ResponseWriter, r *http.Request) {
+	lang := i18n.DetectLang(r)
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		http.Error(w, i18n.T(lang, "error.missing_param"), http.StatusBadRequest)
+		return
+	}
+	detail, ok := d.accountDetailData(r, id)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if d.sch == nil {
+		render(w, r, d.t, "dashboard_account_modal.html", templateData{
+			AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "dashboard", Page: detail,
+		})
+		return
+	}
 	renderPartial(w, r, d.t, "dashboard_account_modal", detail)
 }
 

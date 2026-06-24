@@ -377,6 +377,7 @@ func NewRouter(d Deps) http.Handler {
 	apiAuthed.Group(func(gr chi.Router) {
 		gr.Use(RequireAdminAPI(d.Session))
 		gr.Get("/dashboard", dash.apiPage)
+		gr.Get("/dashboard/account/{id}", dash.apiAccountDetail)
 	})
 	r.Mount("/api", withSession(csrf(apiAuthed)))
 
