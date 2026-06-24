@@ -96,3 +96,28 @@ export interface CampaignDetail {
   EligibleAccounts: string[] | null; SourceAccounts: string[] | null;
   AccountLinked: boolean; AccountLinkURL: string;
 }
+
+export interface CollectMark { Login: string; Platform: string; Full: boolean; }
+export interface WhitelistChip { Login: string; AccountID: string; }
+export interface DropConnectChip { Login: string; Linked: boolean; LinkURL: string; }
+export interface DropsAccount { ID: string; Label: string; Platform: string; }
+
+export interface DropRow {
+  CampaignID: string; When: string; Platform: string; Game: string;
+  CampaignName: string; BenefitName: string; AccountName: string; Kind: string;
+  ActionOnly: boolean; Collectors: CollectMark[] | null;
+  Channels: string[] | null; WhitelistedBy: WhitelistChip[] | null;
+  Linked: boolean; LinkURL: string;
+  ConnectChips: DropConnectChip[] | null; NeedsConnect: boolean;
+}
+
+export interface DropsPage {
+  Tab: string;
+  PastCount: number; CurrentCount: number; UpcomingCount: number;
+  Rows: DropRow[] | null;
+  UnlinkedRows: DropRow[] | null;
+  UnlistedRows: DropRow[] | null;
+  NullGameRows: DropRow[] | null;
+  Accounts: DropsAccount[] | null;
+  NoWhitelist: boolean;
+}

@@ -1,4 +1,4 @@
-import type { DashboardSnapshot, ApiErrorEnvelope } from './types';
+import type { DashboardSnapshot, ApiErrorEnvelope, DropsPage } from './types';
 import { readCookie } from './csrf';
 
 // ApiError carries the server error envelope's stable code plus the HTTP
@@ -47,6 +47,10 @@ export async function apiFetch<T>(path: string): Promise<T> {
 
 export function fetchDashboard(): Promise<DashboardSnapshot> {
   return apiFetch<DashboardSnapshot>('/api/dashboard');
+}
+
+export function fetchDrops(tab: string): Promise<DropsPage> {
+  return apiFetch<DropsPage>('/api/drops?tab=' + encodeURIComponent(tab));
 }
 
 // apiSend performs a mutating request: it attaches the CSRF token (read from
