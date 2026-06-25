@@ -4,20 +4,6 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
-### Added
-
-- **Info filter on the live-events feed.** Uncategorized info events had no
-  matching filter chip, so they only showed under "all". Added an "info" chip
-  alongside claims / progress / state / discovery / auth / errors.
-
-### Changed
-
-- **Successful Twitch GQL responses dropped to debug.** Every successful API
-  call was logged at info, and the per-channel live-check fan-out alone is
-  hundreds per minute, which drowned the live-events feed. Every failure mode
-  (5xx, 429, integrity, decode, application error, partial) is still logged
-  loudly, so the feed loses no signal.
-
 ## [1.3.2] — 2026-06-24
 
 ### Added
@@ -26,6 +12,17 @@ All notable changes to GrubDrops.
   `/drops` item list and confirm to clear it — a backup escape hatch if the
   self-heal ever misses a stale mark. Best-effort: if the platform still
   reports the drop as owned, it gets re-marked on the next discovery cycle. (#24)
+- **Info filter on the live-events feed.** Uncategorized info events had no
+  matching filter chip, so they only showed under "all". Added an "info" chip
+  between state and discovery.
+
+### Changed
+
+- **Successful Twitch GQL responses dropped to debug.** Every successful API
+  call was logged at info, and the per-channel live-check fan-out alone is
+  hundreds per minute, which drowned the live-events feed. Every failure mode
+  (5xx, 429, integrity, decode, application error, partial) is still logged
+  loudly, so the feed loses no signal.
 
 ### Fixed
 
