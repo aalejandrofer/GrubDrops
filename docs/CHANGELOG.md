@@ -4,7 +4,7 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
-## [1.3.5] — 2026-06-26
+## [1.3.4] — 2026-06-26
 
 ### Fixed
 
@@ -15,11 +15,6 @@ All notable changes to GrubDrops.
   miner now skips any drop it already holds a claim for, matched by the drop's
   unique id so a brand-new campaign offering the same item is still mined.
   Verified on a live environment. (#24)
-
-## [1.3.4] — 2026-06-26
-
-### Fixed
-
 - **Bogus "collected" marks now clear themselves for any in-progress drop.**
   Building on 1.3.3, the cleanup no longer depends on the bot actively mining a
   campaign. Every discovery pass sweeps your in-progress drops directly and
