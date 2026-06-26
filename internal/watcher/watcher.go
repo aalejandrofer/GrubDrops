@@ -890,11 +890,18 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 	// present, log + continue with empty progress — we'd rather re-mine
 	// a benefit than stall the watcher.
 	var progress []platform.Progress
+	// inventoryOK gates the claim-row prune: only reconcile the claims table
+	// against inventory when we actually have a trustworthy inventory read.
+	// A failed/absent fetch must never drive deletions (an empty claimed map
+	// would otherwise look like "nothing is claimed" and prune real rows).
+	inventoryOK := false
 	if len(campaigns) > 0 {
 		progress, err = w.cfg.Backend.InventoryProgress(ctx, w.cfg.Session)
 		if err != nil {
 			slog.Warn("watcher inventory failed; treating as no progress yet", "kind", "error", "account", w.cfg.AccountID, "err", err)
 			progress = nil
+		} else {
+			inventoryOK = true
 		}
 	}
 	claimed := map[string]bool{}
@@ -938,19 +945,26 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 	// claims.benefit_id FK.
 	if rec, ok := w.cfg.ClaimRecorder.(interface {
 		RecordClaimIfNew(context.Context, string, platform.DropBenefit) (bool, error)
-	}); ok && len(claimed) > 0 {
+	}); ok && inventoryOK {
 		pruner, canPrune := w.cfg.ClaimRecorder.(interface {
 			PruneClaim(context.Context, string, platform.DropBenefit) (bool, error)
 		})
 		for _, c := range campaigns {
+			active := strings.EqualFold(c.Status, "active")
 			for _, b := range c.Benefits {
-				// Self-heal false COLLECTED marks: inventory tracks this exact
-				// drop as in-progress AND unclaimed, so any claims row for it
-				// is stale (the pre-v1.3.1 shared-reward bug wrote one for every
-				// tier). Drop it. Only acts when we have per-drop inventory
-				// (tracked) — never on drops that legitimately left the
-				// inventory after a real claim.
-				if canPrune && tracked[b.ID] && !claimed[b.ID] {
+				// Self-heal false COLLECTED marks against live inventory truth.
+				// Twitch does NOT report this drop claimed (per-drop IsClaimed
+				// false), yet a claims row exists -> it's stale. Prune it when:
+				//   - the drop is tracked in-progress (the original self-heal), OR
+				//   - its campaign is ACTIVE. For an active campaign a real
+				//     claim stays in dropCampaignsInProgress with IsClaimed=true,
+				//     so "not claimed" is reliable even for tiers that never
+				//     entered the in-progress list (0 watch-time) — exactly the
+				//     owned-marker false rows the prune previously couldn't see.
+				// PruneClaim is a no-op when no row exists, so this is safe to
+				// call broadly. Gated on inventoryOK so a failed fetch can't
+				// drive deletions.
+				if canPrune && !claimed[b.ID] && (tracked[b.ID] || active) {
 					if pruned, err := pruner.PruneClaim(ctx, w.cfg.AccountID, b); err == nil && pruned {
 						slog.Info("watcher pruned stale claim",
 							"kind", "claim", "account", w.cfg.AccountID,

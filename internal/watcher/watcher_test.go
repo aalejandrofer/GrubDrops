@@ -1295,3 +1295,58 @@ func TestWatcher_NewCampaignSameReward_NotSkippedOrFalseMarked(t *testing.T) {
 			"a new campaign's unclaimed tier must not be recorded collected on reward-ownership")
 	}
 }
+
+// activeUnclaimedBackend models a recurring campaign instance that is ACTIVE
+// but whose drop the account never genuinely claimed (it merely owned the
+// reused reward, so the old owned-marker wrote a false claim row). The drop
+// does NOT appear in the in-progress inventory (0 watch-time), so the
+// original tracked-only prune couldn't see it. The hardened prune must still
+// clear it: active campaign + Twitch reports it unclaimed.
+type activeUnclaimedBackend struct {
+	*platformtest.MockBackend
+}
+
+func (b *activeUnclaimedBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	return []platform.Campaign{{
+		ID: "rw11", Game: "Albion Online", Status: "active", AccountLinked: true,
+		Benefits: []platform.DropBenefit{{ID: "rwchest5", CampaignID: "rw11", Name: "Radiant Wilds Chest", RequiredMinutes: 180, RewardID: "rwReward"}},
+	}}, nil
+}
+
+// Inventory does NOT list rwchest5 (untracked) and reports a different
+// claimed drop so the reconcile runs (inventoryOK + non-empty).
+func (b *activeUnclaimedBackend) InventoryProgress(_ context.Context, _ platform.Session) ([]platform.Progress, error) {
+	return []platform.Progress{{BenefitID: "other", MinutesWatched: 10, Claimed: true}}, nil
+}
+
+func (b *activeUnclaimedBackend) ListEligibleChannels(_ context.Context, _ platform.Session, _ platform.Campaign) ([]platform.Stream, error) {
+	return []platform.Stream{{Channel: "albion", DropsEnabled: true}}, nil
+}
+
+// TestWatcher_HardenedPrune_ActiveUnclaimedFalseRow: a false claim row for an
+// untracked drop in an ACTIVE campaign must be pruned (the owned-marker
+// rows the tracked-only prune missed). Recurring campaigns self-heal this way.
+func TestWatcher_HardenedPrune_ActiveUnclaimedFalseRow(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	rec := &recordingClaimRecorder{}
+	backend := &activeUnclaimedBackend{MockBackend: platformtest.New()}
+	w := New(Config{
+		AccountID:     "acc_rw",
+		Backend:       backend,
+		ClaimRecorder: rec,
+		Session:       platform.Session{AccessToken: "tok"},
+		Notifier:      &recordingNotifier{},
+		TickInterval:  2 * time.Millisecond,
+		AllowGame:     func(g string) bool { return g == "Albion Online" },
+	})
+
+	go func() { _ = w.Run(ctx) }()
+
+	require.Eventually(t, func() bool {
+		_, pruned := rec.snapshot()
+		return contains(pruned, "rwchest5")
+	}, time.Second, 5*time.Millisecond,
+		"hardened prune must clear a false claim row for an untracked, unclaimed drop in an active campaign")
+}

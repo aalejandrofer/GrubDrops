@@ -17,6 +17,13 @@ All notable changes to GrubDrops.
   whether you own the reward item, so each campaign's drops are mined and
   claimed on their own merits. Also fixes the same under-mining on reused
   Rocket League rewards. (#24)
+- **False "collected" marks auto-clear against live Twitch status.** Recurring
+  campaigns (daily Albion chests, R6S seasons) had accumulated collected marks
+  the platform never actually granted, left over from the bug above. Each
+  discovery cycle now reconciles every active campaign's drops against Twitch's
+  real claim status and removes any collected mark Twitch does not back. No
+  manual cleanup and no database assumptions: it only trusts live inventory, so
+  it self-corrects on every install. (#24)
 
 ## [1.3.2] — 2026-06-24
 
