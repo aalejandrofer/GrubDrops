@@ -64,6 +64,10 @@ type Querier interface {
 	ListAllAccounts(ctx context.Context) ([]Account, error)
 	ListAllGames(ctx context.Context) ([]Game, error)
 	ListBenefitsForCampaign(ctx context.Context, campaignID string) ([]Benefit, error)
+	// All benefit ids this account already has a claim row for. The watcher
+	// skips re-mining these: a claim is keyed by benefit id which is unique per
+	// drop instance, so owning a claim means THIS exact drop is done.
+	ListClaimedBenefitIDsForAccount(ctx context.Context, accountID string) ([]string, error)
 	// Which accounts have claimed each benefit in a campaign. Powers the
 	// per-account COLLECTED marks on the /drops expanded item list.
 	ListClaimsForCampaign(ctx context.Context, campaignID string) ([]ListClaimsForCampaignRow, error)

@@ -904,6 +904,21 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			inventoryOK = true
 		}
 	}
+	// ownClaimed = benefit ids this account already has a claim row for.
+	// Twitch drops a claimed drop from dropCampaignsInProgress once the
+	// campaign completes, so its per-drop IsClaimed is no longer visible and
+	// the pick loop would otherwise re-mine an already-claimed drop until the
+	// slow no-progress fallback gives up (the "watching an already-collected
+	// skin" waste). Keyed by benefit id (unique per drop instance), so unlike
+	// the old reward-id owned-marker it cannot bleed across campaigns (#24).
+	ownClaimed := map[string]bool{}
+	if cr, ok := w.cfg.ClaimRecorder.(interface {
+		ClaimedBenefitIDs(context.Context, string) (map[string]bool, error)
+	}); ok {
+		if ids, err := cr.ClaimedBenefitIDs(ctx, w.cfg.AccountID); err == nil {
+			ownClaimed = ids
+		}
+	}
 	claimed := map[string]bool{}
 	// tracked = drop ids that appear in the IN-PROGRESS inventory
 	// (dropCampaignsInProgress). gameEventDrops owned-markers are keyed by
@@ -1240,7 +1255,10 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			// must not block a brand-new campaign's drop — that drop is
 			// claimable again (#24 follow-up: new "R6S S1 2026 6" with the
 			// same Esports Pack item was wrongly marked done).
-			if claimed[b.ID] {
+			// ownClaimed[b.ID]: we already hold a claim for THIS exact drop
+			// (by unique benefit id) — skip re-mining it even after Twitch
+			// drops it from the in-progress inventory.
+			if claimed[b.ID] || ownClaimed[b.ID] {
 				continue
 			}
 			// Per-watcher skip set: synth benefits we already burnt

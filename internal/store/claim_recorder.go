@@ -100,6 +100,26 @@ func (r *ClaimRecorder) PruneClaim(ctx context.Context, accountID string, b plat
 	return true, nil
 }
 
+// ClaimedBenefitIDs returns the set of benefit ids this account already has a
+// claim row for. The watcher uses it to skip re-mining a drop it has already
+// claimed but that Twitch has dropped from the in-progress inventory (so its
+// per-drop IsClaimed is no longer visible). Keyed by benefit id, which is
+// unique per drop instance, so it never bleeds across campaigns.
+func (r *ClaimRecorder) ClaimedBenefitIDs(ctx context.Context, accountID string) (map[string]bool, error) {
+	if r == nil || r.Q == nil {
+		return nil, nil
+	}
+	ids, err := r.Q.ListClaimedBenefitIDsForAccount(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out, nil
+}
+
 func newClaimID() string {
 	var b [12]byte
 	_, _ = rand.Read(b[:])

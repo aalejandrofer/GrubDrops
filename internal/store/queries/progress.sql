@@ -32,6 +32,12 @@ ON CONFLICT(account_id, benefit_id) DO UPDATE SET
 -- tiers that were wrongly marked collected.
 DELETE FROM claims WHERE account_id = ? AND benefit_id = ?;
 
+-- name: ListClaimedBenefitIDsForAccount :many
+-- All benefit ids this account already has a claim row for. The watcher
+-- skips re-mining these: a claim is keyed by benefit id which is unique per
+-- drop instance, so owning a claim means THIS exact drop is done.
+SELECT benefit_id FROM claims WHERE account_id = ?;
+
 -- name: CountClaimsFor :one
 -- Claim rows for one account+benefit. Zero means none. Keeps the
 -- inventory-ownership reconcile idempotent.

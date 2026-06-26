@@ -134,6 +134,36 @@ func (q *Queries) InsertClaim(ctx context.Context, arg InsertClaimParams) error 
 	return err
 }
 
+const listClaimedBenefitIDsForAccount = `-- name: ListClaimedBenefitIDsForAccount :many
+SELECT benefit_id FROM claims WHERE account_id = ?
+`
+
+// All benefit ids this account already has a claim row for. The watcher
+// skips re-mining these: a claim is keyed by benefit id which is unique per
+// drop instance, so owning a claim means THIS exact drop is done.
+func (q *Queries) ListClaimedBenefitIDsForAccount(ctx context.Context, accountID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listClaimedBenefitIDsForAccount, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var benefit_id string
+		if err := rows.Scan(&benefit_id); err != nil {
+			return nil, err
+		}
+		items = append(items, benefit_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUnclaimedProgressForAccount = `-- name: ListUnclaimedProgressForAccount :many
 SELECT p.account_id, p.benefit_id, p.minutes_watched, p.claimed_at, p.updated_at FROM progress p
 JOIN benefits b ON b.id = p.benefit_id

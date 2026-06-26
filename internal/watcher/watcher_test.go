@@ -1160,9 +1160,20 @@ func TestWatcher_MultiTierSameReward_ContinuesAfterFirstClaim(t *testing.T) {
 // recordingClaimRecorder captures every RecordClaimIfNew / PruneClaim call so
 // a test can assert the reconcile loop's self-heal decision (issue #24).
 type recordingClaimRecorder struct {
-	mu       sync.Mutex
-	recorded []string
-	pruned   []string
+	mu         sync.Mutex
+	recorded   []string
+	pruned     []string
+	claimedIDs map[string]bool
+}
+
+func (r *recordingClaimRecorder) ClaimedBenefitIDs(_ context.Context, _ string) (map[string]bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := map[string]bool{}
+	for k, v := range r.claimedIDs {
+		out[k] = v
+	}
+	return out, nil
 }
 
 func (r *recordingClaimRecorder) RecordClaim(_ context.Context, _ string, _ platform.DropBenefit) error {
@@ -1357,4 +1368,61 @@ func TestWatcher_InventorySweepPrunesUnminedTrackedFalseRow(t *testing.T) {
 
 	_, pruned := rec.snapshot()
 	assert.NotContains(t, pruned, "somethingClaimed", "a claimed in-progress drop must never be pruned")
+}
+
+// alreadyClaimedBackend offers two unclaimed-in-inventory benefits; one of
+// them already has a claim row (ownClaimed). The watcher must skip the
+// already-claimed one and pick the other — without this it would re-mine a
+// drop it already holds (the "watching an already-collected skin" waste).
+type alreadyClaimedBackend struct {
+	*platformtest.MockBackend
+}
+
+func (b *alreadyClaimedBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	return []platform.Campaign{{
+		ID: "c1", Game: "Rust", Status: "active", AccountLinked: true,
+		Benefits: []platform.DropBenefit{
+			{ID: "done", CampaignID: "c1", Name: "Already Claimed", RequiredMinutes: 60},
+			{ID: "todo", CampaignID: "c1", Name: "Still Open", RequiredMinutes: 60},
+		},
+	}}, nil
+}
+func (b *alreadyClaimedBackend) InventoryProgress(_ context.Context, _ platform.Session) ([]platform.Progress, error) {
+	return nil, nil // neither appears in-progress (both departed/never-started)
+}
+func (b *alreadyClaimedBackend) ListEligibleChannels(_ context.Context, _ platform.Session, _ platform.Campaign) ([]platform.Stream, error) {
+	return []platform.Stream{{Channel: "ch", DropsEnabled: true}}, nil
+}
+
+func TestWatcher_SkipsBenefitWeAlreadyClaimed(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	rec := &recordingClaimRecorder{claimedIDs: map[string]bool{"done": true}}
+	backend := &alreadyClaimedBackend{MockBackend: platformtest.New()}
+	w := New(Config{
+		AccountID:     "acc_x",
+		Backend:       backend,
+		ClaimRecorder: rec,
+		Session:       platform.Session{AccessToken: "tok"},
+		Notifier:      &recordingNotifier{},
+		TickInterval:  2 * time.Millisecond,
+		AllowGame:     func(g string) bool { return g == "Rust" },
+	})
+	go func() { _ = w.Run(ctx) }()
+
+	require.Eventually(t, func() bool {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		return w.currentBenefit != nil && w.currentBenefit.ID == "todo"
+	}, time.Second, 5*time.Millisecond,
+		"watcher must skip the already-claimed benefit and pick the open one")
+
+	w.mu.Lock()
+	picked := ""
+	if w.currentBenefit != nil {
+		picked = w.currentBenefit.ID
+	}
+	w.mu.Unlock()
+	assert.NotEqual(t, "done", picked, "must never pick a benefit we already hold a claim for")
 }
