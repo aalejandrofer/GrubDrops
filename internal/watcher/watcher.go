@@ -981,6 +981,26 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 				}
 			}
 		}
+		// Inventory-driven prune. The loop above only sees benefits discovery
+		// populated this cycle, so a tracked-but-unclaimed drop whose campaign
+		// the bot isn't actively mining (e.g. a low-priority SMITE weekly that
+		// never enters the pick loop) would keep its stale row forever. Sweep
+		// the in-progress inventory directly: every drop Twitch reports
+		// in-progress (tracked) AND unclaimed must not carry a claim row. This
+		// stays positive-evidence only — a genuinely-claimed drop reports
+		// IsClaimed=true (skipped) and a departed genuine claim isn't tracked
+		// at all (never touched) — so it cannot delete real claim history.
+		if canPrune {
+			for id := range tracked {
+				if claimed[id] {
+					continue
+				}
+				if pruned, err := pruner.PruneClaim(ctx, w.cfg.AccountID, platform.DropBenefit{ID: id}); err == nil && pruned {
+					slog.Info("watcher pruned stale claim (inventory sweep)",
+						"kind", "claim", "account", w.cfg.AccountID, "benefit", id)
+				}
+			}
+		}
 	}
 
 	// Apply the per-account whitelist to EVERYTHING the backend returned —

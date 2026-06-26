@@ -1295,3 +1295,66 @@ func TestWatcher_NewCampaignSameReward_NotSkippedOrFalseMarked(t *testing.T) {
 			"a new campaign's unclaimed tier must not be recorded collected on reward-ownership")
 	}
 }
+
+// lowPriorityTrackedBackend models a campaign the bot is NOT actively mining
+// (discovery returns it with NO populated benefits, as happens for a
+// low-priority game like SMITE) but whose drop IS tracked in the in-progress
+// inventory and unclaimed, with a leftover false claim row. The inventory
+// sweep must prune it even though the campaign-benefits loop can't see it.
+type lowPriorityTrackedBackend struct {
+	*platformtest.MockBackend
+}
+
+func (b *lowPriorityTrackedBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	// Campaign present but benefits NOT populated (lazy/unmined) + a separate
+	// mineable campaign so the watcher has something to do.
+	return []platform.Campaign{
+		{ID: "smite", Game: "SMITE 2", Status: "active", AccountLinked: true, Benefits: nil},
+		{ID: "mine", Game: "Rust", Status: "active", AccountLinked: true,
+			Benefits: []platform.DropBenefit{{ID: "rustdrop", CampaignID: "mine", RequiredMinutes: 9999}}},
+	}, nil
+}
+
+func (b *lowPriorityTrackedBackend) InventoryProgress(_ context.Context, _ platform.Session) ([]platform.Progress, error) {
+	// SMITE bundle tracked in-progress + UNCLAIMED (false claim row exists),
+	// plus another claimed drop so the reconcile has claimed entries too.
+	return []platform.Progress{
+		{BenefitID: "smitebundle", MinutesWatched: 30, Claimed: false},
+		{BenefitID: "somethingClaimed", MinutesWatched: 60, Claimed: true},
+	}, nil
+}
+
+func (b *lowPriorityTrackedBackend) ListEligibleChannels(_ context.Context, _ platform.Session, _ platform.Campaign) ([]platform.Stream, error) {
+	return []platform.Stream{{Channel: "ch", DropsEnabled: true}}, nil
+}
+
+// TestWatcher_InventorySweepPrunesUnminedTrackedFalseRow: a false claim row
+// for a tracked-but-unclaimed drop in a campaign the bot isn't mining (no
+// populated benefits) must still be pruned via the inventory sweep.
+func TestWatcher_InventorySweepPrunesUnminedTrackedFalseRow(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	rec := &recordingClaimRecorder{}
+	backend := &lowPriorityTrackedBackend{MockBackend: platformtest.New()}
+	w := New(Config{
+		AccountID:     "acc_smite",
+		Backend:       backend,
+		ClaimRecorder: rec,
+		Session:       platform.Session{AccessToken: "tok"},
+		Notifier:      &recordingNotifier{},
+		TickInterval:  2 * time.Millisecond,
+		AllowGame:     func(g string) bool { return g == "Rust" || g == "SMITE 2" },
+	})
+
+	go func() { _ = w.Run(ctx) }()
+
+	require.Eventually(t, func() bool {
+		_, pruned := rec.snapshot()
+		return contains(pruned, "smitebundle")
+	}, time.Second, 5*time.Millisecond,
+		"inventory sweep must prune a tracked-unclaimed false row even when its campaign has no populated benefits")
+
+	_, pruned := rec.snapshot()
+	assert.NotContains(t, pruned, "somethingClaimed", "a claimed in-progress drop must never be pruned")
+}
