@@ -950,21 +950,16 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			PruneClaim(context.Context, string, platform.DropBenefit) (bool, error)
 		})
 		for _, c := range campaigns {
-			active := strings.EqualFold(c.Status, "active")
 			for _, b := range c.Benefits {
-				// Self-heal false COLLECTED marks against live inventory truth.
-				// Twitch does NOT report this drop claimed (per-drop IsClaimed
-				// false), yet a claims row exists -> it's stale. Prune it when:
-				//   - the drop is tracked in-progress (the original self-heal), OR
-				//   - its campaign is ACTIVE. For an active campaign a real
-				//     claim stays in dropCampaignsInProgress with IsClaimed=true,
-				//     so "not claimed" is reliable even for tiers that never
-				//     entered the in-progress list (0 watch-time) — exactly the
-				//     owned-marker false rows the prune previously couldn't see.
-				// PruneClaim is a no-op when no row exists, so this is safe to
-				// call broadly. Gated on inventoryOK so a failed fetch can't
-				// drive deletions.
-				if canPrune && !claimed[b.ID] && (tracked[b.ID] || active) {
+				// Self-heal false COLLECTED marks ONLY when we have positive
+				// inventory evidence the drop is unclaimed: it is currently
+				// tracked in dropCampaignsInProgress AND IsClaimed=false. We must
+				// NOT prune on mere absence from the in-progress list — a
+				// genuinely-claimed drop leaves that list once claimed, so
+				// "not present" is ambiguous and pruning on it deletes real
+				// claim history. Gated on inventoryOK so a failed fetch can't
+				// drive deletions; PruneClaim is a no-op when no row exists.
+				if canPrune && tracked[b.ID] && !claimed[b.ID] {
 					if pruned, err := pruner.PruneClaim(ctx, w.cfg.AccountID, b); err == nil && pruned {
 						slog.Info("watcher pruned stale claim",
 							"kind", "claim", "account", w.cfg.AccountID,
