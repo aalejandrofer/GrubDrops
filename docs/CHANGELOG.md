@@ -4,6 +4,18 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.3.5] — 2026-06-26
+
+### Fixed
+
+- **No more re-watching drops you already collected.** After a campaign
+  finishes, Twitch stops listing its drops as in-progress, so the miner could
+  no longer tell an already-claimed drop apart and would re-watch it for a few
+  minutes before giving up (e.g. an R6S skin you collected yesterday). The
+  miner now skips any drop it already holds a claim for, matched by the drop's
+  unique id so a brand-new campaign offering the same item is still mined.
+  Verified on a live environment. (#24)
+
 ## [1.3.4] — 2026-06-26
 
 ### Fixed
