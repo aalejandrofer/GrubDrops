@@ -4,6 +4,19 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.3.4] — 2026-06-26
+
+### Fixed
+
+- **Bogus "collected" marks now clear themselves for any in-progress drop.**
+  Building on 1.3.3, the cleanup no longer depends on the bot actively mining a
+  campaign. Every discovery pass sweeps your in-progress drops directly and
+  removes any collected mark Twitch reports as unclaimed, so leftover false
+  marks on lower-priority or not-currently-mined campaigns (e.g. a recurring
+  SMITE weekly) clear on their own. It only ever acts on drops Twitch is
+  actively tracking in-progress, so it never removes a real claim. Verified on
+  a live environment: false marks cleared, genuine claims untouched. (#24)
+
 ## [1.3.3] — 2026-06-26
 
 ### Fixed
