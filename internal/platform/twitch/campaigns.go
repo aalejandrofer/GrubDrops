@@ -457,16 +457,11 @@ func (d *discovery) inventory(ctx context.Context, sess platform.Session) ([]pla
 			})
 		}
 	}
-	// Owned benefits (gameEventDrops): emit a claimed marker keyed by the
-	// BENEFIT id. The watcher matches these against DropBenefit.RewardID
-	// so a drop whose reward the account already holds is treated as
-	// claimed and skipped — even though claimed drops drop out of
-	// dropCampaignsInProgress entirely.
-	for _, ged := range inv.CurrentUser.Inventory.GameEventDrops {
-		if ged.ID == "" {
-			continue
-		}
-		out = append(out, platform.Progress{BenefitID: ged.ID, Claimed: true})
-	}
+	// NOTE: we deliberately do NOT emit gameEventDrops (owned-reward)
+	// markers. Twitch reuses the same reward item across campaigns/seasons,
+	// so "account owns this item" does not mean "this campaign's drop is
+	// claimed" — emitting it made the watcher skip + falsely mark every new
+	// campaign granting an already-owned item (#24 follow-up). Per-drop
+	// IsClaimed from dropCampaignsInProgress above is the only claim truth.
 	return out, nil
 }

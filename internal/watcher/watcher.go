@@ -958,8 +958,11 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 					}
 					continue
 				}
-				owned := b.RewardID != "" && claimed[b.RewardID] && !tracked[b.ID]
-				if !claimed[b.ID] && !owned {
+				// Record only drops Twitch reports claimed for THIS drop id
+				// (per-drop IsClaimed) — never on reward-ownership, which is
+				// shared across campaigns and would re-mark a new campaign's
+				// drop the account merely owns the item for.
+				if !claimed[b.ID] {
 					continue
 				}
 				if wrote, err := rec.RecordClaimIfNew(ctx, w.cfg.AccountID, b); err == nil && wrote {
@@ -1201,15 +1204,14 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			return benefits[i].RequiredMinutes < benefits[j].RequiredMinutes
 		})
 		for _, b := range benefits {
-			// claimed[b.ID]: this exact drop's reward was claimed (in-progress
-			// IsClaimed). claimed[b.RewardID]: the account OWNS this reward
-			// (gameEventDrops marker). Skip on the owned marker ONLY when the
-			// drop has fallen out of the in-progress inventory (!tracked) —
-			// e.g. a reward owned from a prior season. A live campaign whose
-			// tiers all grant the same reward shares one RewardID and keeps
-			// the unclaimed tiers tracked, so skipping them on the owned
-			// marker is the #24 bug (only tier 1 was actually claimed).
-			if claimed[b.ID] || (!tracked[b.ID] && b.RewardID != "" && claimed[b.RewardID]) {
+			// Skip only this exact drop once Twitch reports it claimed
+			// (per-drop IsClaimed). We deliberately do NOT skip on
+			// reward-ownership: Twitch reuses the same reward item (RewardID)
+			// across campaigns/seasons, so owning it from a prior campaign
+			// must not block a brand-new campaign's drop — that drop is
+			// claimable again (#24 follow-up: new "R6S S1 2026 6" with the
+			// same Esports Pack item was wrongly marked done).
+			if claimed[b.ID] {
 				continue
 			}
 			// Per-watcher skip set: synth benefits we already burnt

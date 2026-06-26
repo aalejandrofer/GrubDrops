@@ -1231,3 +1231,67 @@ func contains(s []string, v string) bool {
 	}
 	return false
 }
+
+// newCampaignSameRewardBackend models the #24 FOLLOW-UP: a brand-new
+// campaign whose four tiers grant the SAME reward item (shared RewardID)
+// the account already OWNS from a previous, now-ended campaign. The new
+// tiers are NOT yet in the in-progress inventory (untracked — never
+// watched), and InventoryProgress reports only the owned-reward marker.
+// The watcher must IGNORE reward-ownership: the new campaign's drops are
+// claimable again, so it must pick the lowest tier and must not mark any
+// collected.
+type newCampaignSameRewardBackend struct {
+	*platformtest.MockBackend
+}
+
+func (b *newCampaignSameRewardBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	mk := func(id string, mins int) platform.DropBenefit {
+		return platform.DropBenefit{ID: id, CampaignID: "r6s6", Name: "Esports Pack 2026 Stage 1", RequiredMinutes: mins, RewardID: "rewardX"}
+	}
+	return []platform.Campaign{{
+		ID: "r6s6", Game: "Rainbow Six Siege", Status: "active", AccountLinked: true,
+		Benefits: []platform.DropBenefit{mk("n360", 360), mk("n60", 60), mk("n180", 180), mk("n540", 540)},
+	}}, nil
+}
+
+func (b *newCampaignSameRewardBackend) InventoryProgress(_ context.Context, _ platform.Session) ([]platform.Progress, error) {
+	// Only the owned-reward marker (as the OLD gameEventDrops path would
+	// have emitted). NONE of the new tiers are tracked or claimed per-drop.
+	return []platform.Progress{{BenefitID: "rewardX", Claimed: true}}, nil
+}
+
+func (b *newCampaignSameRewardBackend) ListEligibleChannels(_ context.Context, _ platform.Session, _ platform.Campaign) ([]platform.Stream, error) {
+	return []platform.Stream{{Channel: "rainbow6", DropsEnabled: true}}, nil
+}
+
+func TestWatcher_NewCampaignSameReward_NotSkippedOrFalseMarked(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	rec := &recordingClaimRecorder{}
+	backend := &newCampaignSameRewardBackend{MockBackend: platformtest.New()}
+	w := New(Config{
+		AccountID:     "acc_r6s6",
+		Backend:       backend,
+		ClaimRecorder: rec,
+		Session:       platform.Session{AccessToken: "tok"},
+		Notifier:      &recordingNotifier{},
+		TickInterval:  2 * time.Millisecond,
+		AllowGame:     func(g string) bool { return g == "Rainbow Six Siege" },
+	})
+
+	go func() { _ = w.Run(ctx) }()
+
+	require.Eventually(t, func() bool {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		return w.currentBenefit != nil && w.currentBenefit.ID == "n60"
+	}, time.Second, 5*time.Millisecond,
+		"watcher must mine the new campaign's lowest tier even though it owns the same reward item from a prior campaign")
+
+	recorded, _ := rec.snapshot()
+	for _, id := range []string{"n60", "n180", "n360", "n540"} {
+		assert.NotContains(t, recorded, id,
+			"a new campaign's unclaimed tier must not be recorded collected on reward-ownership")
+	}
+}

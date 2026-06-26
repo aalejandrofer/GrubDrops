@@ -4,6 +4,20 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.3.3] — 2026-06-26
+
+### Fixed
+
+- **New campaigns granting an item you already own are mined again.** Twitch
+  reuses the same reward item across campaigns and seasons, so when a fresh
+  campaign (e.g. "R6S S1 2026 6") offered the same Esports Pack as the ended
+  one before it, the watcher saw the item in your inventory and instantly
+  marked all of its drops collected without watching — and skipped mining them.
+  Claim state is now read only from Twitch's per-drop status, never from
+  whether you own the reward item, so each campaign's drops are mined and
+  claimed on their own merits. Also fixes the same under-mining on reused
+  Rocket League rewards. (#24)
+
 ## [1.3.2] — 2026-06-24
 
 ### Added
