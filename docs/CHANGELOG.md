@@ -4,6 +4,13 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped dependencies: `coreos/go-oidc` 3.18.0 → 3.19.0,
+  `modernc.org/sqlite` 1.52.0 → 1.53.0 (+ `libc` 1.72.5 → 1.73.4). (#22)
+- Bumped GitHub Actions: `actions/checkout` → v7 across CI/release/pages,
+  `configure-pages` → v6, `upload-pages-artifact` → v5, `deploy-pages` → v5. (#21)
+
 ## [1.3.4] — 2026-06-26
 
 ### Fixed
