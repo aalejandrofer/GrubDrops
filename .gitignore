@@ -47,8 +47,5 @@ out/
 /tmp/
 .superpowers/
 
-# superpowers workflow artifacts (specs/plans/mockups) — keep local, out of repo
-docs/superpowers/
-
 # Claude Code worktrees (nested git repos used by agents — never commit)
 .claude/worktrees/
