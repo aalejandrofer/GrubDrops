@@ -846,9 +846,10 @@
   button.cmark-btn:hover { opacity: .65; border-color: color-mix(in srgb, var(--red) 55%, transparent); }
   /* Manual "mark collected" add menu on a benefit row. */
   .cmark-add { position: relative; display: inline-block; }
-  .cmark-add-btn { cursor: pointer; list-style: none; padding: 1px 7px; border: 1px dashed var(--muted);
-    border-radius: 10px; color: var(--muted); font-size: 11px; }
+  .cmark-add-btn { cursor: pointer; display: inline-block; list-style: none; padding: 1px 7px;
+    border: 1px dashed var(--muted); border-radius: 10px; color: var(--muted); font-size: 11px; }
   .cmark-add-btn::-webkit-details-marker { display: none; }
+  .cmark-add-btn::marker { content: ""; }
   .cmark-add[open] .cmark-add-btn { color: var(--accent); border-color: var(--accent); }
   .cmark-add-menu { position: absolute; right: 0; z-index: 20; margin-top: 4px; padding: 6px;
     background: var(--panel, #161616); border: 1px solid var(--border, #2a2a2a); border-radius: 8px;
