@@ -32,6 +32,8 @@ const (
 	keyCanaryIntervalSec   = "settings:canary_interval_sec"
 	keyProxyURL            = "settings:proxy_url"
 	keyProxyEnabled        = "settings:proxy_enabled"
+	keyLatestRelease       = "settings:latest_release"     // most recent GitHub release tag
+	keyLastReleaseCheck    = "settings:last_release_check" // unix seconds of last successful check
 )
 
 // KickWatchMode selects how Kick watch-time is accrued.
@@ -369,4 +371,32 @@ func (s *Settings) SetProxyEnabled(ctx context.Context, enabled bool) error {
 		return s.setString(ctx, keyProxyEnabled, "1")
 	}
 	return s.setString(ctx, keyProxyEnabled, "0")
+}
+
+// LatestRelease is the most recent GitHub release tag the update checker saw
+// (e.g. "v1.3.5"). Empty when no check has succeeded yet.
+func (s *Settings) LatestRelease(ctx context.Context) (string, error) {
+	return s.getString(ctx, keyLatestRelease)
+}
+
+func (s *Settings) SetLatestRelease(ctx context.Context, tag string) error {
+	return s.setString(ctx, keyLatestRelease, strings.TrimSpace(tag))
+}
+
+// LastReleaseCheck is the unix-seconds time of the last successful release
+// check. 0 when none has succeeded.
+func (s *Settings) LastReleaseCheck(ctx context.Context) (int64, error) {
+	raw, err := s.getString(ctx, keyLastReleaseCheck)
+	if err != nil || raw == "" {
+		return 0, err
+	}
+	n, perr := strconv.ParseInt(raw, 10, 64)
+	if perr != nil {
+		return 0, nil
+	}
+	return n, nil
+}
+
+func (s *Settings) SetLastReleaseCheck(ctx context.Context, unixSec int64) error {
+	return s.setString(ctx, keyLastReleaseCheck, strconv.FormatInt(unixSec, 10))
 }
