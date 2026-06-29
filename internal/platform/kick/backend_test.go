@@ -365,6 +365,24 @@ func TestKickBackend_SweepCompletedClaims(t *testing.T) {
 	assert.Equal(t, 1, claimCalls, "exactly one completed reward should be claimed")
 }
 
+// TestKickRewardsToBenefits_MapsAndDefaultsMinutes proves the reward→benefit
+// mapping: fields map across, and a reward with no required minutes defaults to
+// 120 (Kick drops typically need ~2h), matching ListActiveCampaigns.
+func TestKickRewardsToBenefits_MapsAndDefaultsMinutes(t *testing.T) {
+	rewards := []kickReward{
+		{ID: "r1", Name: "Skin", RequiredMinutes: 90, ImageURL: "http://img/r1.png"},
+		{ID: "r2", Name: "Emote", RequiredMinutes: 0, ImageURL: "http://img/r2.png"},
+	}
+	got := kickRewardsToBenefits("camp-1", rewards)
+
+	require.Len(t, got, 2)
+	require.Equal(t, "camp-1", got[0].CampaignID)
+	require.Equal(t, 90, got[0].RequiredMinutes)
+	require.Equal(t, "Skin", got[0].Name)
+	require.Equal(t, "http://img/r1.png", got[0].ImageURL)
+	require.Equal(t, 120, got[1].RequiredMinutes, "0 required minutes defaults to 120")
+}
+
 func TestKickBackend_FetchAvatar(t *testing.T) {
 	// Top-level profile_pic shape.
 	f := &fakeDoer{resp: map[string]fakeResp{

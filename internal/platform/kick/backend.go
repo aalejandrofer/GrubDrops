@@ -333,6 +333,27 @@ func (b *Backend) RefreshSession(_ context.Context, s platform.Session) (platfor
 	return s, nil
 }
 
+// kickRewardsToBenefits maps a Kick campaign's rewards to platform benefits.
+// A reward with no required minutes defaults to 120 (Kick drops typically need
+// ~2h). Shared by ListActiveCampaigns and CampaignDetails.
+func kickRewardsToBenefits(campaignID string, rewards []kickReward) []platform.DropBenefit {
+	benefits := make([]platform.DropBenefit, 0, len(rewards))
+	for _, ben := range rewards {
+		required := ben.RequiredMinutes
+		if required <= 0 {
+			required = 120
+		}
+		benefits = append(benefits, platform.DropBenefit{
+			ID:              ben.ID,
+			CampaignID:      campaignID,
+			Name:            ben.Name,
+			RequiredMinutes: required,
+			ImageURL:        ben.ImageURL,
+		})
+	}
+	return benefits
+}
+
 func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) ([]platform.Campaign, error) {
 	// Drops campaigns over the utls HTTP client (GET /api/v1/drops/campaigns).
 	// The per-account whitelist filters the result — never hardcode a game.
@@ -345,20 +366,7 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 		if s.GameFilter != nil && c.Game != "" && !s.GameFilter(c.Game) {
 			continue
 		}
-		benefits := make([]platform.DropBenefit, 0, len(c.Rewards))
-		for _, ben := range c.Rewards {
-			required := ben.RequiredMinutes
-			if required <= 0 {
-				required = 120 // Kick drops typically require ~2h
-			}
-			benefits = append(benefits, platform.DropBenefit{
-				ID:              ben.ID,
-				CampaignID:      c.ID,
-				Name:            ben.Name,
-				RequiredMinutes: required,
-				ImageURL:        ben.ImageURL,
-			})
-		}
+		benefits := kickRewardsToBenefits(c.ID, c.Rewards)
 		slugs := make([]string, 0, len(c.Channels))
 		for _, ch := range c.Channels {
 			slugs = append(slugs, ch.Slug)
@@ -750,6 +758,26 @@ var _ platform.CompletedSweeper = (*Backend)(nil)
 func (b *Backend) FetchImage(ctx context.Context, rawURL string) ([]byte, string, int, error) {
 	return b.api.FetchImage(ctx, rawURL)
 }
+
+// CampaignDetails fetches one campaign's benefits on demand so the /drops items
+// panel can backfill Kick campaigns (Kick has no per-campaign detail endpoint,
+// so we list campaigns and pick the matching one). Returns (nil, nil) when the
+// campaign isn't found — the panel then shows the clean "no items" state.
+// Satisfies platform.CampaignDetailer.
+func (b *Backend) CampaignDetails(ctx context.Context, s platform.Session, campaignID string) ([]platform.DropBenefit, error) {
+	camps, err := b.api.Campaigns(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range camps {
+		if c.ID == campaignID {
+			return kickRewardsToBenefits(c.ID, c.Rewards), nil
+		}
+	}
+	return nil, nil
+}
+
+var _ platform.CampaignDetailer = (*Backend)(nil)
 
 // VerifyAuth probes the Kick session by fetching the drops campaigns over
 // the authed utls transport. A hard failure (dead cookies / CF block /
