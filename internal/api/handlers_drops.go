@@ -1196,6 +1196,74 @@ func (d *dropsDeps) attachCollection(ctx context.Context, row *dropsRow) {
 	}
 }
 
+// addClaim handles the manual "mark collected" control on the /drops items
+// panel. It writes a claims row (tagged manual) for (account_id, benefit_id)
+// AND sets a collect_override kv flag the watcher's ForceCollected reads, so
+// the reconcile prune never removes the user-asserted mark. Mirrors removeClaim
+// and re-renders the same items partial.
+func (d *dropsDeps) addClaim(w http.ResponseWriter, r *http.Request) {
+	accountID := strings.TrimSpace(r.FormValue("account_id"))
+	benefitID := strings.TrimSpace(r.FormValue("benefit_id"))
+	campaignID := strings.TrimSpace(r.FormValue("campaign_id"))
+	if accountID == "" || benefitID == "" || campaignID == "" {
+		http.Error(w, "missing account_id, benefit_id, or campaign_id", http.StatusBadRequest)
+		return
+	}
+	acc, err := d.q.GetAccount(r.Context(), accountID)
+	if err != nil {
+		http.Error(w, "unknown account", http.StatusBadRequest)
+		return
+	}
+	camp, err := d.q.GetCampaign(r.Context(), campaignID)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if acc.Platform != camp.Platform {
+		http.Error(w, "account/campaign platform mismatch", http.StatusBadRequest)
+		return
+	}
+	// The benefit must belong to this campaign (guards against spoofed ids).
+	bens, _ := d.q.ListBenefitsForCampaign(r.Context(), campaignID)
+	known := false
+	for _, b := range bens {
+		if b.ID == benefitID {
+			known = true
+			break
+		}
+	}
+	if !known {
+		http.Error(w, "unknown benefit for campaign", http.StatusBadRequest)
+		return
+	}
+	if err := d.q.InsertClaim(r.Context(), gen.InsertClaimParams{
+		ID:            store.NewClaimID(),
+		AccountID:     accountID,
+		BenefitID:     benefitID,
+		ClaimedAt:     time.Now().Unix(),
+		ValueMetaJson: `{"manual":true}`,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := d.q.UpsertSettingString(r.Context(), gen.UpsertSettingStringParams{
+		Key:   store.CollectOverridePrefix + benefitID + ":" + accountID,
+		Value: []byte("1"),
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	slog.Info("manual claim mark", "kind", "claim", "account", accountID, "benefit", benefitID, "campaign", campaignID)
+	// Reload so ForceCollected picks up the new override without waiting for the
+	// next discovery cycle (best-effort; the override is persisted regardless).
+	if d.reload != nil {
+		if err := d.reload(r.Context()); err != nil {
+			slog.Warn("scheduler reload after manual collect failed", "benefit", benefitID, "err", err)
+		}
+	}
+	d.renderCampaignItems(w, r, campaignID)
+}
+
 // removeClaim manually un-collects a single (account, benefit): a
 // best-effort escape hatch if the v1.3.2 self-heal misses a stale
 // COLLECTED mark. It just deletes the claims row — if Twitch/Kick still
@@ -1214,6 +1282,9 @@ func (d *dropsDeps) removeClaim(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// Drop any manual-collect protection so an uncollected mark isn't left with
+	// a stale override (no-op for auto claims, which have no override key).
+	_ = d.q.DeleteKV(r.Context(), store.CollectOverridePrefix+benefitID+":"+accountID)
 	slog.Info("manual claim un-collect", "kind", "claim", "account", accountID, "benefit", benefitID, "campaign", campaignID)
 	d.renderCampaignItems(w, r, campaignID)
 }

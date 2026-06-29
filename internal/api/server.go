@@ -357,6 +357,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/drops/whitelist/channel/remove", dropsH.removeChannelWhitelist)
 	authed.Post("/drops/link", dropsH.markLinked)
 	authed.Post("/drops/claim/remove", dropsH.removeClaim)
+	authed.Post("/drops/claim/add", dropsH.addClaim)
 	imgH := &imageProxyDeps{registry: d.Registry}
 	authed.Get("/img/kick", imgH.kick)
 	authed.Get("/history", historyH.get)
