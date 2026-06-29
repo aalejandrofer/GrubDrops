@@ -4,6 +4,16 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Added
+
+- **Manually mark a drop collected.** If you claimed a drop outside GrubDrops
+  (e.g. redeemed it directly), open the drop on `/drops`, click the `+` in a
+  benefit's COLLECTED column, and pick the account. The mark is protected: the
+  watcher's self-heal will not clear it (unlike an auto claim), so it survives
+  even while the drop is still in progress. Uncollecting it (click the chip)
+  removes the protection. Item lists now also load for drops on disabled
+  accounts.
+
 ### Changed
 
 - Bumped dependencies: `coreos/go-oidc` 3.18.0 → 3.19.0,
