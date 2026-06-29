@@ -4,8 +4,19 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Drop item lists no longer get stuck on "Loading…".** The items panel now
+  always renders (it returns a friendly "couldn't load items" message instead
+  of a silent 404), and campaign ids from the scrape fallback are URL-encoded
+  so they resolve.
+
 ### Added
 
+- **Sub / action drops now show in a campaign's item list** (e.g. a "1 Sub or
+  Gift Sub" drop), rendered as "action required". The miner still ignores them
+  — they can't be earned by watching.
+- **Kick campaign item lists backfill on open**, matching Twitch.
 - **Manually mark a drop collected.** If you claimed a drop outside GrubDrops
   (e.g. redeemed it directly), open the drop on `/drops`, click the `+` in a
   benefit's COLLECTED column, and pick the account. The mark is protected: the
