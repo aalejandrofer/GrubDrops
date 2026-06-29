@@ -1322,7 +1322,16 @@ func (d *dropsDeps) removeClaim(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *dropsDeps) items(w http.ResponseWriter, r *http.Request) {
-	d.renderCampaignItems(w, r, chi.URLParam(r, "id"))
+	id := chi.URLParam(r, "id")
+	// chi returns the raw (percent-encoded) path segment, so a scrape-synth id
+	// with spaces/pipes (e.g. "Minecraft|Builder Cape Sat, ...") arrives as
+	// "Minecraft%7CBuilder%20Cape..." and won't match the decoded id stored in
+	// the campaigns table. Decode it back so GetCampaign finds the row. No-op
+	// for normal ids (no %XX) and for already-decoded values.
+	if dec, err := url.PathUnescape(id); err == nil {
+		id = dec
+	}
+	d.renderCampaignItems(w, r, id)
 }
 
 func (d *dropsDeps) renderCampaignItems(w http.ResponseWriter, r *http.Request, id string) {
