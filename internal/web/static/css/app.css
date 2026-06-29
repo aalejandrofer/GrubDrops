@@ -824,8 +824,6 @@
     max-width: 160px;
   }
   .whitelist-add .btn.sm { white-space: nowrap; font-size: 9.5px; padding: 2px 6px; }
-  /* Disabled accounts stay selectable (pre-stage a whitelist) but read as muted. */
-  option.opt-disabled { color: var(--muted); font-style: italic; }
   /* COLLECTED marks — one chip per account that claimed the benefit. */
   .drop-item-collected { display: flex; flex-wrap: wrap; gap: 5px; }
   .cmark {

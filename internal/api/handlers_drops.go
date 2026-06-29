@@ -190,57 +190,6 @@ type whitelistChip struct {
 	AccountID string
 }
 
-// nullGameAcct is one account considered when deciding whether a null-game
-// drop is fully adopted. Only enabled accounts count toward adoption: a
-// disabled account never mines, so it must neither earn a ✓ chip nor block a
-// drop from being promoted to the Whitelisted table.
-type nullGameAcct struct {
-	id       string
-	login    string
-	platform string
-	enabled  bool
-	chans    map[string]bool // lowercased channel slugs this account whitelists
-}
-
-// partitionNullGame splits current-tab discoverable rows into three buckets:
-//
-//   - kept: rows that are NOT null-game (they have a game, or no channels) —
-//     they stay in the game-whitelist Discoverable list.
-//   - nullGame: null-game rows not yet adopted by every enabled matching-platform
-//     account — shown in the dedicated null-game section with a WHITELIST+ form.
-//   - promoted: null-game rows every enabled matching-platform account already
-//     whitelists — fully adopted, shown in the Whitelisted (mining) table.
-//
-// Disabled accounts are ignored entirely: they do not count toward "fully
-// adopted" and do not appear as ✓ chips, mirroring accountWhitelists().
-func partitionNullGame(rows []dropsRow, accts []nullGameAcct) (kept, nullGame, promoted []dropsRow) {
-	for _, row := range rows {
-		if strings.TrimSpace(row.Game) != "" || len(row.Channels) == 0 {
-			kept = append(kept, row)
-			continue
-		}
-		matching := 0
-		for _, ac := range accts {
-			if !ac.enabled || ac.platform != row.Platform {
-				continue
-			}
-			matching++
-			for _, ch := range row.Channels {
-				if ac.chans[strings.ToLower(strings.TrimSpace(ch))] {
-					row.WhitelistedBy = append(row.WhitelistedBy, whitelistChip{Login: ac.login, AccountID: ac.id})
-					break
-				}
-			}
-		}
-		if matching > 0 && len(row.WhitelistedBy) >= matching {
-			promoted = append(promoted, row)
-		} else {
-			nullGame = append(nullGame, row)
-		}
-	}
-	return kept, nullGame, promoted
-}
-
 // connectChip is one account's link state on a not-linked campaign row.
 type connectChip struct {
 	Login   string
@@ -289,10 +238,6 @@ type dropsAccount struct {
 	ID       string
 	Label    string // "@login (platform)"
 	Platform string // "twitch" | "kick" — so the null-game dropdown only offers matching accounts
-	// Disabled is true for accounts that are toggled off. They still appear in
-	// the WHITELIST+ dropdown (so a whitelist can be pre-staged) but are dimmed
-	// and tagged, and they do NOT count toward null-game adoption / placement.
-	Disabled bool
 }
 
 // allowedGamesUnion returns the effective whitelist union across
@@ -453,14 +398,19 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 	// the button server-side. Also load each account's channel whitelist
 	// so the null-game section can show which accounts already mine a drop.
 	var accountsForPick []dropsAccount
-	var allAccts []nullGameAcct
+	type acctChannels struct {
+		id       string
+		login    string
+		platform string
+		chans    map[string]bool
+	}
+	var allAccts []acctChannels
 	if accs, err := d.q.ListAllAccounts(r.Context()); err == nil {
 		for _, a := range accs {
 			accountsForPick = append(accountsForPick, dropsAccount{
 				ID:       a.ID,
 				Label:    a.DisplayName + " (" + a.Platform + ")",
 				Platform: a.Platform,
-				Disabled: a.Enabled != 1,
 			})
 			cm := map[string]bool{}
 			if rows, err := d.q.ListAccountChannels(r.Context(), a.ID); err == nil {
@@ -468,22 +418,47 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 					cm[strings.ToLower(strings.TrimSpace(rc.Channel))] = true
 				}
 			}
-			allAccts = append(allAccts, nullGameAcct{
-				id: a.ID, login: a.DisplayName, platform: a.Platform,
-				enabled: a.Enabled == 1, chans: cm,
-			})
+			allAccts = append(allAccts, acctChannels{id: a.ID, login: a.DisplayName, platform: a.Platform, chans: cm})
 		}
 	}
 
 	// Partition null-game rows (active campaigns with no game category
 	// and at least one channel) out of unlistedRows for the current tab.
 	// They get a dedicated section with a per-account channel whitelist
-	// button instead of the game whitelist button. Only enabled accounts
-	// count toward adoption — a disabled account must not block promotion.
+	// button instead of the game whitelist button.
 	var nullGameRows []dropsRow
 	var nullGamePromoted []dropsRow // fully whitelisted → shown in the Whitelisted table
 	if tab == tabCurrent {
-		unlistedRows, nullGameRows, nullGamePromoted = partitionNullGame(unlistedRows, allAccts)
+		kept := unlistedRows[:0]
+		for _, row := range unlistedRows {
+			if strings.TrimSpace(row.Game) == "" && len(row.Channels) > 0 {
+				// Which accounts already whitelist one of this campaign's
+				// channels (matching platform) → ✓ chips on the row.
+				matching := 0
+				for _, ac := range allAccts {
+					if ac.platform != row.Platform {
+						continue
+					}
+					matching++
+					for _, ch := range row.Channels {
+						if ac.chans[strings.ToLower(strings.TrimSpace(ch))] {
+							row.WhitelistedBy = append(row.WhitelistedBy, whitelistChip{Login: ac.login, AccountID: ac.id})
+							break
+						}
+					}
+				}
+				// Once every matching-platform account whitelists this drop,
+				// it is fully adopted — promote it to the Whitelisted table.
+				if matching > 0 && len(row.WhitelistedBy) >= matching {
+					nullGamePromoted = append(nullGamePromoted, row)
+				} else {
+					nullGameRows = append(nullGameRows, row)
+				}
+			} else {
+				kept = append(kept, row)
+			}
+		}
+		unlistedRows = kept
 	}
 
 	page := dropsPage{

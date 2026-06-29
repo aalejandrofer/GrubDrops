@@ -131,7 +131,7 @@
                 <input type="hidden" name="csrf_token" value="{{$csrf}}">
                 {{range .Channels}}<input type="hidden" name="channel" value="{{.}}">{{end}}
                 <select name="account_id" onclick="event.stopPropagation()" title="{{t "drops_table.whitelist_add"}}">
-                  {{range $accts}}{{if eq .Platform $rowPlat}}<option value="{{.ID}}"{{if .Disabled}} class="opt-disabled"{{end}}>{{.Label}}{{if .Disabled}}{{t "drops_table.disabled_suffix"}}{{end}}</option>{{end}}{{end}}
+                  {{range $accts}}{{if eq .Platform $rowPlat}}<option value="{{.ID}}">{{.Label}}</option>{{end}}{{end}}
                 </select>
                 <button class="btn sm" type="submit" onclick="event.stopPropagation()">{{t "drops_table.whitelist_add"}}</button>
               </form>
