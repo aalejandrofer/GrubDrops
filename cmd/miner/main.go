@@ -36,6 +36,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/scheduler"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/update"
 	"github.com/aalejandrofer/grubdrops/internal/watcher"
 	"github.com/aalejandrofer/grubdrops/internal/web"
 )
@@ -566,6 +567,20 @@ func run() error {
 	canaryInterval := parseDuration(os.Getenv("GRUB_CANARY_INTERVAL"), time.Duration(canaryIntervalSec)*time.Second)
 	go canaryRunner.Run(ctx, canaryInterval)
 
+	// Update checker: background GitHub-release poll (boot + every interval),
+	// cached so the render path never calls GitHub. Disabled by GRUB_UPDATE_CHECK=0.
+	var updateStatus func(current string) (bool, string)
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GRUB_UPDATE_CHECK"))); v != "0" && v != "false" {
+		updateClient := &http.Client{Timeout: 10 * time.Second}
+		if proxyTransport != nil {
+			updateClient.Transport = proxyTransport
+		}
+		updateChecker := update.NewChecker(updateClient, "aalejandrofer/GrubDrops", settingsStore)
+		updateInterval := parseDuration(os.Getenv("GRUB_UPDATE_INTERVAL"), 6*time.Hour)
+		go updateChecker.Run(ctx, updateInterval)
+		updateStatus = updateChecker.Status
+	}
+
 	// Avoid typed-nil-interface trap: only assign if the concrete pointer is non-nil.
 	var bc api.KickBrowserClient
 	if browserClient != nil {
@@ -601,6 +616,7 @@ func run() error {
 		KickActivePath:    kickActivePathFn(kickBackend),
 		GitCommit:         os.Getenv("GIT_COMMIT"),
 		Version:           cmp.Or(version, os.Getenv("GRUB_VERSION")),
+		UpdateStatus:      updateStatus,
 		OIDC:              oidcProvider,
 		SecureCookies:     cfg.SecureCookies,
 		Location:          cfg.Location,
