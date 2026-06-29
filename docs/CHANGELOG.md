@@ -4,8 +4,23 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Disabled accounts no longer strand no-category drops in Discoverable.**
+  A null-game (no game category) drop is promoted to the Whitelisted/mining
+  table once every *enabled* account on its platform whitelists one of its
+  channels. Disabled accounts were still counted, so a single disabled account
+  permanently blocked promotion (it never mines, so it never whitelists),
+  leaving drops stuck in the Discoverable null-game section even after the
+  enabled account adopted them. Placement now ignores disabled accounts,
+  matching the rest of the whitelist logic. Covered by unit tests.
+
 ### Changed
 
+- **Disabled accounts stay in the WHITELIST+ dropdown** on no-category drops,
+  shown dimmed with a "· disabled" tag, so you can pre-stage a whitelist that
+  activates when the account is re-enabled. They are not counted toward drop
+  placement while disabled.
 - Bumped dependencies: `coreos/go-oidc` 3.18.0 → 3.19.0,
   `modernc.org/sqlite` 1.52.0 → 1.53.0 (+ `libc` 1.72.5 → 1.73.4). (#22)
 - Bumped GitHub Actions: `actions/checkout` → v7 across CI/release/pages,

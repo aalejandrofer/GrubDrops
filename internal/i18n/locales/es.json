@@ -291,6 +291,7 @@
   "drops_table.global": "Global",
   "drops_table.whitelist_add": "lista blanca +",
   "drops_table.no_accounts": "sin cuentas",
+  "drops_table.disabled_suffix": " · deshabilitada",
 
   "campaign_items.item": "ítem",
   "campaign_items.collected": "recogido",

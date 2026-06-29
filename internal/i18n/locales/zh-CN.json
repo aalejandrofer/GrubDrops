@@ -291,6 +291,7 @@
   "drops_table.global": "全局",
   "drops_table.whitelist_add": "加入白名单 +",
   "drops_table.no_accounts": "没有账号",
+  "drops_table.disabled_suffix": " · 已禁用",
 
   "campaign_items.item": "物品",
   "campaign_items.collected": "已收集",
