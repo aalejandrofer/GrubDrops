@@ -31,7 +31,7 @@
       <div class="events drops-rows scroll-cap">
         {{range .Rows}}
         <details class="ev kind-{{if eq .Kind "reward"}}auth{{else}}claim{{end}}{{if eq .Kind "reward"}} drop-dim{{end}}{{if .NeedsConnect}} ev-linkrow{{end}}"
-                 {{if .CampaignID}}hx-get="/drops/campaigns/{{.CampaignID}}/items"
+                 {{if .CampaignID}}hx-get="/drops/campaigns/{{pathEscape .CampaignID}}/items"
                  hx-target="find .ev-detail-slot"
                  hx-trigger="toggle once from:closest details"
                  hx-swap="innerHTML"{{end}}>
@@ -67,7 +67,7 @@
         {{$csrf := .CSRFToken}}
         {{range .UnlinkedRows}}
         <details class="ev kind-auth drop-dim ev-linkrow"
-                 {{if .CampaignID}}hx-get="/drops/campaigns/{{.CampaignID}}/items"
+                 {{if .CampaignID}}hx-get="/drops/campaigns/{{pathEscape .CampaignID}}/items"
                  hx-target="find .ev-detail-slot"
                  hx-trigger="toggle once from:closest details"
                  hx-swap="innerHTML"{{end}}>
@@ -115,7 +115,7 @@
         {{$csrf := .CSRFToken}}
         {{range .NullGameRows}}
         <details class="ev kind-discovery ev-linkrow"
-                 {{if .CampaignID}}hx-get="/drops/campaigns/{{.CampaignID}}/items"
+                 {{if .CampaignID}}hx-get="/drops/campaigns/{{pathEscape .CampaignID}}/items"
                  hx-target="find .ev-detail-slot"
                  hx-trigger="toggle once from:closest details"
                  hx-swap="innerHTML"{{end}}>
@@ -164,7 +164,7 @@
         {{$csrf := .CSRFToken}}
         {{range .UnlistedRows}}
         <details class="ev kind-{{if eq .Kind "reward"}}auth{{else}}discovery{{end}} ev-linkrow"
-                 {{if .CampaignID}}hx-get="/drops/campaigns/{{.CampaignID}}/items"
+                 {{if .CampaignID}}hx-get="/drops/campaigns/{{pathEscape .CampaignID}}/items"
                  hx-target="find .ev-detail-slot"
                  hx-trigger="toggle once from:closest details"
                  hx-swap="innerHTML"{{end}}>

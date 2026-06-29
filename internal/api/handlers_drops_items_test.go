@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,4 +32,24 @@ func TestRenderCampaignItems_UnknownID_Renders200LoadError(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Contains(t, rec.Body.String(), "load items for this campaign")
+}
+
+// TestDropsTable_EscapesCampaignIDInItemsURL proves a malformed scrape-synth
+// campaign id (spaces, "|") is percent-encoded in the items hx-get URL so the
+// request can route, while a normal uuid id is left intact.
+func TestDropsTable_EscapesCampaignIDInItemsURL(t *testing.T) {
+	page := dropsPage{
+		Tab: tabCurrent,
+		Rows: []dropsRow{
+			{CampaignID: "Minecraft|Tubbo's WatchTime Sun", Platform: "twitch", When: "x"},
+			{CampaignID: "a37ae57b-2268-4472-a8b3", Platform: "twitch", When: "y"},
+		},
+	}
+	out := renderDropsTable(t, page)
+	if !strings.Contains(out, "/drops/campaigns/Minecraft%7CTubbo%27s%20WatchTime%20Sun/items") {
+		t.Errorf("synth id not path-escaped in hx-get:\n%s", out)
+	}
+	if !strings.Contains(out, "/drops/campaigns/a37ae57b-2268-4472-a8b3/items") {
+		t.Errorf("uuid id should be unchanged")
+	}
 }

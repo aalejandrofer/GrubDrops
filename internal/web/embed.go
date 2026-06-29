@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"io"
 	"io/fs"
+	"net/url"
 	"strings"
 
 	"github.com/aalejandrofer/grubdrops/internal/i18n"
@@ -57,8 +58,9 @@ func (p *PageTemplates) Lookup(name string) *template.Template {
 }
 
 var sharedFuncs = template.FuncMap{
-	"safe": func(s string) template.HTML { return template.HTML(s) },
-	"t":    i18n.TemplateFunc(),
+	"safe":       func(s string) template.HTML { return template.HTML(s) },
+	"t":          i18n.TemplateFunc(),
+	"pathEscape": url.PathEscape,
 	"not": func(v any) bool {
 		if v == nil {
 			return true
