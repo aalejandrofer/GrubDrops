@@ -407,6 +407,7 @@ func run() error {
 		// are account-linked. Loaded per build (per Reload) so toggling +
 		// reloading takes effect. See ForceLinked in watcher.Config.
 		forceLinked := loadLinkOverrides(ctx, q)
+		forceCollected := loadCollectOverrides(ctx, q)
 
 		acctLabel := a.DisplayName
 		w := watcher.New(watcher.Config{
@@ -420,12 +421,13 @@ func run() error {
 			HeartbeatInterval:     60 * time.Second,
 			ProgressNotifyStepPct: progressStep,
 			AllowGame:             allow, GameRank: rank,
-			AllowChannel:  allowChannel,
-			PriorityMode:  priorityMode,
-			Persister:     campaignPersister,
-			ClaimRecorder: claimRecorder,
-			ForceLinked:   forceLinked,
-			ForceWatcher:  forceWatchStore{q: q},
+			AllowChannel:   allowChannel,
+			PriorityMode:   priorityMode,
+			Persister:      campaignPersister,
+			ClaimRecorder:  claimRecorder,
+			ForceLinked:    forceLinked,
+			ForceCollected: forceCollected,
+			ForceWatcher:   forceWatchStore{q: q},
 		})
 		return scheduler.NewEntry(a.ID, w), nil
 	}
@@ -670,6 +672,29 @@ func loadLinkOverrides(ctx context.Context, q *gen.Queries) func(campaignID stri
 		return nil
 	}
 	return func(campaignID string) bool { return set[campaignID] }
+}
+
+// loadCollectOverrides reads the manual "mark collected" assertions from kv
+// (keys prefixed store.CollectOverridePrefix, value "1") and returns a
+// membership predicate keyed by (accountID, benefitID). The kv key encodes
+// benefitID + ":" + accountID. Errors degrade to "no overrides" (nil), so the
+// reconcile prune keeps its normal behaviour. Loaded per build (per Reload) so
+// marking + reloading takes effect immediately.
+func loadCollectOverrides(ctx context.Context, q *gen.Queries) func(accountID, benefitID string) bool {
+	set := map[string]bool{}
+	rows, err := q.ListKVByPrefix(ctx, sql.NullString{String: store.CollectOverridePrefix, Valid: true})
+	if err == nil {
+		for _, kv := range rows {
+			if string(kv.Value) != "1" {
+				continue
+			}
+			set[strings.TrimPrefix(kv.Key, store.CollectOverridePrefix)] = true
+		}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	return func(accountID, benefitID string) bool { return set[benefitID+":"+accountID] }
 }
 
 type indirectNotifier struct {
