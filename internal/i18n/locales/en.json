@@ -11,6 +11,8 @@
   "nav.toggle_theme": "Toggle light / dark",
   "nav.toggle_theme_aria": "Toggle light or dark theme",
   "nav.github_aria": "GitHub repository",
+  "nav.update_available": "update",
+  "nav.update_title": "new version available",
 
   "settings_subnav.general": "General",
   "settings_subnav.accounts": "Accounts",

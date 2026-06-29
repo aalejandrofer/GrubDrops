@@ -11,6 +11,8 @@
   "nav.toggle_theme": "切换亮色 / 暗色",
   "nav.toggle_theme_aria": "切换亮色或暗色主题",
   "nav.github_aria": "GitHub 仓库",
+  "nav.update_available": "更新",
+  "nav.update_title": "有新版本可用",
 
   "settings_subnav.general": "通用",
   "settings_subnav.accounts": "账号",

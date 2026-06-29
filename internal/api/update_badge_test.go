@@ -1,10 +1,14 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/aalejandrofer/grubdrops/internal/web"
 )
 
 // TestUpdateBadgeMiddleware_InjectsContext proves the middleware stores the
@@ -41,5 +45,44 @@ func TestUpdateBadgeMiddleware_NilStatusNoPanic(t *testing.T) {
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil).WithContext(context.Background()))
 	if !called {
 		t.Fatal("next handler not called")
+	}
+}
+
+func renderNav(t *testing.T, data templateData) string {
+	t.Helper()
+	tmpl, err := web.Templates()
+	if err != nil {
+		t.Fatalf("load templates: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, "nav", data); err != nil {
+		t.Fatalf("render nav: %v", err)
+	}
+	return buf.String()
+}
+
+func TestNav_UpdateBadgeShownWhenAvailable(t *testing.T) {
+	out := renderNav(t, templateData{AuthedAdmin: true, UpdateAvailable: true, LatestRelease: "v1.3.5"})
+	if !strings.Contains(out, "update-pill") {
+		t.Errorf("update pill missing when UpdateAvailable")
+	}
+	if !strings.Contains(out, "/releases/latest") {
+		t.Errorf("pill must link to releases/latest")
+	}
+	if !strings.Contains(out, "v1.3.5") {
+		t.Errorf("pill/title must show the latest version")
+	}
+	if !strings.Contains(out, "pulse update") {
+		t.Errorf("pulse dot must get the .update class (orange)")
+	}
+}
+
+func TestNav_NoBadgeWhenUpToDate(t *testing.T) {
+	out := renderNav(t, templateData{AuthedAdmin: true, UpdateAvailable: false})
+	if strings.Contains(out, "update-pill") {
+		t.Errorf("no pill when up to date")
+	}
+	if strings.Contains(out, "pulse update") {
+		t.Errorf("pulse must stay plain (green) when up to date")
 	}
 }

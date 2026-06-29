@@ -11,6 +11,8 @@
   "nav.toggle_theme": "Cambiar claro / oscuro",
   "nav.toggle_theme_aria": "Cambiar entre tema claro y oscuro",
   "nav.github_aria": "Repositorio de GitHub",
+  "nav.update_available": "actualizar",
+  "nav.update_title": "nueva versión disponible",
 
   "settings_subnav.general": "General",
   "settings_subnav.accounts": "Cuentas",
