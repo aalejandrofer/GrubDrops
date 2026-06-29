@@ -17,6 +17,12 @@ import (
 // watcher should attempt to mine it despite the backend reporting unlinked.
 const LinkOverridePrefix = "link_override:"
 
+// CollectOverridePrefix keys a manual "mark collected" assertion in kv.
+// Full key: CollectOverridePrefix + benefitID + ":" + accountID, value "1".
+// The watcher's ForceCollected hook reads these so the reconcile prune never
+// removes a claim the user manually asserted.
+const CollectOverridePrefix = "collect_override:"
+
 // CampaignPersister upserts every Campaign + Benefit the watcher discovers
 // into the local DB so the /drops page can render past + current +
 // upcoming tabs even before anything has been claimed.

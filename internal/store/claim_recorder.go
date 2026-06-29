@@ -49,7 +49,7 @@ func (r *ClaimRecorder) RecordClaimWithCode(ctx context.Context, accountID strin
 		meta = string(raw)
 	}
 	return r.Q.InsertClaim(ctx, gen.InsertClaimParams{
-		ID:            newClaimID(),
+		ID:            NewClaimID(),
 		AccountID:     accountID,
 		BenefitID:     b.ID,
 		ClaimedAt:     time.Now().Unix(),
@@ -120,7 +120,10 @@ func (r *ClaimRecorder) ClaimedBenefitIDs(ctx context.Context, accountID string)
 	return out, nil
 }
 
-func newClaimID() string {
+// NewClaimID returns a fresh random claims-table primary key. Exported so
+// non-recorder callers (e.g. the manual mark-collected handler) can insert a
+// claim row directly.
+func NewClaimID() string {
 	var b [12]byte
 	_, _ = rand.Read(b[:])
 	return "clm_" + hex.EncodeToString(b[:])
