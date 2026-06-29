@@ -113,6 +113,13 @@ type Config struct {
 	// account truly isn't linked the watch just accrues no progress.
 	ForceLinked func(campaignID string) bool
 
+	// ForceCollected, when set and returning true for (accountID, benefitID),
+	// marks that benefit as user-asserted collected. The reconcile prune skips
+	// it, so a manual "mark collected" survives even while inventory reports the
+	// drop in-progress and unclaimed. Nil = no overrides. Backs the /drops
+	// manual mark-collected control.
+	ForceCollected func(accountID, benefitID string) bool
+
 	// ForceWatcher supplies the account's force-watch channel (channel-points
 	// 24/7 idle mining) when the account is otherwise idle. Nil disables the
 	// feature. LOWEST priority: only consulted from the idle branch, and the
@@ -975,6 +982,9 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 				// claim history. Gated on inventoryOK so a failed fetch can't
 				// drive deletions; PruneClaim is a no-op when no row exists.
 				if canPrune && tracked[b.ID] && !claimed[b.ID] {
+					if w.cfg.ForceCollected != nil && w.cfg.ForceCollected(w.cfg.AccountID, b.ID) {
+						continue // user manually marked collected — never prune an asserted mark
+					}
 					if pruned, err := pruner.PruneClaim(ctx, w.cfg.AccountID, b); err == nil && pruned {
 						slog.Info("watcher pruned stale claim",
 							"kind", "claim", "account", w.cfg.AccountID,
@@ -1009,6 +1019,9 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			for id := range tracked {
 				if claimed[id] {
 					continue
+				}
+				if w.cfg.ForceCollected != nil && w.cfg.ForceCollected(w.cfg.AccountID, id) {
+					continue // protected manual mark
 				}
 				if pruned, err := pruner.PruneClaim(ctx, w.cfg.AccountID, platform.DropBenefit{ID: id}); err == nil && pruned {
 					slog.Info("watcher pruned stale claim (inventory sweep)",

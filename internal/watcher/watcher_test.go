@@ -1234,6 +1234,41 @@ func TestWatcher_ReconcilePrunesStaleClaims(t *testing.T) {
 	assert.NotContains(t, recorded, "t180", "an unclaimed in-progress tier must not be re-recorded as claimed")
 }
 
+// TestWatcher_ForceCollected_ProtectsManualMark verifies the manual
+// mark-collected override: a benefit covered by ForceCollected must NOT be
+// pruned by the reconcile self-heal even while inventory reports it
+// in-progress and unclaimed; the other unclaimed tiers must still be pruned.
+func TestWatcher_ForceCollected_ProtectsManualMark(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	rec := &recordingClaimRecorder{}
+	backend := &multiTierBackend{MockBackend: platformtest.New()}
+	w := New(Config{
+		AccountID:     "acc_r6s_protect",
+		Backend:       backend,
+		ClaimRecorder: rec,
+		Session:       platform.Session{AccessToken: "tok"},
+		Notifier:      &recordingNotifier{},
+		TickInterval:  2 * time.Millisecond,
+		AllowGame:     func(g string) bool { return g == "Rainbow Six Siege" },
+		ForceCollected: func(_ string, benefitID string) bool {
+			return benefitID == "t180" // user manually marked this tier collected
+		},
+	})
+
+	go func() { _ = w.Run(ctx) }()
+
+	// The unprotected unclaimed tiers must still be pruned.
+	require.Eventually(t, func() bool {
+		_, pruned := rec.snapshot()
+		return contains(pruned, "t360") && contains(pruned, "t540")
+	}, time.Second, 5*time.Millisecond, "unprotected stale tiers must still prune")
+
+	_, pruned := rec.snapshot()
+	assert.NotContains(t, pruned, "t180", "a ForceCollected benefit must never be pruned")
+}
+
 func contains(s []string, v string) bool {
 	for _, x := range s {
 		if x == v {
