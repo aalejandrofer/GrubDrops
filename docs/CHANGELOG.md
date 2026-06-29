@@ -24,6 +24,10 @@ All notable changes to GrubDrops.
   even while the drop is still in progress. Uncollecting it (click the chip)
   removes the protection. Item lists now also load for drops on disabled
   accounts.
+- **Update checker.** GrubDrops now checks GitHub for new releases in the
+  background (on boot and every 6 hours) and shows an "update" pill by the
+  GitHub icon plus an amber status dot when a newer version is out, linking to
+  the release. Set `GRUB_UPDATE_CHECK=0` to disable the check.
 
 ### Changed
 
