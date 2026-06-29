@@ -4,6 +4,8 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.3.5] — 2026-06-30
+
 ### Fixed
 
 - **Drop item lists no longer get stuck on "Loading…".** The items panel now
