@@ -1461,3 +1461,52 @@ func TestWatcher_SkipsBenefitWeAlreadyClaimed(t *testing.T) {
 	w.mu.Unlock()
 	assert.NotEqual(t, "done", picked, "must never pick a benefit we already hold a claim for")
 }
+
+// zeroMinBackend returns a single active campaign whose only drop is a
+// 0-minute (sub/action) drop. The watcher must NOT pick it for mining.
+type zeroMinBackend struct{ *platformtest.MockBackend }
+
+func (b *zeroMinBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	return []platform.Campaign{{
+		ID: "subcamp", Game: "League of Legends", Status: "active", AccountLinked: true,
+		Benefits: []platform.DropBenefit{{ID: "sub1", CampaignID: "subcamp", Name: "Sub Drop", RequiredMinutes: 0}},
+	}}, nil
+}
+func (b *zeroMinBackend) ListEligibleChannels(_ context.Context, _ platform.Session, _ platform.Campaign) ([]platform.Stream, error) {
+	return []platform.Stream{{Channel: "lolesports", DropsEnabled: true}}, nil
+}
+
+// InventoryProgress returns nothing: 0-minute drops never appear in the watch
+// inventory, so the mock must not return the default MockBackend drop1 row.
+func (b *zeroMinBackend) InventoryProgress(_ context.Context, _ platform.Session) ([]platform.Progress, error) {
+	return nil, nil
+}
+
+// TestWatcher_SkipsZeroMinuteDropForMining proves a 0-minute-only campaign is
+// never picked: the watcher finds no eligible benefit and never starts watching.
+func TestWatcher_SkipsZeroMinuteDropForMining(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	rec := &recordingClaimRecorder{}
+	w := New(Config{
+		AccountID:     "acc_zero",
+		Backend:       &zeroMinBackend{MockBackend: platformtest.New()},
+		ClaimRecorder: rec,
+		Session:       platform.Session{AccessToken: "tok"},
+		Notifier:      &recordingNotifier{},
+		TickInterval:  2 * time.Millisecond,
+		AllowGame:     func(g string) bool { return g == "League of Legends" },
+	})
+	go func() { _ = w.Run(ctx) }()
+	<-ctx.Done()
+
+	// Never claimed/recorded anything, and never settled into the watching state.
+	recorded, pruned := rec.snapshot()
+	if len(recorded) != 0 || len(pruned) != 0 {
+		t.Fatalf("0-min campaign must not drive claims: recorded=%v pruned=%v", recorded, pruned)
+	}
+	if w.State() == StateWatching {
+		t.Fatalf("watcher must not be watching a 0-minute-only campaign")
+	}
+}

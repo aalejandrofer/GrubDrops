@@ -1261,6 +1261,13 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			return benefits[i].RequiredMinutes < benefits[j].RequiredMinutes
 		})
 		for _, b := range benefits {
+			// Watch-time drops only. 0-minute drops (sub/gift/action-gated, e.g.
+			// the LoL "1 Sub or Gift Sub" drop) can't be earned by watching, so
+			// the miner must never pick one. They are still discovered + shown on
+			// /drops (dim, "action required"); they're just not mineable.
+			if b.RequiredMinutes <= 0 {
+				continue
+			}
 			// Skip only this exact drop once Twitch reports it claimed
 			// (per-drop IsClaimed). We deliberately do NOT skip on
 			// reward-ownership: Twitch reuses the same reward item (RewardID)
