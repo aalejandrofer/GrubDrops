@@ -77,11 +77,30 @@ func (d *dropsDeps) lazyFetchBenefits(ctx context.Context, campaignID, plat stri
 	return true
 }
 
-// sessionForPlatform returns the session of the first enabled account on
-// the given platform (any account's token can read public campaign
-// details).
+// sessionForPlatform returns a usable session for the platform. It prefers an
+// enabled account's session (the common case), then falls back to ANY account
+// with a stored session — including disabled ones. Reading public campaign
+// details is account-state-agnostic, and the fallback is what lets a drop
+// collected on a since-disabled account still load its item list.
 func (d *dropsDeps) sessionForPlatform(ctx context.Context, plat string) (platform.Session, bool) {
-	accs, err := d.q.ListEnabledAccounts(ctx)
+	if sess, ok := d.firstStoredSession(ctx, plat, true); ok {
+		return sess, true
+	}
+	return d.firstStoredSession(ctx, plat, false)
+}
+
+// firstStoredSession returns the first session on the platform among either
+// the enabled accounts (enabledOnly=true) or all accounts (enabledOnly=false).
+func (d *dropsDeps) firstStoredSession(ctx context.Context, plat string, enabledOnly bool) (platform.Session, bool) {
+	var (
+		accs []gen.Account
+		err  error
+	)
+	if enabledOnly {
+		accs, err = d.q.ListEnabledAccounts(ctx)
+	} else {
+		accs, err = d.q.ListAllAccounts(ctx)
+	}
 	if err != nil {
 		return platform.Session{}, false
 	}
