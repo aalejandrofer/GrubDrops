@@ -157,3 +157,21 @@ func TestRemoveClaim_DeletesClaimAndOverride(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, rows, "uncollecting must clear the protection override")
 }
+
+func TestAddableAccounts_ExcludesCollectedAndCrossPlatform(t *testing.T) {
+	accs := []gen.Account{
+		{ID: "a1", Platform: "twitch", DisplayName: "TTik3r", Enabled: 1},
+		{ID: "a2", Platform: "twitch", DisplayName: "Phluses", Enabled: 0}, // disabled still offered
+		{ID: "a3", Platform: "kick", DisplayName: "KickOnly", Enabled: 1},  // wrong platform
+	}
+	collected := []collectedMark{{AccountID: "a1", BenefitID: "ben-1"}}
+
+	got := addableAccounts(accs, "twitch", collected)
+
+	if len(got) != 1 {
+		t.Fatalf("got %d addable, want 1 (a2 only)", len(got))
+	}
+	if got[0].AccountID != "a2" {
+		t.Fatalf("addable = %q, want a2", got[0].AccountID)
+	}
+}

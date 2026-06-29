@@ -791,6 +791,7 @@ type campaignBenefitRow struct {
 	// Collected lists the accounts that have already claimed this benefit
 	// (from the claims table) — rendered as per-account marks on the item.
 	Collected []collectedMark
+	Addable   []addableAccount // accounts that can still be marked collected
 }
 
 // collectedMark is one account that claimed a benefit, carrying the
@@ -801,6 +802,32 @@ type collectedMark struct {
 	Platform  string
 	AccountID string
 	BenefitID string
+}
+
+// addableAccount is one account offered in a benefit row's "+ mark collected"
+// menu: a matching-platform account that has NOT already collected that benefit.
+type addableAccount struct {
+	Login     string
+	Platform  string
+	AccountID string
+}
+
+// addableAccounts returns the matching-platform accounts (enabled or disabled)
+// not already present in `collected`. Disabled accounts are intentionally
+// included: the user may have collected on an account they later disabled.
+func addableAccounts(accs []gen.Account, plat string, collected []collectedMark) []addableAccount {
+	done := map[string]bool{}
+	for _, c := range collected {
+		done[c.AccountID] = true
+	}
+	var out []addableAccount
+	for _, a := range accs {
+		if a.Platform != plat || done[a.ID] {
+			continue
+		}
+		out = append(out, addableAccount{Login: a.DisplayName, Platform: a.Platform, AccountID: a.ID})
+	}
+	return out
 }
 
 // addWhitelist takes (account_id, name) from the inline form on the
@@ -1332,6 +1359,7 @@ func (d *dropsDeps) renderCampaignItems(w http.ResponseWriter, r *http.Request, 
 			})
 		}
 	}
+	allAccts, _ := d.q.ListAllAccounts(r.Context())
 	for _, b := range bens {
 		img := b.ImageUrl
 		// Kick CDN images 403 direct hotlinks (Cloudflare); route them
@@ -1339,11 +1367,13 @@ func (d *dropsDeps) renderCampaignItems(w http.ResponseWriter, r *http.Request, 
 		if img != "" && detail.Platform == "kick" {
 			img = "/img/kick?u=" + url.QueryEscape(img)
 		}
+		collected := collectedByBenefit[b.ID]
 		detail.Benefits = append(detail.Benefits, campaignBenefitRow{
 			Name:            b.Name,
 			RequiredMinutes: b.RequiredMinutes,
 			ImageURL:        img,
-			Collected:       collectedByBenefit[b.ID],
+			Collected:       collected,
+			Addable:         addableAccounts(allAccts, detail.Platform, collected),
 		})
 	}
 	renderPartial(w, r, d.t, "drops_campaign_items", detail)
