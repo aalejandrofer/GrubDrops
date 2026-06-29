@@ -108,6 +108,9 @@ type Deps struct {
 	BrowserURLDisplay string // GRUB_BROWSER_URL value (config.Load)
 	GitCommit         string // build-time git commit short hash
 	Version           string // semver / release tag
+	// UpdateStatus reports (updateAvailable, latestTag) for the running version.
+	// Nil when the update checker is disabled — the nav badge then never shows.
+	UpdateStatus func(current string) (bool, string)
 	// KickSidecars lists the per-account Kick sidecar addresses for the
 	// read-only Status panel. Nil when no Kick backend is configured.
 	KickSidecars func() []string
@@ -362,7 +365,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/img/kick", imgH.kick)
 	authed.Get("/history", historyH.get)
 
-	r.Mount("/", withSession(csrf(authed)))
+	r.Mount("/", withSession(csrf(updateBadge(d.UpdateStatus, d.Version)(authed))))
 	return r
 }
 

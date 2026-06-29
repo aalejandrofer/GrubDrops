@@ -23,12 +23,15 @@ type templateData struct {
 	OIDCEnabled      bool   // show the SSO button on the login page
 	OIDCProviderName string // SSO button label
 	Lang             string // current language code (e.g. "en", "zh-CN")
+	UpdateAvailable  bool   // a newer GitHub release exists
+	LatestRelease    string // latest release tag, for the nav badge
 }
 
 func render(w http.ResponseWriter, r *http.Request, t Renderer, name string, data templateData) {
 	// Detect and set language for the template function "t".
 	lang := i18n.DetectLang(r)
 	data.Lang = lang
+	data.UpdateAvailable, data.LatestRelease = updateInfoFromContext(r.Context())
 	i18n.SetLang(lang)
 	defer i18n.ClearLang()
 

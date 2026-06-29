@@ -18,7 +18,37 @@ type ctxKey int
 
 const (
 	ctxAdminAuthed ctxKey = iota
+	ctxUpdateInfo
 )
+
+type updateInfoVal struct {
+	available bool
+	latest    string
+}
+
+// updateBadge stores the cached update status in request context so render()
+// can surface the nav badge. status may be nil (checker disabled) — then it's a
+// safe passthrough that reports no update. current is the running version.
+func updateBadge(status func(current string) (bool, string), current string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if status != nil {
+				avail, latest := status(current)
+				ctx := context.WithValue(r.Context(), ctxUpdateInfo, updateInfoVal{available: avail, latest: latest})
+				r = r.WithContext(ctx)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// updateInfoFromContext reads the injected update status (false/"" when absent).
+func updateInfoFromContext(ctx context.Context) (bool, string) {
+	if v, ok := ctx.Value(ctxUpdateInfo).(updateInfoVal); ok {
+		return v.available, v.latest
+	}
+	return false, ""
+}
 
 // RequireAdmin redirects unauthenticated users to /login.
 //
