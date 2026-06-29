@@ -788,6 +788,7 @@ type campaignBenefitRow struct {
 	Name            string
 	RequiredMinutes int64
 	ImageURL        string
+	BenefitID       string // carried so the add-menu can post benefit_id even when Collected is empty
 	// Collected lists the accounts that have already claimed this benefit
 	// (from the claims table) — rendered as per-account marks on the item.
 	Collected []collectedMark
@@ -1372,6 +1373,7 @@ func (d *dropsDeps) renderCampaignItems(w http.ResponseWriter, r *http.Request, 
 			Name:            b.Name,
 			RequiredMinutes: b.RequiredMinutes,
 			ImageURL:        img,
+			BenefitID:       b.ID,
 			Collected:       collected,
 			Addable:         addableAccounts(allAccts, detail.Platform, collected),
 		})

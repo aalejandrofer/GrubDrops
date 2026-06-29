@@ -302,6 +302,8 @@
   "campaign_items.m_watch": "分钟观看",
   "campaign_items.action_required": "需要操作",
   "campaign_items.no_items": "此活动还没有记录的物品。",
+  "campaign_items.mark_collected": "标记为已领取",
+  "campaign_items.mark_collected_for": "标记已领取账号",
 
   "history.title": "历史 · GrubDrops",
   "history.cooking": "// 记录",

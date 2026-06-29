@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"net/http"
@@ -174,4 +175,35 @@ func TestAddableAccounts_ExcludesCollectedAndCrossPlatform(t *testing.T) {
 	if got[0].AccountID != "a2" {
 		t.Fatalf("addable = %q, want a2", got[0].AccountID)
 	}
+}
+
+func TestCampaignItems_AddMenuListsEligibleAccounts(t *testing.T) {
+	detail := campaignDetailRow{
+		ID: "camp-1", Platform: "twitch", CSRFToken: "csrf",
+		Benefits: []campaignBenefitRow{{
+			Name: "Builder Cape", RequiredMinutes: 5, BenefitID: "ben-1",
+			Collected: nil,
+			Addable:   []addableAccount{{Login: "TTik3r", Platform: "twitch", AccountID: "a1"}},
+		}},
+	}
+	out := renderCampaignItems_render(t, detail)
+	if !strings.Contains(out, `hx-post="/drops/claim/add"`) {
+		t.Errorf("add menu missing the claim/add post")
+	}
+	if !strings.Contains(out, `"benefit_id":"ben-1"`) {
+		t.Errorf("add option must carry the benefit id")
+	}
+	if !strings.Contains(out, ">TTik3r<") {
+		t.Errorf("add menu must list the eligible account")
+	}
+}
+
+// renderCampaignItems_render executes the items partial directly.
+func renderCampaignItems_render(t *testing.T, detail campaignDetailRow) string {
+	t.Helper()
+	tmpl, err := web.Templates()
+	require.NoError(t, err)
+	var buf bytes.Buffer
+	require.NoError(t, tmpl.ExecuteTemplate(&buf, "drops_campaign_items", detail))
+	return buf.String()
 }

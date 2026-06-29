@@ -25,6 +25,20 @@
       {{else}}
         <span class="cmark-none">—</span>
       {{end}}
+      {{if .Addable}}
+      <details class="cmark-add" onclick="event.stopPropagation()">
+        <summary class="cmark-add-btn" title="{{t "campaign_items.mark_collected"}}">+</summary>
+        <div class="cmark-add-menu">
+          <span class="cmark-add-head">{{t "campaign_items.mark_collected_for"}}</span>
+          {{$bid := .BenefitID}}
+          {{range .Addable}}<button type="button" class="cmark-add-opt cmark-{{.Platform}}"
+            hx-post="/drops/claim/add"
+            hx-vals='{"account_id":"{{.AccountID}}","benefit_id":"{{$bid}}","campaign_id":"{{$.ID}}"}'
+            hx-headers='{"X-CSRF-Token":"{{$.CSRFToken}}"}'
+            hx-target="closest .drop-items" hx-swap="outerHTML">{{.Login}}</button>{{end}}
+        </div>
+      </details>
+      {{end}}
     </span>
     <span class="drop-item-type">
       {{if gt .RequiredMinutes 0}}<span class="dtype dtype-watch" title="{{t "campaign_items.watch_drop"}}">⏱ {{.RequiredMinutes}}{{t "campaign_items.m_watch"}}</span>{{else}}<span class="dtype dtype-action" title="{{t "campaign_items.action_required"}}">{{t "campaign_items.action_required"}}</span>{{end}}

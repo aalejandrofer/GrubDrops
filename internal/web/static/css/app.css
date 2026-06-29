@@ -844,6 +844,19 @@
      the static chip; reveals it's actionable only on hover (no visible X). */
   button.cmark-btn { background: transparent; cursor: pointer; transition: opacity .12s, border-color .12s; }
   button.cmark-btn:hover { opacity: .65; border-color: color-mix(in srgb, var(--red) 55%, transparent); }
+  /* Manual "mark collected" add menu on a benefit row. */
+  .cmark-add { position: relative; display: inline-block; }
+  .cmark-add-btn { cursor: pointer; list-style: none; padding: 1px 7px; border: 1px dashed var(--muted);
+    border-radius: 10px; color: var(--muted); font-size: 11px; }
+  .cmark-add-btn::-webkit-details-marker { display: none; }
+  .cmark-add[open] .cmark-add-btn { color: var(--accent); border-color: var(--accent); }
+  .cmark-add-menu { position: absolute; right: 0; z-index: 20; margin-top: 4px; padding: 6px;
+    background: var(--panel, #161616); border: 1px solid var(--border, #2a2a2a); border-radius: 8px;
+    display: flex; flex-direction: column; gap: 4px; min-width: 140px; box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
+  .cmark-add-head { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .cmark-add-opt { cursor: pointer; text-align: left; padding: 3px 6px; border-radius: 6px;
+    border: 1px solid transparent; background: transparent; color: var(--text, #e8e8e8); font-size: 11px; }
+  .cmark-add-opt:hover { border-color: var(--accent); }
 
   /* Watching expand: detail rows on the left, the drop's item icon on the
      right, vertically centered in the free space beside the rows. */
