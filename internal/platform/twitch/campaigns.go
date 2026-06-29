@@ -3,7 +3,6 @@ package twitch
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -356,16 +355,6 @@ func (d *discovery) fetchDetails(ctx context.Context, sess platform.Session, cam
 	}
 	benefits = make([]platform.DropBenefit, 0, len(det.User.DropCampaign.TimeBasedDrops))
 	for _, td := range det.User.DropCampaign.TimeBasedDrops {
-		// Watch-time drops only. DevilXD mines a drop only when
-		// requiredMinutesWatched > 0 (inventory.py _base_earn_conditions).
-		// Drops with 0 required minutes are sub/gift/purchase/event-gated
-		// rewards we can't earn by watching (e.g. the LoL "1 Sub or Gift
-		// Sub" drop) — skip them so the watcher never picks one.
-		if td.RequiredMinutesWatched <= 0 {
-			slog.Info("twitch skipping non-watch drop (0 required minutes)",
-				"campaign", campaignID, "drop", td.ID)
-			continue
-		}
 		var preconds []string
 		for _, pc := range td.PreconditionDrops {
 			if pc.ID != "" {

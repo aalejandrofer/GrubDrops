@@ -209,6 +209,50 @@ func TestCampaigns_DedupeSynthVsReal(t *testing.T) {
 	assert.True(t, ids["kick-uuid-1"], "Kick entry untouched")
 }
 
+// newDetailsTestDiscovery builds a discovery backed by an httptest server that
+// returns detailsJSON for OpDropCampaignDetails and a stub login for CurrentUser.
+func newDetailsTestDiscovery(t *testing.T, detailsJSON string) *discovery {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req gqlRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		switch req.OperationName {
+		case OpDropCampaignDetails.Name:
+			_, _ = w.Write([]byte(detailsJSON))
+		case "CurrentUser":
+			_, _ = w.Write([]byte(`{"data":{"currentUser":{"login":"testuser"}}}`))
+		default:
+			t.Fatalf("unexpected op %q", req.OperationName)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	c := newTestClient(srv.URL)
+	return &discovery{c: c, userLogin: "testuser"}
+}
+
+// TestFetchDetails_IncludesZeroMinuteDrops proves sub/action drops
+// (requiredMinutesWatched == 0) are no longer discarded — they must be
+// returned as benefits (RequiredMinutes 0) so the /drops panel can show them.
+func TestFetchDetails_IncludesZeroMinuteDrops(t *testing.T) {
+	// Build a details response with one 60-min watch drop and one 0-min sub drop.
+	detailsJSON := `{"data":{"user":{"dropCampaign":{"timeBasedDrops":[
+		{"id":"watch1","requiredMinutesWatched":60,"benefitEdges":[{"benefit":{"id":"b1","name":"Watch Item","imageAssetURL":"http://img/w.png"}}]},
+		{"id":"sub1","requiredMinutesWatched":0,"benefitEdges":[{"benefit":{"id":"b2","name":"Sub Item","imageAssetURL":"http://img/s.png"}}]}
+	]}}}}`
+
+	d := newDetailsTestDiscovery(t, detailsJSON)
+	benefits, _, err := d.fetchDetails(context.Background(), platform.Session{AccessToken: "tok"}, "camp-uuid")
+	require.NoError(t, err)
+
+	var minutes = map[string]int{}
+	for _, b := range benefits {
+		minutes[b.Name] = b.RequiredMinutes
+	}
+	require.Contains(t, minutes, "Sub Item", "0-minute drop must be included now")
+	require.Equal(t, 0, minutes["Sub Item"])
+	require.Equal(t, 60, minutes["Watch Item"])
+}
+
 func TestCampaigns_Inventory_ParsesProgress(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(loadFixture(t, "inventory.json"))
