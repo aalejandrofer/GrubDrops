@@ -180,11 +180,13 @@
   @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .4 } }
   /* Update available: pulse dot turns amber, plus a small pill by the GitHub icon. */
   .user .pulse.update { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+  /* GitHub icon + (when an update exists) a tiny version pill stacked under it. */
+  .user .gh-wrap { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; line-height: 1; }
   .update-pill {
-    font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1;
-    padding: 3px 7px; margin-left: 6px; border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace; font-size: 8px; line-height: 1;
+    padding: 1px 5px; border-radius: 8px;
     color: var(--amber); border: 1px solid var(--amber);
-    text-decoration: none; text-transform: uppercase; letter-spacing: 0.04em;
+    text-decoration: none; letter-spacing: 0.02em; white-space: nowrap;
   }
   .update-pill:hover { background: var(--amber); color: #1a1a1a; }
   .user .gh-link {
