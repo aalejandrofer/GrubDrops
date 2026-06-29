@@ -46,6 +46,6 @@
   {{end}}
 </div>
 {{else}}
-<div class="ev-detail" style="color:var(--muted);font-size:11px;">{{t "campaign_items.no_items"}}</div>
+<div class="ev-detail" style="color:var(--muted);font-size:11px;">{{if .LoadError}}{{t "campaign_items.load_error"}}{{else}}{{t "campaign_items.no_items"}}{{end}}</div>
 {{end}}
 {{end}}

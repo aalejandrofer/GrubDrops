@@ -302,6 +302,7 @@
   "campaign_items.m_watch": "min visionado",
   "campaign_items.action_required": "requiere acción",
   "campaign_items.no_items": "Aún no hay ítems registrados para esta campaña.",
+  "campaign_items.load_error": "No se pudieron cargar los ítems de esta campaña.",
   "campaign_items.mark_collected": "marcar recogido",
   "campaign_items.mark_collected_for": "marcar recogido para",
 

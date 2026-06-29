@@ -302,6 +302,7 @@
   "campaign_items.m_watch": "m watch",
   "campaign_items.action_required": "action required",
   "campaign_items.no_items": "No items recorded for this campaign yet.",
+  "campaign_items.load_error": "Couldn't load items for this campaign.",
   "campaign_items.mark_collected": "mark collected",
   "campaign_items.mark_collected_for": "mark collected for",
 

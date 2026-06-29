@@ -782,6 +782,10 @@ type campaignDetailRow struct {
 	Status       string
 	Benefits     []campaignBenefitRow
 	CSRFToken    string // for the inline "mark uncollected" action on each mark
+	// LoadError is true when the campaign couldn't be loaded (e.g. unknown or
+	// malformed id). The items partial then renders a friendly message with a
+	// 200, so HTMX always swaps and the row never hangs on "Loading…".
+	LoadError bool
 }
 
 type campaignBenefitRow struct {
@@ -1324,7 +1328,10 @@ func (d *dropsDeps) items(w http.ResponseWriter, r *http.Request) {
 func (d *dropsDeps) renderCampaignItems(w http.ResponseWriter, r *http.Request, id string) {
 	camp, err := d.q.GetCampaign(r.Context(), id)
 	if err != nil {
-		http.NotFound(w, r)
+		// Render a 200 partial (not 404) so HTMX always swaps the panel —
+		// otherwise the row hangs on "Loading…" forever (e.g. malformed
+		// scrape-synth ids that can't round-trip the URL).
+		renderPartial(w, r, d.t, "drops_campaign_items", campaignDetailRow{LoadError: true})
 		return
 	}
 	bens, _ := d.q.ListBenefitsForCampaign(r.Context(), id)
