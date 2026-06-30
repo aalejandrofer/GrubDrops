@@ -19,6 +19,9 @@ All notable changes to GrubDrops.
   Gift Sub" drop), rendered as "action required". The miner still ignores them
   — they can't be earned by watching.
 - **Kick campaign item lists backfill on open**, matching Twitch.
+- **Optional auto-update via Watchtower.** A commented-out `watchtower` service
+  in `deploy/docker-compose.yml` (scoped to the miner container only) that pulls
+  and recreates GrubDrops when a new image is published. Uncomment to enable.
 - **Manually mark a drop collected.** If you claimed a drop outside GrubDrops
   (e.g. redeemed it directly), open the drop on `/drops`, click the `+` in a
   benefit's COLLECTED column, and pick the account. The mark is protected: the

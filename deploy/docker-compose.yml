@@ -48,3 +48,18 @@ services:
     profiles: ["browser"]
     expose:
       - "9090"
+
+  # Optional auto-update. Watchtower polls ghcr and, when a new GrubDrops image
+  # is published, pulls it and recreates ONLY the miner container (the trailing
+  # `grubdrops` arg scopes it — it never touches your other containers). The
+  # in-app update checker just notifies; this is the piece that actually applies
+  # the update unattended. Uncomment to enable (needs the Docker socket):
+  #
+  # watchtower:
+  #   image: containrrr/watchtower:latest
+  #   restart: unless-stopped
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   command: --interval 21600 --cleanup grubdrops
+  #   # --interval 21600 = poll every 6h; --cleanup removes the old image after update.
+  #   # The trailing `grubdrops` limits Watchtower to the miner container only.
