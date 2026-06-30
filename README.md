@@ -14,7 +14,7 @@
   <img alt="Storage" src="https://img.shields.io/badge/DB-SQLite-003B57?logo=sqlite&logoColor=white">
   <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-Docker-2496ED?logo=docker&logoColor=white">
   <img alt="Tested browser" src="https://img.shields.io/badge/tested-Chrome%20149-4285F4?logo=googlechrome&logoColor=white">
-  <a href="https://github.com/aalejandrofer/GrubDrops/releases"><img alt="Latest release" src="https://img.shields.io/badge/release-v1.3.0-2c2c2c?logo=github"></a>
+  <a href="https://github.com/aalejandrofer/GrubDrops/releases"><img alt="Latest release" src="https://img.shields.io/badge/release-v1.3.5-2c2c2c?logo=github"></a>
   <a href="https://github.com/aalejandrofer/GrubDrops/pkgs/container/grubdrops"><img alt="ghcr.io image" src="https://img.shields.io/badge/ghcr.io-grubdrops-2496ED?logo=github"></a>
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
 </p>
@@ -35,17 +35,11 @@ image and a single SQLite file.
 
 ## Features
 
-- 🎯 **You set a whitelist** (global or per-account). Nothing outside it gets mined.
 - 🟣🟢 **Twitch and Kick together**, several accounts each, all on one page.
-- ✅ **It checks the game** so you never burn watch-time on the wrong stream.
-- 🔗 **It knows about account links** (Krafton, Embark, …) with a per-account "I've linked it" override.
-- 🖥️ **A live console**: lifetime stats, current mining, drops catalog, claim history.
-- 🔔 **Discord notifications**, toggle per event type.
-- 🧪 **Browserless Kick by default**: Kick now starts on a WebSocket watch path (no Chrome, no Docker — light enough for any Pi) and **falls back to the Chrome sidecar automatically** if WS stops accruing. Force a specific path in Settings → Experimental.
-- 🔒 **Your credentials stay yours**: Twitch uses the official device-code login, Kick uses a session you export. No passwords sent to GrubDrops.
-- 🌐 **Multi-language support**: English, Spanish, and Chinese built-in. Add new languages by copying a JSON file.
-- 🕐 **Timezone auto-detection**: Set `TZ` env var for server-side times; browser automatically shows local time.
-- 🌍 **Proxy support**: HTTP/HTTPS/SOCKS5 proxy for all external requests. Configure in Settings → Proxy.
+- 🎯 **Whitelist-driven**: you pick the games (global or per-account) with a priority order, and it verifies the game so no watch-time is wasted.
+- 🔗 **Account-link aware** (Krafton, Embark, …), with a per-account "I've linked it" override.
+- 🧪 **Browserless Kick by default**: WebSocket watch with an automatic Chrome sidecar fallback if WS stops accruing.
+- 🔒 **Credentials stay yours**: Twitch device-code + a Kick session you export, no passwords. Discord alerts, multi-language, proxy, and OIDC SSO built in.
 
 ## Getting started
 
@@ -57,12 +51,12 @@ What you need depends on which platform you're mining:
 | | Twitch | Kick |
 |---|---|---|
 | **Login** | device-code (`twitch.tv/activate`) | `cookies.txt` export |
-| **How it watches** | direct HTTP — no browser | Chrome **sidecar** (real IVS playback) |
-| **Docker** | optional | **required** — the miner spawns the sidecar over the docker socket |
-| **Run from source, no Docker** | ✅ a plain `go build` binary works | ❌ needs Docker for the sidecar |
+| **How it watches** | direct HTTP — no browser | WebSocket; Chrome **sidecar** fallback (IVS playback) |
+| **Docker** | optional | **strongly recommended** — WS works without it, but the Chrome IVS fallback needs the docker socket |
+| **Run from source, no Docker** | ✅ a plain `go build` binary works | ⚠️ WS works; the Chrome fallback needs Docker |
 | **CPU arch** | any — `amd64` + `arm64` | `amd64` + `arm64` (arm64 is heavy — see note) |
 
-Twitch is direct HTTP — a plain Go binary mines it anywhere, no Docker. Kick watch-time needs a real player, so the miner runs a Chrome/Chromium sidecar over the docker socket (**Docker required for Kick**).
+Twitch is direct HTTP — a plain Go binary mines it anywhere, no Docker. Kick mines browserless over WebSocket by default; the dependable Chrome IVS fallback runs as a sidecar over the docker socket, so **Docker is strongly recommended for Kick**.
 
 > **Raspberry Pi / ARM:** both images ship `arm64`; the sidecar uses Debian Chromium (keeps the H.264/AAC codecs for Kick's IVS stream). Heavy — ~4 GB RAM each.
 >
@@ -76,7 +70,7 @@ Twitch is direct HTTP — a plain Go binary mines it anywhere, no Docker. Kick w
 | Linux `arm64` / Raspberry Pi | ✅ | ✅ — Chromium sidecar, ~4 GB RAM each |
 | macOS / Windows · Docker Desktop (Intel) | ✅ | ✅ |
 | macOS / Windows · Apple Silicon | ✅ | ✅ — arm64 Chromium sidecar |
-| `go build` from source (any OS) | ✅ | needs Docker for the sidecar |
+| `go build` from source (any OS) | ✅ | ✅ WS; Chrome fallback needs Docker |
 
 ### Run it
 
@@ -147,7 +141,7 @@ yet"* state (not an error).
 
 Add games either way — by name, no need to wait for a campaign to appear first:
 
-- **Global** (applies to every account): **Settings → Drop Priority → add by name**.
+- **Global** (applies to every account): **Priority → add by name**.
 - **Per account** (overrides the global list): **Accounts → pick an account → add by name**.
 
 Discovery starts crawling that game on the next tick and live campaigns show up
@@ -236,8 +230,9 @@ the first four are set:
 |------|------|
 | **Console** (`/`) | Lifetime stats, per-account mining, live event feed. |
 | **Drops** (`/drops`) | Past / current / upcoming campaigns, items, connect chips, one-click whitelisting. |
+| **Priority** (`/priority`) | Global and per-account game whitelist + mining order. |
 | **History** (`/history`) | Claim log across every account. |
-| **Settings** (`/settings`) | Priority list, intervals, Discord, log level, password. |
+| **Settings** (`/settings`) | Intervals, Discord, proxy, language, health, log level, password. |
 | **Accounts** | Add accounts, per-account whitelists, re-auth, auth health. |
 
 ## Architecture
