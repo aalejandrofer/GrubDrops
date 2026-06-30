@@ -15,9 +15,10 @@ services:
       # "Claims Today" midnight reset. Uses Go's IANA database.
       # Examples: Asia/Shanghai, America/New_York, Europe/London
       TZ: ${TZ:-UTC}
-      # Browser sidecar gRPC endpoint. Empty = no sidecar. Point at the
-      # compose `browser` service with GRUB_BROWSER_URL=browser:9090 (and
-      # start the `browser` profile) to enable the codec-enabled IVS watch.
+      # Legacy fixed sidecar address. Leave empty — for Kick the miner
+      # auto-creates a Chrome sidecar per account on demand over the mounted
+      # docker socket (no sidecar service to define). Set only to pin a
+      # pre-existing always-on sidecar.
       GRUB_BROWSER_URL: ${GRUB_BROWSER_URL:-}
       # Kick sidecar config
       GRUB_KICK_SIDECAR_TEMPLATE: ${GRUB_KICK_SIDECAR_TEMPLATE:-grubdrops-browser-{slug}}
@@ -38,16 +39,14 @@ services:
       #   mkdir -p data && sudo chown 65532:65532 data
       # Or use a named volume (Docker creates it already writable).
       - ./data:/data
+      # Kick: the miner auto-creates a Chrome sidecar per account over the
+      # docker socket. Mount it for Kick. Omit it for a Twitch-only setup.
+      - /var/run/docker.sock:/var/run/docker.sock
 
-  browser:
-    image: ghcr.io/aalejandrofer/grubdrops-browser:latest
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile.browser
-    restart: unless-stopped
-    profiles: ["browser"]
-    expose:
-      - "9090"
+  # No sidecar service to define — the miner pulls + runs the
+  # ghcr.io/aalejandrofer/grubdrops-browser image per Kick account on demand
+  # (see GRUB_KICK_SIDECAR_* above). Build that image with
+  # `docker build -f deploy/Dockerfile.browser .`.
 
   # Optional auto-update. Watchtower polls ghcr and, when a new GrubDrops image
   # is published, pulls it and recreates ONLY the miner container (the trailing
