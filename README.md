@@ -35,11 +35,11 @@ image and a single SQLite file.
 
 ## Features
 
-- 🟣🟢 **Twitch and Kick together**, several accounts each, all on one page.
-- 🎯 **Whitelist-driven**: you pick the games (global or per-account) with a priority order, and it verifies the game so no watch-time is wasted.
-- 🔗 **Account-link aware** (Krafton, Embark, …), with a per-account "I've linked it" override.
-- 🧪 **Browserless Kick by default**: WebSocket watch with an automatic Chrome sidecar fallback if WS stops accruing.
-- 🔒 **Credentials stay yours**: Twitch device-code + a Kick session you export, no passwords. Discord alerts, multi-language, proxy, and OIDC SSO built in.
+- 🟣🟢 **Twitch and Kick, side by side** — many accounts, one dashboard.
+- 🎯 **Set and forget** — pick your games; it discovers, watches, banks the time, and claims for you.
+- 🔒 **Self-hosted and private** — one container, your accounts, your data.
+- ⚡ **Reliable on both platforms** — handles the awkward parts (logins, links, Kick playback) so you don't.
+- 🛠️ **Built to run unattended** — Discord alerts, update checks, multi-language, proxy, and SSO.
 
 ## Getting started
 
