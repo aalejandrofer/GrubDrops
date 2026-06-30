@@ -93,6 +93,14 @@ services:
     volumes:
       - ./data:/data
       - /var/run/docker.sock:/var/run/docker.sock # Kick only, if WS Breaks
+
+  # Optional auto-update: pulls a new image and recreates the miner only.
+  # watchtower:
+  #   image: containrrr/watchtower:latest
+  #   restart: unless-stopped
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   command: --interval 21600 --cleanup grubdrops
 ```
 
 The image runs as distroless `nonroot` (**UID 65532**), so make a bind-mounted
