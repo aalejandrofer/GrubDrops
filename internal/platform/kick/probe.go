@@ -15,7 +15,7 @@ import (
 // the safe way to confirm the endpoint exists + the body parses without
 // changing inventory). One-shot ops tool.
 func ProbeClaim(ctx context.Context, sess platform.Session, rewardID, campaignID string) {
-	d := newHTTPDoer()
+	d := newHTTPDoer(nil)
 	payload := []byte(fmt.Sprintf(`{"reward_id":%q,"campaign_id":%q}`, rewardID, campaignID))
 	fmt.Printf("POST %s/api/v1/drops/claim  body=%s\n", dropsBase, payload)
 	body, status, err := d.do(ctx, sess, http.MethodPost, dropsBase+"/api/v1/drops/claim", payload)
@@ -33,7 +33,7 @@ func ProbeClaim(ctx context.Context, sess platform.Session, rewardID, campaignID
 // apart from "empty 200". Wired only into cmd/kick-probe; not used by the
 // daemon. Output goes to stdout.
 func Probe(ctx context.Context, sess platform.Session, categorySlug string) {
-	d := newHTTPDoer()
+	d := newHTTPDoer(nil)
 	a := newAPI()
 
 	dump := func(label, base, path string) {
