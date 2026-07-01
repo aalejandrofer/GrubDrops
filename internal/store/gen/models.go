@@ -13,7 +13,6 @@ type Account struct {
 	Platform        string         `json:"platform"`
 	DisplayName     string         `json:"display_name"`
 	Status          string         `json:"status"`
-	ProxyUrl        sql.NullString `json:"proxy_url"`
 	WebhookUrl      sql.NullString `json:"webhook_url"`
 	FingerprintJson string         `json:"fingerprint_json"`
 	Enabled         int64          `json:"enabled"`

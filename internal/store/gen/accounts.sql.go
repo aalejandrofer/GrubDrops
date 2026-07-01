@@ -11,9 +11,9 @@ import (
 )
 
 const createAccount = `-- name: CreateAccount :one
-INSERT INTO accounts (id, platform, display_name, status, proxy_url, webhook_url, fingerprint_json, enabled, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, platform, display_name, status, proxy_url, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url
+INSERT INTO accounts (id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url
 `
 
 type CreateAccountParams struct {
@@ -21,7 +21,6 @@ type CreateAccountParams struct {
 	Platform        string         `json:"platform"`
 	DisplayName     string         `json:"display_name"`
 	Status          string         `json:"status"`
-	ProxyUrl        sql.NullString `json:"proxy_url"`
 	WebhookUrl      sql.NullString `json:"webhook_url"`
 	FingerprintJson string         `json:"fingerprint_json"`
 	Enabled         int64          `json:"enabled"`
@@ -35,7 +34,6 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		arg.Platform,
 		arg.DisplayName,
 		arg.Status,
-		arg.ProxyUrl,
 		arg.WebhookUrl,
 		arg.FingerprintJson,
 		arg.Enabled,
@@ -48,7 +46,6 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		&i.Platform,
 		&i.DisplayName,
 		&i.Status,
-		&i.ProxyUrl,
 		&i.WebhookUrl,
 		&i.FingerprintJson,
 		&i.Enabled,
@@ -60,7 +57,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, platform, display_name, status, proxy_url, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url FROM accounts WHERE id = ?
+SELECT id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url FROM accounts WHERE id = ?
 `
 
 func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
@@ -71,7 +68,6 @@ func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
 		&i.Platform,
 		&i.DisplayName,
 		&i.Status,
-		&i.ProxyUrl,
 		&i.WebhookUrl,
 		&i.FingerprintJson,
 		&i.Enabled,
@@ -83,7 +79,7 @@ func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
 }
 
 const listEnabledAccounts = `-- name: ListEnabledAccounts :many
-SELECT id, platform, display_name, status, proxy_url, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url FROM accounts WHERE enabled = 1 ORDER BY created_at ASC
+SELECT id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url FROM accounts WHERE enabled = 1 ORDER BY created_at ASC
 `
 
 func (q *Queries) ListEnabledAccounts(ctx context.Context) ([]Account, error) {
@@ -100,7 +96,6 @@ func (q *Queries) ListEnabledAccounts(ctx context.Context) ([]Account, error) {
 			&i.Platform,
 			&i.DisplayName,
 			&i.Status,
-			&i.ProxyUrl,
 			&i.WebhookUrl,
 			&i.FingerprintJson,
 			&i.Enabled,

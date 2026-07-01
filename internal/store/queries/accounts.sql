@@ -1,6 +1,6 @@
 -- name: CreateAccount :one
-INSERT INTO accounts (id, platform, display_name, status, proxy_url, webhook_url, fingerprint_json, enabled, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO accounts (id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetAccount :one

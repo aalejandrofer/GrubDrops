@@ -71,7 +71,7 @@ func (q *Queries) DeleteAccountSession(ctx context.Context, accountID string) er
 }
 
 const listAllAccounts = `-- name: ListAllAccounts :many
-SELECT id, platform, display_name, status, proxy_url, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url FROM accounts ORDER BY created_at ASC
+SELECT id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url FROM accounts ORDER BY created_at ASC
 `
 
 func (q *Queries) ListAllAccounts(ctx context.Context) ([]Account, error) {
@@ -88,7 +88,6 @@ func (q *Queries) ListAllAccounts(ctx context.Context) ([]Account, error) {
 			&i.Platform,
 			&i.DisplayName,
 			&i.Status,
-			&i.ProxyUrl,
 			&i.WebhookUrl,
 			&i.FingerprintJson,
 			&i.Enabled,
