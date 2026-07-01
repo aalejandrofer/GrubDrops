@@ -15,6 +15,7 @@ import (
 
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/timeutil"
 )
 
 // TestItems_DecodesEncodedSynthID proves the items handler URL-decodes the chi
@@ -39,7 +40,7 @@ func TestItems_DecodesEncodedSynthID(t *testing.T) {
 		ID: campID + "_default", CampaignID: campID, Name: "Builder Cape", RequiredMinutes: 5,
 	}))
 
-	d := &dropsDeps{q: q, t: testRenderer(t), loc: time.UTC}
+	d := &dropsDeps{q: q, t: testRenderer(t), loc: timeutil.NewZone(time.UTC)}
 	// Simulate chi handing back the percent-encoded segment.
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", url.PathEscape(campID))
@@ -63,7 +64,7 @@ func TestRenderCampaignItems_UnknownID_Renders200LoadError(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	q := gen.New(db)
 
-	d := &dropsDeps{q: q, t: testRenderer(t), loc: time.UTC}
+	d := &dropsDeps{q: q, t: testRenderer(t), loc: timeutil.NewZone(time.UTC)}
 	req := httptest.NewRequest(http.MethodGet, "/drops/campaigns/no-such-id/items", nil)
 	rec := httptest.NewRecorder()
 	d.renderCampaignItems(rec, req, "no-such-id")

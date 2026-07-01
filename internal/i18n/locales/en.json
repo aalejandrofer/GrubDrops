@@ -482,6 +482,11 @@
   "runtime.disc_desc_prefix": "how often it",
   "runtime.disc_desc_bold": "looks for new drops",
   "runtime.disc_desc_suffix": "— re-scans the campaign catalog",
+  "runtime.timezone": "Timezone",
+  "runtime.tz_desc_prefix": "IANA name for",
+  "runtime.tz_desc_bold": "all displayed times",
+  "runtime.tz_desc_suffix": "and the clock — leave blank to use the TZ env / UTC",
+  "runtime.tz_effective": "currently",
   "runtime.save": "Save",
 
   "logging.heading": "Logging",
@@ -623,6 +628,7 @@
   "twitch_status.re_add": "and re-add",
   "twitch_status.error": "error — check logs",
 
+  "flash.timezone_invalid": "invalid timezone — use an IANA name like Europe/Madrid",
   "flash.settings_saved": "settings saved",
   "flash.settings_saved_reload": "settings saved — reload watchers (or restart) to apply the new cadence",
   "flash.notifications_saved": "notifications saved",

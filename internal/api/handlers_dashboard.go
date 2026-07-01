@@ -18,6 +18,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/scheduler"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/timeutil"
 	"github.com/aalejandrofer/grubdrops/internal/watcher"
 )
 
@@ -59,7 +60,7 @@ type dashboardDeps struct {
 	ring  *mlog.Ring
 	s     *store.Settings
 	start time.Time
-	loc   *time.Location // timezone for displayed times
+	loc   *timeutil.Zone // display timezone (live; setting → TZ env → UTC)
 	// channelCounters is keyed by platform name ("twitch", "kick"). Nil
 	// or missing entries make the dashboard fall back to zero for that
 	// platform — safer than panicking when a backend isn't wired up.
@@ -343,13 +344,13 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 	}
 
 	page := dashPage{
-		Tele:          telemetryWithClaims(telemetryFrom(snapshots), d.q, r.Context()),
+		Tele:          telemetryWithClaims(telemetryFrom(snapshots), d.q, r.Context(), d.loc.Location()),
 		Alerts:        alerts,
 		Mining:        mining,
 		NextClaims:    nextClaimsFrom(cards),
 		ActiveCamps:   camps,
 		LiveChannels:  liveChannelsFor(accs, snapshots, allowed),
-		Events:        eventsFromRing(d.ring, "", "", lang, accs, d.loc),
+		Events:        eventsFromRing(d.ring, "", "", lang, accs, d.loc.Location()),
 		EventAccounts: eventAccountsFrom(accs),
 		EventFilter:   "all",
 		UpdatedAt:     nowPoll(time.Now(), lang),
@@ -741,7 +742,7 @@ func mineCardFromSnap(a gen.Account, s watcher.Snapshot, lang string) dashMineCa
 // drops claimed, active-campaign count, lifetime watch time) onto a
 // base telemetry struct already populated from the live watcher
 // snapshots by telemetryFrom.
-func telemetryWithClaims(base dashTelemetry, q *gen.Queries, ctx context.Context) dashTelemetry {
+func telemetryWithClaims(base dashTelemetry, q *gen.Queries, ctx context.Context, loc *time.Location) dashTelemetry {
 	// Lifetime drops claimed = every row in the persistent claims table.
 	// (Reward-reaper claims that never reach the claims table aren't counted —
 	// they only live in the ephemeral log ring.)
@@ -749,9 +750,9 @@ func telemetryWithClaims(base dashTelemetry, q *gen.Queries, ctx context.Context
 		if n, err := q.CountClaims(ctx); err == nil {
 			base.ClaimsTotal = int(n)
 		}
-		// Drops claimed today = claims since local midnight.
-		now := time.Now()
-		midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		// Drops claimed today = claims since midnight in the display timezone.
+		now := time.Now().In(loc)
+		midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 		if n, err := q.CountClaimsSince(ctx, midnight.Unix()); err == nil {
 			base.ClaimsToday = int(n)
 		}
@@ -938,7 +939,7 @@ func (d dashboardDeps) events(w http.ResponseWriter, r *http.Request) {
 	account := r.URL.Query().Get("account")
 	accs, _ := d.q.ListAllAccounts(r.Context())
 	lang := i18n.DetectLang(r)
-	renderPartial(w, r, d.t, "dashboard_events", eventsFromRing(d.ring, kind, account, lang, accs, d.loc))
+	renderPartial(w, r, d.t, "dashboard_events", eventsFromRing(d.ring, kind, account, lang, accs, d.loc.Location()))
 }
 
 // campaignDetail renders the modal partial for a single discovered
@@ -989,11 +990,11 @@ func (d dashboardDeps) campaignDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	startsAt := "—"
 	if !dc.StartsAt.IsZero() {
-		startsAt = dc.StartsAt.In(d.loc).Format("2006-01-02 15:04 MST")
+		startsAt = dc.StartsAt.In(d.loc.Location()).Format("2006-01-02 15:04 MST")
 	}
 	endsAt := "—"
 	if !dc.EndsAt.IsZero() {
-		endsAt = dc.EndsAt.In(d.loc).Format("2006-01-02 15:04 MST")
+		endsAt = dc.EndsAt.In(d.loc.Location()).Format("2006-01-02 15:04 MST")
 	}
 
 	benefits := make([]dashCampaignBenefit, 0, len(dc.Benefits))
@@ -1173,7 +1174,7 @@ func (d dashboardDeps) accountDetail(w http.ResponseWriter, r *http.Request) {
 
 	// Filter events ring for this account.
 	if d.ring != nil {
-		all := eventsFromRing(d.ring, "", id, lang, []gen.Account{acc}, d.loc)
+		all := eventsFromRing(d.ring, "", id, lang, []gen.Account{acc}, d.loc.Location())
 		if len(all) > 20 {
 			all = all[:20]
 		}

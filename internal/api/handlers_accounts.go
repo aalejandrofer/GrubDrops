@@ -18,10 +18,11 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/i18n"
 	"github.com/aalejandrofer/grubdrops/internal/scheduler"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/timeutil"
 )
 
 type accountsDeps struct {
-	loc           *time.Location // timezone for displayed times
+	loc           *timeutil.Zone // display timezone (live; setting → TZ env → UTC)
 	q             *gen.Queries
 	db            *sql.DB
 	t             Renderer
@@ -112,7 +113,7 @@ func (d accountsDeps) list(w http.ResponseWriter, r *http.Request) {
 			row.AuthChecked = true
 			row.AuthOK = res.OK
 			row.AuthMsg = res.Msg
-			row.AuthWhen = time.Unix(res.CheckedAt, 0).In(d.loc).Format("2006-01-02 15:04 MST")
+			row.AuthWhen = time.Unix(res.CheckedAt, 0).In(d.loc.Location()).Format("2006-01-02 15:04 MST")
 		}
 		enriched = append(enriched, row)
 	}

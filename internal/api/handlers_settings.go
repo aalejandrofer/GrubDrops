@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -24,10 +25,11 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/scheduler"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/timeutil"
 )
 
 type settingsDeps struct {
-	loc      *time.Location // timezone for displayed times
+	loc      *timeutil.Zone // display timezone (live; setting → TZ env → UTC)
 	s        *store.Settings
 	q        *gen.Queries // for inline accounts table
 	sch      *scheduler.Scheduler
@@ -135,6 +137,12 @@ type settingsPageData struct {
 	// Proxy settings
 	ProxyURL     string
 	ProxyEnabled bool
+
+	// Timezone is the configured IANA display zone ("" = use TZ env / UTC).
+	Timezone string
+	// TimezoneEffective is the zone actually in effect now (setting → TZ env →
+	// UTC), shown as a hint so the operator sees what "unset" resolves to.
+	TimezoneEffective string
 }
 
 func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active string) {
@@ -200,6 +208,12 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 	proxyURL, _ := d.s.ProxyURL(ctx)
 	proxyEnabled, _ := d.s.ProxyEnabled(ctx)
 
+	tz, _ := d.s.Timezone(ctx)
+	tzEffective := "UTC"
+	if d.loc != nil {
+		tzEffective = d.loc.Name()
+	}
+
 	render(w, r, d.t, "settings.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: active,
 		Page: settingsPageData{
@@ -235,6 +249,8 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 			CanaryIntervalSec:    canaryIntervalSec,
 			ProxyURL:             proxyURL,
 			ProxyEnabled:         proxyEnabled,
+			Timezone:             tz,
+			TimezoneEffective:    tzEffective,
 		},
 		Flash: flash,
 	})
@@ -306,6 +322,26 @@ func (d *settingsDeps) postGeneral(w http.ResponseWriter, r *http.Request) {
 	}
 	// heartbeat_interval_sec intentionally not accepted: HeartbeatInterval is
 	// locked to 60s (Twitch credits 1 min per beacon; >60s under-credits).
+
+	// Timezone: validate + persist, then swap the live display zone so the
+	// change takes effect immediately (no restart) across every rendered page
+	// and the header clock. An empty value clears the setting (falls back to
+	// the TZ env var / UTC). An invalid IANA name flashes an error and leaves
+	// the stored value untouched. Guard on field presence: both the intervals
+	// and the logging forms POST to /settings, so an absent field must NOT be
+	// read as "clear the timezone".
+	if vals, ok := r.Form["timezone"]; ok {
+		tzName := strings.TrimSpace(vals[0])
+		if err := d.s.SetTimezone(ctx, tzName); err != nil {
+			d.sm.Put(ctx, "flash", "flash.timezone_invalid")
+			http.Redirect(w, r, "/settings", http.StatusSeeOther)
+			return
+		}
+		if d.loc != nil {
+			d.loc.Set(timeutil.Resolve(tzName, os.Getenv("TZ")))
+		}
+	}
+
 	if d.onUpdate != nil {
 		d.onUpdate()
 	}

@@ -19,8 +19,14 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/scheduler"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/timeutil"
 	"github.com/aalejandrofer/grubdrops/internal/web"
 )
+
+// displayZone is the process-wide display timezone, set once in NewRouter so
+// the shared render() path can stamp the IANA zone name into every page (the
+// client-side header clock reads it). Nil-safe: render() falls back to UTC.
+var displayZone *timeutil.Zone
 
 // applyRedirectTarget picks the post-/accounts/apply landing page from
 // the Referer header. The dashboard also has a Reload button, so we
@@ -76,8 +82,10 @@ type Deps struct {
 	Registrar        KickChannelRegistrar
 	SettingsStore    *store.Settings
 	OnSettingsUpdate func()
-	// Location is the timezone for displayed times (from TZ env var).
-	Location *time.Location
+	// Zone holds the live display timezone (in-app setting → TZ env → UTC).
+	// Swappable at runtime so a timezone-setting change applies without a
+	// restart; also feeds the client-side header clock.
+	Zone *timeutil.Zone
 	// OIDC is the configured single-sign-on provider. Nil or disabled means
 	// the SSO button is hidden and the /auth/oidc/* routes redirect to /login.
 	OIDC *oidc.Provider
@@ -137,6 +145,9 @@ func NewRouter(d Deps) http.Handler {
 		return r
 	}
 
+	// Publish the display timezone for the shared render path (header clock).
+	displayZone = d.Zone
+
 	setup := setupDeps{q: d.Q, t: d.Templates, sm: d.Session}
 	oidcEnabled := d.OIDC != nil && d.OIDC.Enabled()
 	oidcName := ""
@@ -163,11 +174,11 @@ func NewRouter(d Deps) http.Handler {
 		ring:            d.LogRing,
 		s:               d.SettingsStore,
 		start:           startedAt,
-		loc:             d.Location,
+		loc:             d.Zone,
 		channelCounters: channelCountersFromRegistry(d.Registry),
 		kickPath:        d.KickActivePath,
 	}
-	accs := accountsDeps{q: d.Q, db: d.DB, t: d.Templates, sm: d.Session, sch: d.Scheduler, reload: d.Reload, authCheck: d.AuthCheck, reloadAccount: d.ReloadAccount, rootCtx: d.RootCtx, loc: d.Location}
+	accs := accountsDeps{q: d.Q, db: d.DB, t: d.Templates, sm: d.Session, sch: d.Scheduler, reload: d.Reload, authCheck: d.AuthCheck, reloadAccount: d.ReloadAccount, rootCtx: d.RootCtx, loc: d.Zone}
 	loginTwitch := newLoginTwitchDeps(d, d.RootCtx)
 	loginTwitchCookie := newLoginTwitchCookieDeps(d, d.RootCtx)
 	loginTwitchChoose := &loginTwitchChooseDeps{q: d.Q, t: d.Templates}
@@ -180,7 +191,7 @@ func NewRouter(d Deps) http.Handler {
 		registrar: d.Registrar,
 		reload:    d.Reload,
 		rootCtx:   d.RootCtx,
-		loc:       d.Location,
+		loc:       d.Zone,
 	}
 	// loginTwitchPaste retired: Twitch cookie-paste no longer authenticates
 	// (web-issued token vs Android client_id). Twitch login is device-code
@@ -321,7 +332,7 @@ func NewRouter(d Deps) http.Handler {
 		notifier:    d.Notifier,
 		runCanary:   d.RunCanary,
 		startedAt:   startedAt,
-		loc:         d.Location,
+		loc:         d.Zone,
 		logLevelEnv: d.LogLevelEnv,
 		browserURL:  d.BrowserURLDisplay,
 		sidecars:    d.KickSidecars,
@@ -329,8 +340,8 @@ func NewRouter(d Deps) http.Handler {
 		version:     d.Version,
 		oidc:        d.OIDC,
 	}
-	dropsH := &dropsDeps{q: d.Q, t: d.Templates, reload: d.Reload, sessions: d.Sessions, registry: d.Registry, loc: d.Location, sm: d.Session}
-	historyH := &historyDeps{q: d.Q, ring: d.LogRing, t: d.Templates, loc: d.Location}
+	dropsH := &dropsDeps{q: d.Q, t: d.Templates, reload: d.Reload, sessions: d.Sessions, registry: d.Registry, loc: d.Zone, sm: d.Session}
+	historyH := &historyDeps{q: d.Q, ring: d.LogRing, t: d.Templates, loc: d.Zone}
 
 	authed.Get("/settings", settingsH.get)
 	authed.Get("/priority", settingsH.getPriority)          // top-level nav item, moved out of Settings

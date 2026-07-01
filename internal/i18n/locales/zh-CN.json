@@ -482,6 +482,11 @@
   "runtime.disc_desc_prefix": "多久",
   "runtime.disc_desc_bold": "寻找新掉宝",
   "runtime.disc_desc_suffix": "一次 — 重新扫描活动目录",
+  "runtime.timezone": "显示时区",
+  "runtime.tz_desc_prefix": "IANA 名称，用于",
+  "runtime.tz_desc_bold": "所有显示的时间",
+  "runtime.tz_desc_suffix": "和时钟 — 留空则使用 TZ 环境变量 / UTC",
+  "runtime.tz_effective": "当前",
   "runtime.save": "保存",
 
   "logging.heading": "日志",
@@ -623,6 +628,7 @@
   "twitch_status.re_add": "并重新添加",
   "twitch_status.error": "错误 — 查看日志",
 
+  "flash.timezone_invalid": "时区无效 — 请使用 IANA 名称，如 Europe/Madrid",
   "flash.settings_saved": "设置已保存",
   "flash.settings_saved_reload": "设置已保存 — 重新加载监视器（或重启）以应用新频率",
   "flash.notifications_saved": "通知已保存",

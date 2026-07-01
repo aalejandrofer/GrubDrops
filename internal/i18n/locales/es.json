@@ -482,6 +482,11 @@
   "runtime.disc_desc_prefix": "con qué frecuencia",
   "runtime.disc_desc_bold": "busca nuevos drops",
   "runtime.disc_desc_suffix": "— vuelve a escanear el catálogo de campañas",
+  "runtime.timezone": "zona horaria",
+  "runtime.tz_desc_prefix": "nombre IANA para",
+  "runtime.tz_desc_bold": "todas las horas mostradas",
+  "runtime.tz_desc_suffix": "y el reloj — déjalo vacío para usar la variable TZ / UTC",
+  "runtime.tz_effective": "actualmente",
   "runtime.save": "Guardar",
 
   "logging.heading": "Registro",
@@ -623,6 +628,7 @@
   "twitch_status.re_add": "y vuelve a añadir",
   "twitch_status.error": "error — revisa los registros",
 
+  "flash.timezone_invalid": "zona horaria no válida — usa un nombre IANA como Europe/Madrid",
   "flash.settings_saved": "ajustes guardados",
   "flash.settings_saved_reload": "ajustes guardados — recarga los vigilantes (o reinicia) para aplicar la nueva cadencia",
   "flash.notifications_saved": "notificaciones guardadas",
