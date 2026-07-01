@@ -4,6 +4,14 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Fixed
+
+- **All outbound traffic now honours the proxy.** Kick's Chrome-fingerprinted
+  HTTP and WebSocket paths, Twitch PubSub, per-account Twitch, Discord webhooks,
+  and the Kick browser sidecar previously bypassed the configured proxy. They
+  now tunnel through it (SOCKS5 or HTTP CONNECT) with the TLS fingerprint
+  unchanged. Restart to apply.
+
 ## [1.3.6] — 2026-07-01
 
 ### Added
