@@ -56,6 +56,10 @@ type sidecarRegistry struct {
 	image string
 	// netOverride forces the sidecar network; "" means self-detect once.
 	netOverride string
+	// proxyURL, when set, is passed to auto-created sidecars via
+	// GRUB_SIDECAR_PROXY so their Chrome egresses through the same proxy as
+	// the rest of the Kick backend's traffic.
+	proxyURL string
 
 	// netOnce guards lazy network self-detection (inspect the miner's own
 	// container) so we only inspect once and cache the result.
@@ -76,6 +80,23 @@ func (r *sidecarRegistry) withCreate(image, netOverride string) *sidecarRegistry
 	r.image = image
 	r.netOverride = netOverride
 	return r
+}
+
+// withProxy sets the proxy URL (may be "") passed to auto-created sidecars via
+// GRUB_SIDECAR_PROXY. Returns r for chaining at construction.
+func (r *sidecarRegistry) withProxy(proxyURL string) *sidecarRegistry {
+	r.proxyURL = proxyURL
+	return r
+}
+
+// sidecarEnv builds the env for an auto-created sidecar. When a proxy is
+// configured, GRUB_SIDECAR_PROXY tells the sidecar's Chrome to route
+// through it (see internal/auth/browser/sidecar).
+func sidecarEnv(proxyURL string) []string {
+	if proxyURL == "" {
+		return nil
+	}
+	return []string{"GRUB_SIDECAR_PROXY=" + proxyURL}
 }
 
 // register derives the account's sidecar from its username. Safe to call again
@@ -227,6 +248,7 @@ func (r *sidecarRegistry) ensureUp(ctx context.Context, accountID string, ready 
 				dockerctl.LabelAccount: accountID,
 				dockerctl.LabelSlug:    slug,
 			},
+			Env: sidecarEnv(r.proxyURL),
 		}); err != nil {
 			return err
 		}

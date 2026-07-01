@@ -34,6 +34,7 @@ type CreateSpec struct {
 	Port     int               // gRPC port to expose (no host binding)
 	Networks []string          // user-defined networks to attach to
 	Labels   map[string]string // managed/account/slug labels
+	Env      []string          // container environment ("KEY=VALUE" entries)
 }
 
 // ContainerInfo is the slice of a listed container the sweep needs.
@@ -166,6 +167,7 @@ func (s *sdkEngine) create(ctx context.Context, spec CreateSpec) error {
 	cfg := &container.Config{
 		Image:        spec.Image,
 		Labels:       spec.Labels,
+		Env:          spec.Env,
 		ExposedPorts: nat.PortSet{port: struct{}{}},
 	}
 	// RestartPolicy intentionally empty ("no"): the miner owns the lifecycle

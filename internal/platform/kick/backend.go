@@ -102,6 +102,7 @@ func New(c *browser.Client, ctl dockerctl.Controller, template string, port int,
 	if o.sidecarImage != "" {
 		reg.withCreate(o.sidecarImage, o.sidecarNetwork)
 	}
+	reg.withProxy(o.proxyURL)
 	dial, err := netutil.ProxyDialer(o.proxyURL)
 	if err != nil {
 		slog.Warn("kick: bad proxy url, using direct", "err", err)
