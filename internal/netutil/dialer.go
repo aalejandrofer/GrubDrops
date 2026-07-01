@@ -4,6 +4,7 @@ package netutil
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"net/http"
@@ -68,7 +69,8 @@ func ProxyDialer(proxyURL string) (DialContextFunc, error) {
 			}
 			if parsed.User != nil {
 				if pw, ok := parsed.User.Password(); ok {
-					req.SetBasicAuth(parsed.User.Username(), pw)
+					auth := base64.StdEncoding.EncodeToString([]byte(parsed.User.Username() + ":" + pw))
+					req.Header.Set("Proxy-Authorization", "Basic "+auth)
 				}
 			}
 			if err := req.Write(conn); err != nil {
