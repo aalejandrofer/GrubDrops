@@ -162,6 +162,10 @@ func run() error {
 		safeURL := maskProxyURL(proxyURL)
 		logger.Info("proxy enabled", "url", safeURL)
 	}
+	effectiveProxy := ""
+	if proxyEnabled && proxyURL != "" {
+		effectiveProxy = proxyURL
+	}
 
 	// Kick runs over the pure-HTTP utls transport (Chrome TLS fingerprint) and
 	// no longer needs the chromedp sidecar for data — Kick's API 403s any
@@ -177,6 +181,7 @@ func run() error {
 		kickOpts = append(kickOpts, kick.WithSidecarAutoCreate(cfg.KickSidecarImage, cfg.KickSidecarNetwork))
 		logger.Info("kick sidecar auto-create enabled", "image", cfg.KickSidecarImage, "network", cfg.KickSidecarNetwork)
 	}
+	kickOpts = append(kickOpts, kick.WithProxy(effectiveProxy))
 	kickBackend = kick.New(browserClient, dockerCtl, cfg.KickSidecarTemplate, cfg.KickSidecarPort, 10*time.Minute, kickOpts...)
 	// Watch path is operator-selectable (Settings → Experimental). "browser"
 	// (default) drives a real IVS <video> in the sidecar. "ws" is the
@@ -207,7 +212,13 @@ func run() error {
 	// only needs the beacon transport, not the full watch stack.
 	var twitchBackend *twitch.Backend
 	if proxyTransport != nil {
-		twitchBackend = twitch.NewWithTransport(proxyTransport)
+		bk, err := twitch.NewWithProxy(proxyTransport, effectiveProxy)
+		if err != nil {
+			logger.Warn("twitch: proxy-aware backend failed, falling back to non-proxied PubSub", "err", err)
+			twitchBackend = twitch.NewWithTransport(proxyTransport)
+		} else {
+			twitchBackend = bk
+		}
 	} else {
 		twitchBackend = twitch.New()
 	}
@@ -312,7 +323,18 @@ func run() error {
 			if bk, ok := twitchBackends[a.ID]; ok {
 				return bk, true
 			}
-			bk := twitch.New()
+			var bk *twitch.Backend
+			if proxyTransport != nil {
+				pbk, err := twitch.NewWithProxy(proxyTransport, effectiveProxy)
+				if err != nil {
+					logger.Warn("twitch: proxy-aware backend failed for account, falling back to non-proxied", "account", a.ID, "err", err)
+					bk = twitch.New()
+				} else {
+					bk = pbk
+				}
+			} else {
+				bk = twitch.New()
+			}
 			twitchBackends[a.ID] = bk
 			return bk, true
 		}
