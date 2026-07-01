@@ -2,6 +2,7 @@ package notify
 
 import (
 	"context"
+	"net/http"
 	"sync"
 )
 
@@ -13,9 +14,10 @@ type AccountURLResolver func(accountID string) string
 // and routes to a per-account Discord webhook when one is configured.
 // Otherwise it delegates to the fallback notifier.
 type AccountRoutedNotifier struct {
-	fallback Notifier
-	resolve  AccountURLResolver
-	filter   *VerbosityFilter
+	fallback  Notifier
+	resolve   AccountURLResolver
+	filter    *VerbosityFilter
+	transport *http.Transport
 
 	// Branding applied to each per-account webhook client.
 	Username  string
@@ -25,12 +27,13 @@ type AccountRoutedNotifier struct {
 	cache map[string]*DiscordWebhook
 }
 
-func NewAccountRouted(fallback Notifier, resolve AccountURLResolver, filter *VerbosityFilter) *AccountRoutedNotifier {
+func NewAccountRouted(fallback Notifier, resolve AccountURLResolver, filter *VerbosityFilter, transport *http.Transport) *AccountRoutedNotifier {
 	return &AccountRoutedNotifier{
-		fallback: fallback,
-		resolve:  resolve,
-		filter:   filter,
-		cache:    map[string]*DiscordWebhook{},
+		fallback:  fallback,
+		resolve:   resolve,
+		filter:    filter,
+		transport: transport,
+		cache:     map[string]*DiscordWebhook{},
 	}
 }
 
@@ -53,7 +56,7 @@ func (r *AccountRoutedNotifier) client(url string) *DiscordWebhook {
 	if wh, ok := r.cache[url]; ok {
 		return wh
 	}
-	wh := NewDiscordWebhook(url, r.filter)
+	wh := NewDiscordWebhookWithTransport(url, r.filter, r.transport)
 	wh.Username = r.Username
 	wh.AvatarURL = r.AvatarURL
 	r.cache[url] = wh

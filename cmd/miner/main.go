@@ -166,6 +166,11 @@ func run() error {
 	if proxyEnabled && proxyURL != "" {
 		effectiveProxy = proxyURL
 	}
+	if effectiveProxy != "" {
+		if _, err := netutil.ProxyDialer(effectiveProxy); err != nil {
+			return fmt.Errorf("proxy enabled but misconfigured (%s): %w", maskProxyURL(effectiveProxy), err)
+		}
+	}
 
 	// Kick runs over the pure-HTTP utls transport (Chrome TLS fingerprint) and
 	// no longer needs the chromedp sidecar for data — Kick's API 403s any
@@ -275,7 +280,7 @@ func run() error {
 		} else {
 			fallback = &notify.NoopNotifier{Logger: logger}
 		}
-		routed := notify.NewAccountRouted(fallback, resolver, filter)
+		routed := notify.NewAccountRouted(fallback, resolver, filter, proxyTransport)
 		routed.Username = botUsername
 		routed.AvatarURL = avatarURL
 		return routed
