@@ -792,6 +792,7 @@
   .conn-chip {
     font-family: 'JetBrains Mono', monospace;
     font-size: 10px;
+    line-height: 1;
     padding: 2px 6px;
     border-radius: 3px;
     border: 1px solid var(--line);
@@ -805,8 +806,10 @@
   .link-actions { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; flex-wrap: wrap; white-space: nowrap; }
   .link-actions > a { white-space: nowrap; }
   .link-actions form { display: inline; margin: 0; }
-  /* Matches the .collect-box tick style: neutral border, green ✓, no fill. */
-  .linked-btn {
+  /* Matches the .collect-box tick style: neutral border, green ✓, no fill.
+     Scoped under .link-actions so it out-specifies .btn.sm (padding 5px 9px),
+     which would otherwise make the row taller than the whitelisted rows. */
+  .link-actions .linked-btn {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
     font-weight: 700;
@@ -824,6 +827,8 @@
   /* Discoverable row right-cell whitelist control (compact select + button). */
   .whitelist-add { display: inline-flex; justify-content: flex-end; }
   .whitelist-add .disc-add-form { display: inline-flex; gap: 6px; align-items: center; flex-wrap: nowrap; }
+  /* Fixed height so discoverable rows match the whitelisted rows: a native
+     select floors ~21px at any padding, so pin the box height explicitly. */
   .whitelist-add select {
     background: var(--surface);
     color: var(--text);
@@ -831,10 +836,13 @@
     border-radius: 3px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 9.5px;
-    padding: 2px 4px;
+    line-height: 1;
+    height: 17px;
+    padding: 0 4px;
+    box-sizing: border-box;
     max-width: 160px;
   }
-  .whitelist-add .btn.sm { white-space: nowrap; font-size: 9.5px; padding: 2px 6px; }
+  .whitelist-add .btn.sm { white-space: nowrap; font-size: 9.5px; line-height: 1; height: 17px; padding: 0 6px; box-sizing: border-box; }
   /* COLLECTED marks — one chip per account that claimed the benefit. */
   .drop-item-collected { display: flex; flex-wrap: wrap; gap: 5px; }
   .cmark {
@@ -1466,6 +1474,9 @@
   .drops-rows .ev-linkrow > summary {
     grid-template-columns: 14px 160px 10px 1fr 240px;
   }
+  /* Uniform row height across every /drops section regardless of the
+     right-cell control (collect box, connect chip, or whitelist select). */
+  .drops-rows .ev > summary { min-height: 27px; }
   .ev > summary::-webkit-details-marker,
   .ev > summary::marker { display: none; content: ""; }
   .ev:hover { background: var(--surface-2); }

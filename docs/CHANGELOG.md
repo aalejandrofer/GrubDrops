@@ -27,6 +27,11 @@ All notable changes to GrubDrops.
   needs-auth, so a single transient failure (idle-timeout, a lone 403, a
   network blip) no longer wrongly reports a still-valid session as expired.
   (`internal/authcheck`)
+- **Uniform /drops row heights.** The "account not linked" and both
+  "Discoverable" sections rendered taller than the whitelisted rows (a
+  `.btn.sm`-inflated link button, a 1.3 line-height connect chip, and a native
+  select flooring ~21px). All drops rows now share one height. (shadow-deployed
+  under v1.3.6)
 
 ## [1.3.5] — 2026-06-30
 
