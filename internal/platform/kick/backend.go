@@ -107,6 +107,7 @@ func New(c *browser.Client, ctl dockerctl.Controller, template string, port int,
 		slog.Warn("kick: bad proxy url, using direct", "err", err)
 		dial = nil
 	}
+	wsProxyDial = dial
 	b := &Backend{
 		c:                c,
 		api:              &api{d: newHTTPDoer(dial)},

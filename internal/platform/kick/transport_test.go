@@ -19,3 +19,17 @@ func TestHTTPDoer_UsesInjectedDialer(t *testing.T) {
 		t.Fatal("httpDoer did not use the injected dialer")
 	}
 }
+
+func TestNewUTLSConn_UsesProxyDial(t *testing.T) {
+	var used int32
+	old := wsProxyDial
+	t.Cleanup(func() { wsProxyDial = old })
+	wsProxyDial = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		atomic.AddInt32(&used, 1)
+		return nil, context.Canceled
+	}
+	_, _ = newUTLSConn(context.Background(), "tcp", "web.kick.com:443")
+	if atomic.LoadInt32(&used) == 0 {
+		t.Fatal("newUTLSConn did not use wsProxyDial")
+	}
+}

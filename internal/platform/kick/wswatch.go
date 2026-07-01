@@ -15,6 +15,7 @@ import (
 	"github.com/gorilla/websocket"
 	utls "github.com/refraction-networking/utls"
 
+	"github.com/aalejandrofer/grubdrops/internal/netutil"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
@@ -71,8 +72,12 @@ func wsUserEvent(channelID, livestreamID int64) map[string]any {
 // forcing http/1.1 ALPN (the WebSocket upgrade is http/1.1, and the token host
 // is happy on 1.1). Mirrors the verified kickautodrops client.
 func newUTLSConn(ctx context.Context, network, addr string) (net.Conn, error) {
-	d := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
-	raw, err := d.DialContext(ctx, network, addr)
+	dial := wsProxyDial
+	if dial == nil {
+		d := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+		dial = d.DialContext
+	}
+	raw, err := dial(ctx, network, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +117,10 @@ func newUTLSConn(ctx context.Context, network, addr string) (net.Conn, error) {
 	}
 	return uc, nil
 }
+
+// wsProxyDial is the TCP dialer for the WS utls path, set once at backend
+// construction (WithProxy). Nil means direct.
+var wsProxyDial netutil.DialContextFunc
 
 var (
 	wsHTTPClient = &http.Client{
