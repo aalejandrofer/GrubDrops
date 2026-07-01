@@ -36,10 +36,34 @@ type Checker struct {
 	sessions sessionGetter
 	registry *platform.Registry
 	log      *slog.Logger
+	// retryDelay is the pause before the single VerifyAuth retry. A blip
+	// (idle-timeout, transient 403/timeout) clears within seconds, so one
+	// short-delayed retry avoids marking a valid session expired while still
+	// failing a genuinely dead one. Defaults to 15s in New.
+	retryDelay time.Duration
 }
 
 func New(q *gen.Queries, sessions sessionGetter, reg *platform.Registry) *Checker {
-	return &Checker{q: q, sessions: sessions, registry: reg, log: slog.Default().With("component", "authcheck")}
+	return &Checker{q: q, sessions: sessions, registry: reg, log: slog.Default().With("component", "authcheck"), retryDelay: 15 * time.Second}
+}
+
+// verifyWithRetry probes the session and, on failure, retries exactly once
+// after retryDelay. This debounces transient failures (a single idle-timeout,
+// Cloudflare 403, or network blip) so a still-valid session is not wrongly
+// reported as expired — the bug where a Kick account flipped to needs_auth
+// after being left idle and only a manual cookie re-import cleared it. A
+// genuinely expired session fails both attempts and is still reported.
+func (c *Checker) verifyWithRetry(ctx context.Context, checker platform.AuthChecker, sess platform.Session) error {
+	err := checker.VerifyAuth(ctx, sess)
+	if err == nil {
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return err
+	case <-time.After(c.retryDelay):
+	}
+	return checker.VerifyAuth(ctx, sess)
 }
 
 // Run probes once immediately, then every interval until ctx is cancelled.
@@ -100,9 +124,9 @@ func (c *Checker) checkOne(ctx context.Context, accountID, plat string) {
 		return
 	}
 	sess.AccountID = accountID
-	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	cctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	if err := checker.VerifyAuth(cctx, sess); err != nil {
+	if err := c.verifyWithRetry(cctx, checker, sess); err != nil {
 		res.OK, res.Msg = false, truncate(err.Error(), 200)
 	} else {
 		res.OK, res.Msg = true, "ok"

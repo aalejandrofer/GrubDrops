@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/timeutil"
 )
 
 const (
@@ -34,6 +36,7 @@ const (
 	keyProxyEnabled        = "settings:proxy_enabled"
 	keyLatestRelease       = "settings:latest_release"     // most recent GitHub release tag
 	keyLastReleaseCheck    = "settings:last_release_check" // unix seconds of last successful check
+	keyTimezone            = "settings:timezone"           // IANA display timezone (empty = use TZ env/UTC)
 )
 
 // KickWatchMode selects how Kick watch-time is accrued.
@@ -399,4 +402,21 @@ func (s *Settings) LastReleaseCheck(ctx context.Context) (int64, error) {
 
 func (s *Settings) SetLastReleaseCheck(ctx context.Context, unixSec int64) error {
 	return s.setString(ctx, keyLastReleaseCheck, strconv.FormatInt(unixSec, 10))
+}
+
+// Timezone is the IANA display timezone chosen in-app (e.g. "Asia/Shanghai").
+// Empty means "unset" — the caller falls back to the TZ env var, then UTC.
+func (s *Settings) Timezone(ctx context.Context) (string, error) {
+	return s.getString(ctx, keyTimezone)
+}
+
+// SetTimezone validates the IANA name (empty clears it) and persists it. An
+// unloadable zone is rejected so the UI can flash an error and the stored
+// value is left untouched.
+func (s *Settings) SetTimezone(ctx context.Context, name string) error {
+	name = strings.TrimSpace(name)
+	if !timeutil.Valid(name) {
+		return fmt.Errorf("invalid timezone %q", name)
+	}
+	return s.setString(ctx, keyTimezone, name)
 }

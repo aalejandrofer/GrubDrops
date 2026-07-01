@@ -36,6 +36,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/scheduler"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/timeutil"
 	"github.com/aalejandrofer/grubdrops/internal/update"
 	"github.com/aalejandrofer/grubdrops/internal/watcher"
 	"github.com/aalejandrofer/grubdrops/internal/web"
@@ -594,6 +595,14 @@ func run() error {
 		reg = kickBackend // *kick.Backend: RegisterChannels + VerifyAuth
 	}
 
+	// Effective display timezone: the in-app setting wins over the TZ env var,
+	// falling back to UTC. Held in a live-swappable Zone so a Settings change
+	// applies without a restart. cfg.Location (from TZ env) is the fallback.
+	tzSetting, _ := settingsStore.Timezone(ctx)
+	displayLoc := timeutil.Resolve(tzSetting, os.Getenv("TZ"))
+	displayZone := timeutil.NewZone(displayLoc)
+	cfg.Location = displayLoc
+
 	deps := api.Deps{
 		DB: db, Q: q, Templates: tmplSet, Session: sm,
 		Scheduler: sched, Reload: loadAndStart,
@@ -619,11 +628,12 @@ func run() error {
 		UpdateStatus:      updateStatus,
 		OIDC:              oidcProvider,
 		SecureCookies:     cfg.SecureCookies,
-		Location:          cfg.Location,
+		Zone:              displayZone,
 	}
 
-	// Set process-wide timezone so time.Now() / Claims Today use TZ.
-	time.Local = cfg.Location
+	// Set process-wide timezone so any residual time.Local-based formatting
+	// matches the display zone at boot.
+	time.Local = displayLoc
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

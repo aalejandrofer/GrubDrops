@@ -16,6 +16,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/timeutil"
 )
 
 // KickBrowserClient is the surface the Kick login handler depends on.
@@ -36,7 +37,7 @@ type kickBrowserClient = KickBrowserClient
 type kickChannelRegistrar = KickChannelRegistrar
 
 type loginKickDeps struct {
-	loc       *time.Location // timezone for displayed times
+	loc       *timeutil.Zone // display timezone (live; setting → TZ env → UTC)
 	q         *gen.Queries
 	t         Renderer
 	sm        *scs.SessionManager

@@ -19,10 +19,11 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/timeutil"
 )
 
 type dropsDeps struct {
-	loc      *time.Location // timezone for displayed times
+	loc      *timeutil.Zone // display timezone (live; setting → TZ env → UTC)
 	q        *gen.Queries
 	t        Renderer
 	reload   func(context.Context) error
@@ -576,7 +577,7 @@ func (d *dropsDeps) collectAll(
 	for _, c := range pastCamps {
 		row := dropsRow{
 			CampaignID:   c.ID,
-			When:         time.Unix(c.EndsAt, 0).In(d.loc).Format("2006-01-02 15:04 MST"),
+			When:         time.Unix(c.EndsAt, 0).In(d.loc.Location()).Format("2006-01-02 15:04 MST"),
 			Platform:     c.Platform,
 			Game:         c.Game,
 			CampaignName: c.Name,
@@ -607,7 +608,7 @@ func (d *dropsDeps) collectAll(
 	for _, c := range currentCamps {
 		row := dropsRow{
 			CampaignID:   c.ID,
-			When:         time.Unix(c.EndsAt, 0).In(d.loc).Format("2006-01-02 15:04 MST"),
+			When:         time.Unix(c.EndsAt, 0).In(d.loc.Location()).Format("2006-01-02 15:04 MST"),
 			Platform:     c.Platform,
 			Game:         c.Game,
 			CampaignName: c.Name,
@@ -636,7 +637,7 @@ func (d *dropsDeps) collectAll(
 	for _, c := range upcomingCamps {
 		row := dropsRow{
 			CampaignID:   c.ID,
-			When:         time.Unix(c.StartsAt, 0).In(d.loc).Format("2006-01-02 15:04 MST"),
+			When:         time.Unix(c.StartsAt, 0).In(d.loc.Location()).Format("2006-01-02 15:04 MST"),
 			Platform:     c.Platform,
 			Game:         c.Game,
 			CampaignName: c.Name,
@@ -682,7 +683,7 @@ func (d *dropsDeps) collectAll(
 		}
 		past = append(past, dropsRow{
 			CampaignID:   row.CampaignID,
-			When:         time.Unix(row.ClaimedAt, 0).In(d.loc).Format("2006-01-02 15:04 MST"),
+			When:         time.Unix(row.ClaimedAt, 0).In(d.loc.Location()).Format("2006-01-02 15:04 MST"),
 			Platform:     row.Platform,
 			Game:         row.Game,
 			CampaignName: row.CampaignName,
@@ -1362,7 +1363,7 @@ func (d *dropsDeps) renderCampaignItems(w http.ResponseWriter, r *http.Request, 
 		CSRFToken:    csrfToken(r),
 	}
 	if camp.EndsAt > 0 {
-		detail.When = time.Unix(camp.EndsAt, 0).In(d.loc).Format("2006-01-02 15:04 MST")
+		detail.When = time.Unix(camp.EndsAt, 0).In(d.loc.Location()).Format("2006-01-02 15:04 MST")
 	}
 	// Per-benefit COLLECTED marks: which accounts already claimed each benefit.
 	collectedByBenefit := map[string][]collectedMark{}

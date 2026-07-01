@@ -222,6 +222,31 @@
             </div>
           </span>
         </div>
+        <form method="post" action="/settings" class="row" style="align-items:center;justify-content:space-between;" onchange="this.submit()">
+          <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+          <span class="k">{{t "runtime.timezone"}}</span>
+          <span class="v">
+            <input type="text" name="timezone" value="{{.Timezone}}" list="tz-list" placeholder="{{.TimezoneEffective}}" autocomplete="off" spellcheck="false" style="min-width:180px;">
+            <datalist id="tz-list">
+              <option value="UTC"></option>
+              <option value="America/New_York"></option>
+              <option value="America/Chicago"></option>
+              <option value="America/Denver"></option>
+              <option value="America/Los_Angeles"></option>
+              <option value="America/Sao_Paulo"></option>
+              <option value="Europe/London"></option>
+              <option value="Europe/Madrid"></option>
+              <option value="Europe/Paris"></option>
+              <option value="Europe/Berlin"></option>
+              <option value="Europe/Moscow"></option>
+              <option value="Asia/Kolkata"></option>
+              <option value="Asia/Shanghai"></option>
+              <option value="Asia/Tokyo"></option>
+              <option value="Asia/Singapore"></option>
+              <option value="Australia/Sydney"></option>
+            </datalist>
+          </span>
+        </form>
       </div>
     </section>
 

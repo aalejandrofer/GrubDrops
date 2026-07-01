@@ -9,13 +9,14 @@ import (
 
 	mlog "github.com/aalejandrofer/grubdrops/internal/log"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/timeutil"
 )
 
 // historyDeps owns /history. Pulls claims from the on-disk claims
 // table + ring-buffered reward-reaper claims + ring events so the
 // page surfaces both persistent + ephemeral history in one feed.
 type historyDeps struct {
-	loc  *time.Location // timezone for displayed times
+	loc  *timeutil.Zone // display timezone (live; setting → TZ env → UTC)
 	q    *gen.Queries
 	ring *mlog.Ring
 	t    Renderer
@@ -66,7 +67,7 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 				acc = "@" + acc
 			}
 			page.Claims = append(page.Claims, historyClaim{
-				When:         time.Unix(row.ClaimedAt, 0).In(d.loc).Format("2006-01-02 15:04 MST"),
+				When:         time.Unix(row.ClaimedAt, 0).In(d.loc.Location()).Format("2006-01-02 15:04 MST"),
 				Platform:     row.Platform,
 				Game:         row.Game,
 				Title:        row.BenefitName,
@@ -80,7 +81,7 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 	// Ring-buffered reward claims (no benefit_id, so they don't reach
 	// the claims table). Walk the ring for kind=claim entries.
 	if d.ring != nil {
-		page.Claims = append(page.Claims, rewardClaimsFromRing(d.ring.Snapshot(), labelByID, platformByID, d.loc)...)
+		page.Claims = append(page.Claims, rewardClaimsFromRing(d.ring.Snapshot(), labelByID, platformByID, d.loc.Location())...)
 	}
 
 	// Cross-source dedupe — when a claim reaches the claims table it
@@ -116,7 +117,7 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 			acc := fieldStr(l.Fields, "account")
 			label := labelByID[acc]
 			page.Events = append(page.Events, historyEvent{
-				Time:    l.TS.In(d.loc).Format("15:04:05"),
+				Time:    l.TS.In(d.loc.Location()).Format("15:04:05"),
 				Kind:    kind,
 				Color:   colorForKind(kind, l.Level),
 				Message: l.Msg,

@@ -17,6 +17,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/timeutil"
 	"github.com/aalejandrofer/grubdrops/internal/web"
 )
 
@@ -95,7 +96,7 @@ func TestAddClaim_WritesClaimAndOverride(t *testing.T) {
 	require.NoError(t, err)
 	seedCampaignWithBenefit(t, ctx, q, "camp-1", "ben-1", "twitch")
 
-	d := &dropsDeps{q: q, t: testRenderer(t), loc: time.UTC}
+	d := &dropsDeps{q: q, t: testRenderer(t), loc: timeutil.NewZone(time.UTC)}
 
 	form := url.Values{}
 	form.Set("account_id", "acc-1")
@@ -140,7 +141,7 @@ func TestRemoveClaim_DeletesClaimAndOverride(t *testing.T) {
 		Key: store.CollectOverridePrefix + "ben-1:acc-1", Value: []byte("1"),
 	}))
 
-	d := &dropsDeps{q: q, t: testRenderer(t), loc: time.UTC}
+	d := &dropsDeps{q: q, t: testRenderer(t), loc: timeutil.NewZone(time.UTC)}
 	form := url.Values{}
 	form.Set("account_id", "acc-1")
 	form.Set("benefit_id", "ben-1")

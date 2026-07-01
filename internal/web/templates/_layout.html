@@ -36,12 +36,26 @@
 {{block "content" .}}{{end}}
 </main>
 <script>
-  // Clock: show UTC, matching the UTC timestamps in the drops/history lists.
+  // Clock: render in the configured display timezone (Settings → General;
+  // falls back to the TZ env var, then UTC), matching the server-formatted
+  // timestamps in the drops/history lists. The zone label is shown alongside.
   (function () {
+    var tz = '{{.Timezone}}' || 'UTC';
+    function fmt() {
+      try {
+        return new Intl.DateTimeFormat([], {
+          timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit',
+          hour12: false, timeZoneName: 'short'
+        }).format(new Date());
+      } catch (e) {
+        // Invalid/unsupported zone name — fall back to UTC so the clock never breaks.
+        return new Date().toLocaleTimeString([], { timeZone: 'UTC', hour12: false }) + ' UTC';
+      }
+    }
     function tick() {
       var el = document.querySelector('.clock');
       if (!el) return;
-      el.textContent = new Date().toLocaleTimeString([], { timeZone: 'UTC', hour12: false }) + ' UTC';
+      el.textContent = fmt();
     }
     tick(); setInterval(tick, 1000);
   })();
@@ -86,6 +100,10 @@
       f.method = 'POST'; f.action = '/api/lang'; f.style.display = 'none';
       var i = document.createElement('input');
       i.name = 'lang'; i.value = lang; f.appendChild(i);
+      // /api/lang is CSRF-protected; without this token the POST 403s and the
+      // language never switches.
+      var c = document.createElement('input');
+      c.name = 'csrf_token'; c.value = '{{.CSRFToken}}'; f.appendChild(c);
       document.body.appendChild(f); f.submit();
     });
     document.addEventListener('click', function () {

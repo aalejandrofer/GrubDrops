@@ -4,6 +4,30 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.3.6] — 2026-07-01
+
+### Added
+
+- **Display-timezone setting.** Settings → General now has a "display timezone"
+  field (IANA name, e.g. `Europe/Madrid`), so times no longer require the `TZ`
+  environment variable. The change applies live, with no restart, across every
+  page, the header clock, and the "claims today" boundary. Blank falls back to
+  `TZ` then UTC; an invalid name is rejected with a flash. (`internal/timeutil`)
+
+### Fixed
+
+- **Header clock now honours the configured timezone** instead of always
+  showing UTC. It renders in the display timezone (with its short zone label)
+  via the browser's `Intl`, falling back to UTC only if the zone is unloadable.
+- **Language switching no longer 403s.** The language-switch form POSTs to the
+  CSRF-protected `/api/lang`; it now carries the CSRF token, so switching
+  languages works again.
+- **Kick sessions no longer flagged as expired after idle.** The auth-check
+  probe now retries once after a short delay before marking an account
+  needs-auth, so a single transient failure (idle-timeout, a lone 403, a
+  network blip) no longer wrongly reports a still-valid session as expired.
+  (`internal/authcheck`)
+
 ## [1.3.5] — 2026-06-30
 
 ### Fixed
