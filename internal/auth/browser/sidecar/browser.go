@@ -109,6 +109,12 @@ func New(ctx context.Context) *Browser {
 	if bin := os.Getenv("CHROME_BIN"); bin != "" {
 		opts = append(opts, chromedp.ExecPath(bin))
 	}
+
+	// When the miner's global proxy is configured, GRUB_SIDECAR_PROXY is set
+	// on this container's env so Chrome's own egress routes through it too
+	// (see internal/platform/kick/sidecars.go sidecarEnv).
+	opts = append(opts, proxyAllocOpts(os.Getenv("GRUB_SIDECAR_PROXY"))...)
+
 	allocCtx, cancel := chromedp.NewExecAllocator(ctx, opts...)
 	return &Browser{
 		allocCtx:    allocCtx,
@@ -117,6 +123,15 @@ func New(ctx context.Context) *Browser {
 		baseOpts:    opts,
 		tabs:        map[string]tabState{},
 	}
+}
+
+// proxyAllocOpts returns a chromedp option enabling Chrome's proxy when
+// proxyURL is non-empty, else nothing. Chrome accepts http/https/socks5.
+func proxyAllocOpts(proxyURL string) []chromedp.ExecAllocatorOption {
+	if proxyURL == "" {
+		return nil
+	}
+	return []chromedp.ExecAllocatorOption{chromedp.Flag("proxy-server", proxyURL)}
 }
 
 // StealthScript is the JS payload evaluated on every new document

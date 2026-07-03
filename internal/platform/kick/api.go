@@ -51,7 +51,7 @@ type api struct {
 	d doer
 }
 
-func newAPI() *api { return &api{d: newHTTPDoer()} }
+func newAPI() *api { return &api{d: newHTTPDoer(nil)} }
 
 // ---- Public channel discovery (no auth required) -------------------------
 

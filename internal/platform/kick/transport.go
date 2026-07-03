@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aalejandrofer/grubdrops/internal/netutil"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	utls "github.com/refraction-networking/utls"
 	"golang.org/x/net/http2"
@@ -39,6 +40,7 @@ type httpDoer struct {
 	timeout time.Duration
 	mu      sync.Mutex
 	conns   map[string]*cachedConn // host -> cached connection
+	dial    netutil.DialContextFunc
 }
 
 type cachedConn struct {
@@ -48,10 +50,18 @@ type cachedConn struct {
 	lastUse time.Time
 }
 
-func newHTTPDoer() *httpDoer {
+// newHTTPDoer builds an httpDoer that dials new connections through dial. A
+// nil dial (the common case, and every existing call site) falls back to a
+// direct net.Dialer, matching the prior behaviour.
+func newHTTPDoer(dial netutil.DialContextFunc) *httpDoer {
+	if dial == nil {
+		var nd net.Dialer
+		dial = nd.DialContext
+	}
 	return &httpDoer{
 		timeout: 20 * time.Second,
 		conns:   map[string]*cachedConn{},
+		dial:    dial,
 	}
 }
 
@@ -67,8 +77,7 @@ func (d *httpDoer) connFor(ctx context.Context, host string) (*cachedConn, error
 
 	dialCtx, cancel := context.WithTimeout(ctx, d.timeout)
 	defer cancel()
-	var dialer net.Dialer
-	tcp, err := dialer.DialContext(dialCtx, "tcp", host+":443")
+	tcp, err := d.dial(dialCtx, "tcp", host+":443")
 	if err != nil {
 		return nil, fmt.Errorf("dial: %w", err)
 	}

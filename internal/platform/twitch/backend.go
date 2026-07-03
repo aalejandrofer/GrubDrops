@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/aalejandrofer/grubdrops/internal/gameslug"
+	"github.com/aalejandrofer/grubdrops/internal/netutil"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
@@ -102,8 +103,9 @@ type Backend struct {
 	pubsub         *PubSubClient
 	pubsubCancel   context.CancelFunc
 	pubsubHandlers PubSubHandlers
-	pubsubDisabled bool   // tests disable via newForTest
-	boundAccount   string // first account to bind hooks; guards single-account use
+	pubsubDial     netutil.DialContextFunc // routes the PubSub WS dial through the proxy, if any
+	pubsubDisabled bool                    // tests disable via newForTest
+	boundAccount   string                  // first account to bind hooks; guards single-account use
 }
 
 var _ platform.Backend = (*Backend)(nil)
@@ -156,6 +158,22 @@ func NewWithTransport(transport *http.Transport) *Backend {
 		adv:                     &advisory{c: c},
 		allowedLoginsByCampaign: map[string][]string{},
 	}
+}
+
+// NewWithProxy creates a Backend whose HTTP traffic uses transport (as
+// NewWithTransport does) and whose PubSub WebSocket dials through proxyURL
+// (via netutil.ProxyDialer), so per-account backends fully honor the global
+// proxy rather than just their HTTP calls. proxyURL == "" dials direct,
+// matching NewWithTransport's behavior for the WS leg too. Wired up by the
+// caller (cmd/miner/main.go) in a later task.
+func NewWithProxy(transport *http.Transport, proxyURL string) (*Backend, error) {
+	dial, err := netutil.ProxyDialer(proxyURL)
+	if err != nil {
+		return nil, fmt.Errorf("twitch: build proxy dialer: %w", err)
+	}
+	b := NewWithTransport(transport)
+	b.pubsubDial = dial
+	return b, nil
 }
 
 // newForTest builds a Backend pointed at a test endpoint. Used by tests
@@ -285,7 +303,7 @@ func (b *Backend) ensurePubSub(s platform.Session) {
 		return
 	}
 	handlers := b.pubsubHandlers
-	client := NewPubSubClient(s.AccessToken, handlers)
+	client := NewPubSubClientWithDial(s.AccessToken, handlers, b.pubsubDial)
 	ctx, cancel := context.WithCancel(context.Background())
 	b.pubsub = client
 	b.pubsubCancel = cancel

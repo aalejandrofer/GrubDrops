@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aalejandrofer/grubdrops/internal/netutil"
 	"github.com/gorilla/websocket"
 )
 
@@ -67,6 +68,7 @@ type PubSubHandlers struct {
 type PubSubClient struct {
 	authToken string
 	handlers  PubSubHandlers
+	dial      netutil.DialContextFunc // optional; routes the WS dial through a proxy
 
 	mu      sync.Mutex
 	topics  map[string]struct{}
@@ -78,11 +80,27 @@ type PubSubClient struct {
 
 // NewPubSubClient builds a client. Call Connect to dial.
 func NewPubSubClient(authToken string, handlers PubSubHandlers) *PubSubClient {
+	return NewPubSubClientWithDial(authToken, handlers, nil)
+}
+
+// NewPubSubClientWithDial builds a client whose WebSocket dial goes through
+// dial when non-nil (e.g. the output of netutil.ProxyDialer), so per-account
+// backends built with a proxy carry it through to their PubSub socket too.
+// A nil dial behaves exactly like NewPubSubClient (direct dial).
+func NewPubSubClientWithDial(authToken string, handlers PubSubHandlers, dial netutil.DialContextFunc) *PubSubClient {
 	return &PubSubClient{
 		authToken: authToken,
 		handlers:  handlers,
+		dial:      dial,
 		topics:    map[string]struct{}{},
 	}
+}
+
+// newPubSubClientWithDial is the test-facing constructor named by the task
+// brief (TestPubSub_UsesProxyDial): a bare dialer with no auth/handlers,
+// sufficient to exercise dialAndPump's dial wiring in isolation.
+func newPubSubClientWithDial(dial netutil.DialContextFunc) *PubSubClient {
+	return NewPubSubClientWithDial("", PubSubHandlers{}, dial)
 }
 
 // Close stops the Run loop and closes the WebSocket connection.
@@ -183,6 +201,9 @@ func (p *PubSubClient) RemoveTopic(topic string) {
 
 func (p *PubSubClient) dialAndPump(ctx context.Context) error {
 	dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
+	if p.dial != nil {
+		dialer.NetDialContext = p.dial
+	}
 	conn, _, err := dialer.DialContext(ctx, PubSubEndpoint, http.Header{})
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)

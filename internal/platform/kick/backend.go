@@ -11,6 +11,7 @@ import (
 
 	"github.com/aalejandrofer/grubdrops/internal/auth/browser"
 	"github.com/aalejandrofer/grubdrops/internal/dockerctl"
+	"github.com/aalejandrofer/grubdrops/internal/netutil"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
@@ -71,6 +72,7 @@ type Option func(*options)
 type options struct {
 	sidecarImage   string
 	sidecarNetwork string
+	proxyURL       string
 }
 
 // WithSidecarAutoCreate enables auto-create of per-account browser sidecars:
@@ -80,6 +82,10 @@ type options struct {
 func WithSidecarAutoCreate(image, network string) Option {
 	return func(o *options) { o.sidecarImage, o.sidecarNetwork = image, network }
 }
+
+// WithProxy routes the utls HTTP transport (drops API, discovery, claim)
+// through proxyURL. Empty string keeps the direct dialer.
+func WithProxy(proxyURL string) Option { return func(o *options) { o.proxyURL = proxyURL } }
 
 // New builds the Kick backend. c is the login client (data flows over the utls
 // HTTP client; c is kept for the interactive-login path). ctl controls the
@@ -96,9 +102,16 @@ func New(c *browser.Client, ctl dockerctl.Controller, template string, port int,
 	if o.sidecarImage != "" {
 		reg.withCreate(o.sidecarImage, o.sidecarNetwork)
 	}
+	reg.withProxy(o.proxyURL)
+	dial, err := netutil.ProxyDialer(o.proxyURL)
+	if err != nil {
+		slog.Warn("kick: bad proxy url, using direct", "err", err)
+		dial = nil
+	}
+	wsProxyDial = dial
 	b := &Backend{
 		c:                c,
-		api:              newAPI(),
+		api:              &api{d: newHTTPDoer(dial)},
 		sidecars:         reg,
 		clientByName:     map[string]*browser.Client{},
 		sidecarPort:      port,

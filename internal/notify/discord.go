@@ -34,10 +34,19 @@ func NewDiscordWebhook(url string, filter *VerbosityFilter) *DiscordWebhook {
 }
 
 func NewDiscordWebhookWithTransport(url string, filter *VerbosityFilter, transport *http.Transport) *DiscordWebhook {
+	client := &http.Client{Timeout: 10 * time.Second}
+	// A nil *http.Transport assigned into http.Client.Transport (an
+	// interface) is a non-nil interface wrapping a nil pointer, which
+	// panics on first use. Only set Transport when non-nil so the
+	// zero-value case behaves exactly like NewDiscordWebhook (client uses
+	// http.DefaultTransport, i.e. direct).
+	if transport != nil {
+		client.Transport = transport
+	}
 	return &DiscordWebhook{
 		URL:    url,
 		Filter: filter,
-		HTTP:   &http.Client{Timeout: 10 * time.Second, Transport: transport},
+		HTTP:   client,
 	}
 }
 

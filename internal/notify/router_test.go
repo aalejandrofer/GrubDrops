@@ -41,7 +41,7 @@ func TestRouter_RoutesToPerAccountURL(t *testing.T) {
 			return srv.URL
 		}
 		return ""
-	}, nil)
+	}, nil, nil)
 
 	require.NoError(t, r.Notify(context.Background(), EventClaim, map[string]any{
 		"account": "acc1", "benefit": "b1",
@@ -62,7 +62,7 @@ func TestRouter_PropagatesBrandingToPerAccountClient(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	r := NewAccountRouted(&captureNotifier{}, func(string) string { return srv.URL }, nil)
+	r := NewAccountRouted(&captureNotifier{}, func(string) string { return srv.URL }, nil, nil)
 	r.Username = "GrubDrops"
 	r.AvatarURL = "https://img/a.png"
 
@@ -76,7 +76,7 @@ func TestRouter_PropagatesBrandingToPerAccountClient(t *testing.T) {
 
 func TestRouter_FallsBackWhenNoAccountURL(t *testing.T) {
 	fallback := &captureNotifier{}
-	r := NewAccountRouted(fallback, func(_ string) string { return "" }, nil)
+	r := NewAccountRouted(fallback, func(_ string) string { return "" }, nil, nil)
 
 	require.NoError(t, r.Notify(context.Background(), EventState, map[string]any{
 		"account": "acc1", "state": "watching",
@@ -84,9 +84,19 @@ func TestRouter_FallsBackWhenNoAccountURL(t *testing.T) {
 	assert.Len(t, fallback.events, 1)
 }
 
+func TestRouter_ClientUsesConfiguredTransport(t *testing.T) {
+	transport := &http.Transport{}
+	r := NewAccountRouted(&captureNotifier{}, func(string) string { return "http://example.invalid/webhook" }, nil, transport)
+
+	wh := r.client("http://example.invalid/webhook")
+
+	require.NotNil(t, wh.HTTP)
+	assert.Same(t, transport, wh.HTTP.Transport)
+}
+
 func TestRouter_FallsBackWhenAccountFieldMissing(t *testing.T) {
 	fallback := &captureNotifier{}
-	r := NewAccountRouted(fallback, func(_ string) string { return "http://should-not-be-used" }, nil)
+	r := NewAccountRouted(fallback, func(_ string) string { return "http://should-not-be-used" }, nil, nil)
 
 	require.NoError(t, r.Notify(context.Background(), EventError, map[string]any{
 		"panic": "oh no",
