@@ -4,6 +4,8 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.3.7] — 2026-07-03
+
 ### Fixed
 
 - **All outbound traffic now honours the proxy.** Kick's Chrome-fingerprinted
