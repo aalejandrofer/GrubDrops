@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 )
@@ -80,6 +81,7 @@ func httpConnectProxy(t *testing.T) (addr string, connects func() int) {
 // addr + a func to retrieve the captured CONNECT request.
 func httpConnectProxyWithAuth(t *testing.T) (addr string, getCaptured func() *http.Request) {
 	t.Helper()
+	var mu sync.Mutex
 	var captured *http.Request
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -99,7 +101,9 @@ func httpConnectProxyWithAuth(t *testing.T) (addr string, getCaptured func() *ht
 					client.Close()
 					return
 				}
+				mu.Lock()
 				captured = req
+				mu.Unlock()
 				target, err := net.Dial("tcp", req.Host)
 				if err != nil {
 					client.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
@@ -114,7 +118,11 @@ func httpConnectProxyWithAuth(t *testing.T) (addr string, getCaptured func() *ht
 			}()
 		}
 	}()
-	return ln.Addr().String(), func() *http.Request { return captured }
+	return ln.Addr().String(), func() *http.Request {
+		mu.Lock()
+		defer mu.Unlock()
+		return captured
+	}
 }
 
 func readAll(t *testing.T, c net.Conn) string {

@@ -87,9 +87,24 @@ func ProxyDialer(proxyURL string) (DialContextFunc, error) {
 				conn.Close()
 				return nil, fmt.Errorf("proxy CONNECT failed: %s", resp.Status)
 			}
-			return conn, nil
+			// http.ReadResponse reads through br, which may buffer bytes that
+			// arrived after the CONNECT 200 (the start of the tunneled stream).
+			// Returning the bare conn would discard them, so wrap it to drain
+			// the buffer first.
+			return &connectConn{Conn: conn, r: br}, nil
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported proxy scheme %q", parsed.Scheme)
 	}
 }
+
+// connectConn wraps a proxied connection whose CONNECT response was read via a
+// bufio.Reader. Reads drain any bytes the reader buffered past the response
+// (the leading bytes of the tunneled stream) before continuing from the conn;
+// all other operations delegate to the underlying conn.
+type connectConn struct {
+	net.Conn
+	r *bufio.Reader
+}
+
+func (c *connectConn) Read(p []byte) (int, error) { return c.r.Read(p) }
