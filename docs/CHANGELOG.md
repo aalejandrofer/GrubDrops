@@ -4,6 +4,15 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.3.8] — 2026-07-05
+
+### Fixed
+
+- **Proxy tunnels no longer drop the first bytes of a connection.** When using
+  an HTTP proxy, the CONNECT handshake could swallow the leading bytes of the
+  tunneled stream, which could break a proxied connection. Fixes a correctness
+  bug in the v1.3.7 proxy support (SOCKS5 was unaffected).
+
 ## [1.3.7] — 2026-07-03
 
 ### Fixed
