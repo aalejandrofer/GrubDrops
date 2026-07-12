@@ -4,6 +4,8 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.3.9] — 2026-07-13
+
 ### Fixed
 
 - **Twitch drops progress again (Spade beacon).** As of ~2026-07-11 Twitch
