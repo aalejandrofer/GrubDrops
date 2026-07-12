@@ -1,10 +1,7 @@
 package twitch
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -14,21 +11,24 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
-const sendEventsMutation = `mutation SendEvents($input: SendSpadeEventsInput!) {
-  sendSpadeEvents(input: $input) {
-    statusCode
-  }
-}`
-
 type watch struct {
 	c *client
 
 	userIDMu     sync.Mutex
 	cachedUserID int64
+
+	// spadeMu guards spadeURLs, a per-channel cache of the Spade
+	// minute-watched beacon URL. The beacon URL is scraped from each
+	// channel's page (see client.resolveSpadeURL) and is stable for the
+	// channel, so it's worth caching to avoid an extra HTTP GET per
+	// heartbeat. An entry is evicted on a failed beacon so the next
+	// heartbeat re-resolves from a fresh page fetch.
+	spadeMu   sync.Mutex
+	spadeURLs map[string]string
 }
 
 func newWatch() *watch {
-	return &watch{c: newClient()}
+	return &watch{c: newClient(), spadeURLs: map[string]string{}}
 }
 
 type watchInternal struct {
@@ -42,8 +42,8 @@ type watchInternal struct {
 }
 
 func (w *watch) start(ctx context.Context, sess platform.Session, stream platform.Stream) (platform.WatchHandle, error) {
-	// SendEvents tracks watch time against the broadcaster + game IDs
-	// — propagate from stream metadata.
+	// The minute-watched heartbeat is tracked against the broadcaster +
+	// game IDs — propagate them from stream metadata.
 	userID, err := w.resolveUserID(ctx, sess)
 	if err != nil {
 		return platform.WatchHandle{}, fmt.Errorf("resolve user id: %w", err)
@@ -64,8 +64,9 @@ func (w *watch) start(ctx context.Context, sess platform.Session, stream platfor
 
 // resolveUserID returns the authenticated user's Twitch numeric id.
 // Cached on the watch struct because it doesn't change for the
-// lifetime of a session. SendEvents needs this number for every
-// heartbeat — without it watch time is silently discarded.
+// lifetime of a session. The Spade minute-watched heartbeat needs this
+// number in its properties — without it watch time is silently
+// discarded.
 func (w *watch) resolveUserID(ctx context.Context, sess platform.Session) (int64, error) {
 	w.userIDMu.Lock()
 	defer w.userIDMu.Unlock()
@@ -92,12 +93,89 @@ func (w *watch) resolveUserID(ctx context.Context, sess platform.Session) (int64
 	return id, nil
 }
 
+// heartbeat sends one minute-watched event to Twitch's Spade analytics
+// beacon. As of the 2026-07-11 Twitch change, the GQL SendEvents mutation
+// is no longer credited for drop progress — only this Spade POST path
+// accrues watch time. The beacon URL is resolved per channel (cached),
+// and on a failed send the cache entry is evicted and re-resolved once
+// before giving up, mirroring twitch-gql-rs' send_watch retry.
 func (w *watch) heartbeat(ctx context.Context, h platform.WatchHandle) error {
 	internal, ok := h.Internal.(watchInternal)
 	if !ok {
 		return fmt.Errorf("invalid watch handle")
 	}
 
+	events, err := minuteWatchedEvents(internal)
+	if err != nil {
+		return err
+	}
+
+	spadeURL, err := w.cachedSpadeURL(ctx, internal.Token, internal.Channel)
+	if err != nil {
+		return fmt.Errorf("resolve spade url: %w", err)
+	}
+
+	if err := w.c.sendSpadeBeacon(ctx, internal.Token, spadeURL, events); err == nil {
+		return nil
+	}
+
+	// Evict and re-resolve once: the cached URL can go stale (Twitch
+	// rotates the analytics edge) and a fresh page fetch is the fix.
+	w.evictSpadeURL(internal.Channel)
+	spadeURL, err = w.c.resolveSpadeURL(ctx, internal.Token, internal.Channel)
+	if err != nil {
+		return fmt.Errorf("resolve spade url (retry): %w", err)
+	}
+	w.setSpadeURL(internal.Channel, spadeURL)
+	return w.c.sendSpadeBeacon(ctx, internal.Token, spadeURL, events)
+}
+
+func (w *watch) stop(_ context.Context, _ platform.WatchHandle) error {
+	return nil
+}
+
+// cachedSpadeURL returns the channel's beacon URL from the cache,
+// resolving + caching it on first use.
+func (w *watch) cachedSpadeURL(ctx context.Context, token, channel string) (string, error) {
+	w.spadeMu.Lock()
+	if u, ok := w.spadeURLs[channel]; ok {
+		w.spadeMu.Unlock()
+		return u, nil
+	}
+	w.spadeMu.Unlock()
+
+	u, err := w.c.resolveSpadeURL(ctx, token, channel)
+	if err != nil {
+		return "", err
+	}
+	w.setSpadeURL(channel, u)
+	return u, nil
+}
+
+func (w *watch) setSpadeURL(channel, spadeURL string) {
+	w.spadeMu.Lock()
+	// Lazy-init: Backend/BrowserBackend construct *watch via struct
+	// literal (&watch{c: c}) without initializing spadeURLs, so the map
+	// can be nil here. Writing to a nil map panics, so allocate on first use.
+	if w.spadeURLs == nil {
+		w.spadeURLs = map[string]string{}
+	}
+	w.spadeURLs[channel] = spadeURL
+	w.spadeMu.Unlock()
+}
+
+func (w *watch) evictSpadeURL(channel string) {
+	w.spadeMu.Lock()
+	delete(w.spadeURLs, channel)
+	w.spadeMu.Unlock()
+}
+
+// minuteWatchedEvents builds the Spade minute-watched event array for
+// the given watch handle and returns its JSON encoding. The properties
+// schema matches the post-2026-07-11 Twitch edge: game/game_id/
+// is_live/minutes_logged are required (Twitch silently discards
+// heartbeats missing them); the legacy location/player fields are gone.
+func minuteWatchedEvents(internal watchInternal) ([]byte, error) {
 	event := map[string]any{
 		"event": "minute-watched",
 		"properties": map[string]any{
@@ -116,37 +194,5 @@ func (w *watch) heartbeat(ctx context.Context, h platform.WatchHandle) error {
 			"user_id":        internal.UserID,
 		},
 	}
-	plain, err := json.Marshal([]any{event})
-	if err != nil {
-		return err
-	}
-
-	var gz bytes.Buffer
-	gw := gzip.NewWriter(&gz)
-	if _, err := gw.Write(plain); err != nil {
-		return err
-	}
-	if err := gw.Close(); err != nil {
-		return err
-	}
-	encoded := base64.StdEncoding.EncodeToString(gz.Bytes())
-
-	variables := map[string]any{
-		"input": map[string]any{
-			"data":       encoded,
-			"repository": "twilight",
-			"encoding":   "GZIP_B64",
-		},
-	}
-
-	var resp struct {
-		SendSpadeEvents struct {
-			StatusCode int `json:"statusCode"`
-		} `json:"sendSpadeEvents"`
-	}
-	return w.c.gqlQuery(ctx, internal.Token, "SendEvents", sendEventsMutation, variables, &resp)
-}
-
-func (w *watch) stop(_ context.Context, _ platform.WatchHandle) error {
-	return nil
+	return json.Marshal([]any{event})
 }

@@ -15,11 +15,6 @@ const (
 	gqlEndpoint   = "https://gql.twitch.tv/gql"
 	deviceAuthURL = "https://id.twitch.tv/oauth2/device"
 	tokenURL      = "https://id.twitch.tv/oauth2/token"
-
-	// minuteWatchedURL is the same as gqlEndpoint: as of DevilXD@c5e6286, the heartbeat is
-	// sent as a GQL mutation (SendEvents / sendSpadeEvents) rather than to a static analytics
-	// endpoint. See docs/superpowers/notes/2026-06-04-twitch-ops-source.md for payload shape.
-	minuteWatchedURL = "https://gql.twitch.tv/gql"
 )
 
 // Operation identifies a persisted GraphQL operation.

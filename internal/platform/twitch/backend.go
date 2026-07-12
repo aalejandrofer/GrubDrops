@@ -177,9 +177,12 @@ func NewWithProxy(transport *http.Transport, proxyURL string) (*Backend, error) 
 }
 
 // newForTest builds a Backend pointed at a test endpoint. Used by tests
-// that need to drive the whole interface against an httptest server.
+// that need to drive the whole interface against an httptest server. The
+// test server also serves the channel page + Spade beacon the watch
+// transport GETs/POSTs, so homeURL is set to the same endpoint.
 func newForTest(endpoint string) *Backend {
 	c := newTestClient(endpoint)
+	c.homeURL = endpoint
 	return &Backend{
 		c:                       c,
 		auth:                    newAuthFlow(),

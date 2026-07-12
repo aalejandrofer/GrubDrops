@@ -17,14 +17,14 @@ func NewForTest(endpoint string) *Backend {
 
 // ProbeBeacon is the canary entry point for the Twitch watch-beacon transport.
 //
-// It verifies that the SendEvents mutation (the minute-watched beacon) is
-// accepted by Twitch for the given session and channel — without running a
-// full watcher and without requiring a live drop campaign.
+// It verifies that the Spade minute-watched beacon is accepted by Twitch for
+// the given session and channel — without running a full watcher and without
+// requiring a live drop campaign.
 //
 // IMPORTANT: a successful probe proves the beacon HTTP transport is accepted
-// (HTTP 2xx, no gql errors), not that Twitch credited watch-time for a drop.
-// Twitch silently discards watch-time that doesn't match an active campaign or
-// a valid user_id, so transport acceptance and accrual credit are distinct.
+// (HTTP 204), not that Twitch credited watch-time for a drop. Twitch silently
+// discards watch-time that doesn't match an active campaign or a valid
+// user_id, so transport acceptance and accrual credit are distinct.
 //
 // The probe:
 //  1. Resolves the authenticated user's ID (the same call the watcher makes

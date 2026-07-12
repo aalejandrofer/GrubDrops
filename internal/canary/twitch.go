@@ -19,10 +19,10 @@ type beaconProber interface {
 // TwitchProbe is a standalone canary that verifies the Twitch watch-beacon
 // transport is accepted for a given session and channel.
 //
-// IMPORTANT: a passing probe proves the beacon HTTP transport is accepted
-// (HTTP 2xx from the SendEvents mutation), NOT that watch-time was credited
-// toward a drop. Drop credit additionally requires an active campaign and a
-// valid live stream — those are not verified here.
+// IMPORTANT: a passing probe proves the Spade beacon HTTP transport is
+// accepted (HTTP 204), NOT that watch-time was credited toward a drop. Drop
+// credit additionally requires an active campaign and a valid live stream —
+// those are not verified here.
 type TwitchProbe struct {
 	backend        beaconProber
 	beaconInterval time.Duration
