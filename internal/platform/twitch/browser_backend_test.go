@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 	"testing"
 
@@ -95,4 +96,23 @@ func TestBrowserBackend_PersistentIntegrityIsTransient(t *testing.T) {
 	require.Error(t, err)
 	assert.False(t, errors.Is(err, platform.ErrIntegrityBlocked),
 		"persistent browser integrity must NOT surface as ErrIntegrityBlocked (would flip account to needs_auth)")
+}
+
+// TestBrowserBackend_SpadeBeaconHonoursProxyTransport pins the proxy
+// follow-up to PR #28: the direct Spade beacon calls (channel-page GET +
+// beacon POST) that don't route through the sidecar must use the global
+// proxy transport, not a default direct dialer. Otherwise the browser
+// path's outbound analytics traffic leaks around the configured proxy.
+func TestBrowserBackend_SpadeBeaconHonoursProxyTransport(t *testing.T) {
+	proxyTransport := &http.Transport{}
+
+	withProxy := NewBrowserBackendWithTransport(&fakeSidecar{}, proxyTransport)
+	acct := withProxy.accountFor("acc-1")
+	require.Same(t, proxyTransport, acct.c.http.Transport,
+		"per-account beacon client must use the global proxy transport")
+
+	// No proxy configured → direct dial (nil transport), unchanged behaviour.
+	direct := NewBrowserBackend(&fakeSidecar{})
+	require.Nil(t, direct.accountFor("acc-1").c.http.Transport,
+		"nil transport must dial direct")
 }

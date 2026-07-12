@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"sync"
 
@@ -30,6 +31,7 @@ type BrowserBackend struct {
 	auth      TwitchSidecarAuthenticator
 	rewards   TwitchRewardClaimer // nil-safe: ClaimRewards returns ErrNotSupported when nil
 	authFlow  *authFlow
+	transport *http.Transport // global proxy transport for direct Spade beacon calls; nil = direct
 	clientsMu sync.Mutex
 	clients   map[string]*twitchAccount
 
@@ -82,10 +84,23 @@ func NewBrowserBackend(client interface {
 	TwitchGQLSender
 	TwitchSidecarAuthenticator
 }) *BrowserBackend {
+	return NewBrowserBackendWithTransport(client, nil)
+}
+
+// NewBrowserBackendWithTransport is NewBrowserBackend plus a global proxy
+// transport applied to the direct Spade beacon calls (channel-page GET +
+// beacon POST) that don't route through the sidecar. Pass the same
+// proxyTransport the direct backend uses so the browser path's outbound
+// analytics traffic honours the proxy too. nil transport dials direct.
+func NewBrowserBackendWithTransport(client interface {
+	TwitchGQLSender
+	TwitchSidecarAuthenticator
+}, transport *http.Transport) *BrowserBackend {
 	bb := &BrowserBackend{
 		sender:                  client,
 		auth:                    client,
 		authFlow:                newAuthFlow(),
+		transport:               transport,
 		clients:                 map[string]*twitchAccount{},
 		authed:                  map[string]bool{},
 		allowedLoginsByCampaign: map[string][]string{},
@@ -224,7 +239,7 @@ func (b *BrowserBackend) accountFor(accountID string) *twitchAccount {
 	if a, ok := b.clients[accountID]; ok {
 		return a
 	}
-	c := newBrowserClient(b.sender, accountID)
+	c := newBrowserClient(b.sender, accountID, b.transport)
 	a := &twitchAccount{
 		c:     c,
 		disc:  &discovery{c: c},

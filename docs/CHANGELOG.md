@@ -4,6 +4,32 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Twitch drops progress again (Spade beacon).** As of ~2026-07-11 Twitch
+  stopped crediting minute-watched heartbeats sent through the GQL `SendEvents`
+  mutation, so drops silently stopped progressing even though the transport
+  returned success. The heartbeat is now sent as the Spade beacon POST Twitch
+  requires: the per-channel beacon URL is scraped from the channel page (with a
+  `settings.<hex>.js` fallback), and the minute-watched event is POSTed as
+  `data=<urlencoded-base64-of-json>` (plain base64, no gzip/twilight envelope),
+  expecting HTTP 204. Failed beacons evict and re-resolve the URL once before
+  giving up. Both the direct and browser backends are fixed. (PR #28, thanks
+  @steethebutcher)
+- **Browser-backend Spade beacon now honours the proxy.** The Spade
+  channel-page GET + beacon POST are direct net/http calls that don't route
+  through the sidecar, so on the browser Twitch backend they bypassed the
+  configured proxy. The per-account beacon HTTP client now uses the global
+  proxy transport, matching the proxy-everything policy from v1.3.7.
+
+### Added
+
+- **`go run ./cmd/keygen`** emits a correctly-formatted age X25519 identity for
+  `GRUB_MASTER_KEY`. The compose README's `head -c32 /dev/urandom | base64`
+  produces a blob that fails `age.ParseX25519Identity` and crashes the miner at
+  startup; keygen reuses the existing `filippo.io/age` dependency to emit a
+  valid key. (PR #28, thanks @steethebutcher)
+
 ## [1.3.8] — 2026-07-05
 
 ### Fixed

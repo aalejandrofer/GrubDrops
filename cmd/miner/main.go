@@ -228,7 +228,9 @@ func run() error {
 		twitchBackend = twitch.New()
 	}
 	if twitchBrowserEnabled && browserClient != nil {
-		registry.Register(twitch.NewBrowserBackend(browserClient))
+		// proxyTransport is nil when no proxy is configured; the browser
+		// backend then dials the Spade beacon direct, same as before.
+		registry.Register(twitch.NewBrowserBackendWithTransport(browserClient, proxyTransport))
 		logger.Info("twitch backend: BROWSER (via sidecar)")
 	} else {
 		registry.Register(twitchBackend)

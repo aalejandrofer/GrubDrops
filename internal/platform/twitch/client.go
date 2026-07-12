@@ -104,11 +104,17 @@ func newTestClient(endpoint string) *client {
 // way the direct client does — the Spade beacon itself is always a
 // direct net/http call (Twitch's analytics edge, not /gql), so it is
 // unaffected by the /gql integrity wall.
-func newBrowserClient(send TwitchGQLSender, accountID string) *client {
+//
+// transport, when non-nil, is the global proxy transport: the Spade
+// channel-page GET + beacon POST are direct net/http calls (they don't
+// go through the sidecar), so without this they'd bypass the configured
+// proxy that the rest of the miner's outbound traffic honours. nil dials
+// direct.
+func newBrowserClient(send TwitchGQLSender, accountID string, transport *http.Transport) *client {
 	c := &client{
 		endpoint:    gqlEndpoint,
 		homeURL:     "https://www.twitch.tv",
-		http:        &http.Client{Timeout: 20 * time.Second},
+		http:        &http.Client{Timeout: 20 * time.Second, Transport: transport},
 		deviceID:    randomHex(16),
 		sessionID:   randomHex(16),
 		idBootstrap: true,
