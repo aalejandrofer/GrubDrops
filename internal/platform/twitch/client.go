@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -97,9 +100,14 @@ func newTestClient(endpoint string) *client {
 
 // newBrowserClient builds a client whose gql calls go through the
 // chromedp sidecar tab keyed on accountID. Used by NewBrowserBackend.
+// homeURL is set so resolveSpadeURL can GET the channel page the same
+// way the direct client does — the Spade beacon itself is always a
+// direct net/http call (Twitch's analytics edge, not /gql), so it is
+// unaffected by the /gql integrity wall.
 func newBrowserClient(send TwitchGQLSender, accountID string) *client {
 	c := &client{
 		endpoint:    gqlEndpoint,
+		homeURL:     "https://www.twitch.tv",
 		http:        &http.Client{Timeout: 20 * time.Second},
 		deviceID:    randomHex(16),
 		sessionID:   randomHex(16),
@@ -361,4 +369,99 @@ func (c *client) directPost(ctx context.Context, token, opName string, body []by
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
 	return raw, resp.StatusCode, nil
+}
+
+// spadeURLRegex matches the analytics beacon URL embedded in Twitch's
+// settings JSON as "spade_url"/"beacon_url". Same pattern the reference
+// (twitch-gql-rs api::get_spade_url) uses after the 2026-07-11 Twitch
+// change that stopped crediting GQL SendEvents heartbeats. The scheme
+// accepts http and the host allows a port so the scraper is unit-
+// testable against an httptest server; production Twitch always emits
+// https with no port.
+var spadeURLRegex = regexp.MustCompile(`"(?:beacon|spade)_?url": ?"(https?://[.\w:/-]+)"`)
+
+// settingsURLRegex locates the hashed settings.js bundle in the channel
+// page HTML, used as the fallback location for the spade_url. Twitch
+// sometimes inlines spade_url directly in the page; when it doesn't, we
+// fetch settings.<hex>.js and re-scan it.
+var settingsURLRegex = regexp.MustCompile(`src="(https?://[.\w:/]+/config/settings\.[0-9a-f]{32}\.js)"`)
+
+// resolveSpadeURL scrapes the per-channel Spade minute-watched beacon
+// URL from the channel page (and its settings.js fallback). The channel
+// page sometimes inlines spade_url directly; when it doesn't, Twitch
+// stashes it in the hashed settings bundle. We send the Android client
+// headers + OAuth token on both fetches so Twitch returns the full page
+// rather than a bot challenge.
+func (c *client) resolveSpadeURL(ctx context.Context, token, channel string) (string, error) {
+	pageURL := strings.TrimRight(c.homeURL, "/") + "/" + channel
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, nil)
+	if err != nil {
+		return "", err
+	}
+	c.setCommonHeaders(req, token)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	html, _ := io.ReadAll(resp.Body)
+
+	if m := spadeURLRegex.FindSubmatch(html); m != nil {
+		return string(m[1]), nil
+	}
+	if m := settingsURLRegex.FindSubmatch(html); m != nil {
+		settingsJS, err := c.fetchText(ctx, token, string(m[1]))
+		if err != nil {
+			return "", err
+		}
+		if m2 := spadeURLRegex.FindSubmatch(settingsJS); m2 != nil {
+			return string(m2[1]), nil
+		}
+		return "", fmt.Errorf("spade url not found in settings.js for %s", channel)
+	}
+	return "", fmt.Errorf("spade url not found on channel page for %s", channel)
+}
+
+// fetchText GETs url with the common Twitch headers and returns the
+// response body. Used to pull the hashed settings.js bundle during
+// Spade URL resolution.
+func (c *client) fetchText(ctx context.Context, token, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.setCommonHeaders(req, token)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
+
+// sendSpadeBeacon POSTs a minute-watched heartbeat to the Spade
+// analytics edge. As of the 2026-07-11 Twitch change, only this path
+// accrues drop progress — the GQL SendEvents mutation is no longer
+// credited. The body is data=<urlencoded-base64-of-json> with
+// Content-Type application/x-www-form-urlencoded (NOT the gzipped
+// twilight/GZIP_B64 GQL envelope). Twitch acknowledges with HTTP 204.
+func (c *client) sendSpadeBeacon(ctx context.Context, token, spadeURL string, events []byte) error {
+	encoded := base64.StdEncoding.EncodeToString(events)
+	body := "data=" + url.QueryEscape(encoded)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, spadeURL, strings.NewReader(body))
+	if err != nil {
+		return err
+	}
+	c.setCommonHeaders(req, token)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("spade beacon: status %d", resp.StatusCode)
+	}
+	return nil
 }

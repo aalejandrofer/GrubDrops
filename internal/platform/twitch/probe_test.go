@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,70 +14,89 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
-// TestProbeBeacon_OK verifies that ProbeBeacon returns nil when the fake
-// transport accepts every beacon (HTTP 200 with statusCode 204 in data).
+// TestProbeBeacon_OK verifies that ProbeBeacon returns nil when the
+// Spade beacon transport accepts every heartbeat (HTTP 204). After the
+// 2026-07-11 Twitch change, the probe exercises the Spade beacon POST
+// path, so the test server must serve a channel page (with an inlined
+// spade_url) plus the beacon endpoint itself.
 func TestProbeBeacon_OK(t *testing.T) {
-	var beaconCount int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		beaconCount++
-		_, _ = w.Write([]byte(`{"data":{"sendSpadeEvents":{"statusCode":204}}}`))
-	}))
+	const channel = "testchannel"
+	var beaconCount int32
+	var srv *httptest.Server
+	srvBase := func() string { return srv.URL }
+	mux := http.NewServeMux()
+	// Channel page: inline the spade_url so resolveSpadeURL finds it.
+	mux.HandleFunc("/"+channel, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<html>"spade_url": "` + srvBase() + `/spade"</html>`))
+	})
+	// Spade beacon endpoint: 204 No Content is the success signal.
+	mux.HandleFunc("/spade", func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&beaconCount, 1)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	srv = httptest.NewServer(mux)
 	defer srv.Close()
 
 	b := newForTest(srv.URL)
-	// Pre-populate cachedUserID to skip the CurrentUser fetch (same pattern
-	// used by TestWatch_HeartbeatSendsAuthHeader), so the test server only
-	// needs to handle the SendEvents mutation.
+	// Pre-populate cachedUserID to skip the CurrentUser fetch, so the
+	// test server only needs to handle the channel page + beacon.
 	b.watch.cachedUserID = 12345
 	sess := platform.Session{AccessToken: "tok-probe"}
 	// Use 0 interval so the test doesn't wait 60s between beacons.
-	err := b.ProbeBeacon(context.Background(), sess, "testchannel", 0)
+	err := b.ProbeBeacon(context.Background(), sess, channel, 0)
 	require.NoError(t, err)
-	assert.Equal(t, 2, beaconCount, "expected exactly 2 beacon calls")
+	assert.Equal(t, int32(2), atomic.LoadInt32(&beaconCount), "expected exactly 2 beacon calls")
 }
 
-// TestProbeBeacon_Error verifies that ProbeBeacon returns an error when the
-// fake transport returns a non-2xx response for the beacon call.
+// TestProbeBeacon_Error verifies that ProbeBeacon returns an error when
+// the Spade beacon transport returns a non-204 response.
 func TestProbeBeacon_Error(t *testing.T) {
+	const channel = "testchannel"
 	callCount := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var srv *httptest.Server
+	srvBase := func() string { return srv.URL }
+	mux := http.NewServeMux()
+	mux.HandleFunc("/"+channel, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<html>"spade_url": "` + srvBase() + `/spade"</html>`))
+	})
+	mux.HandleFunc("/spade", func(w http.ResponseWriter, r *http.Request) {
 		callCount++
-		// First call is CurrentUser (resolveUserID); return a valid user.
-		// Subsequent calls are beacon mutations — return 500.
-		if callCount == 1 {
-			_, _ = w.Write([]byte(`{"data":{"currentUser":{"id":"99999"}}}`))
-			return
-		}
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"errors":[{"message":"internal server error"}]}`))
-	}))
+	})
+	srv = httptest.NewServer(mux)
 	defer srv.Close()
 
 	b := newForTest(srv.URL)
+	b.watch.cachedUserID = 12345 // skip CurrentUser
 	sess := platform.Session{AccessToken: "tok-probe"}
-	err := b.ProbeBeacon(context.Background(), sess, "testchannel", 0)
+	err := b.ProbeBeacon(context.Background(), sess, channel, 0)
 	require.Error(t, err, "expected error when beacon returns 5xx")
 }
 
-// TestProbeBeacon_Timeout verifies that ProbeBeacon respects context cancellation
-// during the inter-beacon sleep.
+// TestProbeBeacon_Timeout verifies that ProbeBeacon respects context
+// cancellation during the inter-beacon sleep.
 func TestProbeBeacon_Timeout(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// All calls return a valid beacon response; timeout fires during the sleep.
-		_, _ = w.Write([]byte(`{"data":{"sendSpadeEvents":{"statusCode":204}}}`))
-	}))
+	const channel = "testchannel"
+	var srv *httptest.Server
+	srvBase := func() string { return srv.URL }
+	mux := http.NewServeMux()
+	mux.HandleFunc("/"+channel, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<html>"spade_url": "` + srvBase() + `/spade"</html>`))
+	})
+	mux.HandleFunc("/spade", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent) // first beacon succeeds
+	})
+	srv = httptest.NewServer(mux)
 	defer srv.Close()
 
 	b := newForTest(srv.URL)
-	// Pre-populate cachedUserID to skip CurrentUser; we want the timeout to
-	// fire during the inter-beacon sleep, not during a CurrentUser call.
-	b.watch.cachedUserID = 12345
+	b.watch.cachedUserID = 12345 // skip CurrentUser so timeout fires during the sleep
 	sess := platform.Session{AccessToken: "tok-probe"}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 	defer cancel()
 
 	// Very long interval — context should cancel during the sleep between beacons.
-	err := b.ProbeBeacon(ctx, sess, "testchannel", 10*time.Second)
+	err := b.ProbeBeacon(ctx, sess, channel, 10*time.Second)
 	require.Error(t, err, "expected context cancellation error")
 }
