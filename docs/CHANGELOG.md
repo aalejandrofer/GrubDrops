@@ -4,6 +4,8 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.3.10] — 2026-07-13
+
 ### Fixed
 
 - **Twitch Spade beacon only follows twitch.tv hosts.** The minute-watched
