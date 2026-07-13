@@ -23,6 +23,15 @@ const LinkOverridePrefix = "link_override:"
 // removes a claim the user manually asserted.
 const CollectOverridePrefix = "collect_override:"
 
+// SkipOverridePrefix keys a watcher ghost-skip assertion in kv. Full key:
+// SkipOverridePrefix + benefitID + ":" + accountID, value "1". The watcher's
+// ghost-skip path (drop never appears in dropCampaignsInProgress) writes one
+// of these per skipped benefit so the skip survives process/container restarts
+// — without it, every restart re-picks already-completed drops and burns
+// ~6 min of watch time per drop before the in-memory skip fires again. The
+// watcher pre-loads these into its skippedBenefits set at New() time.
+const SkipOverridePrefix = "skip_override:"
+
 // CampaignPersister upserts every Campaign + Benefit the watcher discovers
 // into the local DB so the /drops page can render past + current +
 // upcoming tabs even before anything has been claimed.

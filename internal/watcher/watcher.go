@@ -120,6 +120,20 @@ type Config struct {
 	// manual mark-collected control.
 	ForceCollected func(accountID, benefitID string) bool
 
+	// SkipRecorder, when set, persists a benefit the watcher has given up on
+	// (ghost-skip: the drop never appeared in dropCampaignsInProgress, usually
+	// because it was already claimed). The in-memory skippedBenefits set dies
+	// on restart; this callback writes the skip to durable storage (kv) so the
+	// next process start re-loads it via PersistedSkips and skips re-mining the
+	// same completed drop. Best-effort — errors are logged, never fatal.
+	SkipRecorder func(accountID, benefitID string) error
+
+	// PersistedSkips, when set, returns the set of benefit IDs previously
+	// recorded via SkipRecorder for this account. Seeded into skippedBenefits
+	// at New() so a freshly-started watcher already knows about prior skips
+	// without burning a watch cycle to rediscover them. Nil = no prior skips.
+	PersistedSkips func(accountID string) (map[string]bool, error)
+
 	// ForceWatcher supplies the account's force-watch channel (channel-points
 	// 24/7 idle mining) when the account is otherwise idle. Nil disables the
 	// feature. LOWEST priority: only consulted from the idle branch, and the
@@ -248,6 +262,19 @@ func New(cfg Config) *Watcher {
 		cfg.Session.GameFilter = cfg.AllowGame
 	}
 	w := &Watcher{cfg: cfg, state: StateIdle, lastNotifiedMilestone: -1}
+	// Pre-load persisted ghost-skips so a freshly-started watcher already
+	// knows which completed drops to avoid. Without this, every restart
+	// re-picks already-claimed drops and burns ~6 min of watch time per
+	// drop before the in-memory skip fires. Best-effort — a load failure
+	// degrades to "no prior skips" (the legacy restart behavior).
+	if cfg.PersistedSkips != nil {
+		if skips, err := cfg.PersistedSkips(cfg.AccountID); err == nil && len(skips) > 0 {
+			w.skippedBenefits = make(map[string]struct{}, len(skips))
+			for id := range skips {
+				w.skippedBenefits[id] = struct{}{}
+			}
+		}
+	}
 	// Register PubSub hooks BEFORE the first ListActiveCampaigns call so
 	// the backend's lazy PubSub bootstrap picks them up. Backends that
 	// don't implement PubSubAware (Kick, mock) silently skip this.
@@ -460,6 +487,21 @@ func (w *Watcher) stopCurrentWatch(ctx context.Context) {
 	_ = w.cfg.Backend.StopWatch(ctx, *handle)
 	if cs, ok := w.cfg.Backend.(platform.ChannelSubscriber); ok && channelID != "" {
 		cs.UnsubscribeChannel(w.cfg.AccountID, channelID)
+	}
+}
+
+// recordSkip persists a ghost-skip to durable storage so it survives the
+// process/container restart that would otherwise wipe the in-memory
+// skippedBenefits set. Best-effort: a recorder error is logged and never
+// fatal — the in-memory skip still applies for this run.
+func (w *Watcher) recordSkip(ctx context.Context, benefitID, benefitName string) {
+	if w.cfg.SkipRecorder == nil {
+		return
+	}
+	if err := w.cfg.SkipRecorder(w.cfg.AccountID, benefitID); err != nil {
+		slog.Warn("watcher persist skip failed; in-memory skip still applies this run",
+			"kind", "error", "account", w.cfg.AccountID,
+			"benefit", benefitID, "benefit_name", benefitName, "err", err)
 	}
 }
 
@@ -1667,6 +1709,21 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 	// campaign-expired. Stop the watch and let pickCampaign find the
 	// next eligible target.
 	if !matched {
+		// Diagnostic: log what inventory DID return when the watched benefit
+		// isn't among it. Distinguishes "Twitch isn't reporting this drop at
+		// all" from "Twitch is reporting it under a different ID" — the key
+		// question for diagnosing drops that complete on Twitch but never
+		// appear in the bot's progress bar. DEBUG so it's off by default;
+		// raise the log level when investigating a stuck drop.
+		if len(progress) > 0 {
+			ids := make([]string, 0, len(progress))
+			for _, p := range progress {
+				ids = append(ids, fmt.Sprintf("%s(%dm)", p.BenefitID, p.MinutesWatched))
+			}
+			slog.Debug("watcher inventory did not contain watched benefit",
+				"kind", "progress", "account", w.cfg.AccountID,
+				"benefit", benefit.ID, "inventory_returned", ids)
+		}
 		w.mu.Lock()
 		w.noProgressTicks++
 		n := w.noProgressTicks
@@ -1691,6 +1748,7 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 			w.currentStream = nil
 			w.handle = nil
 			w.mu.Unlock()
+			w.recordSkip(ctx, benefit.ID, benefit.Name)
 			w.setState(ctx, StatePickCampaign)
 			return nil
 		}
@@ -1723,6 +1781,7 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 			w.currentStream = nil
 			w.handle = nil
 			w.mu.Unlock()
+			w.recordSkip(ctx, benefit.ID, benefit.Name)
 			w.setState(ctx, StatePickCampaign)
 			return nil
 		}
@@ -1892,15 +1951,27 @@ func (w *Watcher) claim(ctx context.Context) error {
 	// P6: post-claim consistency probe. Soft signal — log drift but
 	// don't roll back the claim. DropCurrentSession returning the same
 	// drop after claim means Twitch hasn't yet cleared the in-progress
-	// row; usually catches up within a few seconds.
+	// row; usually catches up within a few seconds. An empty or
+	// mismatched session is logged at DEBUG for diagnostic purposes —
+	// it's the normal post-claim state once Twitch clears the row.
 	if checker, ok := w.cfg.Backend.(platform.CurrentSessionChecker); ok {
-		if cs, err := checker.CurrentSession(ctx, w.cfg.Session); err == nil && cs.DropID == benefit.ID {
-			slog.Info("watcher post-claim: drop still in current session, server lag expected",
-				"kind", "claim",
-				"account", w.cfg.AccountID,
-				"benefit", benefit.ID,
-				"current_min", cs.CurrentMinute,
-				"required_min", cs.RequiredMinute)
+		if cs, err := checker.CurrentSession(ctx, w.cfg.Session); err == nil {
+			if cs.DropID == benefit.ID {
+				slog.Info("watcher post-claim: drop still in current session, server lag expected",
+					"kind", "claim",
+					"account", w.cfg.AccountID,
+					"benefit", benefit.ID,
+					"current_min", cs.CurrentMinute,
+					"required_min", cs.RequiredMinute)
+			} else if cs.DropID != "" {
+				slog.Debug("watcher post-claim: current session is a different drop",
+					"kind", "claim",
+					"account", w.cfg.AccountID,
+					"benefit", benefit.ID,
+					"current_session_drop", cs.DropID,
+					"current_min", cs.CurrentMinute,
+					"required_min", cs.RequiredMinute)
+			}
 		}
 	}
 
