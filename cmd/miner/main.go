@@ -439,7 +439,7 @@ func run() error {
 		// reloading takes effect. See ForceLinked in watcher.Config.
 		forceLinked := loadLinkOverrides(ctx, q)
 		forceCollected := loadCollectOverrides(ctx, q)
-		persistedSkips, skipRecorder := loadSkipOverrides(ctx, q)
+		persistedSkips, skipRecorder, skipClearer := loadSkipOverrides(ctx, q)
 
 		acctLabel := a.DisplayName
 		w := watcher.New(watcher.Config{
@@ -461,6 +461,7 @@ func run() error {
 			ForceCollected: forceCollected,
 			PersistedSkips: persistedSkips,
 			SkipRecorder:   skipRecorder,
+			SkipClearer:    skipClearer,
 			ForceWatcher:   forceWatchStore{q: q},
 		})
 		return scheduler.NewEntry(a.ID, w), nil
@@ -756,7 +757,7 @@ func loadCollectOverrides(ctx context.Context, q *gen.Queries) func(accountID, b
 }
 
 // loadSkipOverrides reads the ghost-skip assertions from kv (keys prefixed
-// store.SkipOverridePrefix) and returns two closures:
+// store.SkipOverridePrefix) and returns three closures:
 //
 //   - persistedSkips(accountID): returns the set of benefit IDs previously
 //     recorded as skipped for this account. The watcher seeds its
@@ -764,8 +765,12 @@ func loadCollectOverrides(ctx context.Context, q *gen.Queries) func(accountID, b
 //     watcher already knows about prior skips.
 //   - skipRecorder(accountID, benefitID): writes a new skip row so the next
 //     process start re-loads it.
+//   - skipClearer(accountID, benefitID): deletes a skip row when the watcher
+//     finds the benefit back in the in-progress inventory (the ghost-skip
+//     was a false positive), so a transient enrollment lag can't strand a
+//     legitimate drop permanently.
 //
-// Both encode the key as SkipOverridePrefix + benefitID + ":" + accountID,
+// All encode the key as SkipOverridePrefix + benefitID + ":" + accountID,
 // mirroring the collect_override convention. *gen.Queries wraps *sql.DB
 // which is goroutine-safe, so the build-time q can be reused from the
 // watcher goroutine. A read failure degrades to "no prior skips" (legacy
@@ -774,6 +779,7 @@ func loadCollectOverrides(ctx context.Context, q *gen.Queries) func(accountID, b
 func loadSkipOverrides(ctx context.Context, q *gen.Queries) (
 	persistedSkips func(accountID string) (map[string]bool, error),
 	skipRecorder func(accountID, benefitID string) error,
+	skipClearer func(accountID, benefitID string) error,
 ) {
 	set := map[string]bool{}
 	rows, err := q.ListKVByPrefix(ctx, sql.NullString{String: store.SkipOverridePrefix, Valid: true})
@@ -804,7 +810,11 @@ func loadSkipOverrides(ctx context.Context, q *gen.Queries) (
 			Value: []byte("1"),
 		})
 	}
-	return persistedSkips, skipRecorder
+	skipClearer = func(accountID, benefitID string) error {
+		key := store.SkipOverridePrefix + benefitID + ":" + accountID
+		return q.DeleteKV(context.Background(), key)
+	}
+	return persistedSkips, skipRecorder, skipClearer
 }
 
 type indirectNotifier struct {

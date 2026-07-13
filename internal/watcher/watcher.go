@@ -134,6 +134,15 @@ type Config struct {
 	// without burning a watch cycle to rediscover them. Nil = no prior skips.
 	PersistedSkips func(accountID string) (map[string]bool, error)
 
+	// SkipClearer, when set, removes a previously-recorded ghost-skip.
+	// Called when a skipped benefit reappears in the in-progress inventory
+	// (Twitch was just slow to enroll it, or it became claimable again in a
+	// new campaign) — the skip was a false positive and must be cleared so
+	// the drop can be mined again. Without this, a transient enrollment lag
+	// would permanently strand a legitimate drop. Best-effort — errors are
+	// logged, never fatal.
+	SkipClearer func(accountID, benefitID string) error
+
 	// ForceWatcher supplies the account's force-watch channel (channel-points
 	// 24/7 idle mining) when the account is otherwise idle. Nil disables the
 	// feature. LOWEST priority: only consulted from the idle branch, and the
@@ -502,6 +511,23 @@ func (w *Watcher) recordSkip(ctx context.Context, benefitID, benefitName string)
 		slog.Warn("watcher persist skip failed; in-memory skip still applies this run",
 			"kind", "error", "account", w.cfg.AccountID,
 			"benefit", benefitID, "benefit_name", benefitName, "err", err)
+	}
+}
+
+// clearSkip removes a ghost-skip that turned out to be a false positive
+// (the benefit is back in the in-progress inventory). Drops it from the
+// in-memory set and, best-effort, the durable kv row so it stays cleared
+// across restarts. Caller must NOT hold w.mu.
+func (w *Watcher) clearSkip(benefitID string) {
+	w.mu.Lock()
+	delete(w.skippedBenefits, benefitID)
+	w.mu.Unlock()
+	if w.cfg.SkipClearer == nil {
+		return
+	}
+	if err := w.cfg.SkipClearer(w.cfg.AccountID, benefitID); err != nil {
+		slog.Warn("watcher clear skip failed; skip cleared in-memory but may return on restart",
+			"kind", "error", "account", w.cfg.AccountID, "benefit", benefitID, "err", err)
 	}
 }
 
@@ -980,6 +1006,32 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 		tracked[p.BenefitID] = true
 		if p.Claimed {
 			claimed[p.BenefitID] = true
+		}
+	}
+
+	// Self-heal false-positive ghost-skips. A benefit we previously
+	// ghost-skipped (never enrolled within the grace window) but that now
+	// appears in the in-progress inventory, unclaimed, was skipped in error
+	// — Twitch was just slow to enroll it, or it became claimable again in a
+	// new campaign. Clear the skip (in-memory + durable) so it can be mined.
+	// Gated on a trustworthy inventory read so a failed fetch (empty
+	// progress) can never wrongly un-skip everything.
+	if inventoryOK {
+		w.mu.Lock()
+		reappeared := make([]string, 0)
+		for id := range tracked {
+			if claimed[id] {
+				continue
+			}
+			if _, skipped := w.skippedBenefits[id]; skipped {
+				reappeared = append(reappeared, id)
+			}
+		}
+		w.mu.Unlock()
+		for _, id := range reappeared {
+			slog.Info("watcher un-skipped benefit now back in inventory; clearing stale ghost-skip",
+				"kind", "state", "account", w.cfg.AccountID, "benefit", id)
+			w.clearSkip(id)
 		}
 	}
 

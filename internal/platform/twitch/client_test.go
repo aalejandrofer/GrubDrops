@@ -146,3 +146,53 @@ func TestClient_ResolveSpadeURL_NotFound(t *testing.T) {
 	_, err := c.resolveSpadeURL(context.Background(), "tok", "deadchannel")
 	require.Error(t, err)
 }
+
+// TestClient_ResolveSpadeURL_RejectsOffDomainHost is the security guard for
+// the beacon host-pin: a channel page (attacker-influenceable content) that
+// inlines a spade_url pointing off twitch.tv must NOT be followed, because
+// sendSpadeBeacon would POST the user's OAuth token to that host.
+func TestClient_ResolveSpadeURL_RejectsOffDomainHost(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/evilchannel", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `<html>"spade_url": "https://evil.example.com/spade"</html>`)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c := newTestClient(srv.URL)
+	c.homeURL = srv.URL
+	_, err := c.resolveSpadeURL(context.Background(), "tok", "evilchannel")
+	require.Error(t, err, "off-domain spade_url must be rejected, not followed with the OAuth token")
+	assert.Contains(t, err.Error(), "twitch.tv")
+}
+
+// TestClient_ResolveSpadeURL_RejectsOffDomainSettingsHost guards the
+// settings.js fallback: an off-domain settings bundle URL must not be
+// fetched (fetchText also carries the OAuth token).
+func TestClient_ResolveSpadeURL_RejectsOffDomainSettingsHost(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/evilchannel2", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `<html><script src="https://evil.example.com/config/settings.1234567890abcdef1234567890abcdef.js"></script></html>`)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c := newTestClient(srv.URL)
+	c.homeURL = srv.URL
+	_, err := c.resolveSpadeURL(context.Background(), "tok", "evilchannel2")
+	require.Error(t, err, "off-domain settings.js host must be rejected")
+}
+
+// TestClient_HostAllowedForBeacon pins the allow rule: twitch.tv subdomains
+// pass, arbitrary hosts fail, and the homeURL host (test server) passes.
+func TestClient_HostAllowedForBeacon(t *testing.T) {
+	c := newTestClient("http://127.0.0.1:9999")
+	c.homeURL = "http://127.0.0.1:9999"
+	assert.True(t, c.hostAllowedForBeacon("https://video-edge-abc.spade.twitch.tv/spade"))
+	assert.True(t, c.hostAllowedForBeacon("https://assets.twitch.tv/config/settings.x.js"))
+	assert.True(t, c.hostAllowedForBeacon("https://twitch.tv/spade"))
+	assert.True(t, c.hostAllowedForBeacon("http://127.0.0.1:9999/spade"), "homeURL host (test) allowed")
+	assert.False(t, c.hostAllowedForBeacon("https://evil.example.com/spade"))
+	assert.False(t, c.hostAllowedForBeacon("https://nottwitch.tv.evil.com/spade"))
+	assert.False(t, c.hostAllowedForBeacon("https://faketwitch.tv/spade"))
+}

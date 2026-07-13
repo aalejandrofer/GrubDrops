@@ -1660,3 +1660,79 @@ func TestWatcher_SkipsZeroMinuteDropForMining(t *testing.T) {
 		t.Fatalf("watcher must not be watching a 0-minute-only campaign")
 	}
 }
+
+// selfHealBackend serves one linked campaign whose benefit "healme" IS
+// reported in the in-progress inventory (unclaimed). Used to prove a
+// stale ghost-skip for that benefit gets cleared when it reappears.
+type selfHealBackend struct {
+	*platformtest.MockBackend
+}
+
+func (s *selfHealBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	return []platform.Campaign{{
+		ID: "hcamp", Game: "HealGame", Name: "Heal Camp", Status: "active", AccountLinked: true,
+		Benefits: []platform.DropBenefit{
+			{ID: "healme", CampaignID: "hcamp", Name: "Heal Me", RequiredMinutes: 60},
+		},
+	}}, nil
+}
+
+func (s *selfHealBackend) InventoryProgress(_ context.Context, _ platform.Session) ([]platform.Progress, error) {
+	// Twitch now reports the drop in-progress (enrolled, unclaimed) — the
+	// signal that a prior ghost-skip was a false positive.
+	return []platform.Progress{{BenefitID: "healme", MinutesWatched: 3, Claimed: false}}, nil
+}
+
+// TestWatcher_GhostSkip_SelfHealsWhenBenefitReappears verifies that a
+// benefit pre-seeded into skippedBenefits (a persisted ghost-skip) is
+// cleared — in-memory AND via SkipClearer — once it shows up in the
+// in-progress inventory again, so a transient enrollment lag can't strand
+// a legitimate drop permanently.
+func TestWatcher_GhostSkip_SelfHealsWhenBenefitReappears(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	const accID = "acc-heal"
+	var mu sync.Mutex
+	cleared := map[string]bool{}
+
+	backend := &selfHealBackend{MockBackend: platformtest.New()}
+	w := New(Config{
+		AccountID:         accID,
+		Backend:           backend,
+		Session:           platform.Session{AccessToken: "tok"},
+		Notifier:          &recordingNotifier{},
+		TickInterval:      2 * time.Millisecond,
+		HeartbeatInterval: 2 * time.Millisecond,
+		// Pre-seed the stale ghost-skip, as a fresh post-restart watcher would.
+		PersistedSkips: func(string) (map[string]bool, error) {
+			return map[string]bool{"healme": true}, nil
+		},
+		SkipClearer: func(_, benefitID string) error {
+			mu.Lock()
+			cleared[benefitID] = true
+			mu.Unlock()
+			return nil
+		},
+	})
+	// Confirm it started skipped.
+	w.mu.Lock()
+	_, seeded := w.skippedBenefits["healme"]
+	w.mu.Unlock()
+	require.True(t, seeded, "healme should be pre-seeded as skipped")
+
+	go func() { _ = w.Run(ctx) }()
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return cleared["healme"]
+	}, 2*time.Second, 5*time.Millisecond,
+		"stale ghost-skip should be cleared once the benefit reappears in inventory")
+
+	// And it must be gone from the in-memory set too.
+	w.mu.Lock()
+	_, stillSkipped := w.skippedBenefits["healme"]
+	w.mu.Unlock()
+	assert.False(t, stillSkipped, "healme must be removed from skippedBenefits after self-heal")
+}

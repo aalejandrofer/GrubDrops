@@ -4,6 +4,22 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Twitch Spade beacon only follows twitch.tv hosts.** The minute-watched
+  beacon URL is scraped from the (attacker-influenceable) channel page and the
+  beacon POST carries the account's OAuth token, so an unpinned host was a
+  token-exfiltration surface. The resolver now rejects any scraped spade or
+  settings.js URL whose host is not `twitch.tv`/`*.twitch.tv` (production spade
+  edges are `*.spade.twitch.tv`, so real traffic is unaffected). Hardening
+  follow-up to the v1.3.9 Spade beacon work.
+- **Ghost-skipped drops self-heal.** The persisted ghost-skip added in v1.3.9
+  (skip completed drops across restarts) could permanently strand a legitimate
+  drop if Twitch was merely slow to enroll it. The watcher now clears a skip,
+  in memory and in the durable `kv` row, the moment that benefit reappears in
+  the in-progress inventory unclaimed, so a transient enrollment lag no longer
+  needs a manual SQL delete to recover.
+
 ## [1.3.9] — 2026-07-13
 
 ### Fixed

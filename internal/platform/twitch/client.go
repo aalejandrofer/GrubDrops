@@ -413,19 +413,62 @@ func (c *client) resolveSpadeURL(ctx context.Context, token, channel string) (st
 	html, _ := io.ReadAll(resp.Body)
 
 	if m := spadeURLRegex.FindSubmatch(html); m != nil {
-		return string(m[1]), nil
+		return c.validateBeaconURL(string(m[1]), channel)
 	}
 	if m := settingsURLRegex.FindSubmatch(html); m != nil {
-		settingsJS, err := c.fetchText(ctx, token, string(m[1]))
+		settingsURL := string(m[1])
+		// The settings.js URL is scraped from the page too, and fetchText
+		// carries the OAuth token — validate its host before following it.
+		if !c.hostAllowedForBeacon(settingsURL) {
+			return "", fmt.Errorf("settings.js host not on twitch.tv for %s", channel)
+		}
+		settingsJS, err := c.fetchText(ctx, token, settingsURL)
 		if err != nil {
 			return "", err
 		}
 		if m2 := spadeURLRegex.FindSubmatch(settingsJS); m2 != nil {
-			return string(m2[1]), nil
+			return c.validateBeaconURL(string(m2[1]), channel)
 		}
 		return "", fmt.Errorf("spade url not found in settings.js for %s", channel)
 	}
 	return "", fmt.Errorf("spade url not found on channel page for %s", channel)
+}
+
+// validateBeaconURL returns rawURL only if its host is safe to send the
+// OAuth token to (see hostAllowedForBeacon); otherwise an error. The
+// spade URL is scraped from attacker-influenceable page content and the
+// beacon POST attaches the user's OAuth token, so an unpinned host would
+// be a token-exfiltration vector.
+func (c *client) validateBeaconURL(rawURL, channel string) (string, error) {
+	if !c.hostAllowedForBeacon(rawURL) {
+		return "", fmt.Errorf("spade url host not on twitch.tv for %s: %s", channel, rawURL)
+	}
+	return rawURL, nil
+}
+
+// hostAllowedForBeacon reports whether rawURL is a host we'll send the
+// OAuth token to. Production spade/settings URLs live on Twitch's own
+// domain (spade edges are *.spade.twitch.tv, settings on *.twitch.tv), so
+// we only follow twitch.tv hosts. The client's homeURL host is also
+// allowed so unit tests can point the scraper at an httptest server.
+func (c *client) hostAllowedForBeacon(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	h := u.Hostname()
+	if h == "" {
+		return false
+	}
+	if h == "twitch.tv" || strings.HasSuffix(h, ".twitch.tv") {
+		return true
+	}
+	// Test escape hatch: the scraper is pointed at homeURL (an httptest
+	// server) whose spade/settings URLs share that same host.
+	if hu, err := url.Parse(c.homeURL); err == nil && hu.Hostname() != "" && hu.Hostname() == h {
+		return true
+	}
+	return false
 }
 
 // fetchText GETs url with the common Twitch headers and returns the
