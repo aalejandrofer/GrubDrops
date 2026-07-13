@@ -3,6 +3,7 @@ package watcher
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -318,6 +319,155 @@ func TestWatcher_VanishDetect(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return backend.stops() >= 1
 	}, time.Second, 5*time.Millisecond, "watcher did not StopWatch after benefit vanished")
+}
+
+// ghostSkipBackend serves a campaign with two benefits but reports an
+// EMPTY in-progress inventory, so the watcher never sees either drop
+// enroll and must ghost-skip both after synthSkipThreshold ticks.
+type ghostSkipBackend struct {
+	*platformtest.MockBackend
+	mu         sync.Mutex
+	stopCalled int
+}
+
+func (g *ghostSkipBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	return []platform.Campaign{{
+		ID: "gcamp", Game: "GhostGame", Name: "Ghost Camp", Status: "active", AccountLinked: true,
+		Benefits: []platform.DropBenefit{
+			{ID: "ghost1", CampaignID: "gcamp", Name: "Ghost One", RequiredMinutes: 60},
+			{ID: "ghost2", CampaignID: "gcamp", Name: "Ghost Two", RequiredMinutes: 120},
+		},
+	}}, nil
+}
+
+func (g *ghostSkipBackend) InventoryProgress(_ context.Context, _ platform.Session) ([]platform.Progress, error) {
+	return nil, nil // never reports any in-progress drop → ghost-skip fires
+}
+
+func (g *ghostSkipBackend) StopWatch(_ context.Context, _ platform.WatchHandle) error {
+	g.mu.Lock()
+	g.stopCalled++
+	g.mu.Unlock()
+	return nil
+}
+
+func (g *ghostSkipBackend) stops() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.stopCalled
+}
+
+// recordingSkipRecorder captures every (accountID, benefitID) the watcher
+// records as a ghost-skip, so a test can assert persistence happened and
+// re-seed a fresh watcher from the same set.
+type recordingSkipRecorder struct {
+	mu   sync.Mutex
+	seen map[string]bool // key = accountID + ":" + benefitID
+}
+
+func newRecordingSkipRecorder() *recordingSkipRecorder {
+	return &recordingSkipRecorder{seen: map[string]bool{}}
+}
+
+func (r *recordingSkipRecorder) recordSkip(accountID, benefitID string) error {
+	r.mu.Lock()
+	// Match the kv convention: benefitID + ":" + accountID (see
+	// loadSkipOverrides / CollectOverridePrefix).
+	r.seen[benefitID+":"+accountID] = true
+	r.mu.Unlock()
+	return nil
+}
+
+func (r *recordingSkipRecorder) skips(accountID string) map[string]bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := map[string]bool{}
+	for k := range r.seen {
+		// k = benefitID + ":" + accountID
+		benefitID, acc, ok := strings.Cut(k, ":")
+		if ok && acc == accountID {
+			out[benefitID] = true
+		}
+	}
+	return out
+}
+
+// TestWatcher_GhostSkip_PersistsAcrossRestart verifies that a benefit
+// the watcher ghost-skips is (a) recorded via SkipRecorder and (b) NOT
+// re-picked after a simulated restart — a fresh watcher seeded with the
+// recorded skips via PersistedSkips must skip both ghost benefits
+// immediately rather than burning synthSkipThreshold ticks each.
+func TestWatcher_GhostSkip_PersistsAcrossRestart(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	const accID = "acc-ghost"
+	rec := newRecordingSkipRecorder()
+	backend := &ghostSkipBackend{MockBackend: platformtest.New()}
+
+	// Phase 1: drive the first watcher. It should pick a ghost benefit,
+	// watch for synthSkipThreshold ticks, then ghost-skip it and record it.
+	w1 := New(Config{
+		AccountID:         accID,
+		Backend:           backend,
+		Session:           platform.Session{AccessToken: "tok"},
+		Notifier:          &recordingNotifier{},
+		TickInterval:      2 * time.Millisecond,
+		HeartbeatInterval: 2 * time.Millisecond,
+		SkipRecorder:      rec.recordSkip,
+	})
+	go func() { _ = w1.Run(ctx) }()
+
+	// Wait for BOTH ghost benefits to be recorded as skipped. The watcher
+	// picks ghost1, watches synthSkipThreshold ticks, skips+records it,
+	// then picks ghost2 and repeats — so we need to wait for the full
+	// cycle before snapshotting the skips for the restart simulation.
+	require.Eventually(t, func() bool {
+		return len(rec.skips(accID)) >= 2
+	}, 3*time.Second, 5*time.Millisecond,
+		"watcher never recorded both ghost-skips")
+
+	// Phase 2: simulate a restart. Build a FRESH watcher (new skippedBenefits
+	// map) seeded with the persisted skips. It must NOT pick either ghost
+	// benefit — pickCampaign's skippedBenefits filter should skip them
+	// immediately because PersistedSkips pre-seeded the set at New().
+	cancel() // stop w1 before building w2 to avoid shared-backend races
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel2()
+
+	backend2 := &ghostSkipBackend{MockBackend: platformtest.New()}
+	skipsSoFar := rec.skips(accID)
+	w2 := New(Config{
+		AccountID:         accID,
+		Backend:           backend2,
+		Session:           platform.Session{AccessToken: "tok"},
+		Notifier:          &recordingNotifier{},
+		TickInterval:      2 * time.Millisecond,
+		HeartbeatInterval: 2 * time.Millisecond,
+		PersistedSkips: func(accountID string) (map[string]bool, error) {
+			if accountID == accID {
+				return skipsSoFar, nil
+			}
+			return map[string]bool{}, nil
+		},
+	})
+	go func() { _ = w2.Run(ctx2) }()
+
+	// Give the watcher a few ticks to run a discovery + pick cycle. If the
+	// persisted skips are correctly seeded, it should NOT start watching
+	// either ghost benefit (which would be observable as a StateWatching
+	// transition or a StopWatch call after a ghost-skip).
+	time.Sleep(200 * time.Millisecond)
+
+	// The pre-seeded watcher must NOT have started watching — both benefits
+	// are in skippedBenefits, so pickCampaign skips them and the watcher
+	// sleeps with no current benefit. backend2.stops() stays 0 (no ghost-skip
+	// path fired because nothing was ever picked).
+	assert.Equal(t, 0, backend2.stops(),
+		"fresh watcher seeded with persisted skips must not watch ghost benefits")
+
+	// And both ghost benefits should be in the pre-seeded set.
+	assert.Contains(t, skipsSoFar, "ghost1", "ghost1 should have been recorded as skipped")
 }
 
 // excludeBackend returns two ACTIVE Rust campaigns; the watcher must

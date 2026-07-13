@@ -439,6 +439,7 @@ func run() error {
 		// reloading takes effect. See ForceLinked in watcher.Config.
 		forceLinked := loadLinkOverrides(ctx, q)
 		forceCollected := loadCollectOverrides(ctx, q)
+		persistedSkips, skipRecorder := loadSkipOverrides(ctx, q)
 
 		acctLabel := a.DisplayName
 		w := watcher.New(watcher.Config{
@@ -458,6 +459,8 @@ func run() error {
 			ClaimRecorder:  claimRecorder,
 			ForceLinked:    forceLinked,
 			ForceCollected: forceCollected,
+			PersistedSkips: persistedSkips,
+			SkipRecorder:   skipRecorder,
 			ForceWatcher:   forceWatchStore{q: q},
 		})
 		return scheduler.NewEntry(a.ID, w), nil
@@ -750,6 +753,58 @@ func loadCollectOverrides(ctx context.Context, q *gen.Queries) func(accountID, b
 		return nil
 	}
 	return func(accountID, benefitID string) bool { return set[benefitID+":"+accountID] }
+}
+
+// loadSkipOverrides reads the ghost-skip assertions from kv (keys prefixed
+// store.SkipOverridePrefix) and returns two closures:
+//
+//   - persistedSkips(accountID): returns the set of benefit IDs previously
+//     recorded as skipped for this account. The watcher seeds its
+//     skippedBenefits map with this at New() time, so a freshly-started
+//     watcher already knows about prior skips.
+//   - skipRecorder(accountID, benefitID): writes a new skip row so the next
+//     process start re-loads it.
+//
+// Both encode the key as SkipOverridePrefix + benefitID + ":" + accountID,
+// mirroring the collect_override convention. *gen.Queries wraps *sql.DB
+// which is goroutine-safe, so the build-time q can be reused from the
+// watcher goroutine. A read failure degrades to "no prior skips" (legacy
+// restart behavior); a write failure is surfaced by the watcher, which
+// logs it and continues with the in-memory skip for this run.
+func loadSkipOverrides(ctx context.Context, q *gen.Queries) (
+	persistedSkips func(accountID string) (map[string]bool, error),
+	skipRecorder func(accountID, benefitID string) error,
+) {
+	set := map[string]bool{}
+	rows, err := q.ListKVByPrefix(ctx, sql.NullString{String: store.SkipOverridePrefix, Valid: true})
+	if err == nil {
+		for _, kv := range rows {
+			if string(kv.Value) != "1" {
+				continue
+			}
+			set[strings.TrimPrefix(kv.Key, store.SkipOverridePrefix)] = true
+		}
+	}
+	persistedSkips = func(accountID string) (map[string]bool, error) {
+		out := map[string]bool{}
+		for k := range set {
+			// k = benefitID + ":" + accountID
+			benefitID, acc, ok := strings.Cut(k, ":")
+			if !ok || acc != accountID {
+				continue
+			}
+			out[benefitID] = true
+		}
+		return out, nil
+	}
+	skipRecorder = func(accountID, benefitID string) error {
+		key := store.SkipOverridePrefix + benefitID + ":" + accountID
+		return q.UpsertSettingString(context.Background(), gen.UpsertSettingStringParams{
+			Key:   key,
+			Value: []byte("1"),
+		})
+	}
+	return persistedSkips, skipRecorder
 }
 
 type indirectNotifier struct {
