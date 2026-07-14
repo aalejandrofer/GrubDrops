@@ -3,6 +3,7 @@ package kick
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -11,6 +12,27 @@ import (
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
+
+// ErrClaimNeedsLink signals that a Kick claim was rejected because the
+// account must first link an external platform account (Riot, Steam, …).
+// Kick returns a 4xx whose body carries a connect_url; such a reward can
+// never be claimed by the miner until the user links manually, so callers
+// must stop re-attempting it rather than re-POSTing every poll. Match with
+// errors.Is; the concrete *ClaimNeedsLinkError carries the connect_url.
+var ErrClaimNeedsLink = errors.New("kick claim: account link required")
+
+// ClaimNeedsLinkError is the concrete error behind ErrClaimNeedsLink,
+// carrying the connect_url Kick returned so the caller can surface it.
+type ClaimNeedsLinkError struct {
+	ConnectURL string
+	Status     int
+}
+
+func (e *ClaimNeedsLinkError) Error() string {
+	return fmt.Sprintf("kick claim: account link required (status %d): %s", e.Status, e.ConnectURL)
+}
+
+func (e *ClaimNeedsLinkError) Is(target error) bool { return target == ErrClaimNeedsLink }
 
 // kickFilesBase is the CDN host for Kick reward/drop images. The drops
 // API returns image_url as a host-relative path (e.g.
@@ -527,9 +549,32 @@ func (a *api) Claim(ctx context.Context, sess platform.Session, rewardID, campai
 		return err
 	}
 	if status != 200 && status != 201 {
+		// A rejection whose body carries a connect_url means "link your
+		// external account first" — not a transient failure. Surface it as
+		// ErrClaimNeedsLink so the sweep stops re-attempting the reward.
+		if cu := connectURLFromBody(body); cu != "" {
+			return &ClaimNeedsLinkError{ConnectURL: cu, Status: status}
+		}
 		return fmt.Errorf("drops claim: status %d body %s", status, truncate(body, 200))
 	}
 	return nil
+}
+
+// connectURLFromBody extracts a connect_url from a claim error body,
+// whether it sits at the top level or under a "data" object. Returns ""
+// when absent.
+func connectURLFromBody(body []byte) string {
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		return ""
+	}
+	if cu := mstr(m, "connect_url", "connectUrl"); cu != "" {
+		return cu
+	}
+	if data, ok := m["data"].(map[string]any); ok {
+		return mstr(data, "connect_url", "connectUrl")
+	}
+	return ""
 }
 
 // WatchPing registers a view on a livestream — Kick accrues watch time from

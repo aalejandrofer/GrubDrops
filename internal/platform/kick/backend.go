@@ -49,9 +49,17 @@ type Backend struct {
 	// a sidecar client; without one it degrades to pure WS.
 	autoWatch bool
 
-	mu               sync.Mutex
-	wsFailed         map[string]bool   // accountID -> WS died, use Chrome fallback (auto mode)
-	handleByAcc      map[string]string // accountID -> watch handle
+	mu          sync.Mutex
+	wsFailed    map[string]bool   // accountID -> WS died, use Chrome fallback (auto mode)
+	handleByAcc map[string]string // accountID -> watch handle
+	// needsLink marks rewards whose claim Kick rejected with a connect_url
+	// (the account must link an external platform account first). Keyed by
+	// accountID + ":" + rewardID. Once set, the completed-claim sweep stops
+	// re-POSTing that reward — it can never succeed until the user links
+	// manually, so otherwise it re-attempts (and logs) every poll forever.
+	// In-memory only: a restart re-learns it on the first sweep (one log
+	// line), which is fine.
+	needsLink        map[string]bool
 	channelsByAcc    map[string][]string
 	campaignChannels map[string][]kickChannel // campaignID -> eligible channels (slug+id)
 	categoryChannels map[string][]kickChannel // game/category -> union of participating channels across campaigns
@@ -116,6 +124,7 @@ func New(c *browser.Client, ctl dockerctl.Controller, template string, port int,
 		clientByName:     map[string]*browser.Client{},
 		sidecarPort:      port,
 		wsFailed:         map[string]bool{},
+		needsLink:        map[string]bool{},
 		handleByAcc:      map[string]string{},
 		channelsByAcc:    map[string][]string{},
 		campaignChannels: map[string][]kickChannel{},
@@ -747,9 +756,33 @@ func (b *Backend) SweepCompletedClaims(ctx context.Context, s platform.Session) 
 		if r.Claimed || r.Fraction < 1.0 || r.RewardID == "" || r.CampaignID == "" {
 			continue
 		}
+		// Skip rewards we've already learned require an external account
+		// link — they can never be claimed here, so re-POSTing every poll
+		// only spams the log and Kick.
+		linkKey := s.AccountID + ":" + r.RewardID
+		b.mu.Lock()
+		skip := b.needsLink[linkKey]
+		b.mu.Unlock()
+		if skip {
+			continue
+		}
 		if err := b.api.Claim(ctx, s, r.RewardID, r.CampaignID); err != nil {
-			// Kick may have already auto-granted it server-side, in which
-			// case the claim POST can 4xx — that's not a real failure, the
+			// Link-required rejection (Kick returned a connect_url): the reward
+			// needs the user to link an external account (Riot/Steam/…) before
+			// it can be claimed. Record it so we stop re-attempting, and log
+			// ONCE (not every poll) with the link the user needs to follow.
+			var linkErr *ClaimNeedsLinkError
+			if errors.As(err, &linkErr) {
+				b.mu.Lock()
+				b.needsLink[linkKey] = true
+				b.mu.Unlock()
+				slog.Info("kick sweep: reward needs account link; skipping until linked",
+					"kind", "claim", "account", s.AccountID, "reward", r.RewardID,
+					"name", r.Name, "connect_url", linkErr.ConnectURL)
+				continue
+			}
+			// Otherwise: Kick may have already auto-granted it server-side, in
+			// which case the claim POST can 4xx — not a real failure, the
 			// reward is the user's. Log and move on; the next progress poll
 			// will show claimed:true and stop re-attempting.
 			slog.Info("kick sweep: claim attempt returned error (likely already granted)",

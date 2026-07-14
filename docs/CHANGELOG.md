@@ -4,6 +4,16 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Kick stops re-hammering rewards that need an account link.** A completed
+  Kick reward gated behind an external account link (Riot, Steam, …) returns a
+  `connect_url` when claimed, which the sweep mislabeled as "likely already
+  granted" and retried every poll, spamming the log roughly once a minute
+  forever. Such a rejection is now recognised, the reward is skipped after the
+  first attempt, and it's logged once with the link the user needs to follow
+  instead of on every sweep.
+
 ## [1.3.10] — 2026-07-13
 
 ### Fixed

@@ -2,6 +2,7 @@ package kick
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -408,4 +409,65 @@ func TestKickBackend_FetchAvatar(t *testing.T) {
 	url3, err := withFake(f3).FetchAvatar(context.Background(), sess("acc1"))
 	require.NoError(t, err)
 	assert.Empty(t, url3)
+}
+
+// TestKickBackend_SweepSkipsLinkRequiredAfterFirst proves the fix for the
+// per-minute claim spam: a reward whose claim Kick rejects with a connect_url
+// (needs an external account link) is attempted ONCE, recorded, then skipped
+// on subsequent sweeps instead of re-POSTing (and re-logging) every poll.
+func TestKickBackend_SweepSkipsLinkRequiredAfterFirst(t *testing.T) {
+	f := &fakeDoer{resp: map[string]fakeResp{
+		"https://web.kick.com/api/v1/drops/progress": {200, `{"data":[
+			{"id":"camp1","rewards":[
+				{"id":"needs-link","name":"Riot Icon","progress":1,"claimed":false,"required_units":120}
+			]}
+		],"message":"Success"}`},
+		// Kick rejects the claim: account must link Riot first (connect_url).
+		"https://web.kick.com/api/v1/drops/claim": {400, `{"data":{"connect_url":"https://auth.riotgames.com/authorize?client_id=x"}}`},
+	}}
+	b := withFake(f)
+
+	// Two consecutive sweeps (as the periodic poll would do).
+	_, err := b.SweepCompletedClaims(context.Background(), sess("acc1"))
+	require.NoError(t, err, "link-required must not be a fatal sweep error")
+	_, err = b.SweepCompletedClaims(context.Background(), sess("acc1"))
+	require.NoError(t, err)
+
+	var claimCalls int
+	for _, c := range f.calls {
+		if c.path == "https://web.kick.com/api/v1/drops/claim" {
+			claimCalls++
+		}
+	}
+	assert.Equal(t, 1, claimCalls, "link-required reward must be POSTed once, then skipped on later sweeps")
+
+	b.mu.Lock()
+	marked := b.needsLink["acc1:needs-link"]
+	b.mu.Unlock()
+	assert.True(t, marked, "reward must be recorded as needing an account link")
+}
+
+// TestKickClaim_MapsConnectURLToNeedsLinkError proves api.Claim surfaces a
+// connect_url rejection as ErrClaimNeedsLink (with the URL) rather than an
+// opaque status error.
+func TestKickClaim_MapsConnectURLToNeedsLinkError(t *testing.T) {
+	f := &fakeDoer{resp: map[string]fakeResp{
+		"https://web.kick.com/api/v1/drops/claim": {400, `{"data":{"connect_url":"https://auth.riotgames.com/authorize?client_id=x"}}`},
+	}}
+	a := &api{d: f}
+	err := a.Claim(context.Background(), sess("acc1"), "r1", "c1")
+	require.Error(t, err)
+	require.True(t, errors.Is(err, ErrClaimNeedsLink), "connect_url rejection must map to ErrClaimNeedsLink")
+	var le *ClaimNeedsLinkError
+	require.True(t, errors.As(err, &le))
+	assert.Equal(t, "https://auth.riotgames.com/authorize?client_id=x", le.ConnectURL)
+
+	// A plain error (no connect_url) must NOT be classified as needs-link.
+	f2 := &fakeDoer{resp: map[string]fakeResp{
+		"https://web.kick.com/api/v1/drops/claim": {500, `{"error":"boom"}`},
+	}}
+	a2 := &api{d: f2}
+	err2 := a2.Claim(context.Background(), sess("acc1"), "r1", "c1")
+	require.Error(t, err2)
+	assert.False(t, errors.Is(err2, ErrClaimNeedsLink))
 }
