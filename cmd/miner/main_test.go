@@ -44,3 +44,23 @@ func TestLoadAccountChannels(t *testing.T) {
 	assert.False(t, allow([]string{"xqc"}))
 	assert.False(t, allow(nil))
 }
+
+// TestGenerateMasterKey_IsAcceptedByCryptor proves the `keygen` subcommand
+// emits a key the store actually accepts — guarding against the old README
+// guidance (head -c32 /dev/urandom | base64), which produced a blob that
+// failed age.ParseX25519Identity and crashed the miner at startup.
+func TestGenerateMasterKey_IsAcceptedByCryptor(t *testing.T) {
+	key, err := generateMasterKey()
+	require.NoError(t, err)
+	require.NotEmpty(t, key)
+	assert.Contains(t, key, "AGE-SECRET-KEY-1", "must be an age X25519 identity")
+
+	// The real gate: store.NewCryptor parses it without error.
+	_, err = store.NewCryptor(key)
+	require.NoError(t, err, "generated key must be accepted by the session store")
+
+	// Two calls yield distinct keys.
+	key2, err := generateMasterKey()
+	require.NoError(t, err)
+	assert.NotEqual(t, key, key2, "each keygen must be unique")
+}

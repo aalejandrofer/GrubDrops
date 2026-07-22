@@ -85,7 +85,7 @@ services:
     restart: unless-stopped
     ports: ["8080:8080"]
     environment:
-      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?run: head -c32 /dev/urandom | base64}"
+      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?generate one with docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen}"
       GRUB_DB_PATH: /data/miner.db
       GRUB_SECURE_COOKIES: "0"   # plain-HTTP localhost; set 1 behind HTTPS
     volumes:
@@ -112,7 +112,7 @@ mkdir -p data && sudo chown 65532:65532 data
 把它启动起来。`GRUB_MASTER_KEY` 用于加密存储的会话，所以请生成一个真正的密钥：
 
 ```bash
-GRUB_MASTER_KEY=$(head -c32 /dev/urandom | base64) docker compose up -d
+GRUB_MASTER_KEY="$(docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen)" docker compose up -d
 ```
 
 打开 **http://localhost:8080**。首次访问会要求你创建一个管理员登录账户。

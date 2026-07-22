@@ -86,7 +86,7 @@ services:
     restart: unless-stopped
     ports: ["8080:8080"]
     environment:
-      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?run: head -c32 /dev/urandom | base64}"
+      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?generate one with docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen}"
       GRUB_DB_PATH: /data/miner.db
       GRUB_SECURE_COOKIES: "0"   # plain-HTTP localhost; set 1 behind HTTPS
     volumes:
@@ -113,7 +113,7 @@ esos ya escribibles por el contenedor.)
 Levántalo. `GRUB_MASTER_KEY` cifra las sesiones almacenadas, así que genera una de verdad:
 
 ```bash
-GRUB_MASTER_KEY=$(head -c32 /dev/urandom | base64) docker compose up -d
+GRUB_MASTER_KEY="$(docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen)" docker compose up -d
 ```
 
 Abre **http://localhost:8080**. La primera visita te pide crear un inicio de sesión de administrador.

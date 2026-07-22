@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"filippo.io/age"
 	"github.com/alexedwards/scs/v2"
 
 	"github.com/aalejandrofer/grubdrops/internal/api"
@@ -49,10 +50,34 @@ import (
 var version string
 
 func main() {
+	// `grubdrops keygen` prints a fresh, valid GRUB_MASTER_KEY and exits, so a
+	// Docker-only user can generate one without Go or the age tool:
+	//   docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen
+	// The store requires an age X25519 identity (AGE-SECRET-KEY-1...); a random
+	// base64 blob fails age.ParseX25519Identity and crashes at startup.
+	if len(os.Args) > 1 && os.Args[1] == "keygen" {
+		key, err := generateMasterKey()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "keygen:", err)
+			os.Exit(1)
+		}
+		fmt.Println(key)
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "fatal:", err)
 		os.Exit(1)
 	}
+}
+
+// generateMasterKey returns a fresh age X25519 identity string suitable for
+// GRUB_MASTER_KEY (the exact format store.NewCryptor parses).
+func generateMasterKey() (string, error) {
+	id, err := age.GenerateX25519Identity()
+	if err != nil {
+		return "", err
+	}
+	return id.String(), nil
 }
 
 func run() error {

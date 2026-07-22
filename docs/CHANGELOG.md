@@ -4,8 +4,23 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Added
+
+- **`keygen` subcommand generates a valid `GRUB_MASTER_KEY` with only Docker.**
+  `docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen` prints a fresh
+  age X25519 identity (`AGE-SECRET-KEY-1…`), the exact format the session store
+  requires. No Go toolchain or `age` install needed, so Portainer/GUI users have
+  a one-liner too.
+
 ### Fixed
 
+- **Quickstart no longer hands out a broken master key.** The docs told users to
+  generate `GRUB_MASTER_KEY` with `head -c32 /dev/urandom | base64`, which is not
+  an age identity — it fails to parse and crashes the miner at startup
+  (`malformed secret key`). README, translated READMEs, landing page, and the
+  reference compose now point at the new `keygen` command, and explain that
+  Portainer/GUI deploys must set `GRUB_MASTER_KEY` in the stack's Environment
+  variables (there's no shell to export it). (#33)
 - **Compose file no longer errors in Portainer / strict YAML parsers.** The
   quickstart compose set `GRUB_MASTER_KEY` to an unquoted
   `${GRUB_MASTER_KEY:?run: head -c32 ...}` whose default-error message contains

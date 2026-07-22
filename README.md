@@ -86,7 +86,7 @@ services:
     restart: unless-stopped
     ports: ["8080:8080"]
     environment:
-      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?run: head -c32 /dev/urandom | base64}"
+      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?generate one with docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen}"
       GRUB_DB_PATH: /data/miner.db
       GRUB_SECURE_COOKIES: "0"   # plain-HTTP localhost; set 1 behind HTTPS
       TZ: Europe/London           # server-side timezone
@@ -103,17 +103,30 @@ services:
   #   command: --interval 21600 --cleanup grubdrops
 ```
 
+`GRUB_MASTER_KEY` must be an **age X25519 identity** (`AGE-SECRET-KEY-1…`) — it
+encrypts the stored session tokens. A random string will not parse and the miner
+crashes at startup. Generate a valid one with just Docker:
+
+```bash
+docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen
+# → AGE-SECRET-KEY-1... (keep it; reuse the SAME key on every restart)
+```
+
 The image runs as distroless `nonroot` (**UID 65532**), so make a bind-mounted
 `./data` writable first — otherwise it can't write `miner.db` and login fails
 with *"failed to persist session"*. (Or use a named volume.)
 
 ```bash
 mkdir -p data && sudo chown 65532:65532 data
-GRUB_MASTER_KEY=$(head -c32 /dev/urandom | base64) docker compose up -d
+GRUB_MASTER_KEY="$(docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen)" docker compose up -d
 ```
 
 Open **http://localhost:8080** and create the admin login.
 
+- **Portainer / GUI deploy?** There's no shell to set the variable, so add
+  `GRUB_MASTER_KEY` (value from `keygen` above) in the stack's **Environment
+  variables** section before deploying. Use plain `docker compose`, not a Swarm
+  stack, on a current Docker Engine.
 - **Twitch only?** Drop the docker-socket mount — no sidecars get created.
 - **Every knob?** Reference compose: [`deploy/docker-compose.yml`](deploy/docker-compose.yml).
 - **Build it?** `docker build -f deploy/Dockerfile.miner .`, or `go build ./cmd/miner`.
