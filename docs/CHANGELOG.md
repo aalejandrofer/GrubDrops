@@ -4,6 +4,8 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.3.11] — 2026-07-22
+
 ### Added
 
 - **`keygen` subcommand generates a valid `GRUB_MASTER_KEY` with only Docker.**
