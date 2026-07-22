@@ -6,6 +6,14 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- **Compose file no longer errors in Portainer / strict YAML parsers.** The
+  quickstart compose set `GRUB_MASTER_KEY` to an unquoted
+  `${GRUB_MASTER_KEY:?run: head -c32 ...}` whose default-error message contains
+  a colon-space; `docker compose` tolerated it, but strict YAML parsers like
+  Portainer's read the `run:` as a nested mapping and rejected the stack with
+  "Nested mappings are not allowed in compact mappings". The value is now
+  quoted (README, translated READMEs, landing page, and the reference
+  `deploy/docker-compose.yml`); interpolation is unchanged. (#32)
 - **Kick stops re-hammering rewards that need an account link.** A completed
   Kick reward gated behind an external account link (Riot, Steam, …) returns a
   `connect_url` when claimed, which the sweep mislabeled as "likely already
