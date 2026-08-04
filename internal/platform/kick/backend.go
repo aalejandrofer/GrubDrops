@@ -84,10 +84,15 @@ type Backend struct {
 	// (the capture still updates the in-memory freshest copy).
 	SessionPersister SessionPersister
 
-	// freshest holds the newest captured session per account, so
+	// freshest holds the newest captured, full platform.Session per account
+	// (patched in place by captureCookies — see patchKickSession), so
 	// RefreshSession can hand back a rotated cookie even before the next
-	// process restart. Guarded by mu, which the Backend already holds.
-	freshest map[string]kickSession
+	// process restart. Storing the full Session rather than a bare
+	// kickSession means ExpiresAt/RefreshToken/any other field survive
+	// intact; a kickSession round trip would lose them (see
+	// patchKickSession's doc comment). Guarded by mu, which the Backend
+	// already holds.
+	freshest map[string]platform.Session
 }
 
 var _ platform.Backend = (*Backend)(nil)
@@ -383,7 +388,7 @@ func (b *Backend) captureCookies(sess platform.Session, set []*http.Cookie) {
 	}
 	ks, err := decodeSession(sess)
 	if err != nil {
-		return // not a Kick session blob; nothing to merge
+		return // malformed Kick blob; nothing to merge
 	}
 	merged, changed := mergeCookies(ks, set)
 	if !changed {
@@ -398,22 +403,29 @@ func (b *Backend) captureCookies(sess platform.Session, set []*http.Cookie) {
 		return
 	}
 
+	// Patch only the cookie fields into the EXISTING session/blob rather
+	// than rebuilding one from the bare kickSession — see patchKickSession's
+	// doc comment for why a decode-then-encode round trip is unsafe here
+	// (it silently drops ExpiresAt and the login handler's channel/channels
+	// keys, which idles the account and empties its channel list on the
+	// very first cookie rotation).
+	updated, err := patchKickSession(sess, merged)
+	if err != nil {
+		slog.Warn("kick: patch rotated session failed", "account", accountID, "err", err)
+		return
+	}
+	updated.AccountID = accountID
+
 	b.mu.Lock()
 	if b.freshest == nil {
-		b.freshest = map[string]kickSession{}
+		b.freshest = map[string]platform.Session{}
 	}
-	b.freshest[accountID] = merged
+	b.freshest[accountID] = updated
 	b.mu.Unlock()
 
 	if b.SessionPersister == nil {
 		return
 	}
-	updated, err := encodeSession(merged)
-	if err != nil {
-		slog.Warn("kick: encode rotated session failed", "account", accountID, "err", err)
-		return
-	}
-	updated.AccountID = accountID
 	if err := b.SessionPersister(accountID, updated); err != nil {
 		slog.Warn("kick: persist rotated session failed", "account", accountID, "err", err)
 		return
@@ -424,22 +436,19 @@ func (b *Backend) captureCookies(sess platform.Session, set []*http.Cookie) {
 // RefreshSession returns the freshest captured session for the account.
 // Kick has no server-side refresh endpoint, but it does reissue cookies on
 // ordinary requests; captureCookies banks those, so this hands back the
-// newest one instead of the caller's possibly-stale copy.
+// newest one instead of the caller's possibly-stale copy. freshest already
+// holds a full, patched platform.Session (see patchKickSession), so this is
+// a plain map read — no re-encode needed.
 func (b *Backend) RefreshSession(_ context.Context, s platform.Session) (platform.Session, error) {
 	if s.AccountID == "" {
 		return s, nil
 	}
 	b.mu.Lock()
-	ks, ok := b.freshest[s.AccountID]
+	updated, ok := b.freshest[s.AccountID]
 	b.mu.Unlock()
 	if !ok {
 		return s, nil
 	}
-	updated, err := encodeSession(ks)
-	if err != nil {
-		return s, nil // never fail a refresh over an encode problem
-	}
-	updated.AccountID = s.AccountID
 	return updated, nil
 }
 

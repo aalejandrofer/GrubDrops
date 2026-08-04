@@ -14,6 +14,15 @@ var rotatableCookies = map[string]bool{
 	"kick_session":  true,
 }
 
+// defaultCookieDomain/Path match every cookie the login handler writes
+// (internal/api/handlers_login_kick.go persistKickSession). Used as the
+// last-resort fallback when a newly added rotated cookie carries neither,
+// which Set-Cookie commonly omits for host-only cookies.
+const (
+	defaultCookieDomain = "kick.com"
+	defaultCookiePath   = "/"
+)
+
 // mergeCookies folds a response's Set-Cookie headers into a stored session,
 // returning the merged session and whether any authenticating cookie actually
 // changed. Cookies not named in the response are preserved untouched.
@@ -50,7 +59,33 @@ func mergeCookies(ks kickSession, set []*http.Cookie) (kickSession, bool) {
 			}
 		}
 		if idx == -1 {
-			out.Cookies = append(out.Cookies, cookie{Name: sc.Name, Value: sc.Value})
+			domain, path := sc.Domain, sc.Path
+			if domain == "" || path == "" {
+				// Set-Cookie commonly omits Domain (host-only cookie) and
+				// sometimes Path. A cookie with an empty Domain fails CDP's
+				// Network.setCookie in the browser-watch sidecar
+				// (network.SetCookie(...).WithDomain(...).WithPath(...)),
+				// which aborts the ENTIRE cookie install on its first
+				// error — so one domainless cookie would silently break
+				// browser-watch auth, not just this cookie. Inherit from an
+				// existing stored cookie (Kick issues them all under the
+				// same domain/path) before falling back to the default.
+				for _, c := range out.Cookies {
+					if domain == "" && c.Domain != "" {
+						domain = c.Domain
+					}
+					if path == "" && c.Path != "" {
+						path = c.Path
+					}
+				}
+				if domain == "" {
+					domain = defaultCookieDomain
+				}
+				if path == "" {
+					path = defaultCookiePath
+				}
+			}
+			out.Cookies = append(out.Cookies, cookie{Name: sc.Name, Value: sc.Value, Domain: domain, Path: path})
 			changed = true
 		} else if out.Cookies[idx].Value != sc.Value {
 			out.Cookies[idx].Value = sc.Value

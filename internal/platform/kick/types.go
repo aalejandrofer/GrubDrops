@@ -50,6 +50,64 @@ func decodeSession(p platform.Session) (kickSession, error) {
 	return ks, nil
 }
 
+// patchKickSession returns a copy of sess with ONLY the cookie fields
+// (cookies + xsrf_token) inside the stored "kick" JSON blob updated to
+// merged, and CSRF mirrored to match. Every other key already in that blob
+// — notably "channel"/"channels"/"username", which the login handler writes
+// (internal/api/handlers_login_kick.go, kickSessionForStorage) but
+// kickSession does not model — is preserved untouched, and every other
+// platform.Session field (ExpiresAt, RefreshToken, AccessToken, ...) is
+// carried over unchanged.
+//
+// This exists because kickSession only models cookies/xsrf_token/user_agent:
+// a decode-into-kickSession-then-encodeSession round trip silently drops
+// everything else. In particular it zeroes ExpiresAt, which makes the
+// boot-time scheduler reload treat a perfectly live session as expired
+// (cmd/miner/main.go's s.ExpiresAt.Before(time.Now()) gate) and replace the
+// account with an idling nopRunner — and it drops "channels", leaving the
+// account with nothing to watch. Patching the existing JSON object instead
+// of rebuilding it avoids both.
+func patchKickSession(sess platform.Session, merged kickSession) (platform.Session, error) {
+	var obj map[string]json.RawMessage
+	if raw, ok := sess.Cookies["kick"]; ok {
+		// Best-effort: a malformed existing blob just means obj stays nil
+		// and we start from an empty object rather than fail the rotation.
+		_ = json.Unmarshal([]byte(raw), &obj)
+	}
+	if obj == nil {
+		obj = map[string]json.RawMessage{}
+	}
+
+	cookiesRaw, err := json.Marshal(merged.Cookies)
+	if err != nil {
+		return platform.Session{}, err
+	}
+	xsrfRaw, err := json.Marshal(merged.XSRFToken)
+	if err != nil {
+		return platform.Session{}, err
+	}
+	obj["cookies"] = cookiesRaw
+	obj["xsrf_token"] = xsrfRaw
+
+	patched, err := json.Marshal(obj)
+	if err != nil {
+		return platform.Session{}, err
+	}
+
+	updated := sess // preserves ExpiresAt, AccessToken, RefreshToken, ...
+	// sess.Cookies is a live map the caller (and other goroutines inside
+	// do()) may still read; copy it rather than mutating in place so this
+	// patch never races a concurrent reader.
+	newCookies := make(map[string]string, len(sess.Cookies)+1)
+	for k, v := range sess.Cookies {
+		newCookies[k] = v
+	}
+	newCookies["kick"] = string(patched)
+	updated.Cookies = newCookies
+	updated.CSRF = merged.XSRFToken
+	return updated, nil
+}
+
 // toProto converts the internal session form into the gRPC type used
 // by the sidecar.
 func toProto(ks kickSession) *pb.KickSession {
