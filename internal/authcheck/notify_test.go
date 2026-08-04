@@ -13,11 +13,12 @@ import (
 
 // fakeNotifier records every Notify call.
 type fakeNotifier struct {
-	mu    sync.Mutex
-	calls []map[string]any
+	mu     sync.Mutex
+	calls  []map[string]any
+	events []string
 }
 
-func (f *fakeNotifier) Notify(_ context.Context, _ string, fields map[string]any) error {
+func (f *fakeNotifier) Notify(_ context.Context, event string, fields map[string]any) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	copied := map[string]any{}
@@ -25,6 +26,7 @@ func (f *fakeNotifier) Notify(_ context.Context, _ string, fields map[string]any
 		copied[k] = v
 	}
 	f.calls = append(f.calls, copied)
+	f.events = append(f.events, event)
 	return nil
 }
 
@@ -114,6 +116,15 @@ func TestPersist_FieldsCarryAccountAndReason(t *testing.T) {
 	if got["reason"] != "401 unauthorized" {
 		t.Fatalf("reason field = %v, want the Result.Msg", got["reason"])
 	}
+	// Must match notify.EventAuth ("auth"). authcheck deliberately does not
+	// import internal/notify to stay decoupled, so this asserts the literal
+	// rather than the constant — a typo here would be silently swallowed by
+	// notify.VerbosityFilter.Allow, recreating the exact defect (an event
+	// declared, templated, filtered, and never delivered) this feature exists
+	// to fix.
+	if fn.events[0] != "auth" {
+		t.Fatalf("event = %q, want %q (must match notify.EventAuth)", fn.events[0], "auth")
+	}
 }
 
 // Notifications are best-effort: a send failure must never stop the health
@@ -137,6 +148,36 @@ type errNotifier struct{}
 
 func (errNotifier) Notify(context.Context, string, map[string]any) error {
 	return errors.New("webhook down")
+}
+
+// When the persist write itself fails, notifyTransition must NOT fire. The
+// edge-triggering in notifyTransition depends entirely on the new value
+// having landed: if it never lands, the next sweep re-reads the OLD value,
+// detects the exact same transition again, and would notify again on every
+// sweep for as long as the write keeps failing (e.g. a full disk or a
+// read-only volume) — the same hourly-spam shape already fixed once in
+// v1.3.11 for Kick claims.
+func TestPersist_NoNotifyWhenPersistFails(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, filepath.Join(t.TempDir(), "authcheck.db"))
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	q := gen.New(db)
+	fn := &fakeNotifier{}
+	c := New(q, nil, nil).WithNotifier(fn)
+
+	// Closing the DB makes every subsequent UpsertSettingString return
+	// sql.ErrConnDone, forcing the persist write to fail — same convention
+	// as internal/api/handlers_settings_save_test.go's brokenSettings helper.
+	if err := db.Close(); err != nil {
+		t.Fatalf("close db: %v", err)
+	}
+
+	c.persist(ctx, "acc_1", Result{OK: false, Msg: "401 unauthorized"})
+	if got := fn.count(); got != 0 {
+		t.Fatalf("a failed persist must not notify, got %d sends", got)
+	}
 }
 
 // A miner with no webhook configured has a nil notifier and must behave

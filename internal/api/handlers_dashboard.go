@@ -369,6 +369,15 @@ func buildDashAlerts(ctx context.Context, q *gen.Queries, cards []dashMineCard, 
 	authFailed := authAlertAccounts(ctx, q, cards)
 	var alerts []dashAlert
 	for _, c := range cards {
+		// Disabled accounts get no banner at all. authcheck.CheckAll only
+		// sweeps ListEnabledAccounts, so a disabled account's persisted
+		// authcheck:<id> result is frozen and can never self-heal — an
+		// operator who disables an account after a dead login would
+		// otherwise be stuck with a "needs_auth" banner that nothing can
+		// clear short of re-enabling and re-logging in.
+		if !c.Enabled {
+			continue
+		}
 		if c.State == "needs_auth" || authFailed[c.ID] {
 			alerts = append(alerts, dashAlert{
 				Kind: "needs_auth", Account: c.Name,

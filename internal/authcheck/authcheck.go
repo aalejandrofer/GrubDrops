@@ -205,6 +205,12 @@ func (c *Checker) persistWithMeta(ctx context.Context, accountID, plat, name str
 	b, _ := json.Marshal(res)
 	if err := c.q.UpsertSettingString(ctx, gen.UpsertSettingStringParams{Key: Prefix + accountID, Value: b}); err != nil {
 		c.log.Warn("authcheck: persist failed", "account", accountID, "err", err)
+		// The next sweep re-reads the OLD value (this write never landed) and
+		// will detect the exact same transition again. Notifying here would
+		// re-fire on every sweep for as long as the write keeps failing — the
+		// same hourly-spam shape already fixed once in v1.3.11. Skip the
+		// notification; it will fire once the persist actually succeeds.
+		return
 	}
 
 	c.notifyTransition(ctx, accountID, plat, name, prev, hadPrev, res)

@@ -31,6 +31,13 @@ All notable changes to GrubDrops.
   signals now feed the same banner, and an account that trips both still shows
   a single row.
 
+- **Disabling a dead account no longer leaves a banner you can't clear.** The
+  auth-health sweep only ever re-checks enabled accounts, so a disabled
+  account's stored failure was frozen forever. Combined with the new
+  auth-check banner above, disabling the natural response to a dead login
+  produced a permanent, unclearable "needs re-auth" alert. Disabled accounts
+  are now skipped when building dashboard alerts.
+
 ## [1.3.11] — 2026-07-22
 
 ### Added

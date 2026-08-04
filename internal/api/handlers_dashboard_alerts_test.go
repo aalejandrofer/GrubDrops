@@ -81,7 +81,7 @@ func TestBuildAlerts_NoDuplicateForBothSignals(t *testing.T) {
 	q := alertTestQueries(t)
 	writeAuthResult(t, q, "acc_dead", false)
 
-	cards := []dashMineCard{{ID: "acc_dead", Name: "dead", Platform: "twitch", State: "sleeping"}}
+	cards := []dashMineCard{{ID: "acc_dead", Name: "dead", Platform: "twitch", State: "sleeping", Enabled: true}}
 	alerts := buildDashAlerts(ctx, q, cards, "en")
 
 	var total int
@@ -104,15 +104,38 @@ func TestBuildAlerts_NoDuplicateForBothSignals(t *testing.T) {
 	}
 }
 
+// A disabled account with a stale persisted auth-check failure must raise NO
+// alert. authcheck.CheckAll only sweeps ListEnabledAccounts, so once an
+// operator disables a dead account its authcheck:<id> result is frozen and
+// can never self-heal — without this guard the banner would be permanent
+// (unclearable short of re-enabling and re-logging in), which teaches the
+// operator to ignore the whole banner feature.
+func TestBuildAlerts_DisabledAccountNoAlert(t *testing.T) {
+	ctx := context.Background()
+	q := alertTestQueries(t)
+	writeAuthResult(t, q, "acc_disabled", false)
+
+	cards := []dashMineCard{
+		{ID: "acc_disabled", Name: "disabled", Platform: "kick", State: "stopped", Enabled: false},
+	}
+	alerts := buildDashAlerts(ctx, q, cards, "en")
+
+	for _, a := range alerts {
+		if a.Account == "disabled" {
+			t.Fatalf("disabled account must not raise an alert, got %+v", a)
+		}
+	}
+}
+
 // The pre-existing alert kinds must survive the refactor.
 func TestBuildAlerts_KeepsOtherKinds(t *testing.T) {
 	ctx := context.Background()
 	q := alertTestQueries(t)
 
 	cards := []dashMineCard{
-		{ID: "acc_t", Name: "t", Platform: "twitch", State: "sleeping"},
-		{ID: "acc_c", Name: "c", State: "awaiting_connect"},
-		{ID: "acc_g", Name: "g", State: "no_games"},
+		{ID: "acc_t", Name: "t", Platform: "twitch", State: "sleeping", Enabled: true},
+		{ID: "acc_c", Name: "c", State: "awaiting_connect", Enabled: true},
+		{ID: "acc_g", Name: "g", State: "no_games", Enabled: true},
 	}
 	alerts := buildDashAlerts(ctx, q, cards, "en")
 
