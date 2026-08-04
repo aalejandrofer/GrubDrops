@@ -41,6 +41,10 @@ type httpDoer struct {
 	mu      sync.Mutex
 	conns   map[string]*cachedConn // host -> cached connection
 	dial    netutil.DialContextFunc
+
+	// onCookies, when set, receives the Set-Cookie headers of every response
+	// so the backend can bank a rotated session cookie. Nil is a no-op.
+	onCookies func(sess platform.Session, set []*http.Cookie)
 }
 
 type cachedConn struct {
@@ -224,6 +228,11 @@ func (d *httpDoer) do(ctx context.Context, sess platform.Session, method, rawURL
 		return nil, 0, fmt.Errorf("roundtrip: %w", err)
 	}
 	defer resp.Body.Close()
+	if d.onCookies != nil {
+		if set := resp.Cookies(); len(set) > 0 {
+			d.onCookies(sess, set)
+		}
+	}
 	out, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, resp.StatusCode, fmt.Errorf("read body: %w", err)

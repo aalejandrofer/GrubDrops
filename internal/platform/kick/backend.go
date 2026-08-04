@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,14 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/netutil"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
+
+// SessionPersister writes an updated session back to durable storage. Wired
+// in cmd/miner to store.SessionStore.Put. Needed because nothing else
+// persists a session at runtime: SessionStore.Put is otherwise called only
+// by the two login handlers and by the boot-time watcher build, and that
+// boot-time path is gated on an expiry plus a refresh token, neither of
+// which a Kick session has.
+type SessionPersister func(accountID string, s platform.Session) error
 
 // Backend implements platform.Backend for Kick over a pure-HTTP utls client
 // that mimics a real Chrome TLS/HTTP2 fingerprint. Kick's API 403s any
@@ -70,6 +79,15 @@ type Backend struct {
 	// probeDeps holds injectable dial/token helpers for ProbeWS. Zero value
 	// means "use the real Kick endpoints". Set by NewKickBackendForTest.
 	probeDeps probeWSDeps
+
+	// SessionPersister persists a rotated session. Nil disables persistence
+	// (the capture still updates the in-memory freshest copy).
+	SessionPersister SessionPersister
+
+	// freshest holds the newest captured session per account, so
+	// RefreshSession can hand back a rotated cookie even before the next
+	// process restart. Guarded by mu, which the Backend already holds.
+	freshest map[string]kickSession
 }
 
 var _ platform.Backend = (*Backend)(nil)
@@ -117,9 +135,10 @@ func New(c *browser.Client, ctl dockerctl.Controller, template string, port int,
 		dial = nil
 	}
 	wsProxyDial = dial
+	hd := newHTTPDoer(dial)
 	b := &Backend{
 		c:                c,
-		api:              &api{d: newHTTPDoer(dial)},
+		api:              &api{d: hd},
 		sidecars:         reg,
 		clientByName:     map[string]*browser.Client{},
 		sidecarPort:      port,
@@ -130,6 +149,9 @@ func New(c *browser.Client, ctl dockerctl.Controller, template string, port int,
 		campaignChannels: map[string][]kickChannel{},
 		categoryChannels: map[string][]kickChannel{},
 	}
+	// Bank cookies Kick reissues on API responses. Set after b exists
+	// because the hook is a method value on b.
+	hd.onCookies = b.captureCookies
 	if ctl != nil {
 		ctx, cancel := context.WithCancel(context.Background())
 		b.reaperCancel = cancel
@@ -349,10 +371,76 @@ func (b *Backend) LoginViaBrowser(_ context.Context, rpc platform.BrowserRPC) (p
 	return rpc.LoginInteractive("kick")
 }
 
+// captureCookies folds a response's Set-Cookie into the account's stored
+// session. It updates the in-memory freshest copy and, when an
+// authenticating cookie actually changed, persists it.
+//
+// Called on every Kick API response, so the no-change path must stay cheap:
+// SessionStore.Put encrypts, and writing on every request would be wasteful.
+func (b *Backend) captureCookies(sess platform.Session, set []*http.Cookie) {
+	if len(set) == 0 {
+		return
+	}
+	ks, err := decodeSession(sess)
+	if err != nil {
+		return // not a Kick session blob; nothing to merge
+	}
+	merged, changed := mergeCookies(ks, set)
+	if !changed {
+		return
+	}
+	accountID := sess.AccountID
+	if accountID == "" {
+		// Nothing to key the write on. Discovery and canary borrow a shared
+		// session without an account id; the watcher always sets one
+		// (internal/watcher/watcher.go:266).
+		slog.Debug("kick: rotated cookie with no account id, not persisting")
+		return
+	}
+
+	b.mu.Lock()
+	if b.freshest == nil {
+		b.freshest = map[string]kickSession{}
+	}
+	b.freshest[accountID] = merged
+	b.mu.Unlock()
+
+	if b.SessionPersister == nil {
+		return
+	}
+	updated, err := encodeSession(merged)
+	if err != nil {
+		slog.Warn("kick: encode rotated session failed", "account", accountID, "err", err)
+		return
+	}
+	updated.AccountID = accountID
+	if err := b.SessionPersister(accountID, updated); err != nil {
+		slog.Warn("kick: persist rotated session failed", "account", accountID, "err", err)
+		return
+	}
+	slog.Info("kick: session cookie rotated and persisted", "account", accountID)
+}
+
+// RefreshSession returns the freshest captured session for the account.
+// Kick has no server-side refresh endpoint, but it does reissue cookies on
+// ordinary requests; captureCookies banks those, so this hands back the
+// newest one instead of the caller's possibly-stale copy.
 func (b *Backend) RefreshSession(_ context.Context, s platform.Session) (platform.Session, error) {
-	// Kick cookies don't refresh server-side. Return unchanged — invalid
-	// sessions surface as 401s on the next API call.
-	return s, nil
+	if s.AccountID == "" {
+		return s, nil
+	}
+	b.mu.Lock()
+	ks, ok := b.freshest[s.AccountID]
+	b.mu.Unlock()
+	if !ok {
+		return s, nil
+	}
+	updated, err := encodeSession(ks)
+	if err != nil {
+		return s, nil // never fail a refresh over an encode problem
+	}
+	updated.AccountID = s.AccountID
+	return updated, nil
 }
 
 // kickRewardsToBenefits maps a Kick campaign's rewards to platform benefits.

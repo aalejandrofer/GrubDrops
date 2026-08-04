@@ -213,6 +213,14 @@ func run() error {
 	}
 	kickOpts = append(kickOpts, kick.WithProxy(effectiveProxy))
 	kickBackend = kick.New(browserClient, dockerCtl, cfg.KickSidecarTemplate, cfg.KickSidecarPort, 10*time.Minute, kickOpts...)
+	// Persist a rotated Kick cookie so a reissued session survives a
+	// restart. Nothing else writes a session at runtime: SessionStore.Put
+	// is otherwise reached only from the login handlers and the boot-time
+	// entry build, whose refresh branch needs an expiry plus a refresh
+	// token that a Kick session does not have.
+	kickBackend.SessionPersister = func(accountID string, s platform.Session) error {
+		return sessions.Put(ctx, accountID, s)
+	}
 	// Watch path is operator-selectable (Settings → Experimental). "browser"
 	// (default) drives a real IVS <video> in the sidecar. "ws" is the
 	// experimental pure-WebSocket path (no browser): leaving browser-watch OFF
