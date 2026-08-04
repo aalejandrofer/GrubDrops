@@ -576,7 +576,10 @@ func run() error {
 	// cookies) on a long cadence so the operator sees a "needs re-auth"
 	// flag before an account silently stops mining. CheckAll is also wired
 	// to a manual button on /accounts.
-	authChecker := authcheck.New(q, sessions, registry)
+	//
+	// Attach the notifier so an account whose auth dies raises an alert
+	// instead of silently stopping. EventAuth had no producer before this.
+	authChecker := authcheck.New(q, sessions, registry).WithNotifier(notifier)
 	authInterval := parseDuration(os.Getenv("GRUB_AUTHCHECK_INTERVAL"), time.Hour)
 	go authChecker.Run(ctx, authInterval)
 

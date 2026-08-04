@@ -31,6 +31,13 @@ type sessionGetter interface {
 	Get(ctx context.Context, accountID string) (platform.Session, bool, error)
 }
 
+// Notifier fires an operator notification. Matches notify.Notifier; kept as
+// a local interface so this package stays decoupled from internal/notify
+// (same pattern as internal/api's Notifier in server.go).
+type Notifier interface {
+	Notify(ctx context.Context, event string, fields map[string]any) error
+}
+
 type Checker struct {
 	q        *gen.Queries
 	sessions sessionGetter
@@ -41,10 +48,20 @@ type Checker struct {
 	// short-delayed retry avoids marking a valid session expired while still
 	// failing a genuinely dead one. Defaults to 15s in New.
 	retryDelay time.Duration
+	// notifier fires EventAuth on an auth-health transition. Nil means no
+	// notification is sent (the miner runs fine with no webhook set).
+	notifier Notifier
 }
 
 func New(q *gen.Queries, sessions sessionGetter, reg *platform.Registry) *Checker {
 	return &Checker{q: q, sessions: sessions, registry: reg, log: slog.Default().With("component", "authcheck"), retryDelay: 15 * time.Second}
+}
+
+// WithNotifier attaches the operator notifier and returns the receiver, so
+// wiring reads as one expression at the call site.
+func (c *Checker) WithNotifier(n Notifier) *Checker {
+	c.notifier = n
+	return c
 }
 
 // verifyWithRetry probes the session and, on failure, retries exactly once
@@ -98,29 +115,29 @@ func (c *Checker) CheckAll(ctx context.Context) {
 		return
 	}
 	for _, a := range accs {
-		c.checkOne(ctx, a.ID, a.Platform)
+		c.checkOne(ctx, a.ID, a.Platform, a.DisplayName)
 	}
 }
 
-func (c *Checker) checkOne(ctx context.Context, accountID, plat string) {
+func (c *Checker) checkOne(ctx context.Context, accountID, plat, name string) {
 	res := Result{CheckedAt: time.Now().Unix()}
 	b, ok := c.registry.Get(plat)
 	if !ok {
 		res.Msg = "no backend for platform"
-		c.persist(ctx, accountID, res)
+		c.persistWithMeta(ctx, accountID, plat, name, res)
 		return
 	}
 	checker, ok := b.(platform.AuthChecker)
 	if !ok {
 		// Platform has no probe — treat as healthy (nothing to verify).
 		res.OK, res.Msg = true, "no auth check for platform"
-		c.persist(ctx, accountID, res)
+		c.persistWithMeta(ctx, accountID, plat, name, res)
 		return
 	}
 	sess, found, err := c.sessions.Get(ctx, accountID)
 	if err != nil || !found {
 		res.Msg = "no session — never authenticated"
-		c.persist(ctx, accountID, res)
+		c.persistWithMeta(ctx, accountID, plat, name, res)
 		return
 	}
 	sess.AccountID = accountID
@@ -131,7 +148,7 @@ func (c *Checker) checkOne(ctx context.Context, accountID, plat string) {
 	} else {
 		res.OK, res.Msg = true, "ok"
 	}
-	c.persist(ctx, accountID, res)
+	c.persistWithMeta(ctx, accountID, plat, name, res)
 	c.log.Info("authcheck", "kind", "auth", "account", accountID, "ok", res.OK, "msg", res.Msg)
 
 	// Backfill / refresh the account avatar while we have a verified
@@ -176,9 +193,52 @@ func (c *Checker) refreshAvatar(ctx context.Context, accountID string, b platfor
 }
 
 func (c *Checker) persist(ctx context.Context, accountID string, res Result) {
+	c.persistWithMeta(ctx, accountID, "", "", res)
+}
+
+// persistWithMeta is persist plus the platform and display name used to make
+// the notification human-readable. Empty meta values are omitted from the
+// notify fields.
+func (c *Checker) persistWithMeta(ctx context.Context, accountID, plat, name string, res Result) {
+	prev, hadPrev := Load(ctx, c.q, accountID)
+
 	b, _ := json.Marshal(res)
 	if err := c.q.UpsertSettingString(ctx, gen.UpsertSettingStringParams{Key: Prefix + accountID, Value: b}); err != nil {
 		c.log.Warn("authcheck: persist failed", "account", accountID, "err", err)
+	}
+
+	c.notifyTransition(ctx, accountID, plat, name, prev, hadPrev, res)
+}
+
+// notifyTransition fires EventAuth only when auth health CHANGED:
+// OK→fail, first-ever fail, or fail→OK (recovery). A fail→fail repeat is
+// deliberately silent — the sweep runs hourly, so level-triggering would
+// send 24 messages a day per dead account.
+func (c *Checker) notifyTransition(ctx context.Context, accountID, plat, name string, prev Result, hadPrev bool, res Result) {
+	if c.notifier == nil {
+		return
+	}
+	if hadPrev && prev.OK == res.OK {
+		return // no change
+	}
+	if !hadPrev && res.OK {
+		return // first observation, and it's healthy — nothing to report
+	}
+	fields := map[string]any{
+		"account": accountID,
+		"ok":      res.OK,
+		"reason":  res.Msg,
+	}
+	if plat != "" {
+		fields["platform"] = plat
+	}
+	if name != "" {
+		fields["name"] = name
+	}
+	if err := c.notifier.Notify(ctx, "auth", fields); err != nil {
+		// Best-effort: auth health is already persisted above and is the
+		// source of truth. A dead webhook must not mask a dead account.
+		c.log.Warn("authcheck: notify failed", "account", accountID, "err", err)
 	}
 }
 

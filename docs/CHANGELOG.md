@@ -4,6 +4,18 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Fixed
+
+- **An account whose login dies now actually tells you.** The auth-health
+  sweep has always detected expired sessions hourly and written the result to
+  the Accounts page, but the notification event it was supposed to send
+  (`EventAuth`) had no producer anywhere in the code — it was declared, had a
+  Discord message template, was registered in the notification filter, and was
+  never once fired. A Kick account could sit dead for days with the dashboard
+  showing nothing. The sweep now sends a notification the moment auth health
+  changes, and a recovery notice when it comes back. It fires only on the
+  change, so a still-broken account is not re-reported every hour.
+
 ## [1.3.11] — 2026-07-22
 
 ### Added
