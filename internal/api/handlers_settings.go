@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -29,12 +30,15 @@ import (
 )
 
 type settingsDeps struct {
-	loc      *timeutil.Zone // display timezone (live; setting → TZ env → UTC)
-	s        *store.Settings
-	q        *gen.Queries // for inline accounts table
-	sch      *scheduler.Scheduler
-	t        Renderer
-	sm       *scs.SessionManager
+	loc *timeutil.Zone // display timezone (live; setting → TZ env → UTC)
+	s   *store.Settings
+	q   *gen.Queries // for inline accounts table
+	sch *scheduler.Scheduler
+	t   Renderer
+	sm  *scs.SessionManager
+	// db is the live database handle, used only by the Settings → Health
+	// "download snapshot" button (VACUUM INTO). Nil disables the button.
+	db       *sql.DB
 	onUpdate func()
 	// reload re-spins the scheduler so whitelist/priority POSTs take
 	// effect without the operator clicking "Apply changes" first.

@@ -322,6 +322,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/logout", authH.logoutPost)
 
 	settingsH := &settingsDeps{
+		db:          d.DB,
 		s:           d.SettingsStore,
 		q:           d.Q,
 		sch:         d.Scheduler,
@@ -360,6 +361,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/settings/notify-test", settingsH.notifyTest)
 	authed.Post("/settings/canary", settingsH.canarySave)
 	authed.Post("/settings/canary/run", settingsH.canaryRun)
+	authed.Post("/settings/snapshot", settingsH.postSnapshot)
 	authed.Get("/settings/health/canary-panel", settingsH.canaryPanel)
 	authed.Get("/settings/proxy", settingsH.getProxy)
 	authed.Post("/settings/proxy", settingsH.postProxy)

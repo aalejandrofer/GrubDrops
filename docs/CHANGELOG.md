@@ -4,6 +4,13 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Added
+
+- **Download a database snapshot from Settings → Health.** Copying `miner.db`
+  by hand while the miner is running can capture a half-written state; the new
+  button uses SQLite's `VACUUM INTO` to write a consistent copy and streams it
+  to you, so a backup no longer means stopping the container.
+
 ### Fixed
 
 - **An account whose login dies now actually tells you.** The auth-health

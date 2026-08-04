@@ -543,6 +543,9 @@
   "health.none_running": "ninguno en ejecución",
   "health.commit": "commit",
   "health.version": "versión",
+  "health.snapshot": "Copia de la base de datos",
+  "health.snapshot_download": "Descargar copia",
+  "health.snapshot_desc": "Una copia coherente de la base de datos, segura de hacer mientras el minero está funcionando.",
 
   "canary.twitch": "twitch",
   "canary.not_configured": "no configurado",

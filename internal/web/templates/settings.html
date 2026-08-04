@@ -360,6 +360,19 @@
   {{template "canary_form" $}}
 </section>
 <section class="settings-card">
+  <header class="section-h"><h3>{{t "health.snapshot"}}</h3></header>
+  <form method="post" action="/settings/snapshot">
+    <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+    <div class="kvedit">
+      <div class="row">
+        <span class="k"></span>
+        <span class="d">{{t "health.snapshot_desc"}}</span>
+        <span class="v"><button class="btn-linear" type="submit">{{t "health.snapshot_download"}} &#x2192;</button></span>
+      </div>
+    </div>
+  </form>
+</section>
+<section class="settings-card">
   <header class="section-h"><h3>{{t "health.status"}}</h3><span class="meta">{{t "health.readonly"}}</span></header>
   <div class="kvlist">
     <div class="kvrow"><span class="k">{{t "health.uptime"}}</span><span class="v">{{if .Uptime}}{{.Uptime}}{{else}}—{{end}}</span></div>
