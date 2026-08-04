@@ -71,23 +71,36 @@ func TestAuthAlertAccounts_NoResultIsNotFlagged(t *testing.T) {
 	}
 }
 
-// When BOTH signals fire for one account, the operator needs one row, not two.
+// When BOTH signals fire for one account — the scheduler independently wants
+// a "sleeping"/no_drops alert AND the persisted auth check failed — the
+// operator needs one row, not two. This is the mixed-signal case: the card's
+// State on its own would produce a no_drops alert via the switch, so the
+// test only bites if the needs_auth `continue` actually short-circuits it.
 func TestBuildAlerts_NoDuplicateForBothSignals(t *testing.T) {
 	ctx := context.Background()
 	q := alertTestQueries(t)
 	writeAuthResult(t, q, "acc_dead", false)
 
-	cards := []dashMineCard{{ID: "acc_dead", Name: "dead", State: "needs_auth"}}
+	cards := []dashMineCard{{ID: "acc_dead", Name: "dead", Platform: "twitch", State: "sleeping"}}
 	alerts := buildDashAlerts(ctx, q, cards, "en")
 
-	var n int
+	var total int
 	for _, a := range alerts {
-		if a.Kind == "needs_auth" && a.Account == "dead" {
-			n++
+		if a.Account != "dead" {
+			continue
+		}
+		total++
+		if a.Kind != "needs_auth" {
+			t.Fatalf("expected needs_auth alert for dead account, got kind %q", a.Kind)
 		}
 	}
-	if n != 1 {
-		t.Fatalf("expected exactly 1 needs_auth alert, got %d", n)
+	if total != 1 {
+		t.Fatalf("expected exactly 1 alert for dead account, got %d", total)
+	}
+	for _, a := range alerts {
+		if a.Account == "dead" && a.Kind == "no_drops" {
+			t.Fatal("no_drops alert must not also fire for an account whose auth check failed")
+		}
 	}
 }
 
