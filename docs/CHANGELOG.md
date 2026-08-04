@@ -31,14 +31,6 @@ All notable changes to GrubDrops.
   signals now feed the same banner, and an account that trips both still shows
   a single row.
 
-- **Kick logins last longer.** Kick reissues session cookies on ordinary API
-  responses, but the miner threw every one of them away, so an account rode
-  the cookies from its original `cookies.txt` paste until they expired and
-  mining silently stopped. Reissued cookies are now folded into the stored
-  session and saved, so a session that Kick keeps refreshing stays alive
-  instead of aging out. Only the three cookies the session actually
-  authenticates with can update, so analytics cookies never touch it.
-
 ## [1.3.11] — 2026-07-22
 
 ### Added
