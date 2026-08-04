@@ -16,6 +16,14 @@ All notable changes to GrubDrops.
   changes, and a recovery notice when it comes back. It fires only on the
   change, so a still-broken account is not re-reported every hour.
 
+- **The dashboard no longer reads green while an account is dead.** Broken auth
+  was tracked by two separate signals that could disagree: the watcher's live
+  state, which drove the dashboard banner, and the hourly auth check, which
+  only showed on the Accounts page. An account sitting idle never flipped its
+  watcher state, so a dead session raised no dashboard alert at all. Both
+  signals now feed the same banner, and an account that trips both still shows
+  a single row.
+
 ## [1.3.11] — 2026-07-22
 
 ### Added

@@ -12,6 +12,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/aalejandrofer/grubdrops/internal/authcheck"
 	"github.com/aalejandrofer/grubdrops/internal/i18n"
 	mlog "github.com/aalejandrofer/grubdrops/internal/log"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
@@ -308,33 +309,7 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 	allowed := allowedLoginsFor(r, d.q, accs)
 	// Build alerts: any account in needs_auth state or sleeping with 0
 	// eligible drops gets a top banner pointing at the right CTA.
-	var alerts []dashAlert
-	for _, c := range cards {
-		switch c.State {
-		case "needs_auth":
-			alerts = append(alerts, dashAlert{
-				Kind: "needs_auth", Account: c.Name,
-				URL: "/accounts/" + c.ID + "/login", Action: i18n.T(lang, "dashboard.action_re_auth"),
-			})
-		case "sleeping":
-			if c.Platform == "twitch" {
-				alerts = append(alerts, dashAlert{
-					Kind: "no_drops", Account: c.Name,
-					URL: "/accounts/" + c.ID + "/login", Action: i18n.T(lang, "dashboard.action_device_code"),
-				})
-			}
-		case "awaiting_connect":
-			alerts = append(alerts, dashAlert{
-				Kind: "awaiting_connect", Account: c.Name,
-				URL: "/drops", Action: i18n.T(lang, "dashboard.action_connect"),
-			})
-		case "no_games":
-			alerts = append(alerts, dashAlert{
-				Kind: "no_games", Account: c.Name,
-				URL: "/accounts/" + c.ID, Action: i18n.T(lang, "dashboard.action_add_games"),
-			})
-		}
-	}
+	alerts := buildDashAlerts(r.Context(), d.q, cards, lang)
 
 	camps := activeCampsFromDiscovery(r.Context(), d.sch, d.channelCounters, d.q, lang)
 
@@ -366,6 +341,62 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 		page.Tele.Completed, page.Tele.TotalDrops = completedByAllConnected(r.Context(), d.sch.DiscoverySnapshot(), d.q)
 	}
 	return page
+}
+
+// authAlertAccounts returns the set of account IDs whose PERSISTED auth-health
+// check failed. This is a second, independent signal from scheduler state: an
+// account that is merely idle never flips to "needs_auth", so before this the
+// dashboard could read green while the account's session was dead.
+func authAlertAccounts(ctx context.Context, q *gen.Queries, cards []dashMineCard) map[string]bool {
+	failed := make(map[string]bool, len(cards))
+	for _, c := range cards {
+		res, ok := authcheck.Load(ctx, q, c.ID)
+		if !ok {
+			continue // never checked yet — not evidence of a problem
+		}
+		if !res.OK {
+			failed[c.ID] = true
+		}
+	}
+	return failed
+}
+
+// buildDashAlerts turns the mining cards into top-of-page CTA banners. An
+// account is "needs auth" if EITHER the scheduler says so OR its persisted
+// auth check failed, OR'd into one alert so the operator sees one row per
+// broken account rather than two.
+func buildDashAlerts(ctx context.Context, q *gen.Queries, cards []dashMineCard, lang string) []dashAlert {
+	authFailed := authAlertAccounts(ctx, q, cards)
+	var alerts []dashAlert
+	for _, c := range cards {
+		if c.State == "needs_auth" || authFailed[c.ID] {
+			alerts = append(alerts, dashAlert{
+				Kind: "needs_auth", Account: c.Name,
+				URL: "/accounts/" + c.ID + "/login", Action: i18n.T(lang, "dashboard.action_re_auth"),
+			})
+			continue // one row per broken account
+		}
+		switch c.State {
+		case "sleeping":
+			if c.Platform == "twitch" {
+				alerts = append(alerts, dashAlert{
+					Kind: "no_drops", Account: c.Name,
+					URL: "/accounts/" + c.ID + "/login", Action: i18n.T(lang, "dashboard.action_device_code"),
+				})
+			}
+		case "awaiting_connect":
+			alerts = append(alerts, dashAlert{
+				Kind: "awaiting_connect", Account: c.Name,
+				URL: "/drops", Action: i18n.T(lang, "dashboard.action_connect"),
+			})
+		case "no_games":
+			alerts = append(alerts, dashAlert{
+				Kind: "no_games", Account: c.Name,
+				URL: "/accounts/" + c.ID, Action: i18n.T(lang, "dashboard.action_add_games"),
+			})
+		}
+	}
+	return alerts
 }
 
 // bucketMiningByPlatform splits the flat list of mining cards into the
