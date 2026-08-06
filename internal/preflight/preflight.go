@@ -89,11 +89,14 @@ func CheckDataDir(dbPath string) error {
   path: %s
   uid:  %d
 
-  The mounted directory must be writable by UID %d. On the host:
+  The directory mounted at %s must be writable by UID %d.
+  If you are using the default compose file, which mounts ./data, run this
+  on the host:
       sudo chown -R %d:%d ./data
-  Or use a named Docker volume instead of a bind mount.
+  Otherwise, chown the host directory you have mounted at %s.
+  A named Docker volume avoids this entirely.
 
-  (underlying error: %v)`, dir, os.Getuid(), os.Getuid(), os.Getuid(), os.Getuid(), err)
+  (underlying error: %v)`, dir, os.Getuid(), dir, os.Getuid(), os.Getuid(), os.Getuid(), dir, err)
 	}
 	name := f.Name()
 	// Close before removing so the handle is never left open on an error path.
