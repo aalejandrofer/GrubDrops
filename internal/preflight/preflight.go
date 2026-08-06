@@ -14,6 +14,8 @@ package preflight
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"filippo.io/age"
@@ -37,5 +39,65 @@ func CheckMasterKey(secret string) error {
 
   (underlying error: %v)`, err)
 	}
+	return nil
+}
+
+// CheckDataDir verifies the miner can actually write into the directory that
+// will hold the database.
+//
+// This is a real write probe rather than an inspection of the mode bits.
+// Mode bits do not account for a read-only filesystem, for the effective UID
+// and its supplementary groups, or for ACLs, and reimplementing that logic in
+// Go duplicates what the kernel answers in a single syscall. The probe also
+// collapses two different SQLite failures into one message: "unable to open
+// database file (14)" when the directory is unwritable and no database exists
+// yet, and "attempt to write a readonly database (1544)" when the directory is
+// read-only but the database file is already there. Neither names permissions,
+// the UID, or the mount, and the fix for both is the same chown.
+func CheckDataDir(dbPath string) error {
+	dir := filepath.Dir(dbPath)
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf(`the data directory does not exist
+
+  path: %s
+
+  Nothing is mounted there. Check the volume mapping in your compose file,
+  and that GRUB_DB_PATH points inside it.`, dir)
+		}
+		return fmt.Errorf(`the data directory cannot be read
+
+  path: %s
+
+  (underlying error: %v)`, dir, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf(`the data directory is not a directory
+
+  path: %s
+
+  GRUB_DB_PATH should be a file inside a mounted directory, for example
+  /data/miner.db.`, dir)
+	}
+
+	f, err := os.CreateTemp(dir, ".grubdrops-preflight-*")
+	if err != nil {
+		return fmt.Errorf(`the data directory is not writable
+
+  path: %s
+  uid:  %d
+
+  The mounted directory must be writable by UID %d. On the host:
+      sudo chown -R %d:%d ./data
+  Or use a named Docker volume instead of a bind mount.
+
+  (underlying error: %v)`, dir, os.Getuid(), os.Getuid(), os.Getuid(), os.Getuid(), err)
+	}
+	name := f.Name()
+	// Close before removing so the handle is never left open on an error path.
+	_ = f.Close()
+	_ = os.Remove(name)
 	return nil
 }
