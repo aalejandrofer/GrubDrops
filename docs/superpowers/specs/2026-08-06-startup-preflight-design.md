@@ -35,11 +35,20 @@ Nothing names permissions, UID 65532, or the bind mount. There is no path from
 that message to the fix. The README documents the `chown`, but a reader who
 missed it has no way back.
 
-There is a second, nastier variant. If the *directory* is read-only but the
-database file already exists and is writable, SQLite cannot create its `-wal`
-and `-shm` sidecars. Startup can then succeed and the failure surfaces later as
-"failed to persist session" at login, which the README already mentions. A
-plain writability stat would miss this; see Check 2.
+There is a second variant with a *different* error. If the directory is
+read-only but the database file already exists, SQLite cannot create its `-wal`
+and `-shm` sidecars and fails with a different code:
+
+```
+fatal: open store: ping sqlite: attempt to write a readonly database (1544)
+```
+
+Verified 2026-08-06 against `store.Open`. An earlier draft of this spec guessed
+that this variant would pass startup and only fail later at login; that guess
+was wrong, and the probe above is what settled it. Both variants do fail at
+boot. The problem is that they fail with two different SQLite codes, 14 and
+1544, neither of which names permissions, the UID, or the mount. A single
+write probe covers both with one message the operator can act on.
 
 ### Failure 2: the master key is not an age identity
 
@@ -118,10 +127,12 @@ and leaves no half-created database behind.
 ### Check 2: data directory
 
 Takes `cfg.DBPath`, resolves its parent directory, and performs a **real write
-probe**: create a uniquely named temp file in that directory, then remove it. A
-stat of the mode bits is not enough, because it would miss the read-only-directory
-variant described under Failure 1, and because mode bits do not account for a
-read-only filesystem or the effective UID.
+probe**: create a uniquely named temp file in that directory, then remove it.
+Reading the mode bits is not enough: the bits do not account for a read-only
+filesystem, for the effective UID and its groups, or for ACLs, and getting that
+reasoning right in Go duplicates what the kernel already answers in one syscall.
+The probe also collapses both SQLite failures (codes 14 and 1544) into a single
+message, which is the point.
 
 The probe file is created with `os.CreateTemp(dir, ".grubdrops-preflight-*")`
 and removed in a `defer`, so a crash between create and remove leaves one
@@ -179,7 +190,7 @@ All tests use `t.TempDir()` and `chmod`. No Docker, no network.
 | Writable directory | no error, and no probe file left behind |
 | Directory missing | error naming the path, distinct from the permissions error |
 | Directory read-only (`chmod 0500`) | error naming the path and the UID |
-| DB file exists, directory read-only | error, the variant a stat would miss |
+| DB file exists, directory read-only | error, the SQLite-1544 variant, same message as the 14 variant |
 | Check order | an invalid key is reported even when the data dir is also broken |
 
 The last row matters: it pins the cost ordering, which is the whole point of
