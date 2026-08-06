@@ -543,6 +543,7 @@
   "health.none_running": "none running",
   "health.commit": "commit",
   "health.version": "version",
+  "health.backup": "Backup",
   "health.snapshot": "Database snapshot",
   "health.snapshot_download": "Download snapshot",
   "health.snapshot_desc": "A consistent copy of the database, safe to take while the miner is running.",

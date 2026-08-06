@@ -543,6 +543,7 @@
   "health.none_running": "无运行中",
   "health.commit": "提交",
   "health.version": "版本",
+  "health.backup": "备份",
   "health.snapshot": "数据库快照",
   "health.snapshot_download": "下载快照",
   "health.snapshot_desc": "数据库的一致性副本，可在挖掘运行期间安全获取。",
