@@ -4,6 +4,8 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.3.12] — 2026-08-06
+
 ### Added
 
 - **Download a database snapshot from Settings → Health.** Copying `miner.db`
@@ -37,6 +39,27 @@ All notable changes to GrubDrops.
   auth-check banner above, disabling the natural response to a dead login
   produced a permanent, unclearable "needs re-auth" alert. Disabled accounts
   are now skipped when building dashboard alerts.
+
+- **Release badge on the README no longer goes stale.** It was hardcoded to
+  v1.3.8 while v1.3.11 was out, so the front page understated the project by
+  two releases. It now reads the current release from GitHub instead of naming
+  a version.
+
+### Changed
+
+- **Dependency updates, including a security fix.** gRPC moves to 1.82.1,
+  which closes a high-severity advisory (GHSA-hrxh-6v49-42gf). The xDS half of
+  that advisory never applied here since GrubDrops does not use xDS; the HTTP/2
+  half touched the sidecar's gRPC server, which is only reachable from inside
+  the Docker network. Also updates golang.org/x/net, golang.org/x/crypto,
+  modernc.org/sqlite, chromedp, go-oidc, chi, goose, and go-connections. (#34,
+  #30)
+
+### Removed
+
+- **Stale files from the abandoned Svelte port** are no longer tracked, and the
+  agent worktree directory that held them is now ignored so it cannot be
+  committed again.
 
 ## [1.3.11] — 2026-07-22
 
