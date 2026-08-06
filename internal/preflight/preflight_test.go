@@ -50,10 +50,25 @@ func TestCheckMasterKey_EmptyIsRejected(t *testing.T) {
 }
 
 // Surrounding whitespace is easy to introduce in a .env file or a Portainer
-// environment-variables box, and is not the user's mistake in spirit.
-func TestCheckMasterKey_TrimsSurroundingWhitespace(t *testing.T) {
-	if err := CheckMasterKey("  " + validKey(t) + "\n"); err != nil {
-		t.Fatalf("a key with surrounding whitespace should be accepted: %v", err)
+// environment-variables box, but it is fatal to age.ParseX25519Identity, and
+// cfg.MasterKey reaches store.NewCryptor untrimmed. Silently trimming here
+// would let preflight pass while NewCryptor still fails after the database
+// has been opened and migrated, so this must be an explicit, actionable
+// rejection rather than a silent accept.
+func TestCheckMasterKey_SurroundingWhitespaceIsRejected(t *testing.T) {
+	for _, key := range []string{
+		"  " + validKey(t),
+		validKey(t) + "\n",
+		" " + validKey(t) + " ",
+		"\t" + validKey(t),
+	} {
+		err := CheckMasterKey(key)
+		if err == nil {
+			t.Fatalf("a key with surrounding whitespace must be rejected: %q", key)
+		}
+		if !strings.Contains(err.Error(), "whitespace") {
+			t.Fatalf("message must mention whitespace, got: %s", err)
+		}
 	}
 }
 
@@ -98,8 +113,15 @@ func TestCheckDataDir_MissingDirIsReported(t *testing.T) {
 	if err == nil {
 		t.Fatal("a missing data directory must be reported")
 	}
-	if !strings.Contains(err.Error(), "does not exist") {
-		t.Fatalf("message should say the directory does not exist, got: %s", err)
+	msg := err.Error()
+	if !strings.Contains(msg, "does not exist") {
+		t.Fatalf("message should say the directory does not exist, got: %s", msg)
+	}
+	// The message must name an actionable command and not assume Docker: a
+	// GRUB_DB_PATH=./miner.db user running outside Docker has no compose
+	// file to check.
+	if !strings.Contains(msg, "mkdir -p") {
+		t.Fatalf("message must name the mkdir fix, got: %s", msg)
 	}
 }
 
@@ -147,6 +169,60 @@ func TestCheckDataDir_ReadOnlyDirWithExistingDBIsReported(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "chown") {
 		t.Fatalf("message must name the chown fix, got: %s", err)
+	}
+}
+
+// GRUB_DB_PATH pointing at the mounted directory itself, rather than a file
+// inside it, must get its own message: filepath.Dir("/data") is "/", and a
+// chown suggestion for "/" fixes nothing. The real fix is one character in
+// GRUB_DB_PATH.
+func TestCheckDataDir_DBPathIsADirectoryIsRejected(t *testing.T) {
+	dir := t.TempDir()
+	err := CheckDataDir(dir)
+	if err == nil {
+		t.Fatal("GRUB_DB_PATH naming a directory must be rejected")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "miner.db") {
+		t.Fatalf("message must show a file example like miner.db, got: %s", msg)
+	}
+	if !strings.Contains(msg, "GRUB_DB_PATH") {
+		t.Fatalf("message must name GRUB_DB_PATH, got: %s", msg)
+	}
+}
+
+// A writable directory does not imply a writable database file: a restored
+// backup or a directory left over from an older, root-run container can
+// leave miner.db unwritable while ./data itself is wide open.
+func TestCheckDataDir_ExistingWritableDBFilePasses(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "miner.db")
+	if err := os.WriteFile(dbPath, []byte("not really a db"), 0o644); err != nil {
+		t.Fatalf("seed db file: %v", err)
+	}
+	if err := CheckDataDir(dbPath); err != nil {
+		t.Fatalf("writable existing db file rejected: %v", err)
+	}
+}
+
+func TestCheckDataDir_UnwritableExistingDBFileIsReported(t *testing.T) {
+	skipIfRoot(t)
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "miner.db")
+	if err := os.WriteFile(dbPath, []byte("not really a db"), 0o400); err != nil {
+		t.Fatalf("seed db file: %v", err)
+	}
+
+	err := CheckDataDir(dbPath)
+	if err == nil {
+		t.Fatal("an unwritable database file must be reported even though the directory is writable")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, dbPath) {
+		t.Fatalf("message must name the file, got: %s", msg)
+	}
+	if !strings.Contains(msg, "chown") {
+		t.Fatalf("message must name the chown fix, got: %s", msg)
 	}
 }
 

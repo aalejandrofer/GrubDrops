@@ -13,8 +13,8 @@ All notable changes to GrubDrops.
   `GRUB_MASTER_KEY`, which was only caught after the database had been created
   and fully migrated, so the real error scrolled past under eighteen lines of
   migration output and repeated on every restart. Both are now checked before
-  the database is opened, and each message names the exact command that fixes
-  it.
+  the database is opened, and each message names the path involved, the user
+  the container runs as, and what to do about it.
 
 ## [1.3.12] — 2026-08-06
 
