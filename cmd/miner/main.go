@@ -34,6 +34,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/platform/kick"
 	"github.com/aalejandrofer/grubdrops/internal/platform/twitch"
+	"github.com/aalejandrofer/grubdrops/internal/preflight"
 	"github.com/aalejandrofer/grubdrops/internal/scheduler"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
@@ -94,6 +95,15 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// Fail with an actionable message before opening the database. Every
+	// user-reported problem with this project has been a deployment failure,
+	// and the two that remain, an invalid master key and an unwritable data
+	// mount, used to surface as a SQLite error code after the database had
+	// already been created and migrated.
+	if err := preflight.Run(cfg.DBPath, cfg.MasterKey); err != nil {
+		return err
+	}
 
 	db, err := store.Open(ctx, cfg.DBPath)
 	if err != nil {

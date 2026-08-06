@@ -4,6 +4,18 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Changed
+
+- **A misconfigured container now tells you what to fix.** Two first-run
+  failures used to surface as a raw SQLite error code: an unwritable `./data`
+  mount, which said `unable to open database file (14)` and named neither
+  permissions nor the user the container runs as, and an invalid
+  `GRUB_MASTER_KEY`, which was only caught after the database had been created
+  and fully migrated, so the real error scrolled past under eighteen lines of
+  migration output and repeated on every restart. Both are now checked before
+  the database is opened, and each message names the exact command that fixes
+  it.
+
 ## [1.3.12] — 2026-08-06
 
 ### Added

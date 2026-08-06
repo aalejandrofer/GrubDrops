@@ -104,3 +104,13 @@ func CheckDataDir(dbPath string) error {
 	_ = os.Remove(name)
 	return nil
 }
+
+// Run performs every startup check in cost order and returns the first
+// failure. The master key is checked first because it touches no disk: a bad
+// key should never cost a database open, let alone a full migration.
+func Run(dbPath, masterKey string) error {
+	if err := CheckMasterKey(masterKey); err != nil {
+		return err
+	}
+	return CheckDataDir(dbPath)
+}

@@ -149,3 +149,47 @@ func TestCheckDataDir_ReadOnlyDirWithExistingDBIsReported(t *testing.T) {
 		t.Fatalf("message must name the chown fix, got: %s", err)
 	}
 }
+
+func TestRun_AllGoodPasses(t *testing.T) {
+	dir := t.TempDir()
+	if err := Run(filepath.Join(dir, "miner.db"), validKey(t)); err != nil {
+		t.Fatalf("a good environment was rejected: %v", err)
+	}
+}
+
+// The key check must come first because it touches no disk. This is the whole
+// point of the ordering: a bad key should never cost a database open.
+func TestRun_ReportsKeyBeforeDataDir(t *testing.T) {
+	skipIfRoot(t)
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	// BOTH are broken. The key error is the one that must surface.
+	err := Run(filepath.Join(dir, "miner.db"), "definitely-not-an-age-key")
+	if err == nil {
+		t.Fatal("expected an error when both the key and the data dir are broken")
+	}
+	if !strings.Contains(err.Error(), "AGE-SECRET-KEY-1") {
+		t.Fatalf("the key failure should be reported first, got: %s", err)
+	}
+}
+
+func TestRun_ReportsDataDirWhenKeyIsFine(t *testing.T) {
+	skipIfRoot(t)
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	err := Run(filepath.Join(dir, "miner.db"), validKey(t))
+	if err == nil {
+		t.Fatal("expected an error for an unwritable data dir")
+	}
+	if !strings.Contains(err.Error(), "chown") {
+		t.Fatalf("expected the data dir message, got: %s", err)
+	}
+}
