@@ -97,6 +97,15 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 ```
 
+La `GRUB_MASTER_KEY` debe ser una **identidad X25519 de age** (`AGE-SECRET-KEY-1…`): cifra los
+tokens de sesión almacenados. Una cadena aleatoria no se puede analizar y el minero falla al
+arrancar. Genera una válida solo con Docker:
+
+```bash
+docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen
+# → AGE-SECRET-KEY-1... (consérvala; reutiliza la MISMA clave en cada reinicio)
+```
+
 **Haz primero que el directorio de datos sea escribible.** La imagen del minero se ejecuta como el usuario
 `nonroot` de distroless (**UID 65532**). Un `./data` recién montado por bind es propiedad de tu
 usuario del host, así que el contenedor no puede escribir `miner.db` —las sesiones nunca persisten y
@@ -117,6 +126,11 @@ GRUB_MASTER_KEY="$(docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen
 ```
 
 Abre **http://localhost:8080**. La primera visita te pide crear un inicio de sesión de administrador.
+
+- **¿Despliegas con Portainer o una interfaz gráfica?** Ahí no hay shell para definir la
+  variable, así que añade `GRUB_MASTER_KEY` (el valor que devolvió `keygen` más arriba) en la
+  sección **Environment variables** del stack antes de desplegar. Usa `docker compose` normal,
+  no un stack de Swarm, sobre una versión actual de Docker Engine.
 
 **¿Solo Twitch?** Quita el montaje del socket de Docker y deja `GRUB_BROWSER_URL`
 sin definir —nunca se crea ningún sidecar de Kick (Kick simplemente no tiene ninguna vía de acumulación de tiempo
@@ -150,6 +164,22 @@ sesión existente de kick.com como un archivo `cookies.txt` exportado desde tu n
 Los canales se descubren automáticamente a partir del juego de cada campaña, así que no hay nada más que
 configurar. Cuando la sesión caduque (el descubrimiento registra errores de Cloudflare o 401),
 vuelve a exportarla y pégala de nuevo.
+
+## Seleccionar qué minerar
+
+GrubDrops funciona con listas blancas: solo descubre y mina los juegos que selecciones, así que
+**una instalación nueva no mina nada hasta que añadas al menos un juego a la lista**. Hasta
+entonces `/drops` muestra un aviso que te dirige aquí, y las cuentas se quedan en estado de
+*"sin juegos todavía"* (no es un error).
+
+Puedes añadir juegos de cualquiera de las dos formas, por nombre, sin esperar a que aparezca
+una campaña:
+
+- **Global** (se aplica a todas las cuentas): **Prioridad → añadir por nombre**.
+- **Por cuenta** (anula la lista global): **Cuentas → elige una cuenta → añadir por nombre**.
+
+El descubrimiento empieza a rastrear ese juego en el siguiente ciclo y las campañas en vivo
+aparecen en `/drops`.
 
 ## Cómo funciona
 

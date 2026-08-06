@@ -109,6 +109,14 @@ mkdir -p data && sudo chown 65532:65532 data
 （或者干脆不用绑定挂载，改用具名的 Docker 卷 —— Docker 创建的卷
 默认就对容器可写。）
 
+`GRUB_MASTER_KEY` 必须是一个 **age X25519 身份密钥**（`AGE-SECRET-KEY-1…`），它用于加密存储的
+会话令牌。随机字符串无法被解析，矿工会在启动时崩溃。只用 Docker 就能生成一个有效的密钥：
+
+```bash
+docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen
+# → AGE-SECRET-KEY-1...（请保存好；每次重启都要复用同一个密钥）
+```
+
 把它启动起来。`GRUB_MASTER_KEY` 用于加密存储的会话，所以请生成一个真正的密钥：
 
 ```bash
@@ -116,6 +124,10 @@ GRUB_MASTER_KEY="$(docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen
 ```
 
 打开 **http://localhost:8080**。首次访问会要求你创建一个管理员登录账户。
+
+- **用 Portainer 或图形界面部署？** 那里没有 shell 来设置变量，所以请在部署之前，把
+  `GRUB_MASTER_KEY`（上面 `keygen` 输出的值）填到 stack 的 **Environment variables**
+  一栏。请使用普通的 `docker compose`，不要用 Swarm stack，并保持 Docker Engine 为较新版本。
 
 **只用 Twitch？** 去掉 docker-socket 挂载，并让 `GRUB_BROWSER_URL`
 保持未设置 —— 这样就永远不会创建 Kick 边车容器（没有边车容器，Kick 根本没有累积观看
@@ -149,6 +161,19 @@ kick.com 会话以从浏览器导出的 `cookies.txt` 文件形式交给 GrubDro
 频道会根据每个活动的游戏自动发现，所以无需再做其它
 配置。当会话失效时（发现流程会记录 Cloudflare 或 401
 错误），重新导出并再次粘贴即可。
+
+## 选择要挖矿的内容
+
+GrubDrops 由白名单驱动：它只会发现并挖取你主动加入的游戏，所以
+**全新安装在你把至少一个游戏加入白名单之前不会挖任何东西**。在那之前，`/drops`
+会显示一条指向这里的提示，账户则停留在“尚无游戏”状态（这不是错误）。
+
+两种方式都可以添加游戏，直接按名称添加，不需要等某个活动先出现：
+
+- **全局**（对所有账户生效）：**优先级 → 按名称添加**。
+- **按账户**（覆盖全局列表）：**账户 → 选择一个账户 → 按名称添加**。
+
+发现流程会在下一个周期开始抓取该游戏，进行中的活动随后出现在 `/drops`。
 
 ## 工作原理
 
