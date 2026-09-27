@@ -74,6 +74,7 @@ type Querier interface {
 	// Campaigns currently in flight (starts_at <= now < ends_at).
 	// Whitelist filtering is applied in Go.
 	ListCurrentCampaigns(ctx context.Context, arg ListCurrentCampaignsParams) ([]Campaign, error)
+	ListDropStates(ctx context.Context, accountID string) ([]DropState, error)
 	ListEnabledAccounts(ctx context.Context) ([]Account, error)
 	ListForceChannels(ctx context.Context, accountID string) ([]ListForceChannelsRow, error)
 	ListGlobalGames(ctx context.Context) ([]ListGlobalGamesRow, error)
@@ -81,6 +82,7 @@ type Querier interface {
 	// Campaigns that have ended. Whitelist filtering is applied in Go.
 	ListPastCampaigns(ctx context.Context, arg ListPastCampaignsParams) ([]Campaign, error)
 	ListRecentClaims(ctx context.Context, limit int64) ([]ListRecentClaimsRow, error)
+	ListStreamerPriority(ctx context.Context, accountID string) ([]ListStreamerPriorityRow, error)
 	ListUnclaimedProgressForAccount(ctx context.Context, arg ListUnclaimedProgressForAccountParams) ([]Progress, error)
 	// Campaigns announced but not yet started. Whitelist filtering is
 	// applied in Go.
@@ -100,6 +102,7 @@ type Querier interface {
 	UpsertAdmin(ctx context.Context, arg UpsertAdminParams) error
 	UpsertBenefit(ctx context.Context, arg UpsertBenefitParams) error
 	UpsertCampaign(ctx context.Context, arg UpsertCampaignParams) error
+	UpsertDropState(ctx context.Context, arg UpsertDropStateParams) error
 	UpsertGame(ctx context.Context, arg UpsertGameParams) error
 	UpsertProgress(ctx context.Context, arg UpsertProgressParams) error
 	UpsertSession(ctx context.Context, arg UpsertSessionParams) error
