@@ -18,3 +18,15 @@ ON CONFLICT(account_id, drop_id) DO UPDATE SET
     retry_after = excluded.retry_after,
     synced_at = excluded.synced_at,
     updated_at = excluded.updated_at;
+
+-- name: ListClaimsForBackfill :many
+SELECT c.account_id, c.benefit_id, b.campaign_id, a.platform
+FROM claims c
+JOIN benefits b ON b.id = c.benefit_id
+JOIN accounts a ON a.id = c.account_id;
+
+-- name: GetBenefitCampaign :one
+SELECT b.campaign_id, cp.platform
+FROM benefits b
+JOIN campaigns cp ON cp.id = b.campaign_id
+WHERE b.id = ?;

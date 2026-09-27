@@ -9,6 +9,67 @@ import (
 	"context"
 )
 
+const getBenefitCampaign = `-- name: GetBenefitCampaign :one
+SELECT b.campaign_id, cp.platform
+FROM benefits b
+JOIN campaigns cp ON cp.id = b.campaign_id
+WHERE b.id = ?
+`
+
+type GetBenefitCampaignRow struct {
+	CampaignID string `json:"campaign_id"`
+	Platform   string `json:"platform"`
+}
+
+func (q *Queries) GetBenefitCampaign(ctx context.Context, id string) (GetBenefitCampaignRow, error) {
+	row := q.db.QueryRowContext(ctx, getBenefitCampaign, id)
+	var i GetBenefitCampaignRow
+	err := row.Scan(&i.CampaignID, &i.Platform)
+	return i, err
+}
+
+const listClaimsForBackfill = `-- name: ListClaimsForBackfill :many
+SELECT c.account_id, c.benefit_id, b.campaign_id, a.platform
+FROM claims c
+JOIN benefits b ON b.id = c.benefit_id
+JOIN accounts a ON a.id = c.account_id
+`
+
+type ListClaimsForBackfillRow struct {
+	AccountID  string `json:"account_id"`
+	BenefitID  string `json:"benefit_id"`
+	CampaignID string `json:"campaign_id"`
+	Platform   string `json:"platform"`
+}
+
+func (q *Queries) ListClaimsForBackfill(ctx context.Context) ([]ListClaimsForBackfillRow, error) {
+	rows, err := q.db.QueryContext(ctx, listClaimsForBackfill)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListClaimsForBackfillRow
+	for rows.Next() {
+		var i ListClaimsForBackfillRow
+		if err := rows.Scan(
+			&i.AccountID,
+			&i.BenefitID,
+			&i.CampaignID,
+			&i.Platform,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDropStates = `-- name: ListDropStates :many
 SELECT account_id, drop_id, campaign_id, platform, status, block_reason, minutes, required, source, fail_count, retry_after, synced_at, updated_at FROM drop_state WHERE account_id = ? ORDER BY campaign_id, drop_id
 `

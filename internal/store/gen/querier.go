@@ -49,6 +49,7 @@ type Querier interface {
 	DeleteKV(ctx context.Context, key string) error
 	GetAccount(ctx context.Context, id string) (Account, error)
 	GetAdmin(ctx context.Context) (Admin, error)
+	GetBenefitCampaign(ctx context.Context, id string) (GetBenefitCampaignRow, error)
 	GetCampaign(ctx context.Context, id string) (Campaign, error)
 	GetProgress(ctx context.Context, arg GetProgressParams) (Progress, error)
 	GetSession(ctx context.Context, accountID string) (Session, error)
@@ -68,6 +69,7 @@ type Querier interface {
 	// skips re-mining these: a claim is keyed by benefit id which is unique per
 	// drop instance, so owning a claim means THIS exact drop is done.
 	ListClaimedBenefitIDsForAccount(ctx context.Context, accountID string) ([]string, error)
+	ListClaimsForBackfill(ctx context.Context) ([]ListClaimsForBackfillRow, error)
 	// Which accounts have claimed each benefit in a campaign. Powers the
 	// per-account COLLECTED marks on the /drops expanded item list.
 	ListClaimsForCampaign(ctx context.Context, campaignID string) ([]ListClaimsForCampaignRow, error)
