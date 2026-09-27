@@ -30,6 +30,9 @@ func TestApply(t *testing.T) {
 	needsLink := row(Blocked, NeedsLink, 60, 60)
 	needsLink.RetryAfter = t0.Add(RetryNeedsLink)
 
+	subOnly := row(Blocked, SubOnly, 0, 60)
+	subOnly.RetryAfter = t0.Add(RetrySubOnly)
+
 	cases := []struct {
 		name   string
 		prev   Row
@@ -55,6 +58,8 @@ func TestApply(t *testing.T) {
 		{"claimed beats user skip", skipped, Observation{Known: true, Claimed: true, Minutes: 60, Required: 60}, t0, Claimed, NoReason, FromPlatform},
 		{"needs_link held inside window", needsLink, Observation{Known: true, Minutes: 60, Required: 60}, t0, Blocked, NeedsLink, FromPlatform},
 		{"needs_link re-derived after window", needsLink, Observation{Known: true, Minutes: 60, Required: 60}, t0.Add(25 * time.Hour), Claimable, NoReason, FromPlatform},
+		{"sub_only held inside window", subOnly, Observation{Required: 60}, t0, Blocked, SubOnly, FromPlatform},
+		{"sub_only re-derived after window", subOnly, Observation{Required: 60}, t0.Add(25 * time.Hour), Eligible, NoReason, FromPlatform},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -138,4 +143,42 @@ func TestMineable(t *testing.T) {
 	assert.False(t, Mineable(row(Claimable, NoReason, 60, 60)))
 	assert.False(t, Mineable(row(Blocked, NotEnrolled, 0, 60)))
 	assert.False(t, Mineable(Row{}))
+}
+
+func TestMutators_NeverDemotePlatformClaim(t *testing.T) {
+	platformClaimed := row(Claimed, NoReason, 60, 60)
+	platformClaimed.Source = FromPlatform
+
+	// ClaimNeedsLink must not demote a platform claim
+	got := ClaimNeedsLink(platformClaimed, t0)
+	assert.Equal(t, Claimed, got.Status)
+	assert.Equal(t, FromPlatform, got.Source)
+
+	// ClaimFailedAttempt must not demote a platform claim
+	got = ClaimFailedAttempt(platformClaimed, t0)
+	assert.Equal(t, Claimed, got.Status)
+	assert.Equal(t, FromPlatform, got.Source)
+
+	// Skip must not demote a platform claim
+	got = Skip(platformClaimed, t0)
+	assert.Equal(t, Claimed, got.Status)
+	assert.Equal(t, FromPlatform, got.Source)
+
+	// Retry must not demote a platform claim
+	got = Retry(platformClaimed, t0)
+	assert.Equal(t, Claimed, got.Status)
+	assert.Equal(t, FromPlatform, got.Source)
+
+	// MarkCollected must not downgrade a platform claim to user source
+	got = MarkCollected(platformClaimed, t0)
+	assert.Equal(t, Claimed, got.Status)
+	assert.Equal(t, FromPlatform, got.Source)
+
+	// But Skip on a user-claimed row DOES produce Blocked/UserSkip
+	userClaimed := row(Claimed, NoReason, 60, 60)
+	userClaimed.Source = FromUser
+	got = Skip(userClaimed, t0)
+	assert.Equal(t, Blocked, got.Status)
+	assert.Equal(t, UserSkip, got.Reason)
+	assert.Equal(t, FromUser, got.Source)
 }

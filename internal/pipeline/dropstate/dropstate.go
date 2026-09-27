@@ -136,7 +136,7 @@ func Apply(prev Row, obs Observation, now time.Time) Row {
 			return r.with(st, rs, now)
 		case (prev.Status == Accruing || prev.Status == Claimable) && prev.Source == FromPlatform:
 			return r.with(Blocked, NotEnrolled, now)
-		case prev.Status == Blocked && prev.Reason == NotEnrolled && !now.Before(prev.RetryAfter):
+		case prev.Status == Blocked && (prev.Reason == NotEnrolled || prev.Reason == SubOnly) && !now.Before(prev.RetryAfter):
 			st, rs := derive(prev.Minutes, prev.Required)
 			return r.with(st, rs, now)
 		}
@@ -179,6 +179,9 @@ func ClaimOK(prev Row, now time.Time) Row {
 
 // ClaimNeedsLink blocks a drop whose claim needs an external account link.
 func ClaimNeedsLink(prev Row, now time.Time) Row {
+	if prev.Status == Claimed && prev.Source == FromPlatform {
+		return prev
+	}
 	r := prev.with(Blocked, NeedsLink, now)
 	r.Source = FromPlatform
 	return r
@@ -187,6 +190,9 @@ func ClaimNeedsLink(prev Row, now time.Time) Row {
 // ClaimFailedAttempt counts a failed claim: backoff 1m, 5m, 30m, then
 // blocked:claim_failed after MaxClaimFailures.
 func ClaimFailedAttempt(prev Row, now time.Time) Row {
+	if prev.Status == Claimed && prev.Source == FromPlatform {
+		return prev
+	}
 	r := prev
 	r.FailCount++
 	r.UpdatedAt = now
@@ -203,6 +209,9 @@ func ClaimFailedAttempt(prev Row, now time.Time) Row {
 
 // MarkCollected is the user asserting the drop is claimed.
 func MarkCollected(prev Row, now time.Time) Row {
+	if prev.Status == Claimed {
+		return prev
+	}
 	r := prev.with(Claimed, NoReason, now)
 	r.Source = FromUser
 	return r
@@ -210,6 +219,9 @@ func MarkCollected(prev Row, now time.Time) Row {
 
 // Skip is the user excluding a drop from mining until they retry it.
 func Skip(prev Row, now time.Time) Row {
+	if prev.Status == Claimed && prev.Source == FromPlatform {
+		return prev
+	}
 	r := prev.with(Blocked, UserSkip, now)
 	r.Source = FromUser
 	return r
@@ -217,6 +229,9 @@ func Skip(prev Row, now time.Time) Row {
 
 // Retry clears any block and re-derives from the last known minutes.
 func Retry(prev Row, now time.Time) Row {
+	if prev.Status == Claimed && prev.Source == FromPlatform {
+		return prev
+	}
 	st, rs := derive(prev.Minutes, prev.Required)
 	r := prev.with(st, rs, now)
 	r.FailCount, r.Source = 0, FromPlatform
