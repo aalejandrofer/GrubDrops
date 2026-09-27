@@ -65,3 +65,39 @@ func TestBackfillDropState(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, n)
 }
+
+func TestBackfillDropState_SkipsDeletedAccount(t *testing.T) {
+	db := openTest(t)
+	q := gen.New(db)
+	ctx := context.Background()
+	seedAccount(t, q, "acc-1", "twitch")
+	require.NoError(t, NewCampaignPersister(q).PersistCampaigns(ctx, []platform.Campaign{{
+		ID: "c1", Platform: "twitch", Game: "G", Name: "C", Status: "active",
+		Benefits: []platform.DropBenefit{
+			{ID: "valid1", CampaignID: "c1", Name: "A", RequiredMinutes: 60},
+		},
+	}}))
+	for _, k := range []string{
+		SkipOverridePrefix + "valid1:acc-1",
+		SkipOverridePrefix + "valid1:acc-deleted",
+		CollectOverridePrefix + "valid1:acc-deleted",
+	} {
+		require.NoError(t, q.UpsertSettingString(ctx, gen.UpsertSettingStringParams{Key: k, Value: []byte("1")}))
+	}
+
+	now := time.Unix(1_700_000_000, 0)
+	n, err := BackfillDropState(ctx, q, now)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+
+	rows, err := NewDropStateStore(q).List(ctx, "acc-1")
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "valid1", rows[0].DropID)
+	assert.Equal(t, dropstate.Blocked, rows[0].Status)
+
+	// Idempotent: the flag was still set despite the orphaned overrides.
+	n, err = BackfillDropState(ctx, q, now)
+	require.NoError(t, err)
+	assert.Equal(t, 0, n)
+}

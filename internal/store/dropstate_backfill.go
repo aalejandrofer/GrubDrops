@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -35,9 +36,18 @@ func BackfillDropState(ctx context.Context, q *gen.Queries, now time.Time) (int,
 			if !ok {
 				continue
 			}
+			if _, err := q.GetAccount(ctx, acct); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					continue // account deleted, kv leftover: nothing to seed
+				}
+				return fmt.Errorf("get account %s: %w", acct, err)
+			}
 			bc, err := q.GetBenefitCampaign(ctx, drop)
 			if err != nil {
-				continue // benefit row gone, nothing to seed
+				if errors.Is(err, sql.ErrNoRows) {
+					continue // benefit row gone, nothing to seed
+				}
+				return fmt.Errorf("get benefit campaign %s: %w", drop, err)
 			}
 			put(mk(acct, drop, bc.CampaignID, bc.Platform))
 		}
