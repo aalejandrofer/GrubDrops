@@ -90,6 +90,22 @@ func TestDropProgress_InventoryFillsInstanceAndMinutes(t *testing.T) {
 	assert.Equal(t, "inst", got[0].InstanceID)
 }
 
+func TestDropProgress_InventoryClaimedWins(t *testing.T) {
+	// Details self says isClaimed:false but inventory reports isClaimed:true
+	// for the same drop — claimed=true from either source wins because
+	// isClaimed never reverts on Twitch.
+	b := pipelineTestBackend(t, map[string]string{"c1": `{"data":{"user":{"dropCampaign":{"timeBasedDrops":[
+		{"id":"d1","requiredMinutesWatched":60,"benefitEdges":[],"self":{"currentMinutesWatched":60,"isClaimed":false,"dropInstanceID":"i1"}}
+	]}}}}`}, `{"data":{"currentUser":{"inventory":{"dropCampaignsInProgress":[
+		{"id":"c1","timeBasedDrops":[{"id":"d1","self":{"currentMinutesWatched":60,"isClaimed":true,"dropInstanceID":"i1"}}]}
+	]}}}}`, 0)
+	got, err := b.DropProgress(context.Background(), platform.Session{AccessToken: "t"},
+		[]platform.Campaign{{ID: "c1", Platform: "twitch"}})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.True(t, got[0].Claimed)
+}
+
 func TestDropProgress_SyntheticCampaignIsUnmineable(t *testing.T) {
 	b := pipelineTestBackend(t, nil, emptyInventory, 0)
 	got, err := b.DropProgress(context.Background(), platform.Session{AccessToken: "t"},

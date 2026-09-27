@@ -44,8 +44,10 @@ func (d *discovery) dropProgress(ctx context.Context, sess platform.Session, cam
 
 // DropProgress satisfies platform.DropProgressSource. Per-campaign details
 // are the truth (they survive the campaign leaving the in-progress
-// inventory); the in-progress inventory only fills fresher minutes and the
-// instance id.
+// inventory); the in-progress inventory fills fresher minutes and the
+// instance id, and a claimed=true from either source wins — isClaimed is
+// a positive statement from the same self object and never reverts on
+// Twitch.
 func (b *Backend) DropProgress(ctx context.Context, s platform.Session, camps []platform.Campaign) ([]platform.DropProgress, error) {
 	inv, err := b.disc.inventory(ctx, s)
 	if err != nil {
