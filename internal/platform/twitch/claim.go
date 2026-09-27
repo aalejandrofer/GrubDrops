@@ -18,6 +18,20 @@ type claimResult struct {
 }
 
 func (cl *claimer) claim(ctx context.Context, sess platform.Session, b platform.DropBenefit, userID int64) error {
+	status, err := cl.claimStatus(ctx, sess, b, userID)
+	if err != nil {
+		return err
+	}
+	switch status {
+	case "ELIGIBLE_FOR_ALL", "DROP_INSTANCE_ALREADY_CLAIMED", "":
+		return nil
+	default:
+		return fmt.Errorf("claim status: %s", status)
+	}
+}
+
+// claimStatus sends the claim mutation and returns Twitch's raw status.
+func (cl *claimer) claimStatus(ctx context.Context, sess platform.Session, b platform.DropBenefit, userID int64) (string, error) {
 	// Prefer the per-account instance id captured at progress time.
 	// When it's missing, construct DevilXD's synthetic instance id
 	// `userID#campaignID#dropID` (inventory.py generate_claim) — Twitch
@@ -32,15 +46,9 @@ func (cl *claimer) claim(ctx context.Context, sess platform.Session, b platform.
 		id = b.ID
 	}
 	var out claimResult
-	err := cl.c.gql(ctx, sess.AccessToken, OpClaimDrop,
-		map[string]any{"input": map[string]any{"dropInstanceID": id}}, &out)
-	if err != nil {
-		return fmt.Errorf("claim %s: %w", id, err)
+	if err := cl.c.gql(ctx, sess.AccessToken, OpClaimDrop,
+		map[string]any{"input": map[string]any{"dropInstanceID": id}}, &out); err != nil {
+		return "", fmt.Errorf("claim %s: %w", id, err)
 	}
-	switch out.ClaimDropRewards.Status {
-	case "ELIGIBLE_FOR_ALL", "DROP_INSTANCE_ALREADY_CLAIMED", "":
-		return nil
-	default:
-		return fmt.Errorf("claim status: %s", out.ClaimDropRewards.Status)
-	}
+	return out.ClaimDropRewards.Status, nil
 }

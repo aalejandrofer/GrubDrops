@@ -131,6 +131,13 @@ type campaignDetailsData struct {
 				PreconditionDrops []struct {
 					ID string `json:"id"`
 				} `json:"preconditionDrops"`
+				// self is the viewer's own progress on this drop. Null when
+				// the account is not enrolled in the campaign yet.
+				Self *struct {
+					CurrentMinutesWatched int    `json:"currentMinutesWatched"`
+					IsClaimed             bool   `json:"isClaimed"`
+					DropInstanceID        string `json:"dropInstanceID"`
+				} `json:"self"`
 			} `json:"timeBasedDrops"`
 		} `json:"dropCampaign"`
 	} `json:"user"`
