@@ -61,7 +61,8 @@ func Run(ctx context.Context, cfg Config, out chan<- Event) {
 	for _, id := range cfg.Serves {
 		serves[id] = true
 	}
-	best, still, stalled := -1, 0, false
+	best := make(map[string]int)
+	still, stalled := 0, false
 	beat := func() bool {
 		if err := cfg.Backend.Heartbeat(ctx, h); err != nil {
 			if ctx.Err() == nil {
@@ -74,14 +75,18 @@ func Run(ctx context.Context, cfg Config, out chan<- Event) {
 			return true // transient; the next tick retries
 		}
 		send(Event{Kind: Progress, Progress: prog})
-		total := 0
+		gained := false
 		for _, p := range prog {
 			if serves[p.BenefitID] {
-				total += p.MinutesWatched
+				// First time seeing this id counts as gain (baseline), or if it improved
+				if _, seen := best[p.BenefitID]; !seen || p.MinutesWatched > best[p.BenefitID] {
+					best[p.BenefitID] = p.MinutesWatched
+					gained = true
+				}
 			}
 		}
-		if total > best {
-			best, still = total, 0
+		if gained {
+			still = 0
 		} else {
 			still++
 		}

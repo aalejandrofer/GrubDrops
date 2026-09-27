@@ -18,7 +18,8 @@ type fakeBackend struct {
 	mu       sync.Mutex
 	startErr error
 	beatErr  error
-	minutes  []int // minutes for d1 per poll; last value repeats
+	minutes  []int                 // minutes for d1 per poll; last value repeats
+	script   [][]platform.Progress // scripted responses per poll; overrides minutes
 	polls    int
 	beats    int
 	stopped  bool
@@ -42,6 +43,14 @@ func (f *fakeBackend) StopWatch(context.Context, platform.WatchHandle) error {
 func (f *fakeBackend) InventoryProgress(context.Context, platform.Session) ([]platform.Progress, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.script != nil {
+		i := f.polls
+		if i >= len(f.script) {
+			i = len(f.script) - 1
+		}
+		f.polls++
+		return f.script[i], nil
+	}
 	i := f.polls
 	if i >= len(f.minutes) {
 		i = len(f.minutes) - 1
@@ -117,6 +126,46 @@ func TestRun_StalledOnceAfterNoGain(t *testing.T) {
 	select {
 	case e := <-out:
 		t.Fatalf("unexpected second event %v", e.Kind)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestRun_ClaimedDropLeavingInventoryIsNotAStall(t *testing.T) {
+	// Simulate d1 being claimed and disappearing from inventory while d2 keeps accruing.
+	// With summed watermark (buggy), the claim would cause false stall.
+	// With per-drop watermark (fixed), d2's gain prevents stall.
+	f := &fakeBackend{script: [][]platform.Progress{
+		{{BenefitID: "d1", MinutesWatched: 30}, {BenefitID: "d2", MinutesWatched: 1}},
+		{{BenefitID: "d1", MinutesWatched: 30}, {BenefitID: "d2", MinutesWatched: 2}},
+		{{BenefitID: "d2", MinutesWatched: 3}}, // d1 claimed, absent
+		{{BenefitID: "d2", MinutesWatched: 4}},
+		{{BenefitID: "d2", MinutesWatched: 5}},
+	}}
+	ticks := make(chan time.Time)
+	out := make(chan Event, 32)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go Run(ctx, Config{Backend: f, Stream: platform.Stream{Channel: "ch"}, Serves: []string{"d1", "d2"}, Ticks: ticks, StallPolls: 2}, out)
+
+	// Poll 1: d1=30, d2=1 (total=31), baseline set
+	require.Equal(t, Progress, recv(t, out).Kind)
+	// Poll 2: d1=30, d2=2 (total=32), gain
+	ticks <- time.Now()
+	require.Equal(t, Progress, recv(t, out).Kind)
+	// Poll 3: d1 absent, d2=3, gain on d2 despite d1 gone
+	ticks <- time.Now()
+	require.Equal(t, Progress, recv(t, out).Kind)
+	// Poll 4: d2=4, continued gain
+	ticks <- time.Now()
+	require.Equal(t, Progress, recv(t, out).Kind)
+	// Poll 5: d2=5, still gaining
+	ticks <- time.Now()
+	require.Equal(t, Progress, recv(t, out).Kind)
+
+	// No Stalled event should arrive
+	select {
+	case e := <-out:
+		t.Fatalf("unexpected stalled event %v", e.Kind)
 	case <-time.After(50 * time.Millisecond):
 	}
 }
