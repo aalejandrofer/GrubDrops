@@ -122,6 +122,10 @@ type Loop struct {
 	// lastInv is the set of drop ids in the current session's most recent
 	// Progress event (the full inventory read). Reset on every session start.
 	lastInv map[string]bool
+	// stallCount counts current-channel stalls per probe-qualifying drop
+	// (Eligible, absent from lastInv). The probe fires on the second stall;
+	// an entry is dropped once probed or once the row leaves Eligible.
+	stallCount map[string]int
 }
 
 // New assembles the loop, checking the backend's pipeline capabilities once.
@@ -173,6 +177,7 @@ func New(cfg Config) (*Loop, error) {
 		cooldowns:      map[string]time.Time{},
 		milestones:     map[string]int{},
 		pendingHistory: map[string]bool{},
+		stallCount:     map[string]int{},
 	}
 	l.prober, _ = cfg.Backend.(platform.ChannelProber)
 	l.subs, _ = cfg.Backend.(platform.ChannelSubscriber)
@@ -362,6 +367,9 @@ func (l *Loop) benefit(dropID string) (platform.DropBenefit, platform.Campaign) 
 func (l *Loop) commit(ctx context.Context, next dropstate.Row) {
 	prev := l.rows[next.DropID]
 	l.rows[next.DropID] = next
+	if next.Status != dropstate.Eligible {
+		delete(l.stallCount, next.DropID)
+	}
 	if err := l.cfg.Store.Upsert(ctx, next); err != nil {
 		slog.Warn("pipeline: persist drop state failed", "kind", "error", "account", l.cfg.AccountID, "drop", next.DropID, "err", err)
 	}
@@ -531,12 +539,13 @@ func (l *Loop) onSession(ctx context.Context, ev session.Event) {
 	}
 }
 
-// stallClaimProbe sends one claim for each served Eligible drop the last
-// inventory read did not list. On Twitch such a drop is usually one claimed
-// outside the app whose campaign left the Inventory: nothing reports it, so
-// the claim answer is the only signal. OK/ALREADY_CLAIMED marks it claimed;
-// a failure blocks it not_enrolled (1h re-check) without counting a claim
-// failure, since it was never a completed drop.
+// stallClaimProbe sends one claim for a served Eligible drop the last
+// inventory read did not list, on that drop's second stall (the first is a
+// plain cooldown). On Twitch such a drop is usually one claimed outside the
+// app whose campaign left the Inventory: nothing reports it, so the claim
+// answer is the only signal. OK/ALREADY_CLAIMED marks it claimed; a failure
+// blocks it not_enrolled (1h re-check) without counting a claim failure,
+// since it was never a completed drop.
 func (l *Loop) stallClaimProbe(ctx context.Context, now time.Time) {
 	if l.current == nil {
 		return
@@ -546,21 +555,27 @@ func (l *Loop) stallClaimProbe(ctx context.Context, now time.Time) {
 		if !ok || r.Status != dropstate.Eligible || l.lastInv[id] {
 			continue
 		}
+		l.stallCount[id]++
+		if l.stallCount[id] < 2 {
+			continue
+		}
+		delete(l.stallCount, id)
 		dp, ok := l.progress[id]
 		if !ok || dp.DropID == "" {
 			dp = platform.DropProgress{DropID: id, CampaignID: r.CampaignID}
 		}
 		res := l.claimer.ClaimDrop(ctx, l.cfg.Session, dp)
 		var next dropstate.Row
+		kind := "probe"
 		switch res.Outcome {
 		case platform.ClaimOK, platform.ClaimAlready:
-			next = dropstate.ClaimOK(r, now)
+			next, kind = dropstate.ClaimOK(r, now), "claim"
 		case platform.ClaimNeedsLink:
 			next = dropstate.ClaimNeedsLink(r, now)
 		default:
 			next = dropstate.ProbeNotEnrolled(r, now)
 		}
-		slog.Info("pipeline stall claim-probe", "kind", "claim", "account", l.cfg.AccountID, "drop", id,
+		slog.Info("pipeline stall claim-probe", "kind", kind, "account", l.cfg.AccountID, "drop", id,
 			"outcome", res.Outcome.String(), "detail", res.Detail)
 		l.commit(ctx, next)
 	}

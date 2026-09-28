@@ -143,7 +143,11 @@ func TestDropProgress_DetailsErrorFailsWhole(t *testing.T) {
 
 func TestClassifyClaimStatus(t *testing.T) {
 	assert.Equal(t, platform.ClaimOK, classifyClaimStatus("ELIGIBLE_FOR_ALL").Outcome)
-	assert.Equal(t, platform.ClaimOK, classifyClaimStatus("").Outcome)
+	// An empty status proves nothing; a blind stall claim-probe must not
+	// read it as a claim.
+	empty := classifyClaimStatus("")
+	assert.Equal(t, platform.ClaimFailed, empty.Outcome)
+	assert.Equal(t, "empty claim status", empty.Detail)
 	assert.Equal(t, platform.ClaimAlready, classifyClaimStatus("DROP_INSTANCE_ALREADY_CLAIMED").Outcome)
 	r := classifyClaimStatus("DROP_INSTANCE_ALREADY_EXPIRED")
 	assert.Equal(t, platform.ClaimFailed, r.Outcome)

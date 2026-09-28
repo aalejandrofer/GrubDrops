@@ -42,7 +42,7 @@ type Config struct {
 	StallPolls int
 	// Gen is stamped onto every Event this run produces. See Event.Gen.
 	Gen int
-	// AccountID tags the heartbeat log line the dashboard counts.
+	// AccountID tags the heartbeat log line shown in the dashboard events feed.
 	AccountID string
 }
 
@@ -82,8 +82,8 @@ func Run(ctx context.Context, cfg Config, out chan<- Event) {
 			}
 			return false
 		}
-		// Same line as v1's watcher: the dashboard HEARTBEATS/HR card
-		// counts kind=heartbeat log lines.
+		// Same line as v1's watcher, so v2 heartbeats appear in the
+		// dashboard events feed like v1's.
 		slog.Info("watcher heartbeat sent", "kind", "heartbeat", "account", cfg.AccountID, "channel", ch)
 		prog, err := cfg.Backend.InventoryProgress(ctx, cfg.Session)
 		if err != nil {

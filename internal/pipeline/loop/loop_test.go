@@ -39,6 +39,8 @@ type fakeBackend struct {
 	claimedAfterFail bool
 	// listGames records the Session.Games each ListActiveCampaigns saw.
 	listGames [][]string
+	// claimWatchLen is len(watching) at the first ClaimDrop call.
+	claimWatchLen int
 }
 
 func (f *fakeBackend) ListActiveCampaigns(_ context.Context, s platform.Session) ([]platform.Campaign, error) {
@@ -86,6 +88,9 @@ func (f *fakeBackend) ClaimDrop(context.Context, platform.Session, platform.Drop
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.claims++
+	if f.claims == 1 {
+		f.claimWatchLen = len(f.watching)
+	}
 	if f.claimedAfterFail {
 		for i := range f.progress {
 			f.progress[i].Claimed = true
@@ -675,12 +680,22 @@ func (f *fakeBackend) claimCount() int {
 	return f.claims
 }
 
-// (a) An Eligible served drop absent from the inventory gets one claim on
-// stall; ALREADY_CLAIMED marks it claimed from the platform, records history
-// and the planner moves on instead of re-watching it.
+// watchedChannels returns every channel a session has started on, in order.
+func (f *fakeBackend) watchedChannels() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.watching...)
+}
+
+// (a) An Eligible served drop absent from the inventory is probed on its
+// SECOND stall (ch1 stalls: plain cooldown; ch2 stalls: one claim).
+// ALREADY_CLAIMED marks it claimed from the platform, records history,
+// notifies once, and the planner moves on instead of re-watching it.
 func TestLoop_StallClaimProbe_AlreadyClaimedMarksClaimed(t *testing.T) {
 	f, st, h, cfg := probeSetup(t)
 	f.claimRes = platform.ClaimResult{Outcome: platform.ClaimAlready}
+	n := &recNotifier{}
+	cfg.Notifier = n
 	l, _ := run(t, cfg)
 	require.Eventually(t, func() bool {
 		r := st.get("d1")
@@ -689,13 +704,68 @@ func TestLoop_StallClaimProbe_AlreadyClaimedMarksClaimed(t *testing.T) {
 	require.Eventually(t, func() bool { return l.Snapshot().State == "idle" }, 2*time.Second, 5*time.Millisecond)
 	time.Sleep(50 * time.Millisecond)
 	assert.Equal(t, 1, f.claimCount(), "exactly one probe claim")
+	f.mu.Lock()
+	assert.Equal(t, 2, f.claimWatchLen, "claim sent only after the second stall (ch1, then ch2)")
+	f.mu.Unlock()
+	assert.Equal(t, []string{"ch1", "ch2"}, f.watchedChannels())
 	h.mu.Lock()
 	assert.Contains(t, h.recorded, "d1")
 	h.mu.Unlock()
+	n.mu.Lock()
+	claimEvents := 0
+	for _, e := range n.events {
+		if e == "claim" {
+			claimEvents++
+		}
+	}
+	n.mu.Unlock()
+	assert.Equal(t, 1, claimEvents, "exactly one claim notification")
+}
+
+// A single stall is a plain cooldown: no claim is sent.
+func TestLoop_StallClaimProbe_FirstStallNoClaim(t *testing.T) {
+	f, st, _, cfg := probeSetup(t)
+	f.live = []platform.Stream{{Channel: "ch1", ViewerCount: 10}} // one channel: one stall, then idle
+	l, _ := run(t, cfg)
+	require.Eventually(t, func() bool { return len(f.watchedChannels()) == 1 }, 2*time.Second, 5*time.Millisecond)
+	require.Eventually(t, func() bool { return l.Snapshot().State == "idle" }, 2*time.Second, 5*time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 0, f.claimCount(), "first stall must not probe")
+	assert.Equal(t, dropstate.Eligible, st.get("d1").Status)
+}
+
+// A drop's stall count is cleared once its row leaves Eligible, so a later
+// return to Eligible starts counting from zero again.
+func TestLoop_StallClaimProbe_CountClearedWhenRowLeavesEligible(t *testing.T) {
+	f, _, _, cfg := probeSetup(t)
+	cfg.StallPolls = 1000 // the live session must not stall on its own
+	l, err := New(cfg)
+	require.NoError(t, err)
+	ctx := context.Background()
+	require.NoError(t, l.load(ctx))
+	l.reconcile(ctx)
+	l.refreshLive(ctx)
+	l.replan(ctx)
+	defer l.stopSession()
+	require.Equal(t, "ch1", l.current.Channel.Channel)
+	require.Equal(t, dropstate.Eligible, l.rows["d1"].Status)
+	stall := func() { l.onSession(ctx, session.Event{Kind: session.Stalled, Channel: "ch1", Gen: l.gen}) }
+
+	stall() // count 1
+	assert.Equal(t, 0, f.claimCount())
+	r := l.rows["d1"]
+	r.Status = dropstate.Accruing
+	l.commit(ctx, r) // leaves Eligible: count cleared
+	r.Status = dropstate.Eligible
+	l.commit(ctx, r)
+	stall() // count 1 again, not 2
+	assert.Equal(t, 0, f.claimCount(), "count must restart after the row left Eligible")
+	stall() // count 2: probe
+	assert.Equal(t, 1, f.claimCount())
 }
 
 // (b) A failed probe blocks the drop not_enrolled without counting a claim
-// failure, and it is not probed again.
+// failure, survives the follow-up reconcile, and is not probed again.
 func TestLoop_StallClaimProbe_FailedBlocksNotEnrolled(t *testing.T) {
 	f, st, _, cfg := probeSetup(t)
 	f.claimRes = platform.ClaimResult{Outcome: platform.ClaimFailed}
@@ -707,19 +777,29 @@ func TestLoop_StallClaimProbe_FailedBlocksNotEnrolled(t *testing.T) {
 	require.Eventually(t, func() bool { return l.Snapshot().State == "idle" }, 2*time.Second, 5*time.Millisecond)
 	time.Sleep(50 * time.Millisecond)
 	r := st.get("d1")
+	assert.Equal(t, dropstate.Blocked, r.Status, "block survives the follow-up reconcile")
+	assert.Equal(t, dropstate.NotEnrolled, r.Reason)
 	assert.Equal(t, 0, r.FailCount, "a probe is not a claim failure")
 	assert.Equal(t, dropstate.FromPlatform, r.Source)
 	assert.Equal(t, 1, f.claimCount(), "exactly one probe claim")
 }
 
+// waitBothStalled waits until ch1 and ch2 have both been watched and the
+// loop is idle, i.e. the drop has stalled twice.
+func waitBothStalled(t *testing.T, f *fakeBackend, l *Loop) {
+	t.Helper()
+	require.Eventually(t, func() bool { return len(f.watchedChannels()) >= 2 }, 3*time.Second, 5*time.Millisecond)
+	require.Eventually(t, func() bool { return l.Snapshot().State == "idle" }, 3*time.Second, 5*time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
+}
+
 // (c) A drop present in the inventory (really tracked, just frozen) is a
-// plain stall: no probe claim.
+// plain stall: no probe claim, even on the second stall.
 func TestLoop_StallClaimProbe_SkipsDropInInventory(t *testing.T) {
 	f, st, _, cfg := probeSetup(t)
 	f.inventory = []platform.Progress{{BenefitID: "d1", MinutesWatched: 0}}
 	l, _ := run(t, cfg)
-	require.Eventually(t, func() bool { return l.Snapshot().Channel == "ch2" }, 3*time.Second, 5*time.Millisecond)
-	time.Sleep(50 * time.Millisecond)
+	waitBothStalled(t, f, l)
 	assert.Equal(t, 0, f.claimCount())
 	assert.Equal(t, dropstate.Eligible, st.get("d1").Status)
 }
@@ -729,8 +809,7 @@ func TestLoop_StallClaimProbe_DisabledNoClaim(t *testing.T) {
 	f, st, _, cfg := probeSetup(t)
 	cfg.StallClaimProbe = false
 	l, _ := run(t, cfg)
-	require.Eventually(t, func() bool { return l.Snapshot().Channel == "ch2" }, 3*time.Second, 5*time.Millisecond)
-	time.Sleep(50 * time.Millisecond)
+	waitBothStalled(t, f, l)
 	assert.Equal(t, 0, f.claimCount())
 	assert.Equal(t, dropstate.Eligible, st.get("d1").Status)
 }
@@ -741,8 +820,7 @@ func TestLoop_StallClaimProbe_SkipsAccruing(t *testing.T) {
 	f, st, _, cfg := probeSetup(t)
 	f.progress = []platform.DropProgress{{DropID: "d1", CampaignID: "c1", Minutes: 10, Required: 60, Known: true}}
 	l, _ := run(t, cfg)
-	require.Eventually(t, func() bool { return l.Snapshot().Channel == "ch2" }, 3*time.Second, 5*time.Millisecond)
-	time.Sleep(50 * time.Millisecond)
+	waitBothStalled(t, f, l)
 	assert.Equal(t, 0, f.claimCount())
 	assert.Equal(t, dropstate.Accruing, st.get("d1").Status)
 }

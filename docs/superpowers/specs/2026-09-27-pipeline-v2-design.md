@@ -412,4 +412,4 @@ Results (2026-09-28, probes behind the `live` build tag):
 6. Session stall detection is per-drop, and the loop restarts the session on the same channel when the served-drop set changes; session events carry a generation so stale events are dropped.
 7. A claimed=true from either Twitch source (details self or in-progress inventory) wins.
 8. Kick rows listed without required_units fall back to campaign minutes (reporting 0 would block as sub_only).
-9. Twitch stall claim-probe: when a watched Eligible drop is absent from Inventory and the session stalls, the loop sends one claim; ALREADY_CLAIMED/OK marks it claimed, failure blocks it not_enrolled (1h re-check) without counting a claim failure.
+9. Twitch stall claim-probe: when a watched Eligible drop is absent from Inventory and the session stalls on it for the second time (the first stall is a plain cooldown), the loop sends one claim; ALREADY_CLAIMED/OK marks it claimed, failure (including an empty claim status) blocks it not_enrolled (1h re-check) without counting a claim failure.

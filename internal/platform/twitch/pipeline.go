@@ -127,9 +127,15 @@ func (b *Backend) tvDropProgress(ctx context.Context, s platform.Session, camps 
 }
 
 // classifyClaimStatus maps Twitch's claimDropRewards.status to an outcome.
+// An empty status is a failure: v2 sends blind stall claim-probes, and
+// reading "" as OK would permanently mark an unenrolled drop claimed. A
+// real claim that returned "" is corrected by the post-claim reconcile.
+// (v1's claim() in claim.go keeps its own mapping.)
 func classifyClaimStatus(status string) platform.ClaimResult {
 	switch status {
-	case "ELIGIBLE_FOR_ALL", "":
+	case "":
+		return platform.ClaimResult{Outcome: platform.ClaimFailed, Detail: "empty claim status"}
+	case "ELIGIBLE_FOR_ALL":
 		return platform.ClaimResult{Outcome: platform.ClaimOK}
 	case "DROP_INSTANCE_ALREADY_CLAIMED":
 		return platform.ClaimResult{Outcome: platform.ClaimAlready}
