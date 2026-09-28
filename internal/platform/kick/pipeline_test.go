@@ -38,6 +38,19 @@ func TestKickDropProgress_AbsentRewardIsUnknown(t *testing.T) {
 	assert.Equal(t, 120, got[0].Required)
 }
 
+func TestKickDropProgress_ListedWithoutRequiredUsesCampaign(t *testing.T) {
+	f := &fakeDoer{resp: map[string]fakeResp{progressURL: {200, `{"data":[
+		{"id":"c1","rewards":[{"id":"r1","claimed":false,"progress":0.5}]}
+	]}`}}}
+	b := withFake(f)
+	got, err := b.DropProgress(context.Background(), sess("acc1"), []platform.Campaign{{
+		ID: "c1", Benefits: []platform.DropBenefit{{ID: "r1", CampaignID: "c1", RequiredMinutes: 60}},
+	}})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, platform.DropProgress{DropID: "r1", CampaignID: "c1", Minutes: 30, Required: 60, Known: true}, got[0])
+}
+
 func TestKickDropProgress_ErrorFailsWhole(t *testing.T) {
 	f := &fakeDoer{resp: map[string]fakeResp{progressURL: {403, `{}`}}}
 	_, err := withFake(f).DropProgress(context.Background(), sess("acc1"), []platform.Campaign{{ID: "c1"}})

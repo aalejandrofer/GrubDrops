@@ -32,6 +32,9 @@ func (b *Backend) DropProgress(ctx context.Context, s platform.Session, camps []
 				continue
 			}
 			req := r.Required
+			// Kick's live payload always carries required_units; this fallback
+			// only covers a malformed row. Reporting 0 would wrongly block the
+			// drop as sub_only, so we use the campaign's RequiredMinutes instead.
 			if req <= 0 {
 				req = bf.RequiredMinutes
 			}
