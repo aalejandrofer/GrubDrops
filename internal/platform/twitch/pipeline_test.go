@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,7 +35,8 @@ func pipelineTestBackend(t *testing.T, details map[string]string, inventory stri
 		}
 	}))
 	t.Cleanup(srv.Close)
-	return &Backend{disc: &discovery{c: newTestClient(srv.URL), userLogin: "testuser"}}
+	c := newTestClient(srv.URL)
+	return &Backend{c: c, disc: &discovery{c: c, userLogin: "testuser"}}
 }
 
 const emptyInventory = `{"data":{"currentUser":{"inventory":{"dropCampaignsInProgress":[]}}}}`
@@ -205,6 +207,71 @@ func TestDropProgress_TVSessionSyntheticStillUnmineable(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	assert.True(t, got[0].Unmineable)
+}
+
+// clientIDRecorder is a gql server that records every request's Client-Id
+// and answers each op with a minimal valid body.
+func clientIDRecorder(t *testing.T) (*Backend, func() []string) {
+	t.Helper()
+	var mu sync.Mutex
+	var ids []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		ids = append(ids, r.Header.Get("Client-Id"))
+		mu.Unlock()
+		var req gqlRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		switch req.OperationName {
+		case "CurrentUser":
+			_, _ = w.Write([]byte(`{"data":{"currentUser":{"id":"123","login":"u"}}}`))
+		case OpClaimDrop.Name:
+			_, _ = w.Write([]byte(`{"data":{"claimDropRewards":{"status":"ELIGIBLE_FOR_ALL"}}}`))
+		case OpInventory.Name:
+			_, _ = w.Write([]byte(emptyInventory))
+		default:
+			_, _ = w.Write([]byte(`{"data":{"user":{"stream":null}}}`))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return newForTest(srv.URL), func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), ids...)
+	}
+}
+
+func assertAllClientIDs(t *testing.T, ids []string, want string) {
+	t.Helper()
+	require.NotEmpty(t, ids, "no requests reached the server")
+	for _, id := range ids {
+		assert.Equal(t, want, id)
+	}
+}
+
+// The v2 loop can call ClaimDrop before any v1 entry point bound the token,
+// so ClaimDrop itself must bind the session's client profile.
+func TestClaimDrop_TVSessionSendsTVClientID(t *testing.T) {
+	b, ids := clientIDRecorder(t)
+	res := b.ClaimDrop(context.Background(), platform.Session{AccessToken: "tv-tok", ClientID: ClientTV},
+		platform.DropProgress{DropID: "d1", CampaignID: "c1", InstanceID: "i1"})
+	assert.Equal(t, platform.ClaimOK, res.Outcome)
+	assertAllClientIDs(t, ids(), profileTV.ID)
+}
+
+func TestDropProgress_TVSessionSendsTVClientID(t *testing.T) {
+	b, ids := clientIDRecorder(t)
+	_, err := b.DropProgress(context.Background(), platform.Session{AccessToken: "tv-tok", ClientID: ClientTV},
+		[]platform.Campaign{{ID: "c1", Platform: "twitch"}})
+	require.NoError(t, err)
+	assertAllClientIDs(t, ids(), profileTV.ID)
+}
+
+func TestProbeChannels_TVSessionSendsTVClientID(t *testing.T) {
+	b, ids := clientIDRecorder(t)
+	_, err := b.ProbeChannels(context.Background(), platform.Session{AccessToken: "tv-tok", ClientID: ClientTV},
+		platform.Campaign{}, []string{"somechan"})
+	require.NoError(t, err)
+	assertAllClientIDs(t, ids(), profileTV.ID)
 }
 
 // #47: a sub-gated drop can't be earned by watching, whatever minutes Twitch

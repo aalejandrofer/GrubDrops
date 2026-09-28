@@ -61,6 +61,7 @@ func (d *discovery) dropProgress(ctx context.Context, sess platform.Session, cam
 // a positive statement from the same self object and never reverts on
 // Twitch. TV-client sessions read Inventory only (see tvDropProgress).
 func (b *Backend) DropProgress(ctx context.Context, s platform.Session, camps []platform.Campaign) ([]platform.DropProgress, error) {
+	b.c.bind(s)
 	if s.ClientID == ClientTV {
 		return b.tvDropProgress(ctx, s, camps)
 	}
@@ -141,6 +142,7 @@ func classifyClaimStatus(status string) platform.ClaimResult {
 // before claiming (reconciler reads self.isAccountConnected), so Twitch has
 // no link outcome here.
 func (b *Backend) ClaimDrop(ctx context.Context, s platform.Session, d platform.DropProgress) platform.ClaimResult {
+	b.c.bind(s)
 	userID, _ := b.watch.resolveUserID(ctx, s)
 	status, err := b.claim.claimStatus(ctx, s, platform.DropBenefit{ID: d.DropID, CampaignID: d.CampaignID, InstanceID: d.InstanceID}, userID)
 	if err != nil {
@@ -152,6 +154,7 @@ func (b *Backend) ClaimDrop(ctx context.Context, s platform.Session, d platform.
 // ProbeChannels satisfies platform.ChannelProber: parallel live check of the
 // given logins, filtered to c.Game when set.
 func (b *Backend) ProbeChannels(ctx context.Context, s platform.Session, c platform.Campaign, logins []string) ([]platform.Stream, error) {
+	b.c.bind(s)
 	return b.chans.listEligible(ctx, s, c, logins)
 }
 
