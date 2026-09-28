@@ -96,3 +96,15 @@ func TestClaim_SyntheticInstanceIDFallback(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "491#camp1#drop1", gotID)
 }
+
+// Review Focus #5: Twitch answers a bad/missing instance id with
+// claimDropRewards:null. That must not count as claimed.
+func TestClaim_NullResultIsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":{"claimDropRewards":null}}`))
+	}))
+	defer srv.Close()
+	b := newForTest(srv.URL)
+	err := b.Claim(context.Background(), platform.Session{AccessToken: "t"}, platform.DropBenefit{ID: "d1", InstanceID: "i1"})
+	require.Error(t, err)
+}

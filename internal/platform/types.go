@@ -9,6 +9,18 @@ type Session struct {
 	CSRF         string            `json:"csrf,omitempty"`
 	ExpiresAt    time.Time         `json:"expires_at"`
 	Fingerprint  string            `json:"fingerprint,omitempty"`
+	// ClientID names the Twitch OAuth client this token was minted by.
+	// "" = legacy Android app client (all sessions before 2026-09-27);
+	// "tv" = Twitch for TV (device-code logins after Twitch blocked the
+	// Android client, #48). Requests MUST go out under the same client:
+	// Twitch accepts GQL reads under a mismatched Client-Id but silently
+	// credits zero watch-minutes.
+	ClientID string `json:"client_id,omitempty"`
+	// Games is the account's whitelisted game names, plumbed at use time
+	// (like GameFilter). TV sessions can't see the drops dashboard, so
+	// channel-first discovery needs the names to know which game
+	// directories to walk. Not persisted.
+	Games []string `json:"-"`
 	// AccountID is set by the scheduler/watcher before passing the
 	// session to backend methods. Not persisted — populated at use time
 	// so backends like the Twitch BrowserBackend can route per-account

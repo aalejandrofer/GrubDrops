@@ -59,6 +59,74 @@ func TestSessionForPlatform_FallsBackToDisabledAccount(t *testing.T) {
 	require.Equal(t, "acc-off", sess.AccountID)
 }
 
+// TestSessionForPlatform_PopulatesGamesFromAccountWhitelist proves the /drops
+// lazy item-fetch path (lazyFetchBenefits -> sessionForPlatform) hands the
+// backend a session carrying the account's per-account whitelisted game
+// names in Session.Games — the same field discovery's TwitchScraper
+// populates — so a TV-client CampaignDetails call for a non-whitelisted
+// campaign still has a channel-directory fallback available.
+func TestSessionForPlatform_PopulatesGamesFromAccountWhitelist(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	q := gen.New(db)
+
+	c, err := store.NewCryptor(collectTestKey)
+	require.NoError(t, err)
+	sessions := store.NewSessionStore(db, q, c)
+
+	now := time.Now().Unix()
+	_, err = q.CreateAccount(ctx, gen.CreateAccountParams{
+		ID: "acc-1", Platform: "twitch", DisplayName: "TTik3r",
+		Status: "idle", FingerprintJson: "{}", Enabled: 1,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	require.NoError(t, err)
+	require.NoError(t, sessions.Put(ctx, "acc-1", platformSessionFixture()))
+
+	require.NoError(t, q.UpsertGame(ctx, gen.UpsertGameParams{ID: "g_rust", Name: "Rust", Slug: "rust"}))
+	require.NoError(t, q.AddAccountGame(ctx, gen.AddAccountGameParams{AccountID: "acc-1", GameID: "g_rust", Rank: 0}))
+
+	d := &dropsDeps{q: q, sessions: sessions}
+	sess, ok := d.sessionForPlatform(ctx, "twitch")
+	require.True(t, ok)
+	require.Equal(t, []string{"Rust"}, sess.Games)
+}
+
+// TestSessionForPlatform_PopulatesGamesFromGlobalWhitelist proves the global
+// priority list is used as the Games fallback when the account has no
+// per-account whitelist rows of its own — mirroring loadAccountWhitelist's
+// resolution in cmd/miner/main.go.
+func TestSessionForPlatform_PopulatesGamesFromGlobalWhitelist(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	q := gen.New(db)
+
+	c, err := store.NewCryptor(collectTestKey)
+	require.NoError(t, err)
+	sessions := store.NewSessionStore(db, q, c)
+
+	now := time.Now().Unix()
+	_, err = q.CreateAccount(ctx, gen.CreateAccountParams{
+		ID: "acc-1", Platform: "twitch", DisplayName: "TTik3r",
+		Status: "idle", FingerprintJson: "{}", Enabled: 1,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	require.NoError(t, err)
+	require.NoError(t, sessions.Put(ctx, "acc-1", platformSessionFixture()))
+
+	require.NoError(t, q.UpsertGame(ctx, gen.UpsertGameParams{ID: "g_gta_v", Name: "Grand Theft Auto V", Slug: "grand-theft-auto-v"}))
+	require.NoError(t, q.AddGlobalGame(ctx, gen.AddGlobalGameParams{GameID: "g_gta_v", Rank: 0}))
+
+	d := &dropsDeps{q: q, sessions: sessions}
+	sess, ok := d.sessionForPlatform(ctx, "twitch")
+	require.True(t, ok)
+	require.Equal(t, []string{"Grand Theft Auto V"}, sess.Games)
+}
+
 func testRenderer(t *testing.T) Renderer {
 	t.Helper()
 	tmpl, err := web.Templates()

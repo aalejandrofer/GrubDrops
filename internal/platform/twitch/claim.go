@@ -12,7 +12,7 @@ type claimer struct {
 }
 
 type claimResult struct {
-	ClaimDropRewards struct {
+	ClaimDropRewards *struct {
 		Status string `json:"status"`
 	} `json:"claimDropRewards"`
 }
@@ -49,6 +49,9 @@ func (cl *claimer) claimStatus(ctx context.Context, sess platform.Session, b pla
 	if err := cl.c.gql(ctx, sess.AccessToken, OpClaimDrop,
 		map[string]any{"input": map[string]any{"dropInstanceID": id}}, &out); err != nil {
 		return "", fmt.Errorf("claim %s: %w", id, err)
+	}
+	if out.ClaimDropRewards == nil {
+		return "", fmt.Errorf("claim %s: twitch returned no claim result (unknown or invalid drop instance)", id)
 	}
 	return out.ClaimDropRewards.Status, nil
 }

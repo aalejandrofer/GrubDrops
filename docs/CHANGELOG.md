@@ -30,6 +30,41 @@ All notable changes to GrubDrops.
 - Session restarts wait for the previous watch to stop, and a restart on the same channel keeps its PubSub subscription.
 - A drop that falls back from claimable resets its claim failure count.
 
+## [1.4.0] — 2026-09-28
+
+### Fixed
+
+- **New Twitch logins work again.** Around 2026-09-18 Twitch stopped accepting
+  device-code sign-in from the Android app client that GrubDrops used, so
+  adding or re-logging a Twitch account failed with "Device Error HTTP 400".
+  New logins now go through the Twitch for TV client. Each account remembers
+  which client signed it in, and every request for that account uses the same
+  one: Twitch accepts mismatched requests but credits no watch time for them.
+  Accounts already logged in keep their Android session and behave exactly as
+  before, so there is nothing to redo. (#48)
+- **Campaign discovery for accounts on the TV client.** Twitch hides the drops
+  dashboard and campaign details from that client. For these accounts
+  GrubDrops finds campaigns through the live drops-enabled channels of each
+  whitelisted game, plus the campaigns already in your inventory, and reads
+  account-link state from the inventory so campaigns you have not linked are
+  skipped.
+- **Drops that need a subscription are no longer mined.** Twitch marks them
+  with a subscription requirement but can still list watch minutes, so the
+  miner treated them as watch drops. They now show as action required. (#47)
+- **A claim Twitch does not confirm is no longer recorded as claimed.** An
+  empty claim response used to count as success, leaving drops marked claimed
+  that Twitch still showed unclaimed. It is now a failed claim, and a completed
+  drop that fails to claim three times in a row is skipped instead of retried
+  forever.
+- **Device-login errors show Twitch's reason** instead of a bare HTTP status.
+
+### Known limits
+
+- Accounts on the TV client only discover campaigns for whitelisted games. A
+  campaign that runs only on channels outside a game's top ten live
+  drops-enabled channels can be missed until it shows up in your inventory, and
+  the Discoverable tab on /drops cannot list games you have not whitelisted.
+
 ## [1.3.12] — 2026-08-06
 
 ### Added

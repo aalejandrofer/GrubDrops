@@ -439,7 +439,7 @@ func run() error {
 			}
 		}
 
-		allow, rank, err := loadAccountWhitelist(ctx, q, a.ID)
+		allow, rank, names, err := loadAccountWhitelist(ctx, q, a.ID)
 		if err != nil {
 			logger.Warn("load account whitelist failed; mining nothing until fixed",
 				"account", a.ID, "err", err)
@@ -519,6 +519,7 @@ func run() error {
 			HeartbeatInterval:     60 * time.Second,
 			ProgressNotifyStepPct: progressStep,
 			AllowGame:             allow, GameRank: rank,
+			Games:          names,
 			AllowChannel:   allowChannel,
 			PriorityMode:   priorityMode,
 			Persister:      campaignPersister,
@@ -988,14 +989,17 @@ func matchAnyChannel(logins []string) func([]string) bool {
 }
 
 // loadAccountWhitelist materialises the per-account game allow-list
-// into match + rank closures the watcher consumes. When the account
-// has NO rows of its own, falls back to the global priority list
-// (settings → Global priority). Returns nil closures only when BOTH
-// the account-specific and global lists are empty.
-func loadAccountWhitelist(ctx context.Context, q *gen.Queries, accountID string) (func(string) bool, func(string) int, error) {
+// into match + rank closures the watcher consumes, plus the plain
+// display names (as stored in the games table) that feed
+// watcher.Config.Games / platform.Session.Games for TV-client
+// discovery (chandisc.go listByChannels). When the account has NO rows
+// of its own, falls back to the global priority list (settings →
+// Global priority). Returns nil closures (and a nil names slice) only
+// when BOTH the account-specific and global lists are empty.
+func loadAccountWhitelist(ctx context.Context, q *gen.Queries, accountID string) (func(string) bool, func(string) int, []string, error) {
 	rows, err := q.ListAccountGames(ctx, accountID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("list account games: %w", err)
+		return nil, nil, nil, fmt.Errorf("list account games: %w", err)
 	}
 	if len(rows) == 0 {
 		// Fall back to global priority list when account has no
@@ -1003,10 +1007,10 @@ func loadAccountWhitelist(ctx context.Context, q *gen.Queries, accountID string)
 		// reuse the rest of the function.
 		gRows, gErr := q.ListGlobalGames(ctx)
 		if gErr != nil {
-			return nil, nil, fmt.Errorf("list global games: %w", gErr)
+			return nil, nil, nil, fmt.Errorf("list global games: %w", gErr)
 		}
 		if len(gRows) == 0 {
-			return nil, nil, nil
+			return nil, nil, nil, nil
 		}
 		rows = make([]gen.ListAccountGamesRow, len(gRows))
 		for i, r := range gRows {
@@ -1017,9 +1021,11 @@ func loadAccountWhitelist(ctx context.Context, q *gen.Queries, accountID string)
 	rankByName := make(map[string]int, len(rows))
 	// game.slug -> rank, in case backends report by slug
 	rankBySlug := make(map[string]int, len(rows))
+	names := make([]string, 0, len(rows))
 	for _, r := range rows {
 		rankByName[strings.ToLower(r.Name)] = int(r.Rank)
 		rankBySlug[r.Slug] = int(r.Rank)
+		names = append(names, r.Name)
 	}
 	allow := func(game string) bool {
 		g := strings.ToLower(game)
@@ -1039,7 +1045,7 @@ func loadAccountWhitelist(ctx context.Context, q *gen.Queries, accountID string)
 		}
 		return 1 << 30
 	}
-	return allow, rank, nil
+	return allow, rank, names, nil
 }
 
 func hasAnyGame(allow func(string) bool) bool {

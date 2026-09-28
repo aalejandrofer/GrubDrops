@@ -256,6 +256,7 @@ func (b *BrowserBackend) ListActiveCampaigns(ctx context.Context, s platform.Ses
 		return nil, err
 	}
 	a := b.accountFor(s.AccountID)
+	a.c.bind(s)
 	camps, err := a.disc.listActive(ctx, s)
 	// Both a missing sidecar tab AND an integrity-check failure are
 	// recoverable by reinstalling cookies + reopening the tab: on the
@@ -401,6 +402,7 @@ func (b *BrowserBackend) ListEligibleChannels(ctx context.Context, s platform.Se
 		return nil, err
 	}
 	a := b.accountFor(s.AccountID)
+	a.c.bind(s)
 	b.mu.Lock()
 	allowed := b.allowedLoginsByCampaign[c.ID]
 	b.mu.Unlock()
@@ -417,7 +419,9 @@ func (b *BrowserBackend) InventoryProgress(ctx context.Context, s platform.Sessi
 	if err := b.ensureAuthenticated(ctx, s); err != nil {
 		return nil, err
 	}
-	progs, err := b.accountFor(s.AccountID).disc.inventory(ctx, s)
+	a := b.accountFor(s.AccountID)
+	a.c.bind(s)
+	progs, err := a.disc.inventory(ctx, s)
 	if isTabMissingErr(err) {
 		slog.Info("twitch sidecar tab missing on InventoryProgress; re-authenticating", "account", s.AccountID)
 		b.invalidateAuth(s.AccountID)
@@ -433,7 +437,9 @@ func (b *BrowserBackend) StartWatch(ctx context.Context, s platform.Session, str
 	if err := b.ensureAuthenticated(ctx, s); err != nil {
 		return platform.WatchHandle{}, err
 	}
-	h, err := b.accountFor(s.AccountID).watch.start(ctx, s, stream)
+	a := b.accountFor(s.AccountID)
+	a.c.bind(s)
+	h, err := a.watch.start(ctx, s, stream)
 	if err != nil {
 		return h, err
 	}
@@ -460,6 +466,7 @@ func (b *BrowserBackend) Claim(ctx context.Context, s platform.Session, drop pla
 		return err
 	}
 	a := b.accountFor(s.AccountID)
+	a.c.bind(s)
 	userID, _ := a.watch.resolveUserID(ctx, s)
 	return a.claim.claim(ctx, s, drop, userID)
 }

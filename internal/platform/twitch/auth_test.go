@@ -18,7 +18,7 @@ import (
 func TestAuth_StartDeviceLogin_ParsesResponse(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.NoError(t, r.ParseForm())
-		assert.Equal(t, clientID, r.Form.Get("client_id"))
+		assert.Equal(t, profileTV.ID, r.Form.Get("client_id"))
 		assert.NotEmpty(t, r.Form.Get("scopes"))
 		_, _ = w.Write([]byte(`{
 			"device_code":"DEVABC123",
@@ -45,6 +45,7 @@ func TestAuth_PollDeviceLogin_ReturnsSessionOnAccess(t *testing.T) {
 		require.NoError(t, r.ParseForm())
 		assert.Equal(t, "urn:ietf:params:oauth:grant-type:device_code", r.Form.Get("grant_type"))
 		assert.Equal(t, "DEVABC123", r.Form.Get("device_code"))
+		assert.Equal(t, profileTV.ID, r.Form.Get("client_id"))
 		_, _ = w.Write([]byte(`{
 			"access_token":"acc_tok",
 			"refresh_token":"ref_tok",
@@ -59,6 +60,7 @@ func TestAuth_PollDeviceLogin_ReturnsSessionOnAccess(t *testing.T) {
 	assert.Equal(t, "acc_tok", sess.AccessToken)
 	assert.Equal(t, "ref_tok", sess.RefreshToken)
 	assert.True(t, sess.ExpiresAt.After(time.Now()))
+	assert.Equal(t, ClientTV, sess.ClientID)
 }
 
 func TestAuth_PollDeviceLogin_ReturnsPendingErr(t *testing.T) {
@@ -126,4 +128,38 @@ func TestAuth_FormEncoding(t *testing.T) {
 	v := url.Values{"client_id": {clientID}, "scopes": {"user:read:email channel:read:redemptions"}}
 	enc := v.Encode()
 	assert.Contains(t, enc, "client_id="+clientID)
+}
+
+func TestAuth_StartDeviceLogin_ErrorIncludesTwitchBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"status":400,"message":"invalid client"}`))
+	}))
+	defer srv.Close()
+	a := &authFlow{deviceURL: srv.URL, http: &http.Client{Timeout: 5 * time.Second}}
+	_, err := a.start(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid client")
+}
+
+// Review Focus #1: a refreshed TV session must stay TV.
+func TestAuth_RefreshKeepsClient(t *testing.T) {
+	var gotClient string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, r.ParseForm())
+		gotClient = r.Form.Get("client_id")
+		_, _ = w.Write([]byte(`{"access_token":"new","refresh_token":"r2","expires_in":0}`))
+	}))
+	defer srv.Close()
+	a := &authFlow{tokenURL: srv.URL, http: &http.Client{Timeout: 5 * time.Second}}
+
+	out, err := a.refresh(context.Background(), platform.Session{RefreshToken: "r1", ClientID: ClientTV, Games: []string{"Rust"}})
+	require.NoError(t, err)
+	assert.Equal(t, profileTV.ID, gotClient)
+	assert.Equal(t, ClientTV, out.ClientID)
+	assert.Equal(t, []string{"Rust"}, out.Games)
+
+	_, err = a.refresh(context.Background(), platform.Session{RefreshToken: "r1"})
+	require.NoError(t, err)
+	assert.Equal(t, clientID, gotClient, "legacy session refreshes as Android")
 }

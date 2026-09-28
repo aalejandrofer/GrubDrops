@@ -47,16 +47,17 @@ type deviceInternal struct {
 
 func (a *authFlow) start(ctx context.Context) (platform.DeviceChallenge, error) {
 	form := url.Values{
-		"client_id": {clientID},
+		"client_id": {profileTV.ID},
 		"scopes":    {oauthScopes},
 	}
-	resp, err := a.postForm(ctx, a.deviceURL, form)
+	resp, err := a.postForm(ctx, a.deviceURL, form, profileTV.UserAgent)
 	if err != nil {
 		return platform.DeviceChallenge{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		return platform.DeviceChallenge{}, fmt.Errorf("device authorize: %s", resp.Status)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return platform.DeviceChallenge{}, fmt.Errorf("device authorize: %s: %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 
 	var body struct {
@@ -80,11 +81,11 @@ func (a *authFlow) start(ctx context.Context) (platform.DeviceChallenge, error) 
 
 func (a *authFlow) poll(ctx context.Context, internal deviceInternal) (platform.Session, error) {
 	form := url.Values{
-		"client_id":   {clientID},
+		"client_id":   {profileTV.ID},
 		"device_code": {internal.DeviceCode},
 		"grant_type":  {"urn:ietf:params:oauth:grant-type:device_code"},
 	}
-	resp, err := a.postForm(ctx, a.tokenURL, form)
+	resp, err := a.postForm(ctx, a.tokenURL, form, profileTV.UserAgent)
 	if err != nil {
 		return platform.Session{}, err
 	}
@@ -110,6 +111,7 @@ func (a *authFlow) poll(ctx context.Context, internal deviceInternal) (platform.
 		RefreshToken: body.RefreshToken,
 		ExpiresAt:    computeExpiresAt(body.ExpiresIn),
 		Cookies:      SynthCookieBlob(body.AccessToken),
+		ClientID:     ClientTV,
 	}, nil
 }
 
@@ -147,12 +149,13 @@ func (a *authFlow) refresh(ctx context.Context, s platform.Session) (platform.Se
 	if s.RefreshToken == "" {
 		return platform.Session{}, errors.New("no refresh token")
 	}
+	p := profileFor(s.ClientID)
 	form := url.Values{
-		"client_id":     {clientID},
+		"client_id":     {p.ID},
 		"refresh_token": {s.RefreshToken},
 		"grant_type":    {"refresh_token"},
 	}
-	resp, err := a.postForm(ctx, a.tokenURL, form)
+	resp, err := a.postForm(ctx, a.tokenURL, form, p.UserAgent)
 	if err != nil {
 		return platform.Session{}, err
 	}
@@ -184,15 +187,17 @@ func (a *authFlow) refresh(ctx context.Context, s platform.Session) (platform.Se
 		ExpiresAt:    computeExpiresAt(body.ExpiresIn),
 		Cookies:      SynthCookieBlob(body.AccessToken),
 		GameFilter:   s.GameFilter,
+		ClientID:     s.ClientID,
+		Games:        s.Games,
 	}, nil
 }
 
-func (a *authFlow) postForm(ctx context.Context, target string, form url.Values) (*http.Response, error) {
+func (a *authFlow) postForm(ctx context.Context, target string, form url.Values, ua string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("User-Agent", ua)
 	return a.http.Do(req)
 }

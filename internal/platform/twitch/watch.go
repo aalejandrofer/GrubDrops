@@ -27,8 +27,17 @@ type watch struct {
 	spadeURLs map[string]string
 }
 
-func newWatch() *watch {
-	return &watch{c: newClient(), spadeURLs: map[string]string{}}
+// newWatch builds the watch leg with its OWN client, constructed exactly
+// as before per-session profiles existed (default transport, separate
+// cookie jar and device/session identity), so legacy Android sessions keep
+// an unchanged request surface: the web cookie jar filled by the channel
+// page scrape never leaks onto gql.twitch.tv, and beacons stay off the
+// proxy. Only the token -> profile registry is shared with parent, so a
+// bind() on the backend's client is visible to the Spade heartbeat.
+func newWatch(parent *client) *watch {
+	c := newClient()
+	c.profiles = parent.profiles
+	return &watch{c: c, spadeURLs: map[string]string{}}
 }
 
 type watchInternal struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -99,4 +100,37 @@ func TestProbeBeacon_Timeout(t *testing.T) {
 	// Very long interval — context should cancel during the sleep between beacons.
 	err := b.ProbeBeacon(ctx, sess, channel, 10*time.Second)
 	require.Error(t, err, "expected context cancellation error")
+}
+
+// TestProbeBeacon_TVSessionUsesTVClientID: ProbeBeacon is a public entry
+// point, so it must bind the session first; otherwise the canary beacons a
+// TV-minted token under the Android Client-Id.
+func TestProbeBeacon_TVSessionUsesTVClientID(t *testing.T) {
+	const channel = "testchannel"
+	var mu sync.Mutex
+	var beaconClients []string
+	var srv *httptest.Server
+	mux := http.NewServeMux()
+	mux.HandleFunc("/"+channel, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<html>"spade_url": "` + srv.URL + `/spade"</html>`))
+	})
+	mux.HandleFunc("/spade", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		beaconClients = append(beaconClients, r.Header.Get("Client-Id"))
+		mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	})
+	srv = httptest.NewServer(mux)
+	defer srv.Close()
+
+	b := newForTest(srv.URL)
+	b.watch.cachedUserID = 12345
+	sess := platform.Session{AccessToken: "tok-probe-tv", ClientID: ClientTV}
+	require.NoError(t, b.ProbeBeacon(context.Background(), sess, channel, 0))
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, beaconClients, 2)
+	for _, id := range beaconClients {
+		assert.Equal(t, profileTV.ID, id)
+	}
 }

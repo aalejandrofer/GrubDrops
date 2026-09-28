@@ -128,6 +128,28 @@ func TestTwitchScraper_AttachesGameFilterAndFilters(t *testing.T) {
 	assert.Equal(t, "acc-1", b.gotSession.AccountID, "session must carry the source's AccountID")
 }
 
+// Task 5: TV-client sessions (Session.ClientID == twitch.ClientTV) can't see
+// Twitch's drops dashboard, so chandisc.go's listByChannels walks one game
+// directory per name in Session.Games instead. Scrape must plumb the
+// whitelist it already has in hand into sess.Games so that path has
+// something to walk.
+func TestTwitchScraper_PlumbsWhitelistIntoSessionGames(t *testing.T) {
+	b := &stubBackend{result: []platform.Campaign{
+		{ID: "c-rust", Platform: "twitch", Game: "Rust"},
+	}}
+	source := func(context.Context) (string, platform.Session, bool, error) {
+		return "acc-1", platform.Session{AccessToken: "tok"}, true, nil
+	}
+	s := NewTwitchScraper(b, source)
+	whitelist := []string{"rust", "apex legends"}
+	_, err := s.Scrape(context.Background(), whitelist)
+	require.NoError(t, err)
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	assert.Equal(t, whitelist, b.gotSession.Games)
+}
+
 // Kick scraper mirrors Twitch in graceful no-op behaviour.
 func TestKickScraper_NoSessionIsNoOp(t *testing.T) {
 	b := &stubBackend{}

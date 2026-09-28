@@ -253,6 +253,31 @@ func TestFetchDetails_IncludesZeroMinuteDrops(t *testing.T) {
 	require.Equal(t, 60, minutes["Watch Item"])
 }
 
+// TestFetchDetails_SubGatedDropNotWatchEarnable covers issue #47: Twitch
+// sends sub-gated tiers (e.g. Special Events "UltraViolet") with
+// requiredSubs > 0 AND a nonzero requiredMinutesWatched. Watching alone can
+// never earn them, so they must come back as RequiredMinutes 0 (the
+// codebase-wide "not watch-earnable" marker the watcher skips and /drops
+// shows as action-required), not as a regular timed drop.
+func TestFetchDetails_SubGatedDropNotWatchEarnable(t *testing.T) {
+	detailsJSON := `{"data":{"user":{"dropCampaign":{"timeBasedDrops":[
+		{"id":"watch1","requiredMinutesWatched":60,"requiredSubs":0,"benefitEdges":[{"benefit":{"id":"b1","name":"Watch Item","imageAssetURL":"http://img/w.png"}}]},
+		{"id":"sub1","requiredMinutesWatched":30,"requiredSubs":1,"benefitEdges":[{"benefit":{"id":"b2","name":"Sub Item","imageAssetURL":"http://img/s.png"}}]}
+	]}}}}`
+
+	d := newDetailsTestDiscovery(t, detailsJSON)
+	benefits, _, err := d.fetchDetails(context.Background(), platform.Session{AccessToken: "tok"}, "camp-uuid")
+	require.NoError(t, err)
+
+	minutes := map[string]int{}
+	for _, b := range benefits {
+		minutes[b.Name] = b.RequiredMinutes
+	}
+	require.Contains(t, minutes, "Sub Item", "sub-gated drop must still be listed for /drops")
+	require.Equal(t, 0, minutes["Sub Item"], "sub-gated drop must not be watch-earnable")
+	require.Equal(t, 60, minutes["Watch Item"], "plain watch drop unaffected")
+}
+
 func TestCampaigns_Inventory_ParsesProgress(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(loadFixture(t, "inventory.json"))

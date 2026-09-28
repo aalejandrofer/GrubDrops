@@ -65,6 +65,14 @@ type Config struct {
 	// table stores both. The check should be lenient.
 	AllowGame func(game string) bool
 
+	// Games is the whitelisted game display names (as stored in the games
+	// table), fed into Session.Games when the session doesn't already carry
+	// one. TV-client Twitch sessions can't see the drops dashboard, so
+	// chandisc.go's listByChannels walks one game directory per name here
+	// instead. Harmless for Android sessions — the dashboard path ignores
+	// Session.Games entirely.
+	Games []string
+
 	// AllowChannel returns true if a campaign whose AllowedChannels
 	// include one of the account's whitelisted channels should be
 	// mined, even when its Game is not whitelisted (or empty). This is
@@ -185,9 +193,14 @@ type Watcher struct {
 	// 100). A milestone only notifies when newly crossed, so a stalled watch
 	// (e.g. Kick stuck at 0/120, polled every ~60s) doesn't spam the channel
 	// each tick. Sentinel -1 so the 0% "started" milestone fires once. Reset on
-	// pickStream / New.
+	// New and on pickStream when the benefit changes (see milestoneBenefit).
 	lastNotifiedMilestone int
-	tickCount             int // increments each tickWatch, used to throttle stream-live re-checks
+	// milestoneBenefit is the benefit ID lastNotifiedMilestone refers to.
+	// Re-picking the SAME benefit (claim-failure retry, channel rotation)
+	// keeps the milestone so a completed drop doesn't re-send "100%" every
+	// cycle; only a different benefit resets it.
+	milestoneBenefit string
+	tickCount        int // increments each tickWatch, used to throttle stream-live re-checks
 	// noProgressTicks counts consecutive tickWatch calls where
 	// InventoryProgress returned NO row matching the current benefit ID.
 	// Reset to 0 on any match; on pickStream when starting a fresh watch.
@@ -229,6 +242,18 @@ type Watcher struct {
 	// against this set so we don't loop forever mining a ghost.
 	skippedBenefits map[string]struct{}
 
+	// claimFailures counts consecutive Claim failures per benefit ID; reset
+	// on a successful claim. At claimFailSkipThreshold the benefit joins
+	// skippedBenefits (persisted via SkipRecorder).
+	claimFailures map[string]int
+	// claimFailSkipped holds benefits skipped for repeated claim failures,
+	// mapped to their RequiredMinutes. The ghost-skip self-heal un-skips
+	// any benefit back in the in-progress inventory unclaimed — which a
+	// completed-but-unclaimable drop always is — so these are exempt while
+	// the inventory still shows them complete; only if progress restarts
+	// (minutes below required) does the self-heal clear them.
+	claimFailSkipped map[string]int
+
 	// noStreamCampaigns collects campaign IDs whose eligible channels
 	// were all offline this round. pickStream populates it instead of
 	// sleeping, then re-enters pickCampaign so the watcher advances to
@@ -269,6 +294,9 @@ func New(cfg Config) *Watcher {
 	// Same closure backs both layers — the whitelist is canonical.
 	if cfg.Session.GameFilter == nil {
 		cfg.Session.GameFilter = cfg.AllowGame
+	}
+	if cfg.Session.Games == nil {
+		cfg.Session.Games = cfg.Games
 	}
 	w := &Watcher{cfg: cfg, state: StateIdle, lastNotifiedMilestone: -1}
 	// Pre-load persisted ghost-skips so a freshly-started watcher already
@@ -713,7 +741,7 @@ func (w *Watcher) Run(ctx context.Context) error {
 			// PerimeterX, etc) shouldn't kill the watcher. Reset state
 			// to PickCampaign for the next tick.
 			if backoff == 0 {
-				backoff = 5 * time.Second
+				backoff = stepErrBackoff
 			} else if backoff < maxBackoff {
 				backoff *= 2
 				if backoff > maxBackoff {
@@ -772,6 +800,17 @@ var errIdle = errors.New("idle; recheck later")
 // before re-discovering. Matches the discovery scraper cadence (~5m) so
 // the watcher's view and the persisted /drops view converge.
 const recheckInterval = 5 * time.Minute
+
+// stepErrBackoff is the first retry delay after a failed step (doubling up
+// to 5 min). A var only so tests can shrink it.
+var stepErrBackoff = 5 * time.Second
+
+// claimFailSkipThreshold is how many consecutive Claim failures for the same
+// completed benefit the watcher tolerates before skipping it. A drop Twitch
+// won't let us claim (e.g. null claimDropRewards) stays complete+unclaimed in
+// inventory, so without this the watcher re-picks it forever, starving
+// every other drop and re-notifying 100% each cycle.
+const claimFailSkipThreshold = 3
 
 // forceWatchYieldInterval is how long a force-watch task runs before
 // yielding back to mining to check whether a real whitelisted drop has
@@ -1017,11 +1056,21 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 	// Gated on a trustworthy inventory read so a failed fetch (empty
 	// progress) can never wrongly un-skip everything.
 	if inventoryOK {
+		minutesByID := make(map[string]int, len(progress))
+		for _, p := range progress {
+			minutesByID[p.BenefitID] = p.MinutesWatched
+		}
 		w.mu.Lock()
 		reappeared := make([]string, 0)
 		for id := range tracked {
 			if claimed[id] {
 				continue
+			}
+			if req, claimFail := w.claimFailSkipped[id]; claimFail {
+				if minutesByID[id] >= req {
+					continue // still complete + unclaimable: keep the skip
+				}
+				delete(w.claimFailSkipped, id) // progress restarted
 			}
 			if _, skipped := w.skippedBenefits[id]; skipped {
 				reappeared = append(reappeared, id)
@@ -1552,7 +1601,13 @@ func (w *Watcher) pickStream(ctx context.Context) error {
 	w.handle = &h
 	w.watchStartedAt = time.Now()
 	w.lastProgressMin = 0
-	w.lastNotifiedMilestone = -1
+	if w.currentBenefit == nil || w.currentBenefit.ID != w.milestoneBenefit {
+		w.lastNotifiedMilestone = -1
+		w.milestoneBenefit = ""
+		if w.currentBenefit != nil {
+			w.milestoneBenefit = w.currentBenefit.ID
+		}
+	}
 	w.noProgressTicks = 0
 	w.noAdvanceTicks = 0
 	// Reset the tick counter so the beacon/inventory cadence (tickN==1
@@ -1986,8 +2041,36 @@ func (w *Watcher) claim(ctx context.Context) error {
 			return fmt.Errorf("claim: %w", err)
 		}
 		slog.Error("watcher claim failed", "kind", "error", "account", w.cfg.AccountID, "benefit", benefit.ID, "err", err)
+		w.mu.Lock()
+		if w.claimFailures == nil {
+			w.claimFailures = map[string]int{}
+		}
+		w.claimFailures[benefit.ID]++
+		n := w.claimFailures[benefit.ID]
+		giveUp := n >= claimFailSkipThreshold
+		if giveUp {
+			delete(w.claimFailures, benefit.ID)
+			if w.skippedBenefits == nil {
+				w.skippedBenefits = map[string]struct{}{}
+			}
+			w.skippedBenefits[benefit.ID] = struct{}{}
+			if w.claimFailSkipped == nil {
+				w.claimFailSkipped = map[string]int{}
+			}
+			w.claimFailSkipped[benefit.ID] = benefit.RequiredMinutes
+		}
+		w.mu.Unlock()
+		if giveUp {
+			slog.Warn("watcher: claim failed repeatedly for completed drop; skipping it",
+				"kind", "claim", "account", w.cfg.AccountID,
+				"benefit", benefit.ID, "benefit_name", benefit.Name, "failures", n)
+			w.recordSkip(ctx, benefit.ID, benefit.Name)
+		}
 		return fmt.Errorf("claim: %w", err)
 	}
+	w.mu.Lock()
+	delete(w.claimFailures, benefit.ID)
+	w.mu.Unlock()
 	_ = w.cfg.Backend.StopWatch(ctx, handle)
 	w.unsubscribeCurrentChannel()
 

@@ -37,6 +37,9 @@ func NewForTest(endpoint string) *Backend {
 // very short duration in tests. Production should pass 60s (the watcher's
 // HeartbeatInterval, which is the minimum Twitch credits per beacon).
 func (b *Backend) ProbeBeacon(ctx context.Context, sess platform.Session, channel string, beaconInterval time.Duration) error {
+	// Every public entry binds the session so the beacon (which carries
+	// only the token) goes out under the minting client's Client-Id.
+	b.c.bind(sess)
 	// Build a synthetic stream. The beacon body uses these fields to populate
 	// the minute-watched event properties. Synthetic IDs are fine here because
 	// we're testing transport acceptance, not drop credit.

@@ -99,6 +99,12 @@ func (s *TwitchScraper) Scrape(ctx context.Context, whitelist []string) ([]platf
 	// campaigns are still emitted (without benefits) so the /drops
 	// Discoverable tab can list them.
 	sess.GameFilter = buildAllowList(whitelist)
+	// TV-client sessions (Session.ClientID == twitch.ClientTV) can't see
+	// Twitch's drops dashboard, so chandisc.go's listByChannels walks one
+	// game directory per name in sess.Games instead. Plumb the whitelist
+	// we already have in hand straight through (the /drops lazy item-fetch
+	// path populates the same field from firstStoredSession).
+	sess.Games = append([]string(nil), whitelist...)
 
 	camps, err := s.Backend.ListActiveCampaigns(ctx, sess)
 	if err != nil {

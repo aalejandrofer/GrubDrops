@@ -147,6 +147,34 @@ func TestWatcher_New_PropagatesAllowGameToSession(t *testing.T) {
 	assert.Equal(t, "acc1", w.cfg.Session.AccountID)
 }
 
+// New() must plumb Config.Games into Session.Games when the session doesn't
+// already carry one, so TV-client Twitch sessions (chandisc.go
+// listByChannels) can walk a game directory per whitelisted name. Same
+// pattern as AllowGame -> GameFilter above.
+func TestWatcher_New_PropagatesGamesToSession(t *testing.T) {
+	w := New(Config{
+		AccountID: "acc1",
+		Backend:   platformtest.New(),
+		Session:   platform.Session{AccessToken: "tok"},
+		Notifier:  &recordingNotifier{},
+		Games:     []string{"Rust"},
+	})
+	assert.Equal(t, []string{"Rust"}, w.cfg.Session.Games)
+}
+
+// A session that already carries Games (e.g. refresh() preserved it across a
+// token refresh) must not be clobbered by the Config default.
+func TestWatcher_New_DoesNotOverrideExistingSessionGames(t *testing.T) {
+	w := New(Config{
+		AccountID: "acc1",
+		Backend:   platformtest.New(),
+		Session:   platform.Session{AccessToken: "tok", Games: []string{"Preserved"}},
+		Notifier:  &recordingNotifier{},
+		Games:     []string{"Rust"},
+	})
+	assert.Equal(t, []string{"Preserved"}, w.cfg.Session.Games)
+}
+
 // recordingPersister captures every batch the watcher pushes to it so we
 // can assert the whitelist gate and status filter run BEFORE persistence.
 type recordingPersister struct {

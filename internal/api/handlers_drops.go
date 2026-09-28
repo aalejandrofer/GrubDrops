@@ -111,10 +111,44 @@ func (d *dropsDeps) firstStoredSession(ctx context.Context, plat string, enabled
 		}
 		if sess, ok, err := d.sessions.Get(ctx, a.ID); err == nil && ok {
 			sess.AccountID = a.ID
+			// TV-client sessions can't see Twitch's drops dashboard, so
+			// chandisc.go's listByChannels walks one game directory per
+			// name in sess.Games instead. Populate it here too so a lazy
+			// CampaignDetails fetch for a non-whitelisted campaign still
+			// has that fallback available, same as discovery's scraper.
+			sess.Games = gameNamesForAccount(ctx, d.q, a.ID)
 			return sess, true
 		}
 	}
 	return platform.Session{}, false
+}
+
+// gameNamesForAccount returns the account's whitelisted game display names
+// (as stored in the games table), falling back to the global priority list
+// when the account has none of its own — the same resolution as
+// loadAccountWhitelist in cmd/miner/main.go. Best-effort: a query error
+// yields nil (Games unset, same as before this field existed).
+func gameNamesForAccount(ctx context.Context, q *gen.Queries, accountID string) []string {
+	rows, err := q.ListAccountGames(ctx, accountID)
+	if err != nil {
+		return nil
+	}
+	if len(rows) == 0 {
+		gRows, err := q.ListGlobalGames(ctx)
+		if err != nil {
+			return nil
+		}
+		names := make([]string, 0, len(gRows))
+		for _, r := range gRows {
+			names = append(names, r.Name)
+		}
+		return names
+	}
+	names := make([]string, 0, len(rows))
+	for _, r := range rows {
+		names = append(names, r.Name)
+	}
+	return names
 }
 
 // linkOverrides returns the set of campaign ids the user manually marked
