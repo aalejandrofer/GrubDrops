@@ -22,6 +22,12 @@ type Event struct {
 	Channel  string
 	Progress []platform.Progress
 	Err      error
+	// Gen is the generation stamp of the session that produced this event
+	// (Config.Gen, echoed verbatim). The loop bumps its generation on every
+	// startSession and drops events whose Gen doesn't match the current one,
+	// so a stale event queued by a session that already got stopped (e.g. on
+	// a serves-set restart) can't be mistaken for one from the live session.
+	Gen int
 }
 
 type Config struct {
@@ -33,6 +39,8 @@ type Config struct {
 	// minute per beacon, so a slower cadence under-credits.
 	Ticks      <-chan time.Time
 	StallPolls int
+	// Gen is stamped onto every Event this run produces. See Event.Gen.
+	Gen int
 }
 
 // Run starts the watch, beats immediately and on every tick, and stops the
@@ -41,6 +49,7 @@ func Run(ctx context.Context, cfg Config, out chan<- Event) {
 	ch := cfg.Stream.Channel
 	send := func(e Event) {
 		e.Channel = ch
+		e.Gen = cfg.Gen
 		select {
 		case out <- e:
 		case <-ctx.Done():

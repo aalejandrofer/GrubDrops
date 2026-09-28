@@ -92,17 +92,19 @@ type Loop struct {
 	discoverAt time.Time
 
 	// Owned by the Run goroutine.
-	rows       map[string]dropstate.Row
-	camps      []platform.Campaign
-	progress   map[string]platform.DropProgress
-	live       map[string][]platform.Stream
-	forceLive  []platform.Stream
-	cooldowns  map[string]time.Time
-	current    *planner.Decision
-	lastSwap   time.Time
-	sessCancel context.CancelFunc
-	subscribed string
-	milestones map[string]int
+	rows           map[string]dropstate.Row
+	camps          []platform.Campaign
+	progress       map[string]platform.DropProgress
+	live           map[string][]platform.Stream
+	forceLive      []platform.Stream
+	cooldowns      map[string]time.Time
+	current        *planner.Decision
+	lastSwap       time.Time
+	sessCancel     context.CancelFunc
+	subscribed     string
+	milestones     map[string]int
+	gen            int             // bumped on every startSession; tags session events
+	pendingHistory map[string]bool // drop ids whose RecordClaimIfNew failed, retried each iteration
 }
 
 // New assembles the loop, checking the backend's pipeline capabilities once.
@@ -142,14 +144,15 @@ func New(cfg Config) (*Loop, error) {
 	}
 	l := &Loop{
 		cfg: cfg, prog: prog, claimer: cl,
-		nudge:      make(chan struct{}, 1),
-		pubsub:     make(chan pubsubEvent, 64),
-		sessEvents: make(chan session.Event, 64),
-		rows:       map[string]dropstate.Row{},
-		progress:   map[string]platform.DropProgress{},
-		live:       map[string][]platform.Stream{},
-		cooldowns:  map[string]time.Time{},
-		milestones: map[string]int{},
+		nudge:          make(chan struct{}, 1),
+		pubsub:         make(chan pubsubEvent, 64),
+		sessEvents:     make(chan session.Event, 64),
+		rows:           map[string]dropstate.Row{},
+		progress:       map[string]platform.DropProgress{},
+		live:           map[string][]platform.Stream{},
+		cooldowns:      map[string]time.Time{},
+		milestones:     map[string]int{},
+		pendingHistory: map[string]bool{},
 	}
 	l.prober, _ = cfg.Backend.(platform.ChannelProber)
 	l.subs, _ = cfg.Backend.(platform.ChannelSubscriber)
@@ -209,6 +212,7 @@ func (l *Loop) Run(ctx context.Context) error {
 	l.reconcile(ctx)
 	l.refreshLive(ctx)
 	l.claimReady(ctx)
+	l.retryPendingHistory(ctx)
 	l.replan(ctx)
 	recT := time.NewTicker(l.cfg.ReconcileEvery)
 	liveT := time.NewTicker(l.cfg.LiveEvery)
@@ -232,6 +236,7 @@ func (l *Loop) Run(ctx context.Context) error {
 			l.onPubSub(ctx, pe)
 		}
 		l.claimReady(ctx)
+		l.retryPendingHistory(ctx)
 		l.replan(ctx)
 	}
 }
@@ -314,13 +319,31 @@ func (l *Loop) commit(ctx context.Context, next dropstate.Row) {
 	b, c := l.benefit(next.DropID)
 	if l.cfg.History != nil {
 		if _, err := l.cfg.History.RecordClaimIfNew(ctx, l.cfg.AccountID, b); err != nil {
-			slog.Warn("pipeline: record claim history failed", "kind", "error", "account", l.cfg.AccountID, "drop", next.DropID, "err", err)
+			slog.Warn("pipeline: record claim history failed; will retry", "kind", "error", "account", l.cfg.AccountID, "drop", next.DropID, "err", err)
+			l.pendingHistory[next.DropID] = true
 		}
 	}
 	slog.Info("pipeline drop claimed", "kind", "claim", "account", l.cfg.AccountID, "drop", next.DropID, "source", string(next.Source))
 	// Only notify live transitions, not historical claims seen on first sync.
 	if !prev.IsZero() && next.Source == dropstate.FromPlatform {
 		l.notify(ctx, "claim", c, b, nil)
+	}
+}
+
+// retryPendingHistory retries any RecordClaimIfNew calls that failed on a
+// prior commit, so a transient history-store outage doesn't permanently
+// drop the record (spec 4.2/7). Runs after every loop iteration.
+func (l *Loop) retryPendingHistory(ctx context.Context) {
+	if l.cfg.History == nil || len(l.pendingHistory) == 0 {
+		return
+	}
+	for id := range l.pendingHistory {
+		b, _ := l.benefit(id)
+		if _, err := l.cfg.History.RecordClaimIfNew(ctx, l.cfg.AccountID, b); err != nil {
+			slog.Warn("pipeline: retry claim history failed", "kind", "error", "account", l.cfg.AccountID, "drop", id, "err", err)
+			continue
+		}
+		delete(l.pendingHistory, id)
 	}
 }
 
@@ -425,6 +448,9 @@ func (l *Loop) isCurrent(channel string) bool {
 }
 
 func (l *Loop) onSession(ctx context.Context, ev session.Event) {
+	if ev.Gen != l.gen {
+		return // stale event from a session already stopped/restarted
+	}
 	now := l.cfg.Now()
 	switch ev.Kind {
 	case session.Progress:
@@ -477,6 +503,19 @@ func (l *Loop) onPubSub(ctx context.Context, e pubsubEvent) {
 		dp := l.progress[e.drop]
 		dp.DropID, dp.CampaignID, dp.InstanceID = e.drop, r.CampaignID, e.instance
 		l.progress[e.drop] = dp
+		if r.Required == 0 {
+			// Required isn't known yet (platforms that surface the reward
+			// only via pubsub, e.g. Kick). A claimable event is itself proof
+			// the drop is done; routing it through Apply/derive would read
+			// required<=0 as "blocked: sub_only", which is wrong here.
+			next := r
+			next.Status, next.Reason = dropstate.Claimable, dropstate.NoReason
+			next.RetryAfter = time.Time{}
+			next.Source = dropstate.FromPlatform
+			next.UpdatedAt = l.cfg.Now()
+			l.commit(ctx, next)
+			return
+		}
 		minutes := r.Minutes
 		if minutes < r.Required {
 			minutes = r.Required
@@ -500,10 +539,14 @@ func (l *Loop) maybeNotifyProgress(ctx context.Context, r dropstate.Row) {
 	}
 	m := pct / step * step
 	last, seen := l.milestones[r.DropID]
-	l.milestones[r.DropID] = m
-	if !seen || m <= last {
+	if !seen {
+		l.milestones[r.DropID] = m
 		return // first sight records a baseline; no restart storms
 	}
+	if m <= last {
+		return // never regress the recorded milestone (e.g. a stale re-sync)
+	}
+	l.milestones[r.DropID] = m
 	b, c := l.benefit(r.DropID)
 	l.notify(ctx, "progress", c, b, map[string]any{"cur_min": r.Minutes, "req_min": r.Required})
 }
@@ -530,10 +573,42 @@ func (l *Loop) claimReady(ctx context.Context) {
 	}
 }
 
+// sameServeSet reports whether a and b hold the same drop ids, ignoring order.
+func sameServeSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	counts := make(map[string]int, len(a))
+	for _, id := range a {
+		counts[id]++
+	}
+	for _, id := range b {
+		counts[id]--
+	}
+	for _, n := range counts {
+		if n != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func (l *Loop) replan(ctx context.Context) {
 	d := planner.Plan(l.plannerInput())
 	if l.current != nil && l.current.Same(d) {
+		servesChanged := !sameServeSet(l.current.Serves, d.Serves)
 		l.current.Serves, l.current.Reason = d.Serves, d.Reason
+		if servesChanged && l.current.Kind != planner.Idle {
+			// The running session pinned its stall/claim bookkeeping to the
+			// serves set it started with (e.g. a precondition drop that just
+			// got claimed, handing the baton to the drop it gated). Restart
+			// on the same channel so the session tracks the new set instead
+			// of reading "no progress on my old drops" as a stall. Don't
+			// touch lastSwap: this isn't a channel swap, so the hysteresis
+			// window keeps counting from when we actually landed here.
+			l.stopSession()
+			l.startSession(ctx, *l.current)
+		}
 		l.updateSnapshot()
 		return
 	}
@@ -553,6 +628,7 @@ func (l *Loop) replan(ctx context.Context) {
 func (l *Loop) startSession(ctx context.Context, d planner.Decision) {
 	sctx, cancel := context.WithCancel(ctx)
 	l.sessCancel = cancel
+	l.gen++
 	if l.subs != nil && d.Channel.ChannelID != "" {
 		l.subs.SubscribeChannel(l.cfg.AccountID, d.Channel.ChannelID)
 		l.subscribed = d.Channel.ChannelID
@@ -560,7 +636,7 @@ func (l *Loop) startSession(ctx context.Context, d planner.Decision) {
 	ticker := time.NewTicker(l.cfg.BeatEvery)
 	cfg := session.Config{
 		Backend: l.cfg.Backend, Session: l.cfg.Session, Stream: d.Channel,
-		Serves: d.Serves, Ticks: ticker.C, StallPolls: l.cfg.StallPolls,
+		Serves: d.Serves, Ticks: ticker.C, StallPolls: l.cfg.StallPolls, Gen: l.gen,
 	}
 	if d.Kind == planner.ForceWatch {
 		cfg.StallPolls = 0 // channel-points farming has no drop progress to stall on
