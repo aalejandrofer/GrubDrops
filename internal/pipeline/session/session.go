@@ -4,6 +4,7 @@ package session
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
@@ -41,6 +42,8 @@ type Config struct {
 	StallPolls int
 	// Gen is stamped onto every Event this run produces. See Event.Gen.
 	Gen int
+	// AccountID tags the heartbeat log line the dashboard counts.
+	AccountID string
 }
 
 // Run starts the watch, beats immediately and on every tick, and stops the
@@ -79,6 +82,9 @@ func Run(ctx context.Context, cfg Config, out chan<- Event) {
 			}
 			return false
 		}
+		// Same line as v1's watcher: the dashboard HEARTBEATS/HR card
+		// counts kind=heartbeat log lines.
+		slog.Info("watcher heartbeat sent", "kind", "heartbeat", "account", cfg.AccountID, "channel", ch)
 		prog, err := cfg.Backend.InventoryProgress(ctx, cfg.Session)
 		if err != nil {
 			return true // transient; the next tick retries
