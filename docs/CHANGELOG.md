@@ -33,6 +33,19 @@ All notable changes to GrubDrops.
 - v2 reads TV-account Twitch progress from the inventory, and sends every v2 request under the account's own Twitch client.
 - v2 no longer mines subscription-only Twitch drops.
 
+## [1.4.1] — 2026-09-28
+
+### Fixed
+
+- **Kick accounts no longer show "needs re-auth" a week after login.** The
+  7-day expiry stamped at login is ignored for Kick; the periodic auth check
+  decides whether cookies still work.
+- **A brief database or network hiccup at startup no longer parks an
+  account as needing re-auth.** Loading and refreshing a session now retry a
+  few times first.
+- **A refreshed Twitch session is kept even if saving it fails**, so its new
+  refresh token isn't lost.
+
 ## [1.4.0] — 2026-09-28
 
 ### Fixed

@@ -392,34 +392,19 @@ func run() error {
 
 		var sess platform.Session
 		{
-			s, ok, err := sessions.Get(ctx, a.ID)
+			deps := sessionDeps{
+				get:     sessions.Get,
+				refresh: b.RefreshSession,
+				put:     sessions.Put,
+				logger:  logger,
+				backoff: sessionRetryBackoff,
+			}
+			s, idleReason, err := acquireSession(ctx, deps, a, time.Now())
 			if err != nil {
 				return scheduler.Entry{}, fmt.Errorf("load session: %w", err)
 			}
-			if !ok {
-				logger.Warn("account has no session, will idle until re-auth",
-					"account", a.ID, "platform", a.Platform)
-				return scheduler.NewEntry(a.ID, nopRunner{}), nil
-			}
-			if s.ExpiresAt.Before(time.Now()) {
-				if s.RefreshToken == "" {
-					logger.Warn("session expired and no refresh token, will idle",
-						"account", a.ID, "platform", a.Platform)
-					return scheduler.NewEntry(a.ID, nopRunner{}), nil
-				}
-				refreshed, err := b.RefreshSession(ctx, s)
-				if err != nil {
-					logger.Warn("session refresh failed, will idle",
-						"account", a.ID, "platform", a.Platform, "err", err)
-					return scheduler.NewEntry(a.ID, nopRunner{}), nil
-				}
-				if err := sessions.Put(ctx, a.ID, refreshed); err != nil {
-					logger.Warn("persist refreshed session failed",
-						"account", a.ID, "err", err)
-					return scheduler.NewEntry(a.ID, nopRunner{}), nil
-				}
-				logger.Info("session refreshed", "account", a.ID, "platform", a.Platform)
-				s = refreshed
+			if idleReason != "" {
+				return scheduler.NewEntry(a.ID, nopRunner{reason: idleReason}), nil
 			}
 			sess = s
 		}
