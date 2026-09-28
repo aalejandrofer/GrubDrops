@@ -31,6 +31,7 @@ import (
 	mlog "github.com/aalejandrofer/grubdrops/internal/log"
 	"github.com/aalejandrofer/grubdrops/internal/netutil"
 	"github.com/aalejandrofer/grubdrops/internal/notify"
+	"github.com/aalejandrofer/grubdrops/internal/pipeline/loop"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/platform/kick"
 	"github.com/aalejandrofer/grubdrops/internal/platform/twitch"
@@ -336,6 +337,16 @@ func run() error {
 	// and the /drops Past + /history views stay empty.
 	claimRecorder := store.NewClaimRecorder(q)
 
+	// dropStore is the pipeline v2 per-account drop_state table. Backfill
+	// seeds it from the v1 in-progress/claims state on every boot so a
+	// GRUB_PIPELINE=v2 opt-in mid-lifecycle doesn't start from scratch.
+	dropStore := store.NewDropStateStore(q)
+	if n, err := store.BackfillDropState(ctx, q, time.Now()); err != nil {
+		logger.Warn("pipeline v2: drop_state backfill failed", "err", err)
+	} else if n > 0 {
+		logger.Info("pipeline v2: drop_state backfilled from v1 state", "rows", n)
+	}
+
 	// Per-account direct-Twitch backends. The direct twitch.Backend holds
 	// per-account state (auth, userID/userLogin caches, its own PubSub
 	// socket), so sharing ONE instance across accounts races their tokens
@@ -465,6 +476,36 @@ func run() error {
 		forceLinked := loadLinkOverrides(ctx, q)
 		forceCollected := loadCollectOverrides(ctx, q)
 		persistedSkips, skipRecorder, skipClearer := loadSkipOverrides(ctx, q)
+
+		if pipelineModeFor(ctx, q, a.ID) == "v2" {
+			prio, err := dropStore.StreamerPriority(ctx, a.ID)
+			if err != nil {
+				logger.Warn("pipeline v2: load streamer priority failed", "account", a.ID, "err", err)
+			}
+			var force []string
+			if rows, err := q.ListForceChannels(ctx, a.ID); err == nil {
+				for _, r := range rows {
+					force = append(force, r.Channel)
+				}
+			}
+			l, err := loop.New(loop.Config{
+				AccountID: a.ID, AccountLabel: a.DisplayName, Platform: a.Platform,
+				Backend: b, Session: sess,
+				Store: dropStore, History: claimRecorder, Persister: campaignPersister,
+				Notifier:  notifier,
+				AllowGame: allow, AllowChannel: matchAnyChannel(prio), GameRank: rank,
+				PriorityMode:          priorityMode,
+				ForceLinked:           forceLinked,
+				StreamerPriority:      prio,
+				ForceWatch:            force,
+				ProgressNotifyStepPct: progressStep,
+			})
+			if err == nil {
+				logger.Info("pipeline v2 enabled for account", "account", a.ID, "platform", a.Platform)
+				return scheduler.NewEntry(a.ID, l), nil
+			}
+			logger.Warn("pipeline v2 unavailable, falling back to v1", "account", a.ID, "err", err)
+		}
 
 		acctLabel := a.DisplayName
 		w := watcher.New(watcher.Config{
@@ -910,6 +951,40 @@ func decodeKickChannels(s platform.Session) []string {
 		return nil
 	}
 	return out
+}
+
+// pipelineModeFor picks v1 or v2 for an account: kv override first, then
+// GRUB_PIPELINE, default v1.
+func pipelineModeFor(ctx context.Context, q *gen.Queries, accountID string) string {
+	if v, err := q.GetSettingString(ctx, store.PipelineOverridePrefix+accountID); err == nil {
+		if s := string(v); s == "v1" || s == "v2" {
+			return s
+		}
+	}
+	if os.Getenv("GRUB_PIPELINE") == "v2" {
+		return "v2"
+	}
+	return "v1"
+}
+
+// matchAnyChannel reports whether any campaign channel is one of logins.
+// Nil when logins is empty, so the null-game gate stays off.
+func matchAnyChannel(logins []string) func([]string) bool {
+	if len(logins) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(logins))
+	for _, l := range logins {
+		set[strings.ToLower(l)] = true
+	}
+	return func(chs []string) bool {
+		for _, c := range chs {
+			if set[strings.ToLower(c)] {
+				return true
+			}
+		}
+		return false
+	}
 }
 
 // loadAccountWhitelist materialises the per-account game allow-list

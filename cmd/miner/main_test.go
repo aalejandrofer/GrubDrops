@@ -64,3 +64,27 @@ func TestGenerateMasterKey_IsAcceptedByCryptor(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEqual(t, key, key2, "each keygen must be unique")
 }
+
+func TestPipelineModeFor(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, t.TempDir()+"/t.db")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	q := gen.New(db)
+
+	t.Setenv("GRUB_PIPELINE", "")
+	assert.Equal(t, "v1", pipelineModeFor(ctx, q, "acc"))
+	t.Setenv("GRUB_PIPELINE", "v2")
+	assert.Equal(t, "v2", pipelineModeFor(ctx, q, "acc"))
+	require.NoError(t, q.UpsertSettingString(ctx, gen.UpsertSettingStringParams{Key: store.PipelineOverridePrefix + "acc", Value: []byte("v1")}))
+	assert.Equal(t, "v1", pipelineModeFor(ctx, q, "acc"), "per-account override beats env")
+	require.NoError(t, q.UpsertSettingString(ctx, gen.UpsertSettingStringParams{Key: store.PipelineOverridePrefix + "acc", Value: []byte("junk")}))
+	assert.Equal(t, "v2", pipelineModeFor(ctx, q, "acc"), "invalid override falls through")
+}
+
+func TestMatchAnyChannel(t *testing.T) {
+	assert.Nil(t, matchAnyChannel(nil))
+	m := matchAnyChannel([]string{"Fav"})
+	assert.True(t, m([]string{"x", "fav"}))
+	assert.False(t, m([]string{"x"}))
+}

@@ -32,6 +32,10 @@ const CollectOverridePrefix = "collect_override:"
 // watcher pre-loads these into its skippedBenefits set at New() time.
 const SkipOverridePrefix = "skip_override:"
 
+// PipelineOverridePrefix keys a per-account pipeline choice in kv. Full key:
+// PipelineOverridePrefix + accountID, value "v1" or "v2". Beats GRUB_PIPELINE.
+const PipelineOverridePrefix = "pipeline_override:"
+
 // CampaignPersister upserts every Campaign + Benefit the watcher discovers
 // into the local DB so the /drops page can render past + current +
 // upcoming tabs even before anything has been claimed.
