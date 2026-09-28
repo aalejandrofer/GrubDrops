@@ -392,7 +392,15 @@ verification (Twitch and Kick) on staging before any tag that enables v2.
 
 Either answer may adjust §4.2 mapping; the rest of the design is unaffected.
 
-Status: probes committed (behind the `live` build tag); results pending. Must also be run with a TV-client Twitch token once the #47 TV-client login lands.
+Results (2026-09-28, probes behind the `live` build tag):
+
+- Kick `/drops/progress` keeps claimed rewards listed with `claimed=true`
+  (15/15 on a prod account).
+- Twitch `DropCampaignDetails` (Android client) returns `self: null` for
+  drops of campaigns the account has already claimed; the TV client has no
+  details at all. So Twitch claimed-outside-app detection for campaigns that
+  left Inventory relies on the stall claim-probe (§10 item 9). Active-campaign
+  `self` presence is untested (no in-progress campaigns on the probe account).
 
 ## 10. Refinements during planning
 
@@ -404,3 +412,4 @@ Status: probes committed (behind the `live` build tag); results pending. Must al
 6. Session stall detection is per-drop, and the loop restarts the session on the same channel when the served-drop set changes; session events carry a generation so stale events are dropped.
 7. A claimed=true from either Twitch source (details self or in-progress inventory) wins.
 8. Kick rows listed without required_units fall back to campaign minutes (reporting 0 would block as sub_only).
+9. Twitch stall claim-probe: when a watched Eligible drop is absent from Inventory and the session stalls, the loop sends one claim; ALREADY_CLAIMED/OK marks it claimed, failure blocks it not_enrolled (1h re-check) without counting a claim failure.

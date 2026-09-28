@@ -59,6 +59,12 @@ type Config struct {
 	StreamerPriority      []string
 	ForceWatch            []string
 	ProgressNotifyStepPct int
+	// StallClaimProbe (Twitch): on a stall, send one claim for each served
+	// Eligible drop that was absent from the last inventory read. Twitch
+	// drops claimed outside the app whose campaign left the Inventory are
+	// otherwise invisible (DropCampaignDetails self: null) and would be
+	// watched forever. Kick keeps claimed rewards listed, so it leaves this off.
+	StallClaimProbe bool
 
 	Now            func() time.Time
 	ReconcileEvery time.Duration // default 15m
@@ -113,6 +119,9 @@ type Loop struct {
 	milestones     map[string]int
 	gen            int             // bumped on every startSession; tags session events
 	pendingHistory map[string]bool // drop ids whose RecordClaimIfNew failed, retried each iteration
+	// lastInv is the set of drop ids in the current session's most recent
+	// Progress event (the full inventory read). Reset on every session start.
+	lastInv map[string]bool
 }
 
 // New assembles the loop, checking the backend's pipeline capabilities once.
@@ -501,6 +510,11 @@ func (l *Loop) onSession(ctx context.Context, ev session.Event) {
 	now := l.cfg.Now()
 	switch ev.Kind {
 	case session.Progress:
+		inv := make(map[string]bool, len(ev.Progress))
+		for _, p := range ev.Progress {
+			inv[p.BenefitID] = true
+		}
+		l.lastInv = inv
 		l.applyProgress(ctx, ev.Progress)
 	case session.StreamDown:
 		if l.isCurrent(ev.Channel) {
@@ -508,9 +522,47 @@ func (l *Loop) onSession(ctx context.Context, ev session.Event) {
 		}
 	case session.Stalled:
 		if l.isCurrent(ev.Channel) {
+			if l.cfg.StallClaimProbe {
+				l.stallClaimProbe(ctx, now)
+			}
 			l.cooldowns[strings.ToLower(ev.Channel)] = now.Add(l.cfg.StallCooldown)
 			l.reconcile(ctx)
 		}
+	}
+}
+
+// stallClaimProbe sends one claim for each served Eligible drop the last
+// inventory read did not list. On Twitch such a drop is usually one claimed
+// outside the app whose campaign left the Inventory: nothing reports it, so
+// the claim answer is the only signal. OK/ALREADY_CLAIMED marks it claimed;
+// a failure blocks it not_enrolled (1h re-check) without counting a claim
+// failure, since it was never a completed drop.
+func (l *Loop) stallClaimProbe(ctx context.Context, now time.Time) {
+	if l.current == nil {
+		return
+	}
+	for _, id := range l.current.Serves {
+		r, ok := l.rows[id]
+		if !ok || r.Status != dropstate.Eligible || l.lastInv[id] {
+			continue
+		}
+		dp, ok := l.progress[id]
+		if !ok || dp.DropID == "" {
+			dp = platform.DropProgress{DropID: id, CampaignID: r.CampaignID}
+		}
+		res := l.claimer.ClaimDrop(ctx, l.cfg.Session, dp)
+		var next dropstate.Row
+		switch res.Outcome {
+		case platform.ClaimOK, platform.ClaimAlready:
+			next = dropstate.ClaimOK(r, now)
+		case platform.ClaimNeedsLink:
+			next = dropstate.ClaimNeedsLink(r, now)
+		default:
+			next = dropstate.ProbeNotEnrolled(r, now)
+		}
+		slog.Info("pipeline stall claim-probe", "kind", "claim", "account", l.cfg.AccountID, "drop", id,
+			"outcome", res.Outcome.String(), "detail", res.Detail)
+		l.commit(ctx, next)
 	}
 }
 
@@ -680,6 +732,7 @@ func (l *Loop) startSession(ctx context.Context, d planner.Decision) {
 	sctx, cancel := context.WithCancel(ctx)
 	l.sessCancel = cancel
 	l.gen++
+	l.lastInv = nil
 	if want := d.Channel.ChannelID; l.subs != nil && want != l.subscribed {
 		l.unsubscribe()
 		if want != "" {
@@ -691,6 +744,7 @@ func (l *Loop) startSession(ctx context.Context, d planner.Decision) {
 	cfg := session.Config{
 		Backend: l.cfg.Backend, Session: l.cfg.Session, Stream: d.Channel,
 		Serves: d.Serves, Ticks: ticker.C, StallPolls: l.cfg.StallPolls, Gen: l.gen,
+		AccountID: l.cfg.AccountID,
 	}
 	if d.Kind == planner.ForceWatch {
 		cfg.StallPolls = 0 // channel-points farming has no drop progress to stall on

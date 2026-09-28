@@ -223,3 +223,26 @@ func TestApply_ClaimableDemotionResetsFailCount(t *testing.T) {
 	assert.Equal(t, Eligible, got.Status)
 	assert.Equal(t, 0, got.FailCount)
 }
+
+// ProbeNotEnrolled is the stall claim-probe's failure outcome: blocked with the
+// 1h re-check window, never counted as a claim failure.
+func TestProbeNotEnrolled(t *testing.T) {
+	normal := row(Eligible, NoReason, 0, 60)
+	normal.Source = FromUser
+	got := ProbeNotEnrolled(normal, t0)
+	assert.Equal(t, Blocked, got.Status)
+	assert.Equal(t, NotEnrolled, got.Reason)
+	assert.Equal(t, FromPlatform, got.Source)
+	assert.Equal(t, t0.Add(RetryNotEnrolled), got.RetryAfter)
+	assert.Equal(t, 0, got.FailCount, "a probe is not a claim failure")
+
+	withFails := row(Eligible, NoReason, 0, 60)
+	withFails.FailCount = 2
+	assert.Equal(t, 2, ProbeNotEnrolled(withFails, t0).FailCount, "FailCount carried, never incremented")
+
+	claimed := row(Claimed, NoReason, 60, 60)
+	assert.Equal(t, claimed, ProbeNotEnrolled(claimed, t0), "platform-confirmed claim untouched")
+	skipped := row(Blocked, UserSkip, 0, 60)
+	skipped.Source = FromUser
+	assert.Equal(t, skipped, ProbeNotEnrolled(skipped, t0), "user skip untouched")
+}

@@ -216,6 +216,19 @@ func ClaimFailedAttempt(prev Row, now time.Time) Row {
 	return r
 }
 
+// ProbeNotEnrolled records a failed stall claim-probe: the platform neither
+// tracks the drop nor accepts a claim for it, so block it not_enrolled (1h
+// re-check). A probe is not a claim of a completed drop, so FailCount is
+// left alone. Platform-confirmed claims and user skips are kept.
+func ProbeNotEnrolled(prev Row, now time.Time) Row {
+	if (prev.Status == Claimed && prev.Source == FromPlatform) || (prev.Status == Blocked && prev.Reason == UserSkip) {
+		return prev
+	}
+	r := prev.with(Blocked, NotEnrolled, now)
+	r.Source = FromPlatform
+	return r
+}
+
 // MarkCollected is the user asserting the drop is claimed.
 func MarkCollected(prev Row, now time.Time) Row {
 	if prev.Status == Claimed {

@@ -655,3 +655,94 @@ func TestLoop_ConfigGamesReachSession(t *testing.T) {
 		assert.Equal(t, []string{"G", "Other Game"}, g)
 	}
 }
+
+// probeSetup scripts the Twitch "claimed outside the app, campaign left the
+// Inventory" case: the platform reports nothing for d1 (DropCampaignDetails
+// self: null, not in Inventory), so reconcile derives it Eligible and the
+// session never sees a gain on it.
+func probeSetup(t *testing.T) (*fakeBackend, *memStore, *memHistory, Config) {
+	f, st, h, cfg := setup(t)
+	f.progress = nil
+	f.inventory = nil
+	cfg.StallPolls = 3
+	cfg.StallClaimProbe = true
+	return f, st, h, cfg
+}
+
+func (f *fakeBackend) claimCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.claims
+}
+
+// (a) An Eligible served drop absent from the inventory gets one claim on
+// stall; ALREADY_CLAIMED marks it claimed from the platform, records history
+// and the planner moves on instead of re-watching it.
+func TestLoop_StallClaimProbe_AlreadyClaimedMarksClaimed(t *testing.T) {
+	f, st, h, cfg := probeSetup(t)
+	f.claimRes = platform.ClaimResult{Outcome: platform.ClaimAlready}
+	l, _ := run(t, cfg)
+	require.Eventually(t, func() bool {
+		r := st.get("d1")
+		return r.Status == dropstate.Claimed && r.Source == dropstate.FromPlatform
+	}, 2*time.Second, 5*time.Millisecond)
+	require.Eventually(t, func() bool { return l.Snapshot().State == "idle" }, 2*time.Second, 5*time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 1, f.claimCount(), "exactly one probe claim")
+	h.mu.Lock()
+	assert.Contains(t, h.recorded, "d1")
+	h.mu.Unlock()
+}
+
+// (b) A failed probe blocks the drop not_enrolled without counting a claim
+// failure, and it is not probed again.
+func TestLoop_StallClaimProbe_FailedBlocksNotEnrolled(t *testing.T) {
+	f, st, _, cfg := probeSetup(t)
+	f.claimRes = platform.ClaimResult{Outcome: platform.ClaimFailed}
+	l, _ := run(t, cfg)
+	require.Eventually(t, func() bool {
+		r := st.get("d1")
+		return r.Status == dropstate.Blocked && r.Reason == dropstate.NotEnrolled
+	}, 2*time.Second, 5*time.Millisecond)
+	require.Eventually(t, func() bool { return l.Snapshot().State == "idle" }, 2*time.Second, 5*time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
+	r := st.get("d1")
+	assert.Equal(t, 0, r.FailCount, "a probe is not a claim failure")
+	assert.Equal(t, dropstate.FromPlatform, r.Source)
+	assert.Equal(t, 1, f.claimCount(), "exactly one probe claim")
+}
+
+// (c) A drop present in the inventory (really tracked, just frozen) is a
+// plain stall: no probe claim.
+func TestLoop_StallClaimProbe_SkipsDropInInventory(t *testing.T) {
+	f, st, _, cfg := probeSetup(t)
+	f.inventory = []platform.Progress{{BenefitID: "d1", MinutesWatched: 0}}
+	l, _ := run(t, cfg)
+	require.Eventually(t, func() bool { return l.Snapshot().Channel == "ch2" }, 3*time.Second, 5*time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 0, f.claimCount())
+	assert.Equal(t, dropstate.Eligible, st.get("d1").Status)
+}
+
+// (d) Probe disabled (Kick): stall behaviour unchanged, no claim.
+func TestLoop_StallClaimProbe_DisabledNoClaim(t *testing.T) {
+	f, st, _, cfg := probeSetup(t)
+	cfg.StallClaimProbe = false
+	l, _ := run(t, cfg)
+	require.Eventually(t, func() bool { return l.Snapshot().Channel == "ch2" }, 3*time.Second, 5*time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 0, f.claimCount())
+	assert.Equal(t, dropstate.Eligible, st.get("d1").Status)
+}
+
+// (e) Only Eligible rows are probed: an Accruing row missing from the
+// inventory is not claimed.
+func TestLoop_StallClaimProbe_SkipsAccruing(t *testing.T) {
+	f, st, _, cfg := probeSetup(t)
+	f.progress = []platform.DropProgress{{DropID: "d1", CampaignID: "c1", Minutes: 10, Required: 60, Known: true}}
+	l, _ := run(t, cfg)
+	require.Eventually(t, func() bool { return l.Snapshot().Channel == "ch2" }, 3*time.Second, 5*time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 0, f.claimCount())
+	assert.Equal(t, dropstate.Accruing, st.get("d1").Status)
+}

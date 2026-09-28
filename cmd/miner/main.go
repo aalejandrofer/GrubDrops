@@ -485,6 +485,9 @@ func run() error {
 				StreamerPriority:      prio,
 				ForceWatch:            force,
 				ProgressNotifyStepPct: progressStep,
+				// Twitch hides drops claimed outside the app once their
+				// campaign leaves the Inventory; Kick keeps them listed.
+				StallClaimProbe: a.Platform == "twitch",
 			})
 			if err == nil {
 				logger.Info("pipeline v2 enabled for account", "account", a.ID, "platform", a.Platform)

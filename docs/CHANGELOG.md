@@ -32,6 +32,8 @@ All notable changes to GrubDrops.
 - v2 discovers campaigns for TV-client Twitch accounts (the whitelisted games now reach the session).
 - v2 reads TV-account Twitch progress from the inventory, and sends every v2 request under the account's own Twitch client.
 - v2 no longer mines subscription-only Twitch drops.
+- A Twitch drop claimed outside GrubDrops whose campaign left the inventory is detected with one claim check when watching it stalls, instead of being watched again and again.
+- v2 logs the per-beat heartbeat line, so v2 accounts show on the dashboard HEARTBEATS/HR card instead of 0.
 
 ## [1.4.1] — 2026-09-28
 
