@@ -31,7 +31,9 @@ func (d *discovery) dropProgress(ctx context.Context, sess platform.Session, cam
 			continue
 		}
 		seen[td.ID] = true
-		dp := platform.DropProgress{DropID: td.ID, CampaignID: campaignID, Required: td.RequiredMinutesWatched, Known: true}
+		// self:null means Twitch said nothing about this viewer, which does
+		// not prove "not enrolled"; only a self object is a definite answer.
+		dp := platform.DropProgress{DropID: td.ID, CampaignID: campaignID, Required: td.RequiredMinutesWatched, Known: td.Self != nil}
 		if td.Self != nil {
 			dp.Minutes = td.Self.CurrentMinutesWatched
 			dp.Claimed = td.Self.IsClaimed
@@ -74,6 +76,7 @@ func (b *Backend) DropProgress(ctx context.Context, s platform.Session, camps []
 			if !ok {
 				continue
 			}
+			dps[i].Known = true // present in the in-progress inventory
 			if p.MinutesWatched > dps[i].Minutes {
 				dps[i].Minutes = p.MinutesWatched
 			}

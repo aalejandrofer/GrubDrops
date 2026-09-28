@@ -30,6 +30,8 @@ func TestBackfillDropState(t *testing.T) {
 	rec := NewClaimRecorder(q)
 	require.NoError(t, rec.RecordClaim(ctx, "acc-1", platform.DropBenefit{ID: "claimed1"}))
 	require.NoError(t, rec.RecordClaim(ctx, "acc-1", platform.DropBenefit{ID: "both1"}))
+	// The mark-collected handler writes a claims row AND a collect_override.
+	require.NoError(t, rec.RecordClaim(ctx, "acc-1", platform.DropBenefit{ID: "marked1"}))
 	for _, k := range []string{
 		CollectOverridePrefix + "marked1:acc-1",
 		SkipOverridePrefix + "skipped1:acc-1",
@@ -59,6 +61,11 @@ func TestBackfillDropState(t *testing.T) {
 	assert.Equal(t, now, by["skipped1"].RetryAfter, "skips get one fresh evaluation")
 	assert.Equal(t, dropstate.Claimed, by["both1"].Status)
 	assert.Equal(t, "c1", by["claimed1"].CampaignID)
+	// Seeded rows carry the benefit's requirement so a later re-derive does
+	// not read Required 0 as sub_only.
+	for _, id := range []string{"claimed1", "marked1", "skipped1", "both1"} {
+		assert.Equal(t, 60, by[id].Required, id)
+	}
 
 	// Idempotent: second run is a no-op.
 	n, err = BackfillDropState(ctx, q, now)

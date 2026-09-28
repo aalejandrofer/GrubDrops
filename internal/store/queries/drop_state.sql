@@ -20,13 +20,13 @@ ON CONFLICT(account_id, drop_id) DO UPDATE SET
     updated_at = excluded.updated_at;
 
 -- name: ListClaimsForBackfill :many
-SELECT c.account_id, c.benefit_id, b.campaign_id, a.platform
+SELECT c.account_id, c.benefit_id, b.campaign_id, a.platform, b.required_minutes
 FROM claims c
 JOIN benefits b ON b.id = c.benefit_id
 JOIN accounts a ON a.id = c.account_id;
 
 -- name: GetBenefitCampaign :one
-SELECT b.campaign_id, cp.platform
+SELECT b.campaign_id, cp.platform, b.required_minutes
 FROM benefits b
 JOIN campaigns cp ON cp.id = b.campaign_id
 WHERE b.id = ?;

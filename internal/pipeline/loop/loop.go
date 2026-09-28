@@ -5,6 +5,7 @@ package loop
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -101,7 +102,9 @@ type Loop struct {
 	current        *planner.Decision
 	lastSwap       time.Time
 	sessCancel     context.CancelFunc
+	sessDone       chan struct{} // closed by the session goroutine once session.Run returns
 	subscribed     string
+	authBlocked    bool // integrity wall hit: Run exits, the next reload re-spins the loop
 	milestones     map[string]int
 	gen            int             // bumped on every startSession; tags session events
 	pendingHistory map[string]bool // drop ids whose RecordClaimIfNew failed, retried each iteration
@@ -209,16 +212,22 @@ func (l *Loop) Run(ctx context.Context) error {
 	if err := l.load(ctx); err != nil {
 		return err
 	}
+	defer l.stopSession()
 	l.reconcile(ctx)
+	if l.authBlocked {
+		return nil
+	}
 	l.refreshLive(ctx)
 	l.claimReady(ctx)
+	if l.authBlocked {
+		return nil
+	}
 	l.retryPendingHistory(ctx)
 	l.replan(ctx)
 	recT := time.NewTicker(l.cfg.ReconcileEvery)
 	liveT := time.NewTicker(l.cfg.LiveEvery)
 	defer recT.Stop()
 	defer liveT.Stop()
-	defer l.stopSession()
 	for {
 		select {
 		case <-ctx.Done():
@@ -235,7 +244,13 @@ func (l *Loop) Run(ctx context.Context) error {
 		case pe := <-l.pubsub:
 			l.onPubSub(ctx, pe)
 		}
+		if l.authBlocked {
+			return nil
+		}
 		l.claimReady(ctx)
+		if l.authBlocked {
+			return nil
+		}
 		l.retryPendingHistory(ctx)
 		l.replan(ctx)
 	}
@@ -280,6 +295,10 @@ func (l *Loop) reconcile(ctx context.Context) {
 		ForceLinked: l.cfg.ForceLinked, Persister: l.cfg.Persister,
 	}, l.rows, l.cfg.Now())
 	if err != nil {
+		if errors.Is(err, platform.ErrIntegrityBlocked) {
+			l.onIntegrityBlocked(ctx)
+			return
+		}
 		slog.Warn("pipeline reconcile failed; keeping last state", "kind", "error", "account", l.cfg.AccountID, "err", err)
 		return
 	}
@@ -292,6 +311,22 @@ func (l *Loop) reconcile(ctx context.Context) {
 	l.mu.Unlock()
 	for _, r := range res.Rows {
 		l.commit(ctx, r)
+	}
+}
+
+// onIntegrityBlocked mirrors v1: stop watching, surface auth_required so the
+// dashboard shows a re-auth banner, and let Run exit cleanly. The next reload
+// re-spins the loop once the session is refreshed.
+func (l *Loop) onIntegrityBlocked(ctx context.Context) {
+	slog.Warn("pipeline: integrity blocked, marking account needs_auth", "kind", "auth", "account", l.cfg.AccountID)
+	l.authBlocked = true
+	l.stopSession()
+	l.current = nil
+	l.mu.Lock()
+	l.snap = watcher.Snapshot{AccountID: l.cfg.AccountID, State: "auth_required"}
+	l.mu.Unlock()
+	if l.cfg.Notifier != nil {
+		_ = l.cfg.Notifier.Notify(ctx, "state", map[string]any{"account": l.cfg.AccountID, "state": "auth_required"})
 	}
 }
 
@@ -425,7 +460,11 @@ func (l *Loop) refreshLive(ctx context.Context) {
 		if err != nil {
 			slog.Debug("pipeline: list channels failed", "account", l.cfg.AccountID, "campaign", c.ID, "err", err)
 		}
-		if l.prober != nil {
+		// A restricted campaign whose allow-list the loop can't see (Twitch
+		// reports only a count) would credit none of the probed priority
+		// streamers it doesn't list, so skip probing it.
+		restrictedUnknown := c.AllowedChannelCount > 0 && len(c.AllowedChannels) == 0
+		if l.prober != nil && !restrictedUnknown {
 			if logins := allowedPriority(c, l.cfg.StreamerPriority); len(logins) > 0 {
 				if ps, err := l.prober.ProbeChannels(ctx, l.cfg.Session, c, logins); err == nil {
 					streams = mergeStreams(ps, streams)
@@ -606,13 +645,17 @@ func (l *Loop) replan(ctx context.Context) {
 			// of reading "no progress on my old drops" as a stall. Don't
 			// touch lastSwap: this isn't a channel swap, so the hysteresis
 			// window keeps counting from when we actually landed here.
-			l.stopSession()
+			// Same channel, so the PubSub subscription stays.
+			l.haltSession()
 			l.startSession(ctx, *l.current)
 		}
 		l.updateSnapshot()
 		return
 	}
-	l.stopSession()
+	l.haltSession()
+	if d.Kind == planner.Idle {
+		l.unsubscribe()
+	}
 	l.current, l.lastSwap = &d, l.cfg.Now()
 	slog.Info("pipeline decision", "kind", "state", "account", l.cfg.AccountID,
 		"decision", d.Kind.String(), "channel", d.Channel.Channel, "serves", len(d.Serves), "reason", d.Reason)
@@ -629,9 +672,12 @@ func (l *Loop) startSession(ctx context.Context, d planner.Decision) {
 	sctx, cancel := context.WithCancel(ctx)
 	l.sessCancel = cancel
 	l.gen++
-	if l.subs != nil && d.Channel.ChannelID != "" {
-		l.subs.SubscribeChannel(l.cfg.AccountID, d.Channel.ChannelID)
-		l.subscribed = d.Channel.ChannelID
+	if want := d.Channel.ChannelID; l.subs != nil && want != l.subscribed {
+		l.unsubscribe()
+		if want != "" {
+			l.subs.SubscribeChannel(l.cfg.AccountID, want)
+			l.subscribed = want
+		}
 	}
 	ticker := time.NewTicker(l.cfg.BeatEvery)
 	cfg := session.Config{
@@ -641,21 +687,50 @@ func (l *Loop) startSession(ctx context.Context, d planner.Decision) {
 	if d.Kind == planner.ForceWatch {
 		cfg.StallPolls = 0 // channel-points farming has no drop progress to stall on
 	}
+	done := make(chan struct{})
+	l.sessDone = done
 	go func() {
+		defer close(done)
 		defer ticker.Stop()
 		session.Run(sctx, cfg, l.sessEvents)
 	}()
 }
 
-func (l *Loop) stopSession() {
+// sessionStopWait bounds how long haltSession waits for the session
+// goroutine (and its StopWatch) to finish.
+const sessionStopWait = 15 * time.Second
+
+// haltSession cancels the running session and waits, bounded, for its
+// goroutine to exit so StopWatch never overlaps the next StartWatch. It
+// leaves the PubSub subscription alone.
+func (l *Loop) haltSession() {
 	if l.sessCancel != nil {
 		l.sessCancel()
 		l.sessCancel = nil
 	}
+	if l.sessDone != nil {
+		t := time.NewTimer(sessionStopWait)
+		select {
+		case <-l.sessDone:
+		case <-t.C:
+			slog.Warn("pipeline: session did not stop in time", "kind", "error", "account", l.cfg.AccountID)
+		}
+		t.Stop()
+		l.sessDone = nil
+	}
+}
+
+func (l *Loop) unsubscribe() {
 	if l.subs != nil && l.subscribed != "" {
 		l.subs.UnsubscribeChannel(l.cfg.AccountID, l.subscribed)
 		l.subscribed = ""
 	}
+}
+
+// stopSession is the final stop: halt the session and drop the subscription.
+func (l *Loop) stopSession() {
+	l.haltSession()
+	l.unsubscribe()
 }
 
 // stateString maps a decision onto the v1 dashboard state vocabulary.

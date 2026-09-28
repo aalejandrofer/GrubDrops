@@ -16,9 +16,12 @@ import (
 const DropStateBackfilledKey = "drop_state_backfilled"
 
 // BackfillDropState seeds drop_state from v1 state: ghost-skips become
-// not_enrolled with an immediate retry, manual marks become user claims, and
-// claim history becomes platform claims. Later sources win. Runs once; the v1
-// kv keys are left in place so rolling back to v1 is safe.
+// not_enrolled with an immediate retry, claim history becomes platform
+// claims, and manual marks become user claims. Later sources win: manual
+// marks go last because the mark-collected handler also writes a claims row,
+// and a user assertion must not become a final platform claim. Every row
+// carries the benefit's required minutes. Runs once; the v1 kv keys are left
+// in place so rolling back to v1 is safe.
 func BackfillDropState(ctx context.Context, q *gen.Queries, now time.Time) (int, error) {
 	if v, err := q.GetSettingString(ctx, DropStateBackfilledKey); err == nil && string(v) == "1" {
 		return 0, nil
@@ -26,7 +29,7 @@ func BackfillDropState(ctx context.Context, q *gen.Queries, now time.Time) (int,
 	rows := map[string]dropstate.Row{}
 	put := func(r dropstate.Row) { rows[r.AccountID+"|"+r.DropID] = r }
 
-	fromKV := func(prefix string, mk func(acct, drop, campaign, plat string) dropstate.Row) error {
+	fromKV := func(prefix string, mk func(acct, drop, campaign, plat string, required int) dropstate.Row) error {
 		kvs, err := q.ListKVByPrefix(ctx, sql.NullString{String: prefix, Valid: true})
 		if err != nil {
 			return fmt.Errorf("list %s: %w", prefix, err)
@@ -49,20 +52,14 @@ func BackfillDropState(ctx context.Context, q *gen.Queries, now time.Time) (int,
 				}
 				return fmt.Errorf("get benefit campaign %s: %w", drop, err)
 			}
-			put(mk(acct, drop, bc.CampaignID, bc.Platform))
+			put(mk(acct, drop, bc.CampaignID, bc.Platform, int(bc.RequiredMinutes)))
 		}
 		return nil
 	}
-	if err := fromKV(SkipOverridePrefix, func(acct, drop, campaign, plat string) dropstate.Row {
+	if err := fromKV(SkipOverridePrefix, func(acct, drop, campaign, plat string, required int) dropstate.Row {
 		return dropstate.Row{AccountID: acct, DropID: drop, CampaignID: campaign, Platform: plat,
 			Status: dropstate.Blocked, Reason: dropstate.NotEnrolled, Source: dropstate.FromPlatform,
-			RetryAfter: now, UpdatedAt: now}
-	}); err != nil {
-		return 0, err
-	}
-	if err := fromKV(CollectOverridePrefix, func(acct, drop, campaign, plat string) dropstate.Row {
-		return dropstate.Row{AccountID: acct, DropID: drop, CampaignID: campaign, Platform: plat,
-			Status: dropstate.Claimed, Source: dropstate.FromUser, UpdatedAt: now}
+			Required: required, RetryAfter: now, UpdatedAt: now}
 	}); err != nil {
 		return 0, err
 	}
@@ -72,7 +69,13 @@ func BackfillDropState(ctx context.Context, q *gen.Queries, now time.Time) (int,
 	}
 	for _, c := range claims {
 		put(dropstate.Row{AccountID: c.AccountID, DropID: c.BenefitID, CampaignID: c.CampaignID, Platform: c.Platform,
-			Status: dropstate.Claimed, Source: dropstate.FromPlatform, UpdatedAt: now})
+			Status: dropstate.Claimed, Source: dropstate.FromPlatform, Required: int(c.RequiredMinutes), UpdatedAt: now})
+	}
+	if err := fromKV(CollectOverridePrefix, func(acct, drop, campaign, plat string, required int) dropstate.Row {
+		return dropstate.Row{AccountID: acct, DropID: drop, CampaignID: campaign, Platform: plat,
+			Status: dropstate.Claimed, Source: dropstate.FromUser, Required: required, UpdatedAt: now}
+	}); err != nil {
+		return 0, err
 	}
 
 	st := NewDropStateStore(q)

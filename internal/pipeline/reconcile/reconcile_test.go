@@ -103,13 +103,51 @@ func TestRun_UnlinkedCampaignBlocked_UnlessForced(t *testing.T) {
 		progress: []platform.DropProgress{{DropID: "d1", CampaignID: "c1", Required: 60, Known: true}}}
 	res, err := Run(context.Background(), cfg(f, &fakePersister{}), nil, now)
 	require.NoError(t, err)
-	assert.Equal(t, dropstate.NeedsLink, byDrop(res.Rows)["d1"].Reason)
+	assert.Equal(t, dropstate.Unlinked, byDrop(res.Rows)["d1"].Reason)
 
 	cf := cfg(f, &fakePersister{})
 	cf.ForceLinked = func(id string) bool { return id == "c1" }
 	res, err = Run(context.Background(), cf, nil, now)
 	require.NoError(t, err)
 	assert.Equal(t, dropstate.Eligible, byDrop(res.Rows)["d1"].Status)
+}
+
+// I3: once the user links, the next sync lifts the campaign link block at once.
+func TestRun_LinkedAfterUnlinkedUnblocksImmediately(t *testing.T) {
+	f := &fakeBackend{camps: []platform.Campaign{camp("c1", "G", "d1", "d2")},
+		progress: []platform.DropProgress{
+			{DropID: "d1", CampaignID: "c1", Minutes: 20, Required: 60, Known: true},
+			{DropID: "d2", CampaignID: "c1", Minutes: 0, Required: 60, Known: true},
+		}}
+	blocked := func(id string) dropstate.Row {
+		return dropstate.Row{AccountID: "a", DropID: id, CampaignID: "c1", Platform: "twitch",
+			Status: dropstate.Blocked, Reason: dropstate.Unlinked, Minutes: 10, Required: 60,
+			Source: dropstate.FromPlatform, RetryAfter: now.Add(dropstate.RetryNeedsLink - time.Minute)}
+	}
+	prev := map[string]dropstate.Row{"d1": blocked("d1"), "d2": blocked("d2")}
+	res, err := Run(context.Background(), cfg(f, &fakePersister{}), prev, now)
+	require.NoError(t, err)
+	assert.Equal(t, dropstate.Accruing, byDrop(res.Rows)["d1"].Status)
+	assert.Equal(t, dropstate.Eligible, byDrop(res.Rows)["d2"].Status)
+}
+
+// C1: a backfilled ghost-skip (Required 0, immediate retry) on Kick, where the
+// platform reports unlisted rewards Known=false, becomes mineable again.
+func TestRun_BackfilledKickSkipBecomesEligible(t *testing.T) {
+	c := camp("c1", "G", "d1")
+	c.Platform = "kick"
+	f := &fakeBackend{camps: []platform.Campaign{c},
+		progress: []platform.DropProgress{{DropID: "d1", CampaignID: "c1", Required: 120, Known: false}}}
+	prev := map[string]dropstate.Row{"d1": {AccountID: "a", DropID: "d1", CampaignID: "c1", Platform: "kick",
+		Status: dropstate.Blocked, Reason: dropstate.NotEnrolled, Source: dropstate.FromPlatform, RetryAfter: now}}
+	cf := cfg(f, &fakePersister{})
+	cf.Platform = "kick"
+	res, err := Run(context.Background(), cf, prev, now)
+	require.NoError(t, err)
+	r := byDrop(res.Rows)["d1"]
+	assert.Equal(t, dropstate.Eligible, r.Status)
+	assert.Equal(t, dropstate.NoReason, r.Reason)
+	assert.Equal(t, 120, r.Required)
 }
 
 func TestRun_ExpiredCampaign(t *testing.T) {

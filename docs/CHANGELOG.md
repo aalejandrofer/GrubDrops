@@ -7,7 +7,7 @@ All notable changes to GrubDrops.
 ### Added
 
 - Pipeline v2 (opt-in, `GRUB_PIPELINE=v2` or kv `pipeline_override:<account>`): drop state now comes from each campaign's platform details, so drops claimed on the website or with a lost claim response show as claimed and mining moves on (#50).
-- Streamer priority for pipeline v2: per-account priority streamers are watched first, then any live channel in the category (#49). Seeded from the existing null-game channel list.
+- Streamer priority for pipeline v2: per-account priority streamers are watched first, then any live channel in the category (#49). Seeded from the existing null-game channel list. Until the settings editor lands, v2 reads a one-time copy of the null-game channel list taken at upgrade.
 - `drop_state` and `account_streamer_priority` tables (migration 0016), with a one-time backfill from claim history, manual marks and ghost-skips.
 
 ### Changed
@@ -21,6 +21,14 @@ All notable changes to GrubDrops.
 - Kick link-required claims block with a reason instead of retrying every poll.
 - Kick required minutes come from the platform, not an invented 120.
 - Ghost-skipped drops are re-checked instead of being skipped forever.
+- Migrated Kick ghost-skips pick up the campaign's required minutes instead of staying blocked as sub-only; backfilled rows now carry required minutes.
+- Manual "mark collected" marks migrate as user claims, not final platform claims.
+- A campaign link block lifts on the next sync after the user links, instead of holding for 24h.
+- Twitch priority streamers are not probed for restricted campaigns whose allow-list is unknown, so v2 never watches a channel the campaign doesn't credit.
+- Twitch drops with no viewer record are no longer read as a definite "not enrolled".
+- The Twitch integrity wall shows the account as needing re-auth and stops the loop, like v1.
+- Session restarts wait for the previous watch to stop, and a restart on the same channel keeps its PubSub subscription.
+- A drop that falls back from claimable resets its claim failure count.
 
 ## [1.3.12] — 2026-08-06
 

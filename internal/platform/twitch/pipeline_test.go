@@ -62,7 +62,23 @@ func TestDropProgress_NullSelfIsUnclaimed(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.False(t, got[0].Claimed)
 	assert.Equal(t, 0, got[0].Minutes)
+	assert.False(t, got[0].Known, "self:null proves nothing about enrollment")
+}
+
+// A null self in details but a hit in the in-progress inventory is a definite
+// answer: the inventory entry proves enrollment.
+func TestDropProgress_NullSelfKnownViaInventory(t *testing.T) {
+	b := pipelineTestBackend(t, map[string]string{"c1": `{"data":{"user":{"dropCampaign":{"timeBasedDrops":[
+		{"id":"d1","requiredMinutesWatched":60,"benefitEdges":[],"self":null}
+	]}}}}`}, `{"data":{"currentUser":{"inventory":{"dropCampaignsInProgress":[
+		{"id":"c1","timeBasedDrops":[{"id":"d1","self":{"currentMinutesWatched":7,"isClaimed":false,"dropInstanceID":""}}]}
+	]}}}}`, 0)
+	got, err := b.DropProgress(context.Background(), platform.Session{AccessToken: "t"},
+		[]platform.Campaign{{ID: "c1", Platform: "twitch"}})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
 	assert.True(t, got[0].Known)
+	assert.Equal(t, 7, got[0].Minutes)
 }
 
 func TestDropProgress_DedupesMultiItemDrop(t *testing.T) {

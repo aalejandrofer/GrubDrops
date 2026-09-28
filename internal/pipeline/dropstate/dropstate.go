@@ -26,6 +26,10 @@ const (
 	Expired     Reason = "expired"
 	NotEnrolled Reason = "not_enrolled"
 	UserSkip    Reason = "user_skip"
+	// Unlinked is the campaign-level link block: the campaign needs an
+	// external account the user has not linked. Unlike the claim-level
+	// NeedsLink it has no hold; the next definite answer re-derives it.
+	Unlinked Reason = "unlinked"
 )
 
 type Source string
@@ -93,7 +97,7 @@ func derive(minutes, required int) (Status, Reason) {
 
 func retryFor(reason Reason, now time.Time) time.Time {
 	switch reason {
-	case NeedsLink:
+	case NeedsLink, Unlinked:
 		return now.Add(RetryNeedsLink)
 	case ClaimFailed:
 		return now.Add(RetryClaimFailed)
@@ -128,6 +132,11 @@ func Apply(prev Row, obs Observation, now time.Time) Row {
 		return r
 	}
 	if !obs.Known {
+		// A backfilled row carries no requirement; adopt the catalog's so a
+		// re-derive does not read (0, 0) as sub_only forever.
+		if prev.Required <= 0 && obs.Required > 0 {
+			r.Required = obs.Required
+		}
 		switch {
 		case prev.IsZero():
 			r.Required = obs.Required
@@ -137,7 +146,7 @@ func Apply(prev Row, obs Observation, now time.Time) Row {
 		case (prev.Status == Accruing || prev.Status == Claimable) && prev.Source == FromPlatform:
 			return r.with(Blocked, NotEnrolled, now)
 		case prev.Status == Blocked && (prev.Reason == NotEnrolled || prev.Reason == SubOnly) && !now.Before(prev.RetryAfter):
-			st, rs := derive(prev.Minutes, prev.Required)
+			st, rs := derive(prev.Minutes, r.Required)
 			return r.with(st, rs, now)
 		}
 		return r
@@ -163,7 +172,7 @@ func Apply(prev Row, obs Observation, now time.Time) Row {
 	if st == Claimable && prev.Status == Claimable && now.Before(prev.RetryAfter) {
 		return r // keep claim backoff
 	}
-	if prev.Status == Blocked {
+	if prev.Status == Blocked || (prev.Status == Claimable && st != Claimable) {
 		r.FailCount = 0
 	}
 	r.Source = FromPlatform
@@ -251,7 +260,7 @@ func BlockLink(prev Row, now time.Time) Row {
 	if prev.Status == Claimed || (prev.Status == Blocked && prev.Reason == UserSkip) {
 		return prev
 	}
-	return prev.with(Blocked, NeedsLink, now)
+	return prev.with(Blocked, Unlinked, now)
 }
 
 // Mineable reports whether watching can still advance the drop.

@@ -132,7 +132,7 @@ func TestExpireAndBlockLink_LeaveClaimedAlone(t *testing.T) {
 	assert.Equal(t, Claimed, Expire(c, t0).Status)
 	assert.Equal(t, Claimed, BlockLink(c, t0).Status)
 	assert.Equal(t, Expired, Expire(row(Accruing, NoReason, 10, 60), t0).Reason)
-	assert.Equal(t, NeedsLink, BlockLink(row(Eligible, NoReason, 0, 60), t0).Reason)
+	assert.Equal(t, Unlinked, BlockLink(row(Eligible, NoReason, 0, 60), t0).Reason)
 	sk := row(Blocked, UserSkip, 0, 60)
 	assert.Equal(t, UserSkip, BlockLink(sk, t0).Reason)
 }
@@ -181,4 +181,45 @@ func TestMutators_NeverDemotePlatformClaim(t *testing.T) {
 	assert.Equal(t, Blocked, got.Status)
 	assert.Equal(t, UserSkip, got.Reason)
 	assert.Equal(t, FromUser, got.Source)
+}
+
+// C1: a backfilled ghost-skip has Required 0. When the platform stays silent
+// (Kick reports unlisted rewards Known=false) but the campaign now carries the
+// requirement, the re-derive must use it instead of sticking at sub_only.
+func TestApply_UnknownBackfilledRowAdoptsRequired(t *testing.T) {
+	for _, reason := range []Reason{NotEnrolled, SubOnly} {
+		prev := row(Blocked, reason, 0, 0)
+		prev.RetryAfter = t0.Add(-time.Minute)
+		got := Apply(prev, Observation{Required: 120}, t0)
+		assert.Equal(t, Eligible, got.Status, string(reason))
+		assert.Equal(t, NoReason, got.Reason, string(reason))
+		assert.Equal(t, 120, got.Required, string(reason))
+	}
+}
+
+// I3: a campaign-level link block is re-derived as soon as the platform gives a
+// definite answer; there is no 24h hold once the user links.
+func TestApply_UnlinkedReDerivedImmediately(t *testing.T) {
+	prev := BlockLink(row(Accruing, NoReason, 10, 60), t0)
+	require.Equal(t, Unlinked, prev.Reason)
+	require.True(t, t0.Add(time.Minute).Before(prev.RetryAfter))
+	got := Apply(prev, Observation{Known: true, Minutes: 20, Required: 60}, t0.Add(time.Minute))
+	assert.Equal(t, Accruing, got.Status)
+	assert.Equal(t, NoReason, got.Reason)
+	got = Apply(prev, Observation{Known: true, Minutes: 0, Required: 60}, t0.Add(time.Minute))
+	assert.Equal(t, Eligible, got.Status)
+}
+
+// A row that falls back from Claimable to Accruing/Eligible sheds its claim
+// failure count so a later claim starts a fresh backoff ladder.
+func TestApply_ClaimableDemotionResetsFailCount(t *testing.T) {
+	prev := row(Claimable, NoReason, 60, 60)
+	prev.FailCount = 3
+	prev.RetryAfter = t0.Add(-time.Minute)
+	got := Apply(prev, Observation{Known: true, Minutes: 30, Required: 120}, t0)
+	assert.Equal(t, Accruing, got.Status)
+	assert.Equal(t, 0, got.FailCount)
+	got = Apply(prev, Observation{Known: true, Minutes: 0, Required: 60}, t0)
+	assert.Equal(t, Eligible, got.Status)
+	assert.Equal(t, 0, got.FailCount)
 }

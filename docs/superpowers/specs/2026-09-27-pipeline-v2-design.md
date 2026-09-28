@@ -101,7 +101,7 @@ One row per (account_id, drop_id).
 | `campaign_id` | TEXT | owning campaign |
 | `platform` | TEXT | `twitch` / `kick` |
 | `status` | TEXT | `eligible`, `accruing`, `claimable`, `claimed`, `blocked` |
-| `block_reason` | TEXT NULL | `needs_link`, `claim_failed`, `sub_only`, `no_channels`, `expired`, `not_enrolled`, `user_skip` |
+| `block_reason` | TEXT NULL | `needs_link` (claim-level, 24h hold), `unlinked` (campaign-level, lifted on the next definite answer), `claim_failed`, `sub_only`, `no_channels`, `expired`, `not_enrolled`, `user_skip` |
 | `minutes` | INTEGER | platform-reported watched minutes |
 | `required` | INTEGER | platform-reported required minutes |
 | `source` | TEXT | `platform` or `user` (who last set status) |

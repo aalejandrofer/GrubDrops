@@ -3,6 +3,7 @@ package loop
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -461,4 +462,175 @@ func TestOnPubSub_ClaimableWithUnknownRequiredSetsClaimableDirectly(t *testing.T
 	assert.True(t, r.RetryAfter.IsZero())
 	assert.Equal(t, dropstate.FromPlatform, r.Source)
 	assert.Equal(t, "inst1", l.progress["d1"].InstanceID)
+}
+
+// probeBackend adds a ChannelProber that reports a priority streamer live.
+type probeBackend struct {
+	*fakeBackend
+	pmu    sync.Mutex
+	probed []string // campaign ids probed
+}
+
+func (p *probeBackend) ProbeChannels(_ context.Context, _ platform.Session, c platform.Campaign, _ []string) ([]platform.Stream, error) {
+	p.pmu.Lock()
+	defer p.pmu.Unlock()
+	p.probed = append(p.probed, c.ID)
+	return []platform.Stream{{Channel: "prio", ViewerCount: 1}}, nil
+}
+
+// I4: a restricted campaign whose allow-list the loop can't see (Twitch
+// reports only a count) must not get priority streamers probed in, or the
+// planner would watch a channel the campaign doesn't credit.
+func TestLoop_RestrictedCampaignWithoutAllowListSkipsPriorityProbe(t *testing.T) {
+	f, _, _, cfg := setup(t)
+	f.camps[0].AllowedChannelCount = 3
+	pb := &probeBackend{fakeBackend: f}
+	cfg.Backend = pb
+	cfg.StreamerPriority = []string{"prio"}
+	l, err := New(cfg)
+	require.NoError(t, err)
+	ctx := context.Background()
+	require.NoError(t, l.load(ctx))
+	l.reconcile(ctx)
+	l.refreshLive(ctx)
+	l.replan(ctx)
+	defer l.stopSession()
+
+	pb.pmu.Lock()
+	assert.NotContains(t, pb.probed, "c1", "restricted campaign with unknown allow-list must not be probed")
+	pb.pmu.Unlock()
+	for _, s := range l.live["c1"] {
+		assert.NotEqual(t, "prio", s.Channel)
+	}
+	require.NotNil(t, l.current)
+	assert.Equal(t, "ch1", l.current.Channel.Channel)
+}
+
+// Control for the above: an unrestricted campaign still gets priority probing.
+func TestLoop_UnrestrictedCampaignProbesPriority(t *testing.T) {
+	f, _, _, cfg := setup(t)
+	pb := &probeBackend{fakeBackend: f}
+	cfg.Backend = pb
+	cfg.StreamerPriority = []string{"prio"}
+	l, err := New(cfg)
+	require.NoError(t, err)
+	ctx := context.Background()
+	require.NoError(t, l.load(ctx))
+	l.reconcile(ctx)
+	l.refreshLive(ctx)
+	pb.pmu.Lock()
+	assert.Contains(t, pb.probed, "c1")
+	pb.pmu.Unlock()
+}
+
+// integrityBackend fails discovery with the integrity wall.
+type integrityBackend struct{ *fakeBackend }
+
+func (integrityBackend) ListActiveCampaigns(context.Context, platform.Session) ([]platform.Campaign, error) {
+	return nil, fmt.Errorf("gql: %w", platform.ErrIntegrityBlocked)
+}
+
+// I6: the integrity wall surfaces as auth_required and the loop exits cleanly
+// (like v1) so the next reload re-spins it once the session is refreshed.
+func TestLoop_IntegrityBlockedExitsAuthRequired(t *testing.T) {
+	f, _, _, cfg := setup(t)
+	cfg.Backend = integrityBackend{f}
+	l, err := New(cfg)
+	require.NoError(t, err)
+	done := make(chan error, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { done <- l.Run(ctx) }()
+	select {
+	case err := <-done:
+		assert.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run did not exit on integrity wall")
+	}
+	assert.Equal(t, "auth_required", l.Snapshot().State)
+	f.mu.Lock()
+	assert.Empty(t, f.watching, "no session starts behind an integrity wall")
+	f.mu.Unlock()
+}
+
+// subBackend records PubSub subscriptions and detects StopWatch overlapping
+// the next StartWatch.
+type subBackend struct {
+	*fakeBackend
+	smu      sync.Mutex
+	subs     []string
+	unsubs   []string
+	inStop   bool
+	overlaps int
+	starts   int
+}
+
+func (s *subBackend) SubscribeChannel(_, id string) {
+	s.smu.Lock()
+	defer s.smu.Unlock()
+	s.subs = append(s.subs, id)
+}
+func (s *subBackend) UnsubscribeChannel(_, id string) {
+	s.smu.Lock()
+	defer s.smu.Unlock()
+	s.unsubs = append(s.unsubs, id)
+}
+func (s *subBackend) StartWatch(ctx context.Context, sess platform.Session, st platform.Stream) (platform.WatchHandle, error) {
+	s.smu.Lock()
+	if s.inStop {
+		s.overlaps++
+	}
+	s.starts++
+	s.smu.Unlock()
+	return s.fakeBackend.StartWatch(ctx, sess, st)
+}
+func (s *subBackend) StopWatch(ctx context.Context, h platform.WatchHandle) error {
+	s.smu.Lock()
+	s.inStop = true
+	s.smu.Unlock()
+	time.Sleep(50 * time.Millisecond)
+	s.smu.Lock()
+	s.inStop = false
+	s.smu.Unlock()
+	return s.fakeBackend.StopWatch(ctx, h)
+}
+func (s *subBackend) counts() (subs, unsubs, starts, overlaps int) {
+	s.smu.Lock()
+	defer s.smu.Unlock()
+	return len(s.subs), len(s.unsubs), s.starts, s.overlaps
+}
+
+// A serves-change restart on the same channel waits for the old session's
+// StopWatch before the new StartWatch, and keeps the PubSub subscription.
+func TestLoop_ServesRestartWaitsForStopAndKeepsSubscription(t *testing.T) {
+	f, _, _, cfg := setup(t)
+	f.live = []platform.Stream{{Channel: "ch1", ChannelID: "id1", ViewerCount: 10}}
+	sb := &subBackend{fakeBackend: f}
+	cfg.Backend = sb
+	l, err := New(cfg)
+	require.NoError(t, err)
+	ctx := context.Background()
+	require.NoError(t, l.load(ctx))
+	l.reconcile(ctx)
+	l.refreshLive(ctx)
+	l.replan(ctx)
+	require.Eventually(t, func() bool { _, _, starts, _ := sb.counts(); return starts == 1 }, 2*time.Second, 5*time.Millisecond)
+
+	// Force a serves-set change on the same decision.
+	l.current.Serves = []string{"stale"}
+	l.replan(ctx)
+	require.Eventually(t, func() bool { _, _, starts, _ := sb.counts(); return starts == 2 }, 2*time.Second, 5*time.Millisecond)
+
+	subs, unsubs, _, overlaps := sb.counts()
+	assert.Equal(t, 0, overlaps, "StartWatch must not run while the previous StopWatch is in flight")
+	assert.Equal(t, 1, subs, "same-channel restart must not resubscribe")
+	assert.Equal(t, 0, unsubs, "same-channel restart must not unsubscribe")
+
+	l.stopSession()
+	subs, unsubs, _, _ = sb.counts()
+	assert.Equal(t, 1, subs)
+	assert.Equal(t, 1, unsubs, "final stop unsubscribes")
+	f.mu.Lock()
+	assert.Equal(t, 2, f.stops, "final stop waited for StopWatch")
+	f.mu.Unlock()
 }
