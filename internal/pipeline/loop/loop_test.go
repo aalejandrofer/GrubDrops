@@ -37,11 +37,14 @@ type fakeBackend struct {
 	// Claimed flag the moment ClaimDrop is called, so the next reconcile's
 	// DropProgress read sees it.
 	claimedAfterFail bool
+	// listGames records the Session.Games each ListActiveCampaigns saw.
+	listGames [][]string
 }
 
-func (f *fakeBackend) ListActiveCampaigns(context.Context, platform.Session) ([]platform.Campaign, error) {
+func (f *fakeBackend) ListActiveCampaigns(_ context.Context, s platform.Session) ([]platform.Campaign, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.listGames = append(f.listGames, s.Games)
 	return f.camps, nil
 }
 func (f *fakeBackend) DropProgress(context.Context, platform.Session, []platform.Campaign) ([]platform.DropProgress, error) {
@@ -633,4 +636,22 @@ func TestLoop_ServesRestartWaitsForStopAndKeepsSubscription(t *testing.T) {
 	f.mu.Lock()
 	assert.Equal(t, 2, f.stops, "final stop waited for StopWatch")
 	f.mu.Unlock()
+}
+
+// TV-client Twitch sessions discover channel-first and need Session.Games
+// (the whitelisted names); Config.Games must reach every discovery call.
+func TestLoop_ConfigGamesReachSession(t *testing.T) {
+	f, _, _, cfg := setup(t)
+	cfg.Games = []string{"G", "Other Game"}
+	run(t, cfg)
+	require.Eventually(t, func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return len(f.listGames) > 0
+	}, 2*time.Second, 5*time.Millisecond)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, g := range f.listGames {
+		assert.Equal(t, []string{"G", "Other Game"}, g)
+	}
 }

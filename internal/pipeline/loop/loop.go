@@ -46,7 +46,12 @@ type Config struct {
 	Persister    reconcile.CampaignPersister
 	Notifier     Notifier
 
-	AllowGame             func(game string) bool
+	AllowGame func(game string) bool
+	// Games is the whitelisted game display names, copied into
+	// Session.Games when the session carries none. TV-client Twitch
+	// sessions walk one game directory per name (chandisc.go); Android
+	// sessions ignore it. Mirrors watcher.Config.Games.
+	Games                 []string
 	AllowChannel          func(channels []string) bool
 	GameRank              func(game string) int
 	PriorityMode          string
@@ -142,6 +147,9 @@ func New(cfg Config) (*Loop, error) {
 		cfg.DownCooldown = 2 * time.Minute
 	}
 	cfg.Session.AccountID = cfg.AccountID
+	if cfg.Session.Games == nil {
+		cfg.Session.Games = cfg.Games
+	}
 	if cfg.AllowGame != nil {
 		cfg.Session.GameFilter = cfg.AllowGame
 	}

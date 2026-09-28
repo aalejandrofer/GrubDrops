@@ -494,6 +494,7 @@ func run() error {
 				Store: dropStore, History: claimRecorder, Persister: campaignPersister,
 				Notifier:  notifier,
 				AllowGame: allow, AllowChannel: matchAnyChannel(prio), GameRank: rank,
+				Games:                 names,
 				PriorityMode:          priorityMode,
 				ForceLinked:           forceLinked,
 				StreamerPriority:      prio,
