@@ -391,3 +391,16 @@ verification (Twitch and Kick) on staging before any tag that enables v2.
 2. Kick `/drops/progress` retention of claimed rewards.
 
 Either answer may adjust §4.2 mapping; the rest of the design is unaffected.
+
+Status: probes committed (behind the `live` build tag); results pending. Must also be run with a TV-client Twitch token once the #47 TV-client login lands.
+
+## 10. Refinements during planning
+
+1. Reconcile runs serially on the loop goroutine (single writer; session/PubSub events buffer meanwhile).
+2. Timestamps stored as INTEGER unix seconds, 0 = unset; block_reason NOT NULL DEFAULT ''.
+3. user_skip has no auto-expiry; cleared only by the user.
+4. Platform interfaces named DropProgressSource, DropClaimer (ClaimDrop returns a typed ClaimResult), ChannelProber in internal/platform.
+5. Every dropstate mutator leaves a platform-confirmed claim untouched; sub_only re-derives after its window like not_enrolled.
+6. Session stall detection is per-drop, and the loop restarts the session on the same channel when the served-drop set changes; session events carry a generation so stale events are dropped.
+7. A claimed=true from either Twitch source (details self or in-progress inventory) wins.
+8. Kick rows listed without required_units fall back to campaign minutes (reporting 0 would block as sub_only).

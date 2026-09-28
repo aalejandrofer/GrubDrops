@@ -4,6 +4,24 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Added
+
+- Pipeline v2 (opt-in, `GRUB_PIPELINE=v2` or kv `pipeline_override:<account>`): drop state now comes from each campaign's platform details, so drops claimed on the website or with a lost claim response show as claimed and mining moves on (#50).
+- Streamer priority for pipeline v2: per-account priority streamers are watched first, then any live channel in the category (#49). Seeded from the existing null-game channel list.
+- `drop_state` and `account_streamer_priority` tables (migration 0016), with a one-time backfill from claim history, manual marks and ghost-skips.
+
+### Changed
+
+- Twitch claim code split into status fetch + classification (behaviour unchanged).
+- Scheduler reads dashboard snapshots and discoveries through interfaces, so v1 and v2 runners both report state.
+
+### Fixed (pipeline v2 only)
+
+- Claim failures back off 1m, 5m, 30m and stop after 5 attempts instead of looping forever.
+- Kick link-required claims block with a reason instead of retrying every poll.
+- Kick required minutes come from the platform, not an invented 120.
+- Ghost-skipped drops are re-checked instead of being skipped forever.
+
 ## [1.3.12] — 2026-08-06
 
 ### Added
