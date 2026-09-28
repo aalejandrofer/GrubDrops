@@ -12,6 +12,16 @@ import (
 // Twitch can't report progress for them.
 func isSyntheticID(id string) bool { return strings.ContainsAny(id, "| ") }
 
+// requiredMinutes maps a drop's watch requirement to the app-wide marker:
+// sub-gated drops (requiredSubs > 0) are not watch-earnable whatever minutes
+// Twitch lists, so they report 0 (issue #47, same rule as fetchDetails).
+func requiredMinutes(minutes, subs int) int {
+	if subs > 0 {
+		return 0
+	}
+	return minutes
+}
+
 // dropProgress reads DropCampaignDetails uncached, because self changes as
 // the viewer watches and claims. One entry per drop id.
 func (d *discovery) dropProgress(ctx context.Context, sess platform.Session, campaignID string) ([]platform.DropProgress, error) {
@@ -33,7 +43,7 @@ func (d *discovery) dropProgress(ctx context.Context, sess platform.Session, cam
 		seen[td.ID] = true
 		// self:null means Twitch said nothing about this viewer, which does
 		// not prove "not enrolled"; only a self object is a definite answer.
-		dp := platform.DropProgress{DropID: td.ID, CampaignID: campaignID, Required: td.RequiredMinutesWatched, Known: td.Self != nil}
+		dp := platform.DropProgress{DropID: td.ID, CampaignID: campaignID, Required: requiredMinutes(td.RequiredMinutesWatched, td.RequiredSubs), Known: td.Self != nil}
 		if td.Self != nil {
 			dp.Minutes = td.Self.CurrentMinutesWatched
 			dp.Claimed = td.Self.IsClaimed

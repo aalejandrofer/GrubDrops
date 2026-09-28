@@ -153,3 +153,18 @@ func TestBackend_SatisfiesPipelineInterfaces(t *testing.T) {
 	var _ platform.DropClaimer = (*Backend)(nil)
 	var _ platform.ChannelProber = (*Backend)(nil)
 }
+
+// #47: a sub-gated drop can't be earned by watching, whatever minutes Twitch
+// lists. The details path reports Required 0 (the "not watch-earnable" marker).
+func TestDropProgress_SubGatedDetailsRequiredZero(t *testing.T) {
+	b := pipelineTestBackend(t, map[string]string{"c1": `{"data":{"user":{"dropCampaign":{"timeBasedDrops":[
+		{"id":"d1","requiredMinutesWatched":60,"requiredSubs":1,"benefitEdges":[],"self":{"currentMinutesWatched":0,"isClaimed":false,"dropInstanceID":""}},
+		{"id":"d2","requiredMinutesWatched":60,"requiredSubs":0,"benefitEdges":[],"self":{"currentMinutesWatched":0,"isClaimed":false,"dropInstanceID":""}}
+	]}}}}`}, emptyInventory, 0)
+	got, err := b.DropProgress(context.Background(), platform.Session{AccessToken: "t"},
+		[]platform.Campaign{{ID: "c1", Platform: "twitch"}})
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, 0, got[0].Required, "sub-gated drop is not watch-earnable")
+	assert.Equal(t, 60, got[1].Required)
+}
