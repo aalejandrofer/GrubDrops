@@ -154,6 +154,59 @@ func TestBackend_SatisfiesPipelineInterfaces(t *testing.T) {
 	var _ platform.ChannelProber = (*Backend)(nil)
 }
 
+// tvPipelineBackend serves only Inventory; any DropCampaignDetails request
+// fails the test (Twitch returns dropCampaign:null for TV-client tokens).
+func tvPipelineBackend(t *testing.T, inventory string) *Backend {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req gqlRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		switch req.OperationName {
+		case OpInventory.Name:
+			_, _ = w.Write([]byte(inventory))
+		default:
+			t.Errorf("unexpected op %q for a TV session", req.OperationName)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	c := newTestClient(srv.URL)
+	return &Backend{c: c, disc: &discovery{c: c, userLogin: "testuser"}}
+}
+
+func TestDropProgress_TVSessionReadsInventoryNoDetails(t *testing.T) {
+	b := tvPipelineBackend(t, `{"data":{"currentUser":{"inventory":{"dropCampaignsInProgress":[
+		{"id":"c1","timeBasedDrops":[
+			{"id":"d1","requiredMinutesWatched":60,"requiredSubs":0,"self":{"currentMinutesWatched":60,"isClaimed":true,"dropInstanceID":"i1"}},
+			{"id":"d2","requiredMinutesWatched":120,"requiredSubs":0,"self":{"currentMinutesWatched":30,"isClaimed":false,"dropInstanceID":""}},
+			{"id":"d3","requiredMinutesWatched":60,"requiredSubs":1,"self":{"currentMinutesWatched":0,"isClaimed":false,"dropInstanceID":""}}
+		]},
+		{"id":"cOther","timeBasedDrops":[
+			{"id":"dx","requiredMinutesWatched":60,"self":{"currentMinutesWatched":5,"isClaimed":false,"dropInstanceID":""}}
+		]}
+	]}}}}`)
+	got, err := b.DropProgress(context.Background(), platform.Session{AccessToken: "t", ClientID: ClientTV},
+		[]platform.Campaign{
+			{ID: "c1", Platform: "twitch", Benefits: []platform.DropBenefit{{ID: "d1"}, {ID: "d2"}, {ID: "d3"}, {ID: "d4"}}},
+			{ID: "c2", Platform: "twitch", Benefits: []platform.DropBenefit{{ID: "e1"}}},
+		})
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []platform.DropProgress{
+		{DropID: "d1", CampaignID: "c1", Minutes: 60, Required: 60, Claimed: true, InstanceID: "i1", Known: true},
+		{DropID: "d2", CampaignID: "c1", Minutes: 30, Required: 120, Known: true},
+		{DropID: "d3", CampaignID: "c1", Minutes: 0, Required: 0, Known: true}, // sub-gated
+	}, got, "only requested campaigns' drops present in Inventory; absent drops get no entry")
+}
+
+func TestDropProgress_TVSessionSyntheticStillUnmineable(t *testing.T) {
+	b := tvPipelineBackend(t, emptyInventory)
+	got, err := b.DropProgress(context.Background(), platform.Session{AccessToken: "t", ClientID: ClientTV},
+		[]platform.Campaign{{ID: "Game|Name", Platform: "twitch", Benefits: []platform.DropBenefit{{ID: "Game|Name_default"}}}})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.True(t, got[0].Unmineable)
+}
+
 // #47: a sub-gated drop can't be earned by watching, whatever minutes Twitch
 // lists. The details path reports Required 0 (the "not watch-earnable" marker).
 func TestDropProgress_SubGatedDetailsRequiredZero(t *testing.T) {

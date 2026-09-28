@@ -59,8 +59,11 @@ func (d *discovery) dropProgress(ctx context.Context, sess platform.Session, cam
 // inventory); the in-progress inventory fills fresher minutes and the
 // instance id, and a claimed=true from either source wins — isClaimed is
 // a positive statement from the same self object and never reverts on
-// Twitch.
+// Twitch. TV-client sessions read Inventory only (see tvDropProgress).
 func (b *Backend) DropProgress(ctx context.Context, s platform.Session, camps []platform.Campaign) ([]platform.DropProgress, error) {
+	if s.ClientID == ClientTV {
+		return b.tvDropProgress(ctx, s, camps)
+	}
 	inv, err := b.disc.inventory(ctx, s)
 	if err != nil {
 		return nil, err
@@ -96,6 +99,28 @@ func (b *Backend) DropProgress(ctx context.Context, s platform.Session, camps []
 			}
 		}
 		out = append(out, dps...)
+	}
+	return out, nil
+}
+
+// tvDropProgress serves TV-client sessions from Inventory alone: Twitch
+// returns dropCampaign:null for DropCampaignDetails on TV tokens (#48), so
+// the details call is never made. Drops missing from Inventory get no entry,
+// which the reconciler treats as unknown.
+func (b *Backend) tvDropProgress(ctx context.Context, s platform.Session, camps []platform.Campaign) ([]platform.DropProgress, error) {
+	byCamp, err := b.disc.inventoryDropProgress(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	var out []platform.DropProgress
+	for _, c := range camps {
+		if isSyntheticID(c.ID) {
+			for _, bf := range c.Benefits {
+				out = append(out, platform.DropProgress{DropID: bf.ID, CampaignID: c.ID, Known: true, Unmineable: true})
+			}
+			continue
+		}
+		out = append(out, byCamp[c.ID]...)
 	}
 	return out, nil
 }
