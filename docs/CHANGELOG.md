@@ -29,6 +29,9 @@ All notable changes to GrubDrops.
 - The Twitch integrity wall shows the account as needing re-auth and stops the loop, like v1.
 - Session restarts wait for the previous watch to stop, and a restart on the same channel keeps its PubSub subscription.
 - A drop that falls back from claimable resets its claim failure count.
+- v2 discovers campaigns for TV-client Twitch accounts (the whitelisted games now reach the session).
+- v2 reads TV-account Twitch progress from the inventory, and sends every v2 request under the account's own Twitch client.
+- v2 no longer mines subscription-only Twitch drops.
 
 ## [1.4.0] — 2026-09-28
 
