@@ -309,6 +309,41 @@ func TestLoop_BridgesManualMarksAfterReconcile(t *testing.T) {
 	f.mu.Unlock()
 }
 
+// TestLoop_PostReconcileBridgeDoesNotRefightDefiniteAnswer covers review
+// finding round 1 (Critical): the post-reconcile bridge must only apply to
+// rows that didn't exist before that reconcile. d1 is bridged to
+// Claimed/FromUser at load. A later sync then gives a *definite* platform
+// answer (Known=true, Claimed=false) contradicting that user mark; per spec
+// 4.2 (dropstate.Apply) that answer must win and stick — a second reconcile
+// must not flip it back to Claimed just because history still lists it.
+// Revert-proof: drop the "only rows new this sync" filter (bridge every
+// history id unconditionally on every reconcile) and this fails, because the
+// post-reconcile bridge re-claims d1 in the same reconcile that just
+// demoted it, and again on the following one.
+func TestLoop_PostReconcileBridgeDoesNotRefightDefiniteAnswer(t *testing.T) {
+	f, st, h, cfg := setup(t)
+	st.rows["d1"] = dropstate.Row{AccountID: "acc", DropID: "d1", CampaignID: "c1", Platform: "twitch", Status: dropstate.Accruing, Minutes: 10, Required: 60, Source: dropstate.FromPlatform}
+	h.claimed = map[string]bool{"d1": true}
+	l, err := New(cfg)
+	require.NoError(t, err)
+	ctx := context.Background()
+	require.NoError(t, l.load(ctx))
+	require.Equal(t, dropstate.Claimed, st.get("d1").Status, "bridged at load")
+	require.Equal(t, dropstate.FromUser, st.get("d1").Source, "bridged at load")
+
+	f.mu.Lock()
+	f.progress = []platform.DropProgress{{DropID: "d1", CampaignID: "c1", Minutes: 5, Required: 60, Known: true, Claimed: false}}
+	f.mu.Unlock()
+
+	l.reconcile(ctx)
+	assert.Equal(t, dropstate.Accruing, st.get("d1").Status, "a definite platform answer must overwrite the user mark")
+	assert.Equal(t, dropstate.FromPlatform, st.get("d1").Source)
+
+	l.reconcile(ctx)
+	assert.Equal(t, dropstate.Accruing, st.get("d1").Status, "post-reconcile bridge must not re-assert history on a row that already existed")
+	assert.Equal(t, dropstate.FromPlatform, st.get("d1").Source)
+}
+
 func TestNew_RejectsBackendWithoutCapabilities(t *testing.T) {
 	type bare struct{ platform.Backend }
 	_, err := New(Config{AccountID: "a", Backend: bare{}})

@@ -288,21 +288,27 @@ func (l *Loop) load(ctx context.Context) error {
 	for _, r := range rows {
 		l.rows[r.DropID] = r
 	}
-	l.bridgeClaimHistory(ctx)
+	l.bridgeClaimHistory(ctx, nil)
 	return nil
 }
 
-// bridgeClaimHistory marks any row the claim history already lists as
-// claimed but the local row hasn't caught up to. It runs at load (for claims
-// a v1-era mark-collected click, or v1 itself, wrote before v2 started) and
-// again after every reconcile (for rows reconcile itself just created: an
-// account's first sync under v2 has no drop_state rows yet, so a claim v1
-// recorded for one of them would otherwise never be bridged — see
-// bridge-brief 2026-09-27). A later definite platform answer still overwrites
-// a user mark (dropstate.Apply, spec 4.2); MarkCollected already leaves a
-// platform-confirmed claim untouched, so re-running this on an
-// already-claimed row is a no-op.
-func (l *Loop) bridgeClaimHistory(ctx context.Context) {
+// bridgeClaimHistory marks rows the claim history already lists as claimed
+// but the local row hasn't caught up to. only, when non-nil, restricts which
+// history ids are eligible: reconcile passes a filter that keeps only ids
+// whose row didn't exist before that reconcile (an account's first sync
+// under v2 has no drop_state rows yet, so a claim v1 recorded for one of
+// them would otherwise never be bridged — see bridge-brief 2026-09-27).
+//
+// A row that already existed is deliberately left alone here: the next
+// definite platform answer must overwrite a user mark (dropstate.Apply, spec
+// 4.2), and re-asserting the bridge on every reconcile would fight that rule
+// forever — Apply demotes Claimed/FromUser to Accruing/FromPlatform on a
+// definite answer, then this bridge would immediately re-claim it from the
+// same (still-present) history id, in the same reconcile and every one
+// after. load() bridges every existing row unconditionally (only=nil): a
+// v1-era mark-collected click, or v1 itself, reloads the scheduler on write,
+// so load() runs again right after such a claim lands.
+func (l *Loop) bridgeClaimHistory(ctx context.Context, only func(id string) bool) {
 	if l.cfg.History == nil {
 		return
 	}
@@ -313,6 +319,9 @@ func (l *Loop) bridgeClaimHistory(ctx context.Context) {
 	}
 	now := l.cfg.Now()
 	for id := range ids {
+		if only != nil && !only(id) {
+			continue
+		}
 		r, ok := l.rows[id]
 		if !ok || r.Status == dropstate.Claimed {
 			continue
@@ -343,10 +352,17 @@ func (l *Loop) reconcile(ctx context.Context) {
 	l.mu.Lock()
 	l.discovery, l.discoverAt = res.Campaigns, l.cfg.Now()
 	l.mu.Unlock()
+	existed := make(map[string]bool, len(l.rows))
+	for id := range l.rows {
+		existed[id] = true
+	}
 	for _, r := range res.Rows {
 		l.commit(ctx, r)
 	}
-	l.bridgeClaimHistory(ctx)
+	// Only bridge rows this reconcile just created (not in existed): an
+	// already-existing row is left to dropstate.Apply's own rules so a
+	// definite platform answer can overwrite a stale user mark and stick.
+	l.bridgeClaimHistory(ctx, func(id string) bool { return !existed[id] })
 }
 
 // onIntegrityBlocked mirrors v1: stop watching, surface auth_required so the
