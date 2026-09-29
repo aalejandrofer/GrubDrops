@@ -392,12 +392,22 @@ func run() error {
 
 		var sess platform.Session
 		{
+			// verify is a last-resort fallback for when every refresh
+			// attempt fails: it's only consulted if the backend exposes
+			// the cheap AuthChecker probe (Twitch does; a backend that
+			// doesn't gets nil and keeps the old idle-on-refresh-failure
+			// behaviour). See acquireSession's refresh-failure branch.
+			var verify func(ctx context.Context, s platform.Session) error
+			if ac, ok := b.(platform.AuthChecker); ok {
+				verify = ac.VerifyAuth
+			}
 			deps := sessionDeps{
 				get:     sessions.Get,
 				refresh: b.RefreshSession,
 				put:     sessions.Put,
 				logger:  logger,
 				backoff: sessionRetryBackoff,
+				verify:  verify,
 			}
 			s, idleReason, err := acquireSession(ctx, deps, a, time.Now())
 			if err != nil {

@@ -38,6 +38,16 @@ type sessionDeps struct {
 	put     func(ctx context.Context, accountID string, s platform.Session) error
 	logger  *slog.Logger
 	backoff []time.Duration
+	// verify is an optional last-resort check consulted only when every
+	// refresh attempt has failed: it probes whether the existing (expired
+	// by ExpiresAt stamp) session still works against the live API. Twitch
+	// now rejects refreshes for the legacy Android client (#48-adjacent)
+	// even when the access token itself is still good, so a refresh
+	// rejection alone is not proof the session is dead. nil when the
+	// backend doesn't implement platform.AuthChecker (e.g. wired from a
+	// non-AuthChecker backend); Kick never reaches this branch at all
+	// (see the platform=="kick" short-circuit above).
+	verify func(ctx context.Context, s platform.Session) error
 }
 
 // acquireSession loads (and refreshes, if needed) an account's session. It
@@ -97,14 +107,31 @@ func acquireSession(ctx context.Context, deps sessionDeps, a gen.Account, now ti
 	}
 
 	var refreshed platform.Session
+	var refreshErr error
 	for attempt := 0; attempt < sessionAttempts; attempt++ {
-		refreshed, err = deps.refresh(ctx, sess)
-		if err == nil {
+		refreshed, refreshErr = deps.refresh(ctx, sess)
+		if refreshErr == nil {
 			break
 		}
 		if attempt == sessionAttempts-1 {
+			// Every refresh attempt failed. That's not automatically proof
+			// the session is dead: Twitch rejects refreshes outright for
+			// the legacy Android client even while the access token itself
+			// still works. If the backend gave us a cheap way to check
+			// (deps.verify) and the existing session passes it, keep
+			// mining with it instead of idling a perfectly good account.
+			if deps.verify != nil {
+				if ctx.Err() != nil {
+					return platform.Session{}, "", ctx.Err()
+				}
+				if verifyErr := deps.verify(ctx, sess); verifyErr == nil {
+					deps.logger.Warn("session refresh failed but the current token still verifies; continuing with it",
+						"account", a.ID, "platform", a.Platform, "err", refreshErr)
+					return sess, "", nil
+				}
+			}
 			deps.logger.Warn("session refresh failed, will idle",
-				"account", a.ID, "platform", a.Platform, "err", err)
+				"account", a.ID, "platform", a.Platform, "err", refreshErr)
 			return platform.Session{}, idleReasonNeedsAuth, nil
 		}
 		if !sleepBackoff(ctx, deps.backoff, attempt) {

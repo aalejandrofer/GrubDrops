@@ -200,6 +200,131 @@ func TestAcquireSession_TwitchExpiredNoRefreshTokenIdles(t *testing.T) {
 	assert.Equal(t, platform.Session{}, sess)
 }
 
+// TestAcquireSession_RefreshFailsButVerifyOkReturnsExistingSession covers
+// requirement 2 of the v1.4.2 refresh-fallback brief: when every refresh
+// attempt fails but the existing (expired-by-stamp) session still verifies
+// against the live API, acquireSession must keep mining with it rather than
+// idling — Twitch rejects refreshes for the legacy Android client even
+// though the access token itself is still good.
+func TestAcquireSession_RefreshFailsButVerifyOkReturnsExistingSession(t *testing.T) {
+	deps := noBackoffDeps()
+	expired := platform.Session{ExpiresAt: time.Now().Add(-time.Hour), RefreshToken: "rt", AccessToken: "still-good"}
+	deps.get = func(ctx context.Context, id string) (platform.Session, bool, error) {
+		return expired, true, nil
+	}
+	var refreshCalls int32
+	deps.refresh = func(ctx context.Context, s platform.Session) (platform.Session, error) {
+		atomic.AddInt32(&refreshCalls, 1)
+		return platform.Session{}, errors.New("refresh: 400 Bad Request")
+	}
+	deps.put = func(ctx context.Context, id string, s platform.Session) error {
+		t.Fatal("put should never be called on the verify-fallback path")
+		return nil
+	}
+	var verifyCalls int32
+	deps.verify = func(ctx context.Context, s platform.Session) error {
+		atomic.AddInt32(&verifyCalls, 1)
+		assert.Equal(t, expired.AccessToken, s.AccessToken, "verify must be called with the existing session")
+		return nil
+	}
+	a := gen.Account{ID: "acc-1", Platform: "twitch"}
+
+	sess, idleReason, err := acquireSession(context.Background(), deps, a, time.Now())
+
+	require.NoError(t, err)
+	assert.Empty(t, idleReason, "a still-verifying token must not idle the account")
+	assert.Equal(t, expired.AccessToken, sess.AccessToken)
+	assert.Equal(t, int32(3), atomic.LoadInt32(&refreshCalls), "expected exactly 3 refresh attempts before falling back to verify")
+	assert.Equal(t, int32(1), atomic.LoadInt32(&verifyCalls), "expected exactly 1 verify call")
+}
+
+// TestAcquireSession_RefreshFailsAndVerifyFailsIdles covers the "both signals
+// agree the session is dead" case: refresh fails and verify also fails, so
+// the account idles exactly as it did before this fallback existed.
+func TestAcquireSession_RefreshFailsAndVerifyFailsIdles(t *testing.T) {
+	deps := noBackoffDeps()
+	expired := platform.Session{ExpiresAt: time.Now().Add(-time.Hour), RefreshToken: "rt"}
+	deps.get = func(ctx context.Context, id string) (platform.Session, bool, error) {
+		return expired, true, nil
+	}
+	deps.refresh = func(ctx context.Context, s platform.Session) (platform.Session, error) {
+		return platform.Session{}, errors.New("refresh down")
+	}
+	deps.put = func(ctx context.Context, id string, s platform.Session) error {
+		t.Fatal("put should never be called when refresh never succeeds")
+		return nil
+	}
+	var verifyCalls int32
+	deps.verify = func(ctx context.Context, s platform.Session) error {
+		atomic.AddInt32(&verifyCalls, 1)
+		return errors.New("currentUser null — token invalid or expired")
+	}
+	a := gen.Account{ID: "acc-1", Platform: "twitch"}
+
+	sess, idleReason, err := acquireSession(context.Background(), deps, a, time.Now())
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, idleReason, "refresh AND verify both failing must still idle")
+	assert.Equal(t, platform.Session{}, sess)
+	assert.Equal(t, int32(1), atomic.LoadInt32(&verifyCalls))
+}
+
+// TestAcquireSession_RefreshFailsVerifyNilIdles covers backends that don't
+// implement platform.AuthChecker (deps.verify == nil, e.g. Kick's registry
+// wiring or any future backend without a cheap liveness probe): behaviour
+// must stay exactly as it was pre-fallback — idle.
+func TestAcquireSession_RefreshFailsVerifyNilIdles(t *testing.T) {
+	deps := noBackoffDeps()
+	expired := platform.Session{ExpiresAt: time.Now().Add(-time.Hour), RefreshToken: "rt"}
+	deps.get = func(ctx context.Context, id string) (platform.Session, bool, error) {
+		return expired, true, nil
+	}
+	deps.refresh = func(ctx context.Context, s platform.Session) (platform.Session, error) {
+		return platform.Session{}, errors.New("refresh down")
+	}
+	deps.put = func(ctx context.Context, id string, s platform.Session) error {
+		t.Fatal("put should never be called when refresh never succeeds")
+		return nil
+	}
+	deps.verify = nil
+	a := gen.Account{ID: "acc-1", Platform: "twitch"}
+
+	sess, idleReason, err := acquireSession(context.Background(), deps, a, time.Now())
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, idleReason, "nil verify must idle exactly like before this fallback existed")
+	assert.Equal(t, platform.Session{}, sess)
+}
+
+// TestAcquireSession_RefreshSucceedsVerifyNeverCalled makes sure the new
+// verify dependency is strictly a last-resort fallback: it must never run
+// on the happy path where refresh itself succeeds.
+func TestAcquireSession_RefreshSucceedsVerifyNeverCalled(t *testing.T) {
+	deps := noBackoffDeps()
+	expired := platform.Session{ExpiresAt: time.Now().Add(-time.Hour), RefreshToken: "rt"}
+	refreshed := platform.Session{ExpiresAt: time.Now().Add(time.Hour), RefreshToken: "rt2"}
+	deps.get = func(ctx context.Context, id string) (platform.Session, bool, error) {
+		return expired, true, nil
+	}
+	deps.refresh = func(ctx context.Context, s platform.Session) (platform.Session, error) {
+		return refreshed, nil
+	}
+	deps.put = func(ctx context.Context, id string, s platform.Session) error {
+		return nil
+	}
+	deps.verify = func(ctx context.Context, s platform.Session) error {
+		t.Fatal("verify should never be called when refresh succeeds")
+		return nil
+	}
+	a := gen.Account{ID: "acc-1", Platform: "twitch"}
+
+	sess, idleReason, err := acquireSession(context.Background(), deps, a, time.Now())
+
+	require.NoError(t, err)
+	assert.Empty(t, idleReason)
+	assert.Equal(t, refreshed.RefreshToken, sess.RefreshToken)
+}
+
 func TestAcquireSession_CtxCancelledDuringBackoffReturnsPromptly(t *testing.T) {
 	deps := sessionDeps{
 		logger:  testLogger(),
