@@ -288,25 +288,37 @@ func (l *Loop) load(ctx context.Context) error {
 	for _, r := range rows {
 		l.rows[r.DropID] = r
 	}
+	l.bridgeClaimHistory(ctx)
+	return nil
+}
+
+// bridgeClaimHistory marks any row the claim history already lists as
+// claimed but the local row hasn't caught up to. It runs at load (for claims
+// a v1-era mark-collected click, or v1 itself, wrote before v2 started) and
+// again after every reconcile (for rows reconcile itself just created: an
+// account's first sync under v2 has no drop_state rows yet, so a claim v1
+// recorded for one of them would otherwise never be bridged — see
+// bridge-brief 2026-09-27). A later definite platform answer still overwrites
+// a user mark (dropstate.Apply, spec 4.2); MarkCollected already leaves a
+// platform-confirmed claim untouched, so re-running this on an
+// already-claimed row is a no-op.
+func (l *Loop) bridgeClaimHistory(ctx context.Context) {
 	if l.cfg.History == nil {
-		return nil
+		return
 	}
 	ids, err := l.cfg.History.ClaimedBenefitIDs(ctx, l.cfg.AccountID)
 	if err != nil {
 		slog.Warn("pipeline: read claim history failed", "kind", "error", "account", l.cfg.AccountID, "err", err)
-		return nil
+		return
 	}
 	now := l.cfg.Now()
 	for id := range ids {
-		if r, ok := l.rows[id]; ok && r.Status != dropstate.Claimed {
-			next := dropstate.MarkCollected(r, now)
-			l.rows[id] = next
-			if err := l.cfg.Store.Upsert(ctx, next); err != nil {
-				slog.Warn("pipeline: persist bridged mark failed", "kind", "error", "account", l.cfg.AccountID, "drop", id, "err", err)
-			}
+		r, ok := l.rows[id]
+		if !ok || r.Status == dropstate.Claimed {
+			continue
 		}
+		l.commit(ctx, dropstate.MarkCollected(r, now))
 	}
-	return nil
 }
 
 func (l *Loop) reconcile(ctx context.Context) {
@@ -334,6 +346,7 @@ func (l *Loop) reconcile(ctx context.Context) {
 	for _, r := range res.Rows {
 		l.commit(ctx, r)
 	}
+	l.bridgeClaimHistory(ctx)
 }
 
 // onIntegrityBlocked mirrors v1: stop watching, surface auth_required so the

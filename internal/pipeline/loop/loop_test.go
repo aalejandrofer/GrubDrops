@@ -278,6 +278,37 @@ func TestLoop_BridgesManualMarksOnLoad(t *testing.T) {
 	assert.Equal(t, dropstate.FromUser, st.get("d1").Source)
 }
 
+// TestLoop_BridgesManualMarksAfterReconcile covers the gap TestLoop_BridgesManualMarksOnLoad
+// doesn't: an account switching from v1 to v2 has claims rows in history
+// before drop_state ever has a row for that drop. load() finds nothing to
+// bridge (no row yet); the first reconcile creates the row from the
+// platform's silent (Known=false) answer, so the bridge must also run after
+// reconcile, on the row it just created, or the drop is stuck looking
+// unclaimed forever. Revert-proof: remove the post-reconcile bridge call and
+// this fails (d1 stays Eligible/FromPlatform, and the planner mines it).
+func TestLoop_BridgesManualMarksAfterReconcile(t *testing.T) {
+	f, st, h, cfg := setup(t)
+	f.progress = nil // d1 absent from the platform's DropProgress answer (Known=false)
+	h.claimed = map[string]bool{"d1": true}
+	l, err := New(cfg)
+	require.NoError(t, err)
+	ctx := context.Background()
+	require.NoError(t, l.load(ctx))
+	require.True(t, st.get("d1").IsZero(), "no row exists yet; nothing for load() to bridge")
+
+	l.reconcile(ctx)
+
+	assert.Equal(t, dropstate.Claimed, st.get("d1").Status, "claim history must be bridged onto the row reconcile just created")
+	assert.Equal(t, dropstate.FromUser, st.get("d1").Source)
+
+	l.refreshLive(ctx)
+	l.replan(ctx)
+	assert.Equal(t, "idle", l.Snapshot().State, "an already-claimed drop must not be planned for mining")
+	f.mu.Lock()
+	assert.Empty(t, f.watching, "no session should start for a drop claimed under v1")
+	f.mu.Unlock()
+}
+
 func TestNew_RejectsBackendWithoutCapabilities(t *testing.T) {
 	type bare struct{ platform.Backend }
 	_, err := New(Config{AccountID: "a", Backend: bare{}})
