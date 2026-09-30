@@ -507,3 +507,34 @@ func TestListByChannels_SkipsAvailableDropsForOtherGames(t *testing.T) {
 	assert.False(t, ids["campOther"], "campaign for a different game skipped")
 	assert.Len(t, camps, 2)
 }
+
+// TestListByChannels_GameIDMatchOverridesNameSlugMismatch: Twitch's
+// AvailableDrops game display name can diverge from the directory's own
+// display name for the same game (e.g. a differently punctuated/localized
+// variant) even though both payloads carry the same game ID. The ID -- not
+// the display-name slug -- is the authoritative match signal; a campaign
+// whose name wouldn't slug-match the directory's game must still be kept
+// when its game ID matches the directory stream's game ID.
+func TestListByChannels_GameIDMatchOverridesNameSlugMismatch(t *testing.T) {
+	const availIDMatchNameMismatch = `{"data":{"channel":{"viewerDropCampaigns":[
+ {"id":"campIDMatch","name":"Renamed Drop","game":{"id":"263490","name":"RUST: Legacy Display"},"endAt":"2030-01-01T00:00:00Z",
+  "timeBasedDrops":[{"id":"dI","name":"I","requiredMinutesWatched":30,"requiredSubs":0,"benefitEdges":[{"benefit":{"id":"bI","name":"I","imageAssetURL":""}}]}]}]}}}`
+	srv := fakeGQL(t, map[string]func(map[string]any) string{
+		"DirectoryPage_Game": func(v map[string]any) string { return dirRust },
+		"DropsHighlightService_AvailableDrops": func(v map[string]any) string {
+			return availIDMatchNameMismatch
+		},
+		"Inventory": func(map[string]any) string { return inventoryEmpty },
+	})
+	defer srv.Close()
+
+	b := newForTest(srv.URL)
+	sess := platform.Session{AccessToken: "tv", ClientID: ClientTV, Games: []string{"Rust"}}
+	camps, err := b.ListActiveCampaigns(context.Background(), sess)
+	require.NoError(t, err)
+	ids := map[string]bool{}
+	for _, c := range camps {
+		ids[c.ID] = true
+	}
+	assert.True(t, ids["campIDMatch"], "game ID match must keep the campaign despite a display-name/slug mismatch")
+}

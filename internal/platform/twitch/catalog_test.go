@@ -2,6 +2,9 @@ package twitch
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
+	"sync"
 	"testing"
 	"time"
 
@@ -229,4 +232,133 @@ func TestCatalog_PrefersEntryWithBenefits(t *testing.T) {
 	require.Len(t, camps, 1)
 	assert.Len(t, camps[0].Benefits, 1)
 	assert.Equal(t, []string{"x"}, allowed["c1"])
+}
+
+// TestCatalog_PublishEvictsStaleSources: Publish must sweep any source
+// entry older than catalogTTL out of the map, not just skip it in
+// snapshot. Without this, a source keyed by backend pointer (the
+// no-AccountID fallback in catalogSource) accumulates forever across
+// Reloads, since the old *Backend is garbage but its map entry never is.
+func TestCatalog_PublishEvictsStaleSources(t *testing.T) {
+	cat := NewCatalog()
+	cat.Publish("stale-src", []platform.Campaign{{ID: "c1", Game: "Rust"}}, nil)
+	cat.mu.Lock()
+	e := cat.sources["stale-src"]
+	e.at = e.at.Add(-catalogTTL - time.Minute)
+	cat.sources["stale-src"] = e
+	cat.mu.Unlock()
+
+	cat.Publish("fresh-src", []platform.Campaign{{ID: "c2", Game: "Rust"}}, nil)
+
+	cat.mu.Lock()
+	_, stillThere := cat.sources["stale-src"]
+	n := len(cat.sources)
+	cat.mu.Unlock()
+	assert.False(t, stillThere, "Publish must evict sources older than catalogTTL")
+	assert.Equal(t, 1, n, "only the fresh source should remain")
+}
+
+// TestCatalog_SnapshotEvictsStaleSources: snapshot must also sweep stale
+// entries out of the map (not merely skip them while computing the
+// result), so a catalog that's never Published to again still shrinks.
+func TestCatalog_SnapshotEvictsStaleSources(t *testing.T) {
+	cat := NewCatalog()
+	cat.Publish("stale-src", []platform.Campaign{{ID: "c1", Game: "Rust"}}, nil)
+	cat.mu.Lock()
+	e := cat.sources["stale-src"]
+	e.at = e.at.Add(-catalogTTL - time.Minute)
+	cat.sources["stale-src"] = e
+	cat.mu.Unlock()
+
+	_, _, _, ok := cat.snapshot()
+	assert.False(t, ok, "no fresh source: snapshot reports not-ok")
+
+	cat.mu.Lock()
+	n := len(cat.sources)
+	cat.mu.Unlock()
+	assert.Equal(t, 0, n, "snapshot must evict the stale source from the map")
+}
+
+// levelCapture is a minimal slog.Handler that records the level each
+// message was logged at, keyed by message text.
+type levelCapture struct {
+	mu     sync.Mutex
+	levels map[string]slog.Level
+}
+
+func (h *levelCapture) Enabled(context.Context, slog.Level) bool { return true }
+func (h *levelCapture) Handle(_ context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.levels == nil {
+		h.levels = map[string]slog.Level{}
+	}
+	h.levels[r.Message] = r.Level
+	return nil
+}
+func (h *levelCapture) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h *levelCapture) WithGroup(string) slog.Handler      { return h }
+
+func (h *levelCapture) levelOf(t *testing.T, msg string) slog.Level {
+	t.Helper()
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	lvl, ok := h.levels[msg]
+	require.True(t, ok, "message %q was never logged", msg)
+	return lvl
+}
+
+// TestMergeCatalog_LogsInfoOnlyWhenSomethingMerged: the "merged shared
+// catalog" line is only interesting at INFO when it actually added a
+// campaign (merged > 0); an every-tick no-op merge must log at DEBUG so it
+// doesn't flood INFO logs for accounts whose catalog never contributes.
+func TestMergeCatalog_LogsInfoOnlyWhenSomethingMerged(t *testing.T) {
+	prev := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	const msg = "tv discovery: merged shared catalog"
+
+	t.Run("merged=0 logs at DEBUG", func(t *testing.T) {
+		cap := &levelCapture{}
+		slog.SetDefault(slog.New(cap))
+		cat := NewCatalog()
+		cat.Publish("src", []platform.Campaign{{ID: "c1", Game: "Rust", Status: "active", EndsAt: time.Now().Add(time.Hour)}}, nil)
+		sess := platform.Session{Games: []string{"OtherGame"}}
+		mergeCatalog(cat, sess, nil, map[string][]string{})
+		assert.Equal(t, slog.LevelDebug, cap.levelOf(t, msg))
+	})
+
+	t.Run("merged>0 logs at INFO", func(t *testing.T) {
+		cap := &levelCapture{}
+		slog.SetDefault(slog.New(cap))
+		cat := NewCatalog()
+		cat.Publish("src", []platform.Campaign{{ID: "c1", Game: "Rust", Status: "active", EndsAt: time.Now().Add(time.Hour)}}, nil)
+		sess := platform.Session{Games: []string{"Rust"}}
+		mergeCatalog(cat, sess, nil, map[string][]string{})
+		assert.Equal(t, slog.LevelInfo, cap.levelOf(t, msg))
+	})
+}
+
+// TestCatalog_ConcurrentPublishSnapshot exercises Publish and snapshot
+// concurrently from many goroutines (run with -race) to guard the shared
+// sources map + the new eviction sweep against data races.
+func TestCatalog_ConcurrentPublishSnapshot(t *testing.T) {
+	cat := NewCatalog()
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		i := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			src := fmt.Sprintf("src-%d", i)
+			for j := 0; j < 25; j++ {
+				cat.Publish(src, []platform.Campaign{{
+					ID: fmt.Sprintf("c-%d-%d", i, j), Game: "Rust",
+					Status: "active", EndsAt: time.Now().Add(time.Hour),
+				}}, map[string][]string{fmt.Sprintf("c-%d-%d", i, j): {"chan"}})
+				_, _, _, _ = cat.snapshot()
+			}
+		}()
+	}
+	wg.Wait()
 }

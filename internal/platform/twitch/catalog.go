@@ -61,7 +61,23 @@ func (c *Catalog) Publish(source string, camps []platform.Campaign, allowed map[
 	}
 	c.mu.Lock()
 	c.sources[source] = catalogEntry{campaigns: cp, allowed: al, at: time.Now()}
+	c.evictStale()
 	c.mu.Unlock()
+}
+
+// evictStale drops sources whose last Publish is older than catalogTTL.
+// Called by Publish and snapshot, both already holding mu. Without this a
+// source keyed by backend pointer (catalogSource's no-AccountID fallback)
+// accumulates forever across scheduler Reloads: the old *Backend becomes
+// garbage, but nothing ever deletes its map entry — snapshot merely
+// skipped it, so c.sources grew without bound over the process lifetime.
+func (c *Catalog) evictStale() {
+	now := time.Now()
+	for k, e := range c.sources {
+		if now.Sub(e.at) >= catalogTTL {
+			delete(c.sources, k)
+		}
+	}
 }
 
 // snapshot unions every fresh source. For a campaign more than one source
@@ -72,6 +88,7 @@ func (c *Catalog) Publish(source string, camps []platform.Campaign, allowed map[
 func (c *Catalog) snapshot() (camps []platform.Campaign, allowed map[string][]string, age time.Duration, ok bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.evictStale()
 	keys := make([]string, 0, len(c.sources))
 	for k := range c.sources {
 		keys = append(keys, k)
@@ -180,6 +197,13 @@ func mergeCatalog(cat *Catalog, s platform.Session, camps []platform.Campaign, a
 		}
 		merged++
 	}
-	slog.Info("tv discovery: merged shared catalog", "merged", merged, "catalog_age", age.Round(time.Second))
+	// Only interesting at INFO when it actually added a campaign; an
+	// every-tick no-op merge (the common case once the catalog has
+	// converged) would otherwise flood INFO logs for every account.
+	if merged > 0 {
+		slog.Info("tv discovery: merged shared catalog", "merged", merged, "catalog_age", age.Round(time.Second))
+	} else {
+		slog.Debug("tv discovery: merged shared catalog", "merged", merged, "catalog_age", age.Round(time.Second))
+	}
 	return camps
 }
