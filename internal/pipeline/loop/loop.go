@@ -640,7 +640,10 @@ func (l *Loop) onPubSub(ctx context.Context, e pubsubEvent) {
 		l.applyProgress(ctx, []platform.Progress{{BenefitID: e.drop, MinutesWatched: e.minutes}})
 	case "claimable":
 		r, ok := l.rows[e.drop]
-		if !ok || r.Status == dropstate.Claimed {
+		if !ok || r.Status == dropstate.Claimed || userOrLinkBlocked(r) {
+			// A skip or a campaign link block is lifted only by the user or
+			// the reconciler, never by a claim notification: the Required==0
+			// branch below would otherwise bypass it entirely.
 			return
 		}
 		dp := l.progress[e.drop]
@@ -669,6 +672,12 @@ func (l *Loop) onPubSub(ctx context.Context, e pubsubEvent) {
 			l.cooldowns[strings.ToLower(l.current.Channel.Channel)] = l.cfg.Now().Add(l.cfg.DownCooldown)
 		}
 	}
+}
+
+// userOrLinkBlocked reports a row blocked by a user skip or a campaign link
+// block, the two blocks only the user or the reconciler may lift.
+func userOrLinkBlocked(r dropstate.Row) bool {
+	return r.Status == dropstate.Blocked && (r.Reason == dropstate.UserSkip || r.Reason == dropstate.Unlinked)
 }
 
 func (l *Loop) maybeNotifyProgress(ctx context.Context, r dropstate.Row) {

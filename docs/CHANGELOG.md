@@ -45,6 +45,7 @@ All notable changes to GrubDrops.
 - v2 no longer watches drops from campaigns that need an unlinked account between syncs.
 - Channel whitelist edits on the drops page now reach v2 accounts.
 - The force-watch on/off switch now applies to v2 accounts.
+- A Twitch claim notification no longer overrides a drop you skipped or that needs a linked account.
 
 ## [1.4.2] — 2026-09-28
 
