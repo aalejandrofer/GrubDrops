@@ -344,12 +344,13 @@ Twitch placeholder-ID handling, Kick channel preferences.
 
 ### 6.5 Rollout
 
-- `GRUB_PIPELINE=v1|v2` (default `v1`), overridable per account (account
-  settings toggle) so v2 can run on one account first.
+- `GRUB_PIPELINE=v1|v2` (default `v2` as of 1.4.5), overridable per account
+  (account settings toggle / kv `pipeline_override:<accountID>`) so a single
+  account can still fall back to v1 without affecting the rest.
 - `cmd/miner/main.go` `build()` branches on the selection; v1 wiring
-  unchanged.
-- Default flips to `v2` only after live verification on a Twitch drop and a
-  Kick drop (CLAUDE.md accrual/claim gate). v1 deletion (incl.
+  unchanged. `build()` also falls back to v1 automatically, per account,
+  when `loop.New` itself fails (e.g. no `BrowserBackend` wired for Kick).
+- Default flipped from `v1` to `v2` in 1.4.5 batch B. v1 deletion (incl.
   `watcher.go`, `skip_override`/`collect_override` loaders, `account_channels`)
   is a separate follow-up release.
 

@@ -16,10 +16,15 @@ All notable changes to GrubDrops.
 
 - Twitch claim code split into status fetch + classification (behaviour unchanged).
 - Scheduler reads dashboard snapshots and discoveries through interfaces, so v1 and v2 runners both report state.
+- Pipeline v2 is now the default. Set `GRUB_PIPELINE=v1` (or a per-account override) to fall back to the legacy watcher.
+- Reloading accounts builds them in parallel, so a slow account no longer holds up the others.
 
 ### Fixed
 
 - Streamers' own channel campaigns with no game no longer flood the drops page, and campaigns past their end time show as ended.
+- Twitch TV-channel discovery now matches a campaign's game by ID first (falling back to the display-name slug only when either ID is missing), so a campaign whose display name doesn't match the live directory's is no longer wrongly skipped.
+- The shared Twitch discovery catalog no longer accumulates stale entries from recycled account backends; sources older than the TTL are evicted, not just ignored.
+- Idle Kick accounts no longer flood the log with state changes every few seconds.
 
 ### Fixed (pipeline v2 only)
 
