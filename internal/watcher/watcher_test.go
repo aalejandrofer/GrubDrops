@@ -1764,3 +1764,38 @@ func TestWatcher_GhostSkip_SelfHealsWhenBenefitReappears(t *testing.T) {
 	w.mu.Unlock()
 	assert.False(t, stillSkipped, "healme must be removed from skippedBenefits after self-heal")
 }
+
+// TestNextKickIdleWait_RampsThenCaps: a Kick account with no live channel
+// for any campaign otherwise cycles pick_stream→pick_campaign→sleeping on
+// every tick, spamming state-change logs. nextKickIdleWait ramps the idle
+// re-discovery wait 30s→60s→120s, then holds at recheckInterval (5m) —
+// never exceeding it.
+func TestNextKickIdleWait_RampsThenCaps(t *testing.T) {
+	seq := make([]time.Duration, 0, 6)
+	wait := time.Duration(0)
+	for i := 0; i < 6; i++ {
+		wait = nextKickIdleWait(wait)
+		seq = append(seq, wait)
+	}
+	assert.Equal(t, []time.Duration{
+		30 * time.Second,
+		60 * time.Second,
+		120 * time.Second,
+		recheckInterval,
+		recheckInterval,
+		recheckInterval,
+	}, seq)
+}
+
+// TestNextKickIdleWait_ResetStartsOverAtFloor: resetting to 0 (a
+// successful pick) must restart the ramp from its 30s floor, not resume
+// from wherever it had climbed to.
+func TestNextKickIdleWait_ResetStartsOverAtFloor(t *testing.T) {
+	wait := nextKickIdleWait(0)
+	wait = nextKickIdleWait(wait) // 60s
+	wait = nextKickIdleWait(wait) // 120s
+	require.Equal(t, 120*time.Second, wait)
+
+	wait = 0 // simulated reset on successful pick
+	assert.Equal(t, 30*time.Second, nextKickIdleWait(wait))
+}
