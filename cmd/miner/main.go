@@ -955,17 +955,20 @@ func decodeKickChannels(s platform.Session) []string {
 }
 
 // pipelineModeFor picks v1 or v2 for an account: kv override first, then
-// GRUB_PIPELINE, default v1.
+// GRUB_PIPELINE, default v2. Set GRUB_PIPELINE=v1 (or a per-account
+// override) to fall back to the legacy watcher; build() also falls back
+// automatically per-account when loop.New itself fails (e.g. no
+// BrowserBackend wired for Kick).
 func pipelineModeFor(ctx context.Context, q *gen.Queries, accountID string) string {
 	if v, err := q.GetSettingString(ctx, store.PipelineOverridePrefix+accountID); err == nil {
 		if s := string(v); s == "v1" || s == "v2" {
 			return s
 		}
 	}
-	if os.Getenv("GRUB_PIPELINE") == "v2" {
-		return "v2"
+	if os.Getenv("GRUB_PIPELINE") == "v1" {
+		return "v1"
 	}
-	return "v1"
+	return "v2"
 }
 
 // matchAnyChannel reports whether any campaign channel is one of logins.

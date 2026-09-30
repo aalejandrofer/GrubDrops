@@ -74,13 +74,13 @@ func TestPipelineModeFor(t *testing.T) {
 	q := gen.New(db)
 
 	t.Setenv("GRUB_PIPELINE", "")
-	assert.Equal(t, "v1", pipelineModeFor(ctx, q, "acc"))
-	t.Setenv("GRUB_PIPELINE", "v2")
-	assert.Equal(t, "v2", pipelineModeFor(ctx, q, "acc"))
-	require.NoError(t, q.UpsertSettingString(ctx, gen.UpsertSettingStringParams{Key: store.PipelineOverridePrefix + "acc", Value: []byte("v1")}))
-	assert.Equal(t, "v1", pipelineModeFor(ctx, q, "acc"), "per-account override beats env")
+	assert.Equal(t, "v2", pipelineModeFor(ctx, q, "acc"), "v2 is the default")
+	t.Setenv("GRUB_PIPELINE", "v1")
+	assert.Equal(t, "v1", pipelineModeFor(ctx, q, "acc"), "GRUB_PIPELINE=v1 falls back to the legacy watcher")
+	require.NoError(t, q.UpsertSettingString(ctx, gen.UpsertSettingStringParams{Key: store.PipelineOverridePrefix + "acc", Value: []byte("v2")}))
+	assert.Equal(t, "v2", pipelineModeFor(ctx, q, "acc"), "per-account override beats env")
 	require.NoError(t, q.UpsertSettingString(ctx, gen.UpsertSettingStringParams{Key: store.PipelineOverridePrefix + "acc", Value: []byte("junk")}))
-	assert.Equal(t, "v2", pipelineModeFor(ctx, q, "acc"), "invalid override falls through")
+	assert.Equal(t, "v1", pipelineModeFor(ctx, q, "acc"), "invalid override falls through to env (still v1 here)")
 }
 
 func TestMatchAnyChannel(t *testing.T) {
