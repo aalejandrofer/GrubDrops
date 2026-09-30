@@ -1,3 +1,5 @@
+> ❗ **Drop discovery is limited.** Twitch no longer lists campaigns for new logins, so GrubDrops only finds drops for games on your whitelist.
+
 <p align="center">
   <img src="internal/web/static/img/logo.png" width="160" alt="GrubDrops">
 </p>
