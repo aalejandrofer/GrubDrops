@@ -159,6 +159,12 @@ func (d *discovery) listByChannels(ctx context.Context, sess platform.Session, c
 				continue
 			}
 			for _, vc := range resp.Channel.ViewerDropCampaigns {
+				// AvailableDrops also returns the streamer's own channel
+				// campaigns (no game) and campaigns for other games. Keep
+				// only the game being walked; they flooded /drops otherwise.
+				if vc.Game.Name == "" || gameslug.Slug(vc.Game.Name) != slug {
+					continue
+				}
 				start, end := parseISO(vc.StartAt), parseISO(vc.EndAt)
 				add(platform.Campaign{
 					ID: vc.ID, Platform: "twitch", Game: vc.Game.Name, Name: vc.Name,

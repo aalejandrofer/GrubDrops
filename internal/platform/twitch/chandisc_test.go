@@ -470,3 +470,40 @@ func TestListByChannels_InventoryFailureKeepsDirectoryResults(t *testing.T) {
 	assert.Equal(t, "campA", camps[0].ID)
 	assert.Equal(t, 1, b.AllowedChannelCount("campA"))
 }
+
+// TestListByChannels_SkipsAvailableDropsForOtherGames: AvailableDrops also
+// returns streamers' own channel campaigns, which carry no game (or a
+// different game than the directory being walked). Those flooded /drops
+// with hundreds of "no game" rows. Only campaigns for the queried game are
+// kept; Inventory campaigns are unaffected.
+func TestListByChannels_SkipsAvailableDropsForOtherGames(t *testing.T) {
+	const availMixed = `{"data":{"channel":{"viewerDropCampaigns":[
+ {"id":"campNoGame","name":"Streamer Channel Drop","game":null,"endAt":"2030-01-01T00:00:00Z",
+  "timeBasedDrops":[{"id":"dN","name":"N","requiredMinutesWatched":30,"requiredSubs":0,"benefitEdges":[{"benefit":{"id":"bN","name":"N","imageAssetURL":""}}]}]},
+ {"id":"campOther","name":"Other Game Drop","game":{"id":"1","name":"Apex Legends"},"endAt":"2030-01-01T00:00:00Z",
+  "timeBasedDrops":[{"id":"dO","name":"O","requiredMinutesWatched":30,"requiredSubs":0,"benefitEdges":[{"benefit":{"id":"bO","name":"O","imageAssetURL":""}}]}]},
+ {"id":"campA","name":"Rust Isles General","game":{"id":"263490","name":"Rust"},"endAt":"2030-01-01T00:00:00Z",
+  "timeBasedDrops":[{"id":"dWatch","name":"Box","requiredMinutesWatched":60,"requiredSubs":0,"benefitEdges":[{"benefit":{"id":"bW","name":"Box","imageAssetURL":""}}]}]}]}}}`
+	srv := fakeGQL(t, map[string]func(map[string]any) string{
+		"DirectoryPage_Game": func(v map[string]any) string { return dirRust },
+		"DropsHighlightService_AvailableDrops": func(v map[string]any) string {
+			return availMixed
+		},
+		"Inventory": func(map[string]any) string { return inventoryTV },
+	})
+	defer srv.Close()
+
+	b := newForTest(srv.URL)
+	sess := platform.Session{AccessToken: "tv", ClientID: ClientTV, Games: []string{"Rust"}}
+	camps, err := b.ListActiveCampaigns(context.Background(), sess)
+	require.NoError(t, err)
+	ids := map[string]bool{}
+	for _, c := range camps {
+		ids[c.ID] = true
+	}
+	assert.True(t, ids["campA"], "matching-game AvailableDrops campaign kept")
+	assert.True(t, ids["campB"], "Inventory campaign unaffected")
+	assert.False(t, ids["campNoGame"], "game-less channel campaign skipped")
+	assert.False(t, ids["campOther"], "campaign for a different game skipped")
+	assert.Len(t, camps, 2)
+}
