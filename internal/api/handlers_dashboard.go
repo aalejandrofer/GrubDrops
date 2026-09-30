@@ -62,6 +62,10 @@ type dashboardDeps struct {
 	s     *store.Settings
 	start time.Time
 	loc   *timeutil.Zone // display timezone (live; setting → TZ env → UTC)
+	// sessions loads decrypted platform sessions, used only to detect a
+	// Twitch TV-client login for the tv_discovery banner. Nil-safe:
+	// tvDiscoveryAlert returns nil when unset.
+	sessions *store.SessionStore
 	// channelCounters is keyed by platform name ("twitch", "kick"). Nil
 	// or missing entries make the dashboard fall back to zero for that
 	// platform — safer than panicking when a backend isn't wired up.
@@ -250,10 +254,15 @@ type dashPage struct {
 }
 
 type dashAlert struct {
-	Kind    string // "needs_auth" | "no_drops"
-	Account string // display @login
-	URL     string // direct CTA link
-	Action  string // button label
+	Kind    string // "needs_auth" | "no_drops" | "tv_discovery" | ...
+	Account string // display @login, or (for account-agnostic alerts like
+	// tv_discovery) the alert's bold title text
+	URL    string // direct CTA link
+	Action string // button label
+	// Warning styles the alert with the red/warning accent instead of the
+	// default info accent (same copy, different emphasis). Used by
+	// tv_discovery when the affected account's effective whitelist is empty.
+	Warning bool
 }
 
 func (d dashboardDeps) collectPage(r *http.Request) dashPage {
@@ -310,6 +319,11 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 	// Build alerts: any account in needs_auth state or sleeping with 0
 	// eligible drops gets a top banner pointing at the right CTA.
 	alerts := buildDashAlerts(r.Context(), d.q, cards, lang)
+	// tv_discovery goes first — it's an install-wide notice, not tied to
+	// one account, so it leads the other per-account alerts.
+	if tv := tvDiscoveryAlert(r.Context(), d.q, d.sessions, lang); tv != nil {
+		alerts = append([]dashAlert{*tv}, alerts...)
+	}
 
 	camps := activeCampsFromDiscovery(r.Context(), d.sch, d.channelCounters, d.q, lang)
 

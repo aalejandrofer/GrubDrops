@@ -54,6 +54,10 @@
   "dashboard.action_device_code": "Cambiar a inicio con código de dispositivo →",
   "dashboard.action_connect": "Conectar cuenta →",
   "dashboard.action_add_games": "Añadir juegos →",
+  "dashboard.tv_discovery": "descubrimiento limitado",
+  "dashboard.tv_discovery_title": "El descubrimiento de drops está limitado.",
+  "dashboard.alert_tv_discovery": "Twitch ya no lista campañas para inicios de sesión nuevos, así que GrubDrops solo encuentra drops de los juegos en tu lista blanca.",
+  "dashboard.action_whitelist_games": "Añadir juegos a la lista blanca →",
 
   "dashboard_modal.account": "cuenta",
   "dashboard_modal.close": "Cerrar",

@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/aalejandrofer/grubdrops/internal/gameslug"
+	"github.com/aalejandrofer/grubdrops/internal/i18n"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
@@ -286,6 +287,9 @@ type dropsPage struct {
 	// a bootstrap CTA in this case instead of misleading "discovery populates
 	// this" empty text.
 	NoWhitelist bool
+	// Alerts is the same top-of-page banner component the dashboard renders
+	// (dashAlert) — reused here for the tv_discovery notice.
+	Alerts []dashAlert
 }
 
 type dropsAccount struct {
@@ -437,6 +441,7 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		tab = tabCurrent
 	}
 
+	lang := i18n.DetectLang(r)
 	allow, hasWhitelist := allowedGamesUnion(r.Context(), d.q)
 	now := time.Now().Unix()
 	const limit = 200
@@ -525,6 +530,9 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		Accounts:      accountsForPick,
 		CSRFToken:     csrfToken(r),
 		NoWhitelist:   !hasWhitelist,
+	}
+	if tv := tvDiscoveryAlert(r.Context(), d.q, d.sessions, lang); tv != nil {
+		page.Alerts = append(page.Alerts, *tv)
 	}
 	switch tab {
 	case tabPast:

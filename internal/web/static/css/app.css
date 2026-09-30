@@ -340,6 +340,16 @@
     color: var(--accent);
   }
   .alert-cta:hover { color: var(--text); background: none; border: none; }
+  /* Warning emphasis — same flat alert row, red accent instead of the
+     default info orange (matches the red-for-warning convention used
+     elsewhere: .login-flash, .dot.error). Used when the condition the
+     alert describes has no fallback (e.g. an empty whitelist). */
+  .alert.warning {
+    box-shadow: inset 3px 0 0 var(--red);
+    background: rgba(198, 74, 60, 0.06);
+  }
+  .alert.warning .alert-tag,
+  .alert.warning .alert-cta { color: var(--red); }
 
   /* TELEMETRY STRIP — 6 stats */
   /* Flat stat strip — no boxed grid; cards separated by space, the strip

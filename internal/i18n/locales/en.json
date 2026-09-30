@@ -54,6 +54,10 @@
   "dashboard.action_device_code": "Switch to device-code login →",
   "dashboard.action_connect": "Connect account →",
   "dashboard.action_add_games": "Add games →",
+  "dashboard.tv_discovery": "discovery limited",
+  "dashboard.tv_discovery_title": "Drop discovery is limited.",
+  "dashboard.alert_tv_discovery": "Twitch no longer lists campaigns for new logins, so GrubDrops only finds drops for games on your whitelist.",
+  "dashboard.action_whitelist_games": "Whitelist games →",
 
   "dashboard_modal.account": "account",
   "dashboard_modal.close": "Close",

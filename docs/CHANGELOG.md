@@ -10,6 +10,7 @@ All notable changes to GrubDrops.
 - Streamer priority for pipeline v2: per-account priority streamers are watched first, then any live channel in the category (#49). Seeded from the existing null-game channel list. Until the settings editor lands, v2 reads a one-time copy of the null-game channel list taken at upgrade.
 - `drop_state` and `account_streamer_priority` tables (migration 0016), with a one-time backfill from claim history, manual marks and ghost-skips.
 - Accounts on the Twitch TV login share the full campaign list found by any Android-login account in the same GrubDrops, so campaigns hidden from the TV client (for example behind a global badge campaign) are still found.
+- A banner explains that Twitch limits campaign discovery for new (TV) logins and points to the game whitelist.
 
 ### Changed
 

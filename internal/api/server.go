@@ -177,6 +177,7 @@ func NewRouter(d Deps) http.Handler {
 		loc:             d.Zone,
 		channelCounters: channelCountersFromRegistry(d.Registry),
 		kickPath:        d.KickActivePath,
+		sessions:        d.Sessions,
 	}
 	accs := accountsDeps{q: d.Q, db: d.DB, t: d.Templates, sm: d.Session, sch: d.Scheduler, reload: d.Reload, authCheck: d.AuthCheck, reloadAccount: d.ReloadAccount, rootCtx: d.RootCtx, loc: d.Zone}
 	loginTwitch := newLoginTwitchDeps(d, d.RootCtx)
