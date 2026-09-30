@@ -527,6 +527,7 @@ func (l *Loop) refreshLive(ctx context.Context) {
 		}
 		live[c.ID] = streams
 	}
+	l.keepCurrentLive(ctx, live)
 	l.live = live
 	l.forceLive = nil
 	if l.prober != nil && len(l.cfg.ForceWatch) > 0 {
@@ -534,6 +535,65 @@ func (l *Loop) refreshLive(ctx context.Context) {
 			l.forceLive = ps
 		}
 	}
+}
+
+// keepCurrentLive re-checks the channel being mined when a fresh directory
+// page omits it for every campaign it serves. Directory pages are top-N and
+// churn, so a still-live channel can drop out of one refresh; without this
+// the planner reads it as gone, swaps away, and swaps back on the next
+// refresh that lists it again (a flip-flop every LiveEvery). One prober call
+// per served campaign, only in that case; without a prober nothing changes.
+func (l *Loop) keepCurrentLive(ctx context.Context, live map[string][]platform.Stream) {
+	d := l.current
+	if l.prober == nil || d == nil || d.Kind != planner.Mine || d.Channel.Channel == "" {
+		return
+	}
+	ch := d.Channel.Channel
+	var campIDs []string
+	seen := map[string]bool{}
+	add := func(id string) {
+		if id != "" && !seen[id] {
+			seen[id] = true
+			campIDs = append(campIDs, id)
+		}
+	}
+	add(d.CampaignID)
+	for _, id := range d.Serves {
+		add(l.rows[id].CampaignID)
+	}
+	for _, id := range campIDs {
+		for _, s := range live[id] {
+			if strings.EqualFold(s.Channel, ch) {
+				return // still listed for a campaign it serves
+			}
+		}
+	}
+	for _, id := range campIDs {
+		c, ok := l.campaign(id)
+		if !ok {
+			continue
+		}
+		ps, err := l.prober.ProbeChannels(ctx, l.cfg.Session, c, []string{ch})
+		if err != nil {
+			slog.Debug("pipeline: current channel re-check failed", "account", l.cfg.AccountID, "campaign", id, "channel", ch, "err", err)
+			continue
+		}
+		for _, s := range ps {
+			if strings.EqualFold(s.Channel, ch) {
+				live[id] = mergeStreams(live[id], []platform.Stream{s})
+				break
+			}
+		}
+	}
+}
+
+func (l *Loop) campaign(id string) (platform.Campaign, bool) {
+	for _, c := range l.camps {
+		if c.ID == id {
+			return c, true
+		}
+	}
+	return platform.Campaign{}, false
 }
 
 func (l *Loop) isCurrent(channel string) bool {

@@ -46,6 +46,7 @@ All notable changes to GrubDrops.
 - Channel whitelist edits on the drops page now reach v2 accounts.
 - The force-watch on/off switch now applies to v2 accounts.
 - A Twitch claim notification no longer overrides a drop you skipped or that needs a linked account.
+- v2 no longer bounces between two channels every few minutes when a channel drops out of Twitch's directory list.
 
 ## [1.4.2] — 2026-09-28
 
