@@ -43,6 +43,8 @@ All notable changes to GrubDrops.
 - The stall claim check only runs on a drop's second stall, and an empty Twitch claim status counts as a failure, so a blind check can never mark an unenrolled drop claimed.
 - Drops already claimed under v1 no longer look unclaimed to v2 when an account switches over; v2 reads the claim history after every sync, not only at startup.
 - v2 no longer watches drops from campaigns that need an unlinked account between syncs.
+- Channel whitelist edits on the drops page now reach v2 accounts.
+- The force-watch on/off switch now applies to v2 accounts.
 
 ## [1.4.2] — 2026-09-28
 

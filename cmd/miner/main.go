@@ -483,12 +483,7 @@ func run() error {
 			if err != nil {
 				logger.Warn("pipeline v2: load streamer priority failed", "account", a.ID, "err", err)
 			}
-			var force []string
-			if rows, err := q.ListForceChannels(ctx, a.ID); err == nil {
-				for _, r := range rows {
-					force = append(force, r.Channel)
-				}
-			}
+			force := v2ForceChannels(ctx, q, a.ID)
 			l, err := loop.New(loop.Config{
 				AccountID: a.ID, AccountLabel: a.DisplayName, Platform: a.Platform,
 				Backend: b, Session: sess,
@@ -1091,8 +1086,7 @@ func loadAccountChannels(ctx context.Context, q *gen.Queries, accountID string) 
 type forceWatchStore struct{ q *gen.Queries }
 
 func (f forceWatchStore) Next(ctx context.Context, accountID string) (watcher.ForceTask, bool) {
-	v, err := f.q.GetSettingString(ctx, api.ForceWatchEnabledKey(accountID))
-	if err != nil || string(v) != "1" {
+	if !forceWatchEnabled(ctx, f.q, accountID) {
 		return watcher.ForceTask{}, false
 	}
 	rows, err := f.q.ListForceChannels(ctx, accountID)
@@ -1100,6 +1094,35 @@ func (f forceWatchStore) Next(ctx context.Context, accountID string) (watcher.Fo
 		return watcher.ForceTask{}, false
 	}
 	return watcher.ForceTask{Channel: rows[0].Channel}, true
+}
+
+// forceWatchEnabled reports whether the per-account force-watch toggle
+// (force_watch:<accountID> KV flag, set via /accounts/:id/force-watch) is
+// on. Shared by v1's forceWatchStore and the v2 wiring so both agree on
+// when a configured force-watch channel actually applies.
+func forceWatchEnabled(ctx context.Context, q *gen.Queries, accountID string) bool {
+	v, err := q.GetSettingString(ctx, api.ForceWatchEnabledKey(accountID))
+	return err == nil && string(v) == "1"
+}
+
+// v2ForceChannels returns the account's configured force-watch channel
+// logins when the force-watch toggle is enabled, or nil otherwise. Used by
+// the pipeline v2 branch in build() so a disabled toggle behaves like v1's
+// forceWatchStore.Next (no forced channel), instead of always passing the
+// configured list.
+func v2ForceChannels(ctx context.Context, q *gen.Queries, accountID string) []string {
+	if !forceWatchEnabled(ctx, q, accountID) {
+		return nil
+	}
+	rows, err := q.ListForceChannels(ctx, accountID)
+	if err != nil {
+		return nil
+	}
+	var force []string
+	for _, r := range rows {
+		force = append(force, r.Channel)
+	}
+	return force
 }
 
 // parseDuration parses a Go duration string (e.g. "5m", "30s") with a

@@ -9,6 +9,29 @@ import (
 	"context"
 )
 
+const addStreamerPriority = `-- name: AddStreamerPriority :exec
+INSERT INTO account_streamer_priority (account_id, platform, login, rank)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(account_id, login) DO UPDATE SET rank = excluded.rank, platform = excluded.platform
+`
+
+type AddStreamerPriorityParams struct {
+	AccountID string `json:"account_id"`
+	Platform  string `json:"platform"`
+	Login     string `json:"login"`
+	Rank      int64  `json:"rank"`
+}
+
+func (q *Queries) AddStreamerPriority(ctx context.Context, arg AddStreamerPriorityParams) error {
+	_, err := q.db.ExecContext(ctx, addStreamerPriority,
+		arg.AccountID,
+		arg.Platform,
+		arg.Login,
+		arg.Rank,
+	)
+	return err
+}
+
 const listStreamerPriority = `-- name: ListStreamerPriority :many
 SELECT login, rank FROM account_streamer_priority
 WHERE account_id = ?
@@ -41,4 +64,18 @@ func (q *Queries) ListStreamerPriority(ctx context.Context, accountID string) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const removeStreamerPriority = `-- name: RemoveStreamerPriority :exec
+DELETE FROM account_streamer_priority WHERE account_id = ? AND login = ?
+`
+
+type RemoveStreamerPriorityParams struct {
+	AccountID string `json:"account_id"`
+	Login     string `json:"login"`
+}
+
+func (q *Queries) RemoveStreamerPriority(ctx context.Context, arg RemoveStreamerPriorityParams) error {
+	_, err := q.db.ExecContext(ctx, removeStreamerPriority, arg.AccountID, arg.Login)
+	return err
 }

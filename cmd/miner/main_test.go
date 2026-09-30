@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/aalejandrofer/grubdrops/internal/api"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
@@ -87,4 +88,53 @@ func TestMatchAnyChannel(t *testing.T) {
 	m := matchAnyChannel([]string{"Fav"})
 	assert.True(t, m([]string{"x", "fav"}))
 	assert.False(t, m([]string{"x"}))
+}
+
+// TestForceWatchEnabled proves the extracted helper reads the same
+// force_watch:<accountID> KV flag forceWatchStore.Next checks, so v1 and v2
+// agree on whether force-watch is on for an account.
+func TestForceWatchEnabled(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, t.TempDir()+"/t.db")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	q := gen.New(db)
+
+	assert.False(t, forceWatchEnabled(ctx, q, "acc-1"), "flag unset -> disabled")
+
+	require.NoError(t, q.UpsertSettingString(ctx, gen.UpsertSettingStringParams{
+		Key: api.ForceWatchEnabledKey("acc-1"), Value: []byte("1"),
+	}))
+	assert.True(t, forceWatchEnabled(ctx, q, "acc-1"), "flag=1 -> enabled")
+
+	assert.False(t, forceWatchEnabled(ctx, q, "acc-2"), "different account unaffected")
+}
+
+// TestV2ForceChannels proves the v2 wiring only surfaces ListForceChannels
+// rows when the account's force-watch flag is enabled — matching v1's
+// forceWatchStore.Next gate (previously v2 passed the list unconditionally).
+func TestV2ForceChannels(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, t.TempDir()+"/t.db")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	q := gen.New(db)
+
+	now := time.Now().Unix()
+	_, err = q.CreateAccount(ctx, gen.CreateAccountParams{
+		ID: "acc-1", Platform: "kick", DisplayName: "k",
+		Status: "idle", FingerprintJson: "{}", Enabled: 1,
+		CreatedAt: now, UpdatedAt: now,
+	})
+	require.NoError(t, err)
+	require.NoError(t, q.AddForceChannel(ctx, gen.AddForceChannelParams{
+		AccountID: "acc-1", Channel: "somechannel", Rank: 0, CreatedAt: now,
+	}))
+
+	assert.Empty(t, v2ForceChannels(ctx, q, "acc-1"), "flag off -> no force channels even though rows exist")
+
+	require.NoError(t, q.UpsertSettingString(ctx, gen.UpsertSettingStringParams{
+		Key: api.ForceWatchEnabledKey("acc-1"), Value: []byte("1"),
+	}))
+	assert.Equal(t, []string{"somechannel"}, v2ForceChannels(ctx, q, "acc-1"), "flag on -> rows surfaced")
 }

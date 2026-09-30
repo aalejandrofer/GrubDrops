@@ -1030,9 +1030,21 @@ func (d *dropsDeps) addChannelWhitelist(w http.ResponseWriter, r *http.Request) 
 		http.Redirect(w, r, "/drops", http.StatusSeeOther)
 		return
 	}
-	if _, err := d.q.GetAccount(r.Context(), accID); err != nil {
+	acct, err := d.q.GetAccount(r.Context(), accID)
+	if err != nil {
 		http.NotFound(w, r)
 		return
+	}
+	// v2 reads account_streamer_priority exclusively (account_channels was
+	// only ever copied there once, by the 0016 migration seed), so every
+	// add here must land in both tables to reach v2 accounts too.
+	nextRank := int64(0)
+	if prio, err := d.q.ListStreamerPriority(r.Context(), accID); err == nil {
+		for _, p := range prio {
+			if p.Rank >= nextRank {
+				nextRank = p.Rank + 1
+			}
+		}
 	}
 	seen := map[string]struct{}{}
 	added := 0
@@ -1054,6 +1066,16 @@ func (d *dropsDeps) addChannelWhitelist(w http.ResponseWriter, r *http.Request) 
 			http.Redirect(w, r, "/drops", http.StatusSeeOther)
 			return
 		}
+		if err := d.q.AddStreamerPriority(r.Context(), gen.AddStreamerPriorityParams{
+			AccountID: accID, Platform: acct.Platform, Login: ch, Rank: nextRank,
+		}); err != nil {
+			if d.sm != nil {
+				d.sm.Put(r.Context(), "flash", "flash.channel_whitelist_failed")
+			}
+			http.Redirect(w, r, "/drops", http.StatusSeeOther)
+			return
+		}
+		nextRank++
 		added++
 	}
 	// Reload the scheduler so the watcher re-picks immediately and starts
@@ -1094,6 +1116,12 @@ func (d *dropsDeps) removeChannelWhitelist(w http.ResponseWriter, r *http.Reques
 		seen[ch] = struct{}{}
 		if err := d.q.RemoveAccountChannel(r.Context(), gen.RemoveAccountChannelParams{
 			AccountID: accID, Channel: ch,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := d.q.RemoveStreamerPriority(r.Context(), gen.RemoveStreamerPriorityParams{
+			AccountID: accID, Login: ch,
 		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

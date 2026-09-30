@@ -14,6 +14,7 @@ type Querier interface {
 	AddAccountGame(ctx context.Context, arg AddAccountGameParams) error
 	AddForceChannel(ctx context.Context, arg AddForceChannelParams) error
 	AddGlobalGame(ctx context.Context, arg AddGlobalGameParams) error
+	AddStreamerPriority(ctx context.Context, arg AddStreamerPriorityParams) error
 	AdminExists(ctx context.Context) (bool, error)
 	ClearAccountChannels(ctx context.Context, accountID string) error
 	ClearAccountGames(ctx context.Context, accountID string) error
@@ -92,6 +93,7 @@ type Querier interface {
 	RemoveAccountChannel(ctx context.Context, arg RemoveAccountChannelParams) error
 	RemoveAccountGame(ctx context.Context, arg RemoveAccountGameParams) error
 	RemoveForceChannel(ctx context.Context, arg RemoveForceChannelParams) error
+	RemoveStreamerPriority(ctx context.Context, arg RemoveStreamerPriorityParams) error
 	SetAccountEnabled(ctx context.Context, arg SetAccountEnabledParams) error
 	// Lifetime watch minutes: sum of per-benefit progress. Persistent, so it
 	// survives restarts (unlike the heartbeat log ring used for today's count).
