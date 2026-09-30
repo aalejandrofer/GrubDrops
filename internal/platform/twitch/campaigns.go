@@ -136,6 +136,13 @@ type campaignDetailsData struct {
 				PreconditionDrops []struct {
 					ID string `json:"id"`
 				} `json:"preconditionDrops"`
+				// self is the viewer's own progress on this drop. Null when
+				// the account is not enrolled in the campaign yet.
+				Self *struct {
+					CurrentMinutesWatched int    `json:"currentMinutesWatched"`
+					IsClaimed             bool   `json:"isClaimed"`
+					DropInstanceID        string `json:"dropInstanceID"`
+				} `json:"self"`
 			} `json:"timeBasedDrops"`
 		} `json:"dropCampaign"`
 	} `json:"user"`
@@ -465,6 +472,41 @@ func (d *discovery) drainAllowed() map[string][]string {
 	out := d.pendingAllowed
 	d.pendingAllowed = map[string][]string{}
 	return out
+}
+
+// inventoryDropProgress reads the Inventory query as pipeline v2 per-drop
+// observations keyed by campaign id. Used for TV-client sessions, whose
+// DropCampaignDetails returns dropCampaign:null (#48): Inventory is the
+// only per-viewer progress source. Unlike inventory() it keeps the
+// campaign id and the drop's requirement (Required 0 for sub-gated drops,
+// #47). Every entry is Known — Inventory always carries self for in-progress
+// campaigns. Duplicate drop ids within a campaign are collapsed.
+func (d *discovery) inventoryDropProgress(ctx context.Context, sess platform.Session) (map[string][]platform.DropProgress, error) {
+	var inv inventoryData
+	if err := d.c.gql(ctx, sess.AccessToken, OpInventory, nil, &inv); err != nil {
+		return nil, fmt.Errorf("inventory: %w", err)
+	}
+	out := map[string][]platform.DropProgress{}
+	seen := map[string]bool{}
+	for _, camp := range inv.CurrentUser.Inventory.DropCampaignsInProgress {
+		for _, td := range camp.TimeBasedDrops {
+			key := camp.ID + "\x00" + td.ID
+			if td.ID == "" || seen[key] {
+				continue
+			}
+			seen[key] = true
+			out[camp.ID] = append(out[camp.ID], platform.DropProgress{
+				DropID:     td.ID,
+				CampaignID: camp.ID,
+				Minutes:    td.Self.CurrentMinutesWatched,
+				Required:   requiredMinutes(td.RequiredMinutesWatched, td.RequiredSubs),
+				Claimed:    td.Self.IsClaimed,
+				InstanceID: td.Self.DropInstanceID,
+				Known:      true,
+			})
+		}
+	}
+	return out, nil
 }
 
 // inventory returns the current watch progress for all in-progress drop campaigns.

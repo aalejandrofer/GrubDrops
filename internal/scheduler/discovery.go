@@ -6,8 +6,13 @@ import (
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
-	"github.com/aalejandrofer/grubdrops/internal/watcher"
 )
+
+// discoveryReporter is any runner that caches its last campaign discovery.
+type discoveryReporter interface {
+	LastDiscovery() ([]platform.Campaign, time.Time)
+	AllowGame() func(game string) bool
+}
 
 // AccountDiscovery is the per-account view of the most recent
 // ListActiveCampaigns result. CapturedAt is zero when the watcher has
@@ -30,7 +35,7 @@ func (s *Scheduler) WatcherDiscoveries() []AccountDiscovery {
 	defer s.mu.Unlock()
 	out := make([]AccountDiscovery, 0, len(s.entries))
 	for _, e := range s.entries {
-		w, ok := e.runner.(*watcher.Watcher)
+		w, ok := e.runner.(discoveryReporter)
 		if !ok {
 			out = append(out, AccountDiscovery{AccountID: e.id})
 			continue

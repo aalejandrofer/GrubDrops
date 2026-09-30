@@ -63,10 +63,13 @@ proto/                  buf config + gRPC defs for the sidecar — core, not dea
 
 ## Platform gotchas
 
-- **Twitch = Android device-code OAuth over direct HTTP.** Never send a
-  `Client-Integrity` header — adding it is a self-inflicted integrity wall. Do
-  not re-implement logged-out catalog scraping; `/drops/campaigns` while logged
-  out is just a login wall.
+- **Twitch clients: Android (legacy sessions) and TV (device-code logins since
+  v1.4.0) over direct HTTP.** Never send a `Client-Integrity` header on the
+  Android or TV client; adding it there is a self-inflicted integrity wall. The
+  `Client-Integrity` header is allowed ONLY on the web-client profile
+  (browser-captured sessions), where Twitch requires it. Do not re-implement
+  logged-out catalog scraping; `/drops/campaigns` while logged out is just a
+  login wall.
 - **Twitch credit beacon is gated by `HeartbeatInterval`** (1 minute credited
   per beacon), so anything above 60s under-credits. Keep it at 60s. Kick is
   immune.

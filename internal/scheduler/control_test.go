@@ -150,3 +150,39 @@ func TestScheduler_ReloadAccountSurvivesTriggerContextCancel(t *testing.T) {
 	require.Eventually(t, func() bool { return !fresh.running(20 * time.Millisecond) },
 		time.Second, 2*time.Millisecond, "watcher should stop when the root context is cancelled")
 }
+
+// TestScheduler_ReloadBuildsBuildersConcurrently: Reload must build the
+// EntryBuilders concurrently (capped) rather than one at a time — a single
+// slow account (e.g. a browser-sidecar cold start) must not hold up every
+// other account's rebuild. 4 builders that each block 100ms must complete
+// well under their serial total (400ms); the resulting entry order must
+// still match the builders slice order, not completion order.
+func TestScheduler_ReloadBuildsBuildersConcurrently(t *testing.T) {
+	s := New(Options{Notifier: &counterNotifier{}})
+
+	mkBuilder := func(id string) EntryBuilder {
+		return func() Entry {
+			time.Sleep(100 * time.Millisecond)
+			return NewEntry(id, &liveRunner{})
+		}
+	}
+
+	start := time.Now()
+	require.NoError(t, s.Reload(context.Background(), []EntryBuilder{
+		mkBuilder("a"), mkBuilder("b"), mkBuilder("c"), mkBuilder("d"),
+	}))
+	elapsed := time.Since(start)
+	require.Less(t, elapsed, 250*time.Millisecond,
+		"4 concurrent 100ms builders should overlap, not serialize to ~400ms+")
+
+	s.mu.Lock()
+	ids := make([]string, len(s.entries))
+	for i, e := range s.entries {
+		ids[i] = e.id
+	}
+	s.mu.Unlock()
+	require.Equal(t, []string{"a", "b", "c", "d"}, ids,
+		"entry order must match builder order regardless of completion timing")
+
+	s.Stop(context.Background())
+}

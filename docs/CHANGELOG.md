@@ -4,6 +4,57 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Added
+
+- Pipeline v2 (opt-in, `GRUB_PIPELINE=v2` or kv `pipeline_override:<account>`): drop state now comes from each campaign's platform details, so drops claimed on the website or with a lost claim response show as claimed and mining moves on (#50).
+- Streamer priority for pipeline v2: per-account priority streamers are watched first, then any live channel in the category (#49). Seeded from the existing null-game channel list. Until the settings editor lands, v2 reads a one-time copy of the null-game channel list taken at upgrade.
+- `drop_state` and `account_streamer_priority` tables (migration 0016), with a one-time backfill from claim history, manual marks and ghost-skips.
+- Accounts on the Twitch TV login share the full campaign list found by any Android-login account in the same GrubDrops, so campaigns hidden from the TV client (for example behind a global badge campaign) are still found.
+- A banner explains that Twitch limits campaign discovery for new (TV) logins and points to the game whitelist.
+- Accounts on the Twitch TV login find campaigns by briefly watching a top drops-enabled channel for each whitelisted game when there is nothing else to mine, so Twitch enrolls them and the campaigns appear. (Pipeline v2: 10 minutes per game, each game at most once every 6 hours; dashboard state `discovering`.) (the dashboard shows these accounts as Discovering)
+
+### Changed
+
+- Twitch claim code split into status fetch + classification (behaviour unchanged).
+- Scheduler reads dashboard snapshots and discoveries through interfaces, so v1 and v2 runners both report state.
+- Pipeline v2 is now the default. Set `GRUB_PIPELINE=v1` (or a per-account override) to fall back to the legacy watcher.
+- Reloading accounts builds them in parallel, so a slow account no longer holds up the others.
+
+### Fixed
+
+- Streamers' own channel campaigns with no game no longer flood the drops page, and campaigns past their end time show as ended.
+- Twitch TV-channel discovery now matches a campaign's game by ID first (falling back to the display-name slug only when either ID is missing), so a campaign whose display name doesn't match the live directory's is no longer wrongly skipped.
+- The shared Twitch discovery catalog no longer accumulates stale entries from recycled account backends; sources older than the TTL are evicted, not just ignored.
+- Idle Kick accounts no longer flood the log with state changes every few seconds.
+
+### Fixed (pipeline v2 only)
+
+- Claim failures back off 1m, 5m, 30m and stop after 5 attempts instead of looping forever.
+- Kick link-required claims block with a reason instead of retrying every poll.
+- Kick required minutes come from the platform, not an invented 120.
+- Ghost-skipped drops are re-checked instead of being skipped forever.
+- Migrated Kick ghost-skips pick up the campaign's required minutes instead of staying blocked as sub-only; backfilled rows now carry required minutes.
+- Manual "mark collected" marks migrate as user claims, not final platform claims.
+- A campaign link block lifts on the next sync after the user links, instead of holding for 24h.
+- Twitch priority streamers are not probed for restricted campaigns whose allow-list is unknown, so v2 never watches a channel the campaign doesn't credit.
+- Twitch drops with no viewer record are no longer read as a definite "not enrolled".
+- The Twitch integrity wall shows the account as needing re-auth and stops the loop, like v1.
+- Session restarts wait for the previous watch to stop, and a restart on the same channel keeps its PubSub subscription.
+- A drop that falls back from claimable resets its claim failure count.
+- v2 discovers campaigns for TV-client Twitch accounts (the whitelisted games now reach the session).
+- v2 reads TV-account Twitch progress from the inventory, and sends every v2 request under the account's own Twitch client.
+- v2 no longer mines subscription-only Twitch drops.
+- A Twitch drop claimed outside GrubDrops whose campaign left the inventory is detected with one claim check when watching it stalls, instead of being watched again and again.
+- v2 heartbeats appear in the dashboard events feed, like v1's.
+- The stall claim check only runs on a drop's second stall, and an empty Twitch claim status counts as a failure, so a blind check can never mark an unenrolled drop claimed.
+- Drops already claimed under v1 no longer look unclaimed to v2 when an account switches over; v2 reads the claim history after every sync, not only at startup.
+- v2 no longer watches drops from campaigns that need an unlinked account between syncs.
+- Channel whitelist edits on the drops page now reach v2 accounts.
+- The force-watch on/off switch now applies to v2 accounts.
+- A newly added Twitch account that already finished its drops is recognised within a few syncs instead of being watched drop by drop.
+- A Twitch claim notification no longer overrides a drop you skipped or that needs a linked account.
+- v2 no longer bounces between two channels every few minutes when a channel drops out of Twitch's directory list.
+
 ## [1.4.2] — 2026-09-28
 
 ### Fixed

@@ -31,6 +31,7 @@ import (
 	mlog "github.com/aalejandrofer/grubdrops/internal/log"
 	"github.com/aalejandrofer/grubdrops/internal/netutil"
 	"github.com/aalejandrofer/grubdrops/internal/notify"
+	"github.com/aalejandrofer/grubdrops/internal/pipeline/loop"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/platform/kick"
 	"github.com/aalejandrofer/grubdrops/internal/platform/twitch"
@@ -252,6 +253,11 @@ func run() error {
 	} else {
 		twitchBackend = twitch.New()
 	}
+	// One shared Twitch campaign catalog for the whole process: backends on
+	// the Android/legacy login publish the full campaign list, TV-login
+	// backends merge the campaigns Twitch hides from the TV client.
+	twitchCatalog := twitch.NewCatalog()
+	twitchBackend.SetCatalog(twitchCatalog)
 	if twitchBrowserEnabled && browserClient != nil {
 		// proxyTransport is nil when no proxy is configured; the browser
 		// backend then dials the Spade beacon direct, same as before.
@@ -336,6 +342,16 @@ func run() error {
 	// and the /drops Past + /history views stay empty.
 	claimRecorder := store.NewClaimRecorder(q)
 
+	// dropStore is the pipeline v2 per-account drop_state table. Backfill
+	// seeds it from the v1 in-progress/claims state on every boot so a
+	// GRUB_PIPELINE=v2 opt-in mid-lifecycle doesn't start from scratch.
+	dropStore := store.NewDropStateStore(q)
+	if n, err := store.BackfillDropState(ctx, q, time.Now()); err != nil {
+		logger.Warn("pipeline v2: drop_state backfill failed", "err", err)
+	} else if n > 0 {
+		logger.Info("pipeline v2: drop_state backfilled from v1 state", "rows", n)
+	}
+
 	// Per-account direct-Twitch backends. The direct twitch.Backend holds
 	// per-account state (auth, userID/userLogin caches, its own PubSub
 	// socket), so sharing ONE instance across accounts races their tokens
@@ -367,6 +383,7 @@ func run() error {
 			} else {
 				bk = twitch.New()
 			}
+			bk.SetCatalog(twitchCatalog)
 			twitchBackends[a.ID] = bk
 			return bk, true
 		}
@@ -460,6 +477,36 @@ func run() error {
 		forceLinked := loadLinkOverrides(ctx, q)
 		forceCollected := loadCollectOverrides(ctx, q)
 		persistedSkips, skipRecorder, skipClearer := loadSkipOverrides(ctx, q)
+
+		if pipelineModeFor(ctx, q, a.ID) == "v2" {
+			prio, err := dropStore.StreamerPriority(ctx, a.ID)
+			if err != nil {
+				logger.Warn("pipeline v2: load streamer priority failed", "account", a.ID, "err", err)
+			}
+			force := v2ForceChannels(ctx, q, a.ID)
+			l, err := loop.New(loop.Config{
+				AccountID: a.ID, AccountLabel: a.DisplayName, Platform: a.Platform,
+				Backend: b, Session: sess,
+				Store: dropStore, History: claimRecorder, Persister: campaignPersister,
+				Notifier:  notifier,
+				AllowGame: allow, AllowChannel: matchAnyChannel(prio), GameRank: rank,
+				Games:                 names,
+				PriorityMode:          priorityMode,
+				ForceLinked:           forceLinked,
+				StreamerPriority:      prio,
+				ForceWatch:            force,
+				ProgressNotifyStepPct: progressStep,
+				// Twitch hides drops claimed outside the app once their
+				// campaign leaves the Inventory; Kick keeps them listed.
+				ClaimProbe:      a.Platform == "twitch",
+				EnrollDiscovery: enrollDiscoveryFor(a.Platform, sess),
+			})
+			if err == nil {
+				logger.Info("pipeline v2 enabled for account", "account", a.ID, "platform", a.Platform)
+				return scheduler.NewEntry(a.ID, l), nil
+			}
+			logger.Warn("pipeline v2 unavailable, falling back to v1", "account", a.ID, "err", err)
+		}
 
 		acctLabel := a.DisplayName
 		w := watcher.New(watcher.Config{
@@ -908,6 +955,52 @@ func decodeKickChannels(s platform.Session) []string {
 	return out
 }
 
+// pipelineModeFor picks v1 or v2 for an account: kv override first, then
+// GRUB_PIPELINE, default v2. Set GRUB_PIPELINE=v1 (or a per-account
+// override) to fall back to the legacy watcher; build() also falls back
+// automatically per-account when loop.New itself fails (e.g. no
+// BrowserBackend wired for Kick).
+func pipelineModeFor(ctx context.Context, q *gen.Queries, accountID string) string {
+	if v, err := q.GetSettingString(ctx, store.PipelineOverridePrefix+accountID); err == nil {
+		if s := string(v); s == "v1" || s == "v2" {
+			return s
+		}
+	}
+	if os.Getenv("GRUB_PIPELINE") == "v1" {
+		return "v1"
+	}
+	return "v2"
+}
+
+// enrollDiscoveryFor turns on pipeline v2 watch-to-enroll discovery for
+// TV-client Twitch sessions: they can't read the campaign list, so they
+// find campaigns by watching a drops-enabled channel per whitelisted game
+// until Inventory lists what Twitch enrolled them in. Android sessions see
+// the list directly and Kick has no such gap, so both stay off.
+func enrollDiscoveryFor(platformName string, sess platform.Session) bool {
+	return platformName == "twitch" && sess.ClientID == twitch.ClientTV
+}
+
+// matchAnyChannel reports whether any campaign channel is one of logins.
+// Nil when logins is empty, so the null-game gate stays off.
+func matchAnyChannel(logins []string) func([]string) bool {
+	if len(logins) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(logins))
+	for _, l := range logins {
+		set[strings.ToLower(l)] = true
+	}
+	return func(chs []string) bool {
+		for _, c := range chs {
+			if set[strings.ToLower(c)] {
+				return true
+			}
+		}
+		return false
+	}
+}
+
 // loadAccountWhitelist materialises the per-account game allow-list
 // into match + rank closures the watcher consumes, plus the plain
 // display names (as stored in the games table) that feed
@@ -1006,8 +1099,7 @@ func loadAccountChannels(ctx context.Context, q *gen.Queries, accountID string) 
 type forceWatchStore struct{ q *gen.Queries }
 
 func (f forceWatchStore) Next(ctx context.Context, accountID string) (watcher.ForceTask, bool) {
-	v, err := f.q.GetSettingString(ctx, api.ForceWatchEnabledKey(accountID))
-	if err != nil || string(v) != "1" {
+	if !forceWatchEnabled(ctx, f.q, accountID) {
 		return watcher.ForceTask{}, false
 	}
 	rows, err := f.q.ListForceChannels(ctx, accountID)
@@ -1015,6 +1107,35 @@ func (f forceWatchStore) Next(ctx context.Context, accountID string) (watcher.Fo
 		return watcher.ForceTask{}, false
 	}
 	return watcher.ForceTask{Channel: rows[0].Channel}, true
+}
+
+// forceWatchEnabled reports whether the per-account force-watch toggle
+// (force_watch:<accountID> KV flag, set via /accounts/:id/force-watch) is
+// on. Shared by v1's forceWatchStore and the v2 wiring so both agree on
+// when a configured force-watch channel actually applies.
+func forceWatchEnabled(ctx context.Context, q *gen.Queries, accountID string) bool {
+	v, err := q.GetSettingString(ctx, api.ForceWatchEnabledKey(accountID))
+	return err == nil && string(v) == "1"
+}
+
+// v2ForceChannels returns the account's configured force-watch channel
+// logins when the force-watch toggle is enabled, or nil otherwise. Used by
+// the pipeline v2 branch in build() so a disabled toggle behaves like v1's
+// forceWatchStore.Next (no forced channel), instead of always passing the
+// configured list.
+func v2ForceChannels(ctx context.Context, q *gen.Queries, accountID string) []string {
+	if !forceWatchEnabled(ctx, q, accountID) {
+		return nil
+	}
+	rows, err := q.ListForceChannels(ctx, accountID)
+	if err != nil {
+		return nil
+	}
+	var force []string
+	for _, r := range rows {
+		force = append(force, r.Channel)
+	}
+	return force
 }
 
 // parseDuration parses a Go duration string (e.g. "5m", "30s") with a

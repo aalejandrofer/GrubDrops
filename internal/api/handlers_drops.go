@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/aalejandrofer/grubdrops/internal/gameslug"
+	"github.com/aalejandrofer/grubdrops/internal/i18n"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
@@ -286,6 +287,9 @@ type dropsPage struct {
 	// a bootstrap CTA in this case instead of misleading "discovery populates
 	// this" empty text.
 	NoWhitelist bool
+	// Alerts is the same top-of-page banner component the dashboard renders
+	// (dashAlert) — reused here for the tv_discovery notice.
+	Alerts []dashAlert
 }
 
 type dropsAccount struct {
@@ -437,6 +441,7 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		tab = tabCurrent
 	}
 
+	lang := i18n.DetectLang(r)
 	allow, hasWhitelist := allowedGamesUnion(r.Context(), d.q)
 	now := time.Now().Unix()
 	const limit = 200
@@ -525,6 +530,9 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		Accounts:      accountsForPick,
 		CSRFToken:     csrfToken(r),
 		NoWhitelist:   !hasWhitelist,
+	}
+	if tv := tvDiscoveryAlert(r.Context(), d.q, d.sessions, lang); tv != nil {
+		page.Alerts = append(page.Alerts, *tv)
 	}
 	switch tab {
 	case tabPast:
@@ -1022,9 +1030,21 @@ func (d *dropsDeps) addChannelWhitelist(w http.ResponseWriter, r *http.Request) 
 		http.Redirect(w, r, "/drops", http.StatusSeeOther)
 		return
 	}
-	if _, err := d.q.GetAccount(r.Context(), accID); err != nil {
+	acct, err := d.q.GetAccount(r.Context(), accID)
+	if err != nil {
 		http.NotFound(w, r)
 		return
+	}
+	// v2 reads account_streamer_priority exclusively (account_channels was
+	// only ever copied there once, by the 0016 migration seed), so every
+	// add here must land in both tables to reach v2 accounts too.
+	nextRank := int64(0)
+	if prio, err := d.q.ListStreamerPriority(r.Context(), accID); err == nil {
+		for _, p := range prio {
+			if p.Rank >= nextRank {
+				nextRank = p.Rank + 1
+			}
+		}
 	}
 	seen := map[string]struct{}{}
 	added := 0
@@ -1046,6 +1066,16 @@ func (d *dropsDeps) addChannelWhitelist(w http.ResponseWriter, r *http.Request) 
 			http.Redirect(w, r, "/drops", http.StatusSeeOther)
 			return
 		}
+		if err := d.q.AddStreamerPriority(r.Context(), gen.AddStreamerPriorityParams{
+			AccountID: accID, Platform: acct.Platform, Login: ch, Rank: nextRank,
+		}); err != nil {
+			if d.sm != nil {
+				d.sm.Put(r.Context(), "flash", "flash.channel_whitelist_failed")
+			}
+			http.Redirect(w, r, "/drops", http.StatusSeeOther)
+			return
+		}
+		nextRank++
 		added++
 	}
 	// Reload the scheduler so the watcher re-picks immediately and starts
@@ -1086,6 +1116,12 @@ func (d *dropsDeps) removeChannelWhitelist(w http.ResponseWriter, r *http.Reques
 		seen[ch] = struct{}{}
 		if err := d.q.RemoveAccountChannel(r.Context(), gen.RemoveAccountChannelParams{
 			AccountID: accID, Channel: ch,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := d.q.RemoveStreamerPriority(r.Context(), gen.RemoveStreamerPriorityParams{
+			AccountID: accID, Login: ch,
 		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

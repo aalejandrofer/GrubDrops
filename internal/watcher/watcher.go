@@ -700,10 +700,26 @@ func (w *Watcher) Run(ctx context.Context) error {
 	backoff := time.Duration(0)
 	const maxBackoff = 5 * time.Minute
 
+	// Kick idle-sleep ramp (see nextKickIdleWait). Reset to 0 only when the
+	// watcher actually starts watching a stream — NOT on every non-idle
+	// step. pickCampaign->StatePickStream and pickStream's no-live-channel
+	// path->StatePickCampaign both return nil too, so resetting on "any
+	// nil, non-idle state" (the original version of this fix) zeroed
+	// idleWait every round for an account with matched-but-offline
+	// campaigns: the ramp never climbed past its first step, which is
+	// worse than the flat recheckInterval it replaced. Gating the reset on
+	// StateWatching specifically means it only fires once a live channel
+	// was actually found, restarting the ramp at its 30s floor the next
+	// time the account goes idle.
+	idleWait := time.Duration(0)
+
 	for {
 		err := w.step(ctx)
 		if err == nil {
 			backoff = 0
+			if w.State() == StateWatching {
+				idleWait = 0
+			}
 		} else if errors.Is(err, errIdle) {
 			// Idle (sleeping / awaiting connect): nothing to mine right now.
 			// As the LOWEST-priority fallback, run a queued force-watch task
@@ -716,7 +732,12 @@ func (w *Watcher) Run(ctx context.Context) error {
 				continue
 			}
 			w.setState(ctx, StatePickCampaign)
-			timer := time.NewTimer(recheckInterval)
+			wait := recheckInterval
+			if w.cfg.Platform == "kick" {
+				idleWait = nextKickIdleWait(idleWait)
+				wait = idleWait
+			}
+			timer := time.NewTimer(wait)
 			select {
 			case <-ctx.Done():
 				timer.Stop()
@@ -798,8 +819,36 @@ var errIdle = errors.New("idle; recheck later")
 
 // recheckInterval is how long a sleeping/awaiting-connect watcher waits
 // before re-discovering. Matches the discovery scraper cadence (~5m) so
-// the watcher's view and the persisted /drops view converge.
+// the watcher's view and the persisted /drops view converge. Twitch
+// accounts always wait exactly this long; see nextKickIdleWait for Kick's
+// ramped variant.
 const recheckInterval = 5 * time.Minute
+
+// kickIdleWaitSteps is the ramp nextKickIdleWait climbs through before
+// holding at recheckInterval.
+var kickIdleWaitSteps = []time.Duration{30 * time.Second, 60 * time.Second, 120 * time.Second, recheckInterval}
+
+// nextKickIdleWait computes how long a Kick watcher should wait before its
+// next re-discovery after landing on StateSleeping/StateAwaitingConnect,
+// given the PREVIOUS wait it used (0 the first time since going idle). A
+// Kick account with no live channel for any of its campaigns otherwise
+// re-picks and exhausts every campaign, then idles, then immediately
+// re-arms on the very next tick — cycling
+// pick_stream→pick_campaign→sleeping roughly every TickInterval and
+// spamming state-change logs. Ramping 30s→60s→120s before holding at the
+// same recheckInterval cap Twitch uses cuts that churn while still
+// re-checking quickly the first couple of times (a channel may go live
+// any moment). The caller resets prev to 0 the moment a pick succeeds, so
+// the ramp always restarts at its 30s floor rather than resuming from
+// wherever it had climbed to.
+func nextKickIdleWait(prev time.Duration) time.Duration {
+	for _, step := range kickIdleWaitSteps {
+		if prev < step {
+			return step
+		}
+	}
+	return kickIdleWaitSteps[len(kickIdleWaitSteps)-1]
+}
 
 // stepErrBackoff is the first retry delay after a failed step (doubling up
 // to 5 min). A var only so tests can shrink it.
