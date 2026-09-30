@@ -120,7 +120,15 @@ func Run(ctx context.Context, cfg Config, prev map[string]dropstate.Row, now tim
 				if known {
 					req = o.Required
 				}
-				next = dropstate.Apply(p, dropstate.Observation{
+				applyFrom := p
+				if linked && p.Status == dropstate.Blocked && p.Reason == dropstate.Unlinked {
+					// Only the reconciler may lift a campaign link block, and
+					// only once it has confirmed the campaign is linked: a
+					// non-claimed observation alone (e.g. a mid-watch session
+					// Progress event) must never lift it.
+					applyFrom = dropstate.Retry(p, now)
+				}
+				next = dropstate.Apply(applyFrom, dropstate.Observation{
 					Known: known && o.Known, Unmineable: o.Unmineable, Claimed: o.Claimed,
 					Minutes: o.Minutes, Required: req,
 				}, now)

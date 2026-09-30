@@ -27,8 +27,11 @@ const (
 	NotEnrolled Reason = "not_enrolled"
 	UserSkip    Reason = "user_skip"
 	// Unlinked is the campaign-level link block: the campaign needs an
-	// external account the user has not linked. Unlike the claim-level
-	// NeedsLink it has no hold; the next definite answer re-derives it.
+	// external account the user has not linked. Like UserSkip, a non-claimed
+	// observation never lifts it on its own — only the reconciler may, once
+	// it re-checks the campaign's link status and confirms it is linked
+	// (dropstate.Retry). A platform-confirmed claim still wins, same as any
+	// other block.
 	Unlinked Reason = "unlinked"
 )
 
@@ -162,7 +165,7 @@ func Apply(prev Row, obs Observation, now time.Time) Row {
 		r.Source, r.FailCount = FromPlatform, 0
 		return r.with(Claimed, NoReason, now)
 	}
-	if prev.Status == Blocked && prev.Reason == UserSkip {
+	if prev.Status == Blocked && (prev.Reason == UserSkip || prev.Reason == Unlinked) {
 		return r
 	}
 	if prev.Status == Blocked && (prev.Reason == NeedsLink || prev.Reason == ClaimFailed) && now.Before(prev.RetryAfter) {

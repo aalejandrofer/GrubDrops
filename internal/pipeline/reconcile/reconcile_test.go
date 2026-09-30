@@ -131,6 +131,25 @@ func TestRun_LinkedAfterUnlinkedUnblocksImmediately(t *testing.T) {
 	assert.Equal(t, dropstate.Eligible, byDrop(res.Rows)["d2"].Status)
 }
 
+// Companion to TestRun_LinkedAfterUnlinkedUnblocksImmediately: when the
+// campaign is still unlinked, a Blocked/Unlinked row must stay that way
+// (dropstate.Apply alone no longer lifts it, and reconcile.Run re-applies
+// BlockLink after Apply).
+func TestRun_StillUnlinkedStaysBlocked(t *testing.T) {
+	c := camp("c1", "G", "d1")
+	c.AccountLinked = false
+	f := &fakeBackend{camps: []platform.Campaign{c},
+		progress: []platform.DropProgress{{DropID: "d1", CampaignID: "c1", Minutes: 20, Required: 60, Known: true}}}
+	prev := map[string]dropstate.Row{"d1": {AccountID: "a", DropID: "d1", CampaignID: "c1", Platform: "twitch",
+		Status: dropstate.Blocked, Reason: dropstate.Unlinked, Minutes: 10, Required: 60,
+		Source: dropstate.FromPlatform, RetryAfter: now.Add(dropstate.RetryNeedsLink - time.Minute)}}
+	res, err := Run(context.Background(), cfg(f, &fakePersister{}), prev, now)
+	require.NoError(t, err)
+	r := byDrop(res.Rows)["d1"]
+	assert.Equal(t, dropstate.Blocked, r.Status)
+	assert.Equal(t, dropstate.Unlinked, r.Reason)
+}
+
 // C1: a backfilled ghost-skip (Required 0, immediate retry) on Kick, where the
 // platform reports unlisted rewards Known=false, becomes mineable again.
 func TestRun_BackfilledKickSkipBecomesEligible(t *testing.T) {

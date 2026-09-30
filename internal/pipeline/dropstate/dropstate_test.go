@@ -197,17 +197,35 @@ func TestApply_UnknownBackfilledRowAdoptsRequired(t *testing.T) {
 	}
 }
 
-// I3: a campaign-level link block is re-derived as soon as the platform gives a
-// definite answer; there is no 24h hold once the user links.
-func TestApply_UnlinkedReDerivedImmediately(t *testing.T) {
+// I3 (superseded, see below): a campaign-level link block used to re-derive
+// on the next Known observation regardless of source. That let a mid-watch
+// session Progress event (loop.applyProgress, also Known=true) lift the
+// block between reconciles even though the campaign was still unlinked, so
+// the planner mined a drop whose claim could never succeed. Lifting an
+// unlinked block is now the reconciler's job alone (dropstate.Retry once it
+// confirms the campaign is linked); see TestApply_UnlinkedNeverLiftedByObservation
+// and reconcile.TestRun_LinkedAfterUnlinkedUnblocksImmediately.
+
+// A campaign-level link block behaves like user_skip: only a claimed
+// observation can move it. Any other Known observation (including one from
+// a mid-watch session Progress event) must leave it Blocked/Unlinked; only
+// the reconciler (via dropstate.Retry, once it has confirmed the campaign
+// is linked) may lift it.
+func TestApply_UnlinkedNeverLiftedByObservation(t *testing.T) {
 	prev := BlockLink(row(Accruing, NoReason, 10, 60), t0)
 	require.Equal(t, Unlinked, prev.Reason)
-	require.True(t, t0.Add(time.Minute).Before(prev.RetryAfter))
+
 	got := Apply(prev, Observation{Known: true, Minutes: 20, Required: 60}, t0.Add(time.Minute))
-	assert.Equal(t, Accruing, got.Status)
-	assert.Equal(t, NoReason, got.Reason)
+	assert.Equal(t, Blocked, got.Status)
+	assert.Equal(t, Unlinked, got.Reason)
+
 	got = Apply(prev, Observation{Known: true, Minutes: 0, Required: 60}, t0.Add(time.Minute))
-	assert.Equal(t, Eligible, got.Status)
+	assert.Equal(t, Blocked, got.Status)
+	assert.Equal(t, Unlinked, got.Reason)
+
+	got = Apply(prev, Observation{Known: true, Claimed: true, Minutes: 60, Required: 60}, t0.Add(time.Minute))
+	assert.Equal(t, Claimed, got.Status)
+	assert.Equal(t, NoReason, got.Reason)
 }
 
 // A row that falls back from Claimable to Accruing/Eligible sheds its claim

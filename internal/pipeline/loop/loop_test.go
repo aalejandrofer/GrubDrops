@@ -267,6 +267,46 @@ func TestLoop_StaleGenerationIgnored(t *testing.T) {
 	_ = f
 }
 
+// TestLoop_UnlinkedCampaign_SessionProgressNeverLiftsBlock covers the prod
+// bug (2026-09-30): an unlinked campaign's Blocked/Unlinked drop was re-derived
+// to Accruing by the next mid-watch session Progress event (loop.applyProgress,
+// a Known=true observation just like reconcile's), so the planner mined it
+// between syncs even though its claim could never succeed. Revert-proof:
+// revert the dropstate.Apply Unlinked guard and this fails — applyProgress
+// flips d1 back to Accruing and a following replan starts watching ch1 again.
+func TestLoop_UnlinkedCampaign_SessionProgressNeverLiftsBlock(t *testing.T) {
+	f, st, _, cfg := setup(t)
+	f.camps[0].AccountLinked = false
+	l, err := New(cfg)
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	require.NoError(t, l.load(ctx))
+	l.reconcile(ctx)
+	require.Equal(t, dropstate.Blocked, st.get("d1").Status)
+	require.Equal(t, dropstate.Unlinked, st.get("d1").Reason)
+
+	l.refreshLive(ctx)
+	l.replan(ctx)
+	assert.Equal(t, "idle", l.Snapshot().State, "the only drop is blocked, so there is nothing to mine")
+
+	// A session Progress event (as loop.applyProgress folds mid-watch, the
+	// same path a live watch session feeds between reconciles) must not lift
+	// the campaign link block on its own.
+	l.applyProgress(ctx, []platform.Progress{{BenefitID: "d1", MinutesWatched: 50}})
+	assert.Equal(t, dropstate.Blocked, st.get("d1").Status, "session progress must not lift a campaign link block")
+	assert.Equal(t, dropstate.Unlinked, st.get("d1").Reason)
+
+	l.refreshLive(ctx)
+	l.replan(ctx)
+	assert.Equal(t, "idle", l.Snapshot().State, "the planner must still not pick the unlinked drop")
+	f.mu.Lock()
+	assert.Empty(t, f.watching, "no StartWatch for an unlinked campaign's drop")
+	f.mu.Unlock()
+	l.stopSession()
+}
+
 func TestLoop_BridgesManualMarksOnLoad(t *testing.T) {
 	_, st, h, cfg := setup(t)
 	st.rows["d1"] = dropstate.Row{AccountID: "acc", DropID: "d1", CampaignID: "c1", Platform: "twitch", Status: dropstate.Accruing, Minutes: 10, Required: 60, Source: dropstate.FromPlatform}
