@@ -253,6 +253,11 @@ func run() error {
 	} else {
 		twitchBackend = twitch.New()
 	}
+	// One shared Twitch campaign catalog for the whole process: backends on
+	// the Android/legacy login publish the full campaign list, TV-login
+	// backends merge the campaigns Twitch hides from the TV client.
+	twitchCatalog := twitch.NewCatalog()
+	twitchBackend.SetCatalog(twitchCatalog)
 	if twitchBrowserEnabled && browserClient != nil {
 		// proxyTransport is nil when no proxy is configured; the browser
 		// backend then dials the Spade beacon direct, same as before.
@@ -378,6 +383,7 @@ func run() error {
 			} else {
 				bk = twitch.New()
 			}
+			bk.SetCatalog(twitchCatalog)
 			twitchBackends[a.ID] = bk
 			return bk, true
 		}

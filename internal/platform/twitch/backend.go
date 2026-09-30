@@ -119,6 +119,10 @@ type Backend struct {
 	tvDetails   map[string][]platform.DropBenefit
 	tvDetailsAt time.Time
 
+	// catalog is the process-wide shared campaign list: non-TV sessions
+	// publish to it, TV sessions merge from it. Nil = no sharing.
+	catalog *Catalog
+
 	// PubSub WebSocket — one per backend (per platform-account). Lazy
 	// init on first ListActiveCampaigns once we have the user_id +
 	// auth token. Real-time progress / claim / stream-down events feed
@@ -255,6 +259,10 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 		if err != nil {
 			return nil, err
 		}
+		b.mu.Lock()
+		cat := b.catalog
+		b.mu.Unlock()
+		camps = mergeCatalog(cat, s, camps, allowed)
 		details := make(map[string][]platform.DropBenefit, len(camps))
 		for _, c := range camps {
 			details[c.ID] = c.Benefits
@@ -280,11 +288,35 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 	for cid, logins := range allowed {
 		b.allowedLoginsByCampaign[cid] = logins
 	}
+	cat := b.catalog
 	b.mu.Unlock()
+	// Share the full list with TV-client backends (which can't see the
+	// dashboard). Publish copies account-neutral link state.
+	if cat != nil {
+		cat.Publish(b.catalogSource(s), camps, allowed)
+	}
 	// Best-effort PubSub bootstrap. Once-only — subsequent calls noop.
 	// Failures are non-fatal: the watcher falls back to polling.
 	b.ensurePubSub(s)
 	return camps, nil
+}
+
+// SetCatalog attaches the process-wide shared campaign catalog. Non-TV
+// sessions publish their discovered campaigns to it; TV sessions merge
+// campaigns hidden from the TV client from it. Nil disables sharing.
+func (b *Backend) SetCatalog(c *Catalog) {
+	b.mu.Lock()
+	b.catalog = c
+	b.mu.Unlock()
+}
+
+// catalogSource keys this backend's catalog entry: the account when the
+// scheduler set it, else the backend instance (one per account in prod).
+func (b *Backend) catalogSource(s platform.Session) string {
+	if s.AccountID != "" {
+		return s.AccountID
+	}
+	return fmt.Sprintf("%p", b)
 }
 
 // SetPubSubHandlers wires real-time callbacks. Must be called before
