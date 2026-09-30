@@ -50,6 +50,9 @@ type fakeBackend struct {
 	// uses. gameLookups counts those calls per game.
 	gameLive    map[string][]platform.Stream
 	gameLookups map[string]int
+	// gameErr, keyed by game, fails a synthetic-campaign ListEligibleChannels
+	// lookup instead of answering from gameLive (enroll's directory-error path).
+	gameErr map[string]error
 	// onStartWatch, when set, runs (under mu) on every StartWatch.
 	onStartWatch func(channel string)
 }
@@ -73,6 +76,9 @@ func (f *fakeBackend) ListEligibleChannels(_ context.Context, _ platform.Session
 			f.gameLookups = map[string]int{}
 		}
 		f.gameLookups[c.Game]++
+		if err := f.gameErr[c.Game]; err != nil {
+			return nil, err
+		}
 		return append([]platform.Stream(nil), f.gameLive[c.Game]...), nil
 	}
 	return append([]platform.Stream(nil), f.live...), nil

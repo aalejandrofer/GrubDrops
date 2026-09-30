@@ -313,6 +313,11 @@ func (l *Loop) Run(ctx context.Context) error {
 			l.catchUpT.Stop()
 		}
 		l.stopEnrollTimer()
+		// A Loop is meant to run once per Run call, but clear the enroll
+		// run itself (not just its timer) so a re-entered Run can never
+		// inherit a stale enrollRun and report "discovering" forever with
+		// no timer left to end it.
+		l.enroll = nil
 	}()
 	l.reconcile(ctx)
 	if l.authBlocked {

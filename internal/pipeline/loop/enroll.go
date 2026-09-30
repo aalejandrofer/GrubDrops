@@ -61,7 +61,12 @@ func (l *Loop) maybeEnroll(ctx context.Context) {
 func (l *Loop) enrollChannel(ctx context.Context, game string, now time.Time) (platform.Stream, bool) {
 	streams, err := l.cfg.Backend.ListEligibleChannels(ctx, l.cfg.Session, platform.Campaign{Platform: l.cfg.Platform, Game: game})
 	if err != nil {
-		slog.Debug("pipeline enroll: list channels failed", "account", l.cfg.AccountID, "game", game, "err", err)
+		// WARN, not Debug: this is the only signal an operator gets that
+		// enroll discovery can't see a game's directory. The caller
+		// (maybeEnroll) backs the game off for LiveEvery on any failed
+		// lookup (enrollEmpty), so this fires at most once per game per
+		// backoff window, not on every idle nudge.
+		slog.Warn("pipeline enroll: list channels failed", "account", l.cfg.AccountID, "game", game, "err", err)
 		return platform.Stream{}, false
 	}
 	sort.SliceStable(streams, func(i, j int) bool { return streams[i].ViewerCount > streams[j].ViewerCount })
@@ -129,10 +134,12 @@ func (l *Loop) finishEnroll(ctx context.Context) {
 		before[id] = true
 	}
 	l.reconcile(ctx)
-	if l.authBlocked {
-		return
-	}
-	l.refreshLive(ctx)
+	// campaigns_found/new_drops reflect reconcile alone (refreshLive only
+	// probes channels for candidates already in l.rows, it adds no rows),
+	// so this INFO line fires even when the reconcile itself trips
+	// authBlocked (integrity wall) and refreshLive never runs. Without it,
+	// an enroll watch that ends in an auth block would leave no
+	// phase=stop reason=done line at all.
 	newDrops := 0
 	camps := map[string]bool{}
 	for id, r := range l.rows {
@@ -144,4 +151,8 @@ func (l *Loop) finishEnroll(ctx context.Context) {
 	slog.Info("pipeline enroll discovery", "kind", "discovery", "account", l.cfg.AccountID,
 		"phase", "stop", "game", e.game, "channel", e.stream.Channel, "reason", "done",
 		"campaigns_found", len(camps), "new_drops", newDrops)
+	if l.authBlocked {
+		return
+	}
+	l.refreshLive(ctx)
 }

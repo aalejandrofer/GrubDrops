@@ -11,7 +11,7 @@ All notable changes to GrubDrops.
 - `drop_state` and `account_streamer_priority` tables (migration 0016), with a one-time backfill from claim history, manual marks and ghost-skips.
 - Accounts on the Twitch TV login share the full campaign list found by any Android-login account in the same GrubDrops, so campaigns hidden from the TV client (for example behind a global badge campaign) are still found.
 - A banner explains that Twitch limits campaign discovery for new (TV) logins and points to the game whitelist.
-- Accounts on the Twitch TV login find campaigns by briefly watching a top drops-enabled channel for each whitelisted game when there is nothing else to mine, so Twitch enrolls them and the campaigns appear. (Pipeline v2: 10 minutes per game, each game at most once every 6 hours; dashboard state `discovering`.)
+- Accounts on the Twitch TV login find campaigns by briefly watching a top drops-enabled channel for each whitelisted game when there is nothing else to mine, so Twitch enrolls them and the campaigns appear. (Pipeline v2: 10 minutes per game, each game at most once every 6 hours; dashboard state `discovering`.) (the dashboard shows these accounts as Discovering)
 
 ### Changed
 

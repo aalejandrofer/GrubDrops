@@ -226,6 +226,7 @@
   "mining.scanning": "escaneando",
   "mining.scanning_channels": "escaneando canales",
   "mining.force_watching": "viendo",
+  "mining.discovering": "descubriendo",
   "mining.picking": "eligiendo",
   "mining.idle": "inactivo",
   "mining.reload_account": "Recargar esta cuenta",
