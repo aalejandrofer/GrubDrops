@@ -41,6 +41,10 @@ type fakeBackend struct {
 	listGames [][]string
 	// claimWatchLen is len(watching) at the first ClaimDrop call.
 	claimWatchLen int
+	// claimByDrop overrides claimRes per drop id; claimedIDs records every
+	// ClaimDrop call's drop id in order.
+	claimByDrop map[string]platform.ClaimResult
+	claimedIDs  []string
 }
 
 func (f *fakeBackend) ListActiveCampaigns(_ context.Context, s platform.Session) ([]platform.Campaign, error) {
@@ -84,10 +88,14 @@ func (f *fakeBackend) StopWatch(context.Context, platform.WatchHandle) error {
 	f.stops++
 	return nil
 }
-func (f *fakeBackend) ClaimDrop(context.Context, platform.Session, platform.DropProgress) platform.ClaimResult {
+func (f *fakeBackend) ClaimDrop(_ context.Context, _ platform.Session, dp platform.DropProgress) platform.ClaimResult {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.claims++
+	f.claimedIDs = append(f.claimedIDs, dp.DropID)
+	if r, ok := f.claimByDrop[dp.DropID]; ok {
+		return r
+	}
 	if f.claims == 1 {
 		f.claimWatchLen = len(f.watching)
 	}
@@ -776,7 +784,12 @@ func probeSetup(t *testing.T) (*fakeBackend, *memStore, *memHistory, Config) {
 	f.progress = nil
 	f.inventory = nil
 	cfg.StallPolls = 3
-	cfg.StallClaimProbe = true
+	cfg.ClaimProbe = true
+	// These tests isolate the stall probe: ClaimProbe also enables the
+	// catch-up pass (batch145_test.go), which would claim d1 one
+	// CatchUpEvery (default 3s) after the first reconcile. An hour keeps it
+	// out explicitly instead of relying on the tests finishing within 3s.
+	cfg.CatchUpEvery = time.Hour
 	return f, st, h, cfg
 }
 
@@ -913,7 +926,7 @@ func TestLoop_StallClaimProbe_SkipsDropInInventory(t *testing.T) {
 // (d) Probe disabled (Kick): stall behaviour unchanged, no claim.
 func TestLoop_StallClaimProbe_DisabledNoClaim(t *testing.T) {
 	f, st, _, cfg := probeSetup(t)
-	cfg.StallClaimProbe = false
+	cfg.ClaimProbe = false
 	l, _ := run(t, cfg)
 	waitBothStalled(t, f, l)
 	assert.Equal(t, 0, f.claimCount())

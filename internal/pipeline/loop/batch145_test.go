@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -173,4 +174,154 @@ func TestLoop_RefreshDoesNotReprobeListedCurrentChannel(t *testing.T) {
 	p.pmu.Lock()
 	assert.Empty(t, p.calls)
 	p.pmu.Unlock()
+}
+
+// catchUpSetup scripts a Twitch account added after it finished its drops:
+// campaign c1 is active and in scope with n drops, and the platform reports
+// nothing for any of them (campaign left the Inventory, details self null),
+// so reconcile derives every row Eligible from a Known=false observation.
+func catchUpSetup(t *testing.T, n int) (*fakeBackend, *memStore, Config) {
+	f, st, _, cfg := setup(t)
+	var bs []platform.DropBenefit
+	for i := 1; i <= n; i++ {
+		id := fmt.Sprintf("d%d", i)
+		bs = append(bs, platform.DropBenefit{ID: id, CampaignID: "c1", Name: id, RequiredMinutes: 60 * i})
+	}
+	f.camps[0].Benefits = bs
+	f.progress = nil
+	f.inventory = nil
+	f.live = nil // nothing live: any claim below comes from catch-up, never a watch
+	f.claimRes = platform.ClaimResult{Outcome: platform.ClaimFailed}
+	cfg.ClaimProbe = true
+	cfg.CatchUpEvery = 2 * time.Millisecond
+	return f, st, cfg
+}
+
+func (f *fakeBackend) claimedIDsCopy() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.claimedIDs...)
+}
+
+func (f *fakeBackend) listCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.listGames)
+}
+
+// Batch 1.4.5 item 1: a new account whose drops are already done. Already
+// → Claimed/FromPlatform without any watch; Failed leaves the row Eligible
+// and is not re-probed on the next reconcile. Revert-proof: remove the
+// catch-up enqueue in reconcile and no claim is ever sent (nothing is live,
+// so the stall probe never runs either).
+func TestLoop_CatchUpClaimProbe_NewAccountAlreadyClaimed(t *testing.T) {
+	f, st, cfg := catchUpSetup(t, 3)
+	f.claimByDrop = map[string]platform.ClaimResult{
+		"d1": {Outcome: platform.ClaimAlready},
+		"d2": {Outcome: platform.ClaimAlready},
+		"d3": {Outcome: platform.ClaimFailed},
+	}
+	l, _ := run(t, cfg)
+	require.Eventually(t, func() bool {
+		return st.get("d1").Status == dropstate.Claimed && st.get("d2").Status == dropstate.Claimed && f.claimCount() == 3
+	}, 2*time.Second, 2*time.Millisecond)
+	for _, id := range []string{"d1", "d2"} {
+		assert.Equal(t, dropstate.FromPlatform, st.get(id).Source, id)
+	}
+	r3 := st.get("d3")
+	assert.Equal(t, dropstate.Eligible, r3.Status, "a failed catch-up probe leaves the row unchanged")
+	assert.Equal(t, dropstate.NoReason, r3.Reason)
+	assert.Equal(t, 0, r3.FailCount, "a catch-up probe is not a claim failure")
+	assert.Empty(t, f.watchedChannels(), "claimed without any watch")
+
+	before := f.listCount()
+	l.Nudge()
+	require.Eventually(t, func() bool { return f.listCount() > before }, 2*time.Second, 2*time.Millisecond)
+	time.Sleep(40 * time.Millisecond) // many CatchUpEvery periods
+	assert.ElementsMatch(t, []string{"d1", "d2", "d3"}, f.claimedIDsCopy(), "each drop probed once per loop run")
+	assert.Equal(t, dropstate.Eligible, st.get("d3").Status)
+}
+
+// NeedsLink maps to the needs_link block.
+func TestLoop_CatchUpClaimProbe_NeedsLinkBlocks(t *testing.T) {
+	f, st, cfg := catchUpSetup(t, 1)
+	f.claimRes = platform.ClaimResult{Outcome: platform.ClaimNeedsLink}
+	run(t, cfg)
+	require.Eventually(t, func() bool { return st.get("d1").Reason == dropstate.NeedsLink }, 2*time.Second, 2*time.Millisecond)
+	assert.Equal(t, dropstate.Blocked, st.get("d1").Status)
+}
+
+// Cap: with 8 candidates one reconcile queues only catchUpPerReconcile; the
+// rest wait for the next reconcile, and nothing is probed twice. Driven by
+// hand so the drain is deterministic.
+func TestLoop_CatchUpClaimProbe_CapPerReconcile(t *testing.T) {
+	f, _, cfg := catchUpSetup(t, 8)
+	l, err := New(cfg)
+	require.NoError(t, err)
+	ctx := context.Background()
+	require.NoError(t, l.load(ctx))
+	drain := func() {
+		for i := 0; i < 20; i++ {
+			l.catchUpOne(ctx)
+		}
+	}
+
+	l.reconcile(ctx)
+	assert.Equal(t, 0, f.claimCount(), "reconcile only queues; probes are spaced by the loop timer")
+	drain()
+	assert.Equal(t, catchUpPerReconcile, f.claimCount())
+
+	l.reconcile(ctx)
+	drain()
+	assert.Equal(t, 8, f.claimCount(), "the remaining candidates go on the next reconcile")
+
+	l.reconcile(ctx)
+	drain()
+	assert.Equal(t, 8, f.claimCount(), "no drop is probed twice")
+	assert.ElementsMatch(t, []string{"d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8"}, f.claimedIDsCopy())
+}
+
+// Only Eligible rows with a Known=false observation, Required>0 and an
+// active campaign qualify.
+func TestLoop_CatchUpClaimProbe_SkipsNonCandidates(t *testing.T) {
+	f, _, cfg := catchUpSetup(t, 3)
+	f.progress = []platform.DropProgress{{DropID: "d1", CampaignID: "c1", Minutes: 0, Required: 60, Known: true}}
+	f.camps = append(f.camps, platform.Campaign{ID: "c2", Platform: "twitch", Game: "G", Name: "Old", Status: "expired",
+		AccountLinked: true, AccountLinkChecked: true,
+		Benefits: []platform.DropBenefit{{ID: "e1", CampaignID: "c2", RequiredMinutes: 60}}})
+	l, err := New(cfg)
+	require.NoError(t, err)
+	ctx := context.Background()
+	require.NoError(t, l.load(ctx))
+	r := dropstate.Row{AccountID: "acc", DropID: "d2", CampaignID: "c1", Platform: "twitch", Status: dropstate.Accruing, Minutes: 5, Required: 120, Source: dropstate.FromPlatform}
+	l.rows["d2"] = r
+	l.reconcile(ctx)
+	for i := 0; i < 10; i++ {
+		l.catchUpOne(ctx)
+	}
+	assert.Equal(t, []string{"d3"}, f.claimedIDsCopy(), "d1 is Known, d2 is not Eligible (Accruing then not_enrolled), e1 is in an expired campaign")
+}
+
+// Probes are not sent inline: with an hour between probes, none is sent.
+func TestLoop_CatchUpClaimProbe_SpacedNotInline(t *testing.T) {
+	f, _, cfg := catchUpSetup(t, 3)
+	cfg.CatchUpEvery = time.Hour
+	run(t, cfg)
+	require.Eventually(t, func() bool { return f.listCount() >= 1 }, 2*time.Second, 2*time.Millisecond)
+	time.Sleep(40 * time.Millisecond)
+	assert.Equal(t, 0, f.claimCount())
+}
+
+// Kick keeps claimed rewards listed, so main.go leaves ClaimProbe off: no
+// catch-up probes.
+func TestLoop_CatchUpClaimProbe_KickOff(t *testing.T) {
+	f, st, cfg := catchUpSetup(t, 3)
+	cfg.Platform = "kick"
+	cfg.ClaimProbe = false
+	f.claimRes = platform.ClaimResult{Outcome: platform.ClaimAlready}
+	run(t, cfg)
+	require.Eventually(t, func() bool { return f.listCount() >= 1 }, 2*time.Second, 2*time.Millisecond)
+	time.Sleep(40 * time.Millisecond)
+	assert.Equal(t, 0, f.claimCount())
+	assert.Equal(t, dropstate.Eligible, st.get("d1").Status)
 }

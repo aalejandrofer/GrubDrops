@@ -59,12 +59,20 @@ type Config struct {
 	StreamerPriority      []string
 	ForceWatch            []string
 	ProgressNotifyStepPct int
-	// StallClaimProbe (Twitch): on a stall, send one claim for each served
-	// Eligible drop that was absent from the last inventory read. Twitch
-	// drops claimed outside the app whose campaign left the Inventory are
-	// otherwise invisible (DropCampaignDetails self: null) and would be
-	// watched forever. Kick keeps claimed rewards listed, so it leaves this off.
-	StallClaimProbe bool
+	// ClaimProbe (Twitch) turns on both blind claim checks for drops the
+	// platform says nothing about. Twitch drops claimed outside the app whose
+	// campaign left the Inventory are otherwise invisible (DropCampaignDetails
+	// self: null) and would be watched forever. Kick keeps claimed rewards
+	// listed, so it leaves this off.
+	//   - catch-up: after each reconcile, one claim per Eligible drop of an
+	//     active campaign that the reconcile read had no record of, once per
+	//     loop run, spaced CatchUpEvery apart (catchUpPerReconcile queued per
+	//     reconcile). Recognises an account added after it finished its drops.
+	//   - stall: on a stall, one claim for each served Eligible drop absent
+	//     from the last inventory read, on that drop's second stall.
+	ClaimProbe bool
+	// CatchUpEvery spaces catch-up claim probes (default 3s).
+	CatchUpEvery time.Duration
 
 	Now            func() time.Time
 	ReconcileEvery time.Duration // default 15m
@@ -77,6 +85,14 @@ type Config struct {
 
 // maxLiveCampaigns bounds channel lookups per refresh.
 const maxLiveCampaigns = 8
+
+// catchUpPerReconcile bounds the catch-up claim-probe queue: a reconcile
+// tops it up to this many, and the loop drains one every CatchUpEvery.
+// Probes never run inline in reconcile, so the loop stays responsive (at
+// most one claim call per timer fire) and the rate stays at or below one
+// claim per CatchUpEvery (3s) and catchUpPerReconcile (5, well under 20)
+// per reconcile. Candidates past the cap wait for the next reconcile.
+const catchUpPerReconcile = 5
 
 type pubsubEvent struct {
 	kind     string // "progress" | "claimable" | "down"
@@ -126,6 +142,13 @@ type Loop struct {
 	// (Eligible, absent from lastInv). The probe fires on the second stall;
 	// an entry is dropped once probed or once the row leaves Eligible.
 	stallCount map[string]int
+	// Catch-up claim probes (ClaimProbe). probed holds every drop id probed
+	// this loop run (a restart may probe once more); catchUpQ is the pending
+	// queue, drained one per catchUpC fire (nil while no timer is armed).
+	probed   map[string]bool
+	catchUpQ []string
+	catchUpT *time.Timer
+	catchUpC <-chan time.Time
 }
 
 // New assembles the loop, checking the backend's pipeline capabilities once.
@@ -159,6 +182,9 @@ func New(cfg Config) (*Loop, error) {
 	if cfg.DownCooldown <= 0 {
 		cfg.DownCooldown = 2 * time.Minute
 	}
+	if cfg.CatchUpEvery <= 0 {
+		cfg.CatchUpEvery = 3 * time.Second
+	}
 	cfg.Session.AccountID = cfg.AccountID
 	if cfg.Session.Games == nil {
 		cfg.Session.Games = cfg.Games
@@ -178,6 +204,7 @@ func New(cfg Config) (*Loop, error) {
 		milestones:     map[string]int{},
 		pendingHistory: map[string]bool{},
 		stallCount:     map[string]int{},
+		probed:         map[string]bool{},
 	}
 	l.prober, _ = cfg.Backend.(platform.ChannelProber)
 	l.subs, _ = cfg.Backend.(platform.ChannelSubscriber)
@@ -250,6 +277,11 @@ func (l *Loop) Run(ctx context.Context) error {
 	liveT := time.NewTicker(l.cfg.LiveEvery)
 	defer recT.Stop()
 	defer liveT.Stop()
+	defer func() {
+		if l.catchUpT != nil {
+			l.catchUpT.Stop()
+		}
+	}()
 	for {
 		select {
 		case <-ctx.Done():
@@ -265,6 +297,10 @@ func (l *Loop) Run(ctx context.Context) error {
 			l.onSession(ctx, ev)
 		case pe := <-l.pubsub:
 			l.onPubSub(ctx, pe)
+		case <-l.catchUpC:
+			l.catchUpC, l.catchUpT = nil, nil
+			l.catchUpOne(ctx)
+			l.armCatchUp()
 		}
 		if l.authBlocked {
 			return nil
@@ -363,6 +399,87 @@ func (l *Loop) reconcile(ctx context.Context) {
 	// already-existing row is left to dropstate.Apply's own rules so a
 	// definite platform answer can overwrite a stale user mark and stick.
 	l.bridgeClaimHistory(ctx, func(id string) bool { return !existed[id] })
+	if l.cfg.ClaimProbe {
+		l.queueCatchUp(res)
+	}
+}
+
+// queueCatchUp tops the catch-up queue up to catchUpPerReconcile with drops
+// this reconcile left Eligible although the platform had no record of them
+// (Known=false: absent from Inventory and campaign details), in an active
+// in-scope campaign, with a known requirement, not yet probed this run. On
+// Twitch that is what an account added after finishing its drops looks
+// like; without this each one needs two stalls to be recognised.
+func (l *Loop) queueCatchUp(res reconcile.Result) {
+	queued := make(map[string]bool, len(l.catchUpQ))
+	for _, id := range l.catchUpQ {
+		queued[id] = true
+	}
+	for _, c := range res.Campaigns {
+		for _, b := range c.Benefits {
+			if len(l.catchUpQ) >= catchUpPerReconcile {
+				l.armCatchUp()
+				return
+			}
+			id := b.ID
+			if id == "" || queued[id] || l.probed[id] || res.Progress[id].Known {
+				continue
+			}
+			r, ok := l.rows[id]
+			if !ok || r.CampaignID != c.ID || r.Status != dropstate.Eligible || r.Required <= 0 {
+				continue
+			}
+			queued[id] = true
+			l.catchUpQ = append(l.catchUpQ, id)
+		}
+	}
+	l.armCatchUp()
+}
+
+// armCatchUp starts the catch-up timer when work is queued and none runs.
+func (l *Loop) armCatchUp() {
+	if len(l.catchUpQ) == 0 || l.catchUpT != nil {
+		return
+	}
+	l.catchUpT = time.NewTimer(l.cfg.CatchUpEvery)
+	l.catchUpC = l.catchUpT.C
+}
+
+// catchUpOne sends one catch-up claim probe: the first queued drop still
+// Eligible and unprobed. OK/ALREADY_CLAIMED marks it claimed; NeedsLink
+// blocks it needs_link; a failure leaves the row untouched (it may simply
+// be unstarted) and counts nothing. Either way it is not probed again this
+// loop run.
+func (l *Loop) catchUpOne(ctx context.Context) {
+	for len(l.catchUpQ) > 0 {
+		id := l.catchUpQ[0]
+		l.catchUpQ = l.catchUpQ[1:]
+		r, ok := l.rows[id]
+		if !ok || r.Status != dropstate.Eligible || l.probed[id] {
+			continue
+		}
+		l.probed[id] = true
+		dp, ok := l.progress[id]
+		if !ok || dp.DropID == "" {
+			dp = platform.DropProgress{DropID: id, CampaignID: r.CampaignID}
+		}
+		res := l.claimer.ClaimDrop(ctx, l.cfg.Session, dp)
+		now := l.cfg.Now()
+		kind := "probe"
+		var next dropstate.Row
+		switch res.Outcome {
+		case platform.ClaimOK, platform.ClaimAlready:
+			next, kind = dropstate.ClaimOK(r, now), "claim"
+		case platform.ClaimNeedsLink:
+			next = dropstate.ClaimNeedsLink(r, now)
+		}
+		slog.Info("pipeline catch-up claim-probe", "kind", kind, "account", l.cfg.AccountID, "drop", id,
+			"outcome", res.Outcome.String(), "detail", res.Detail)
+		if !next.IsZero() {
+			l.commit(ctx, next)
+		}
+		return
+	}
 }
 
 // onIntegrityBlocked mirrors v1: stop watching, surface auth_required so the
@@ -619,7 +736,7 @@ func (l *Loop) onSession(ctx context.Context, ev session.Event) {
 		}
 	case session.Stalled:
 		if l.isCurrent(ev.Channel) {
-			if l.cfg.StallClaimProbe {
+			if l.cfg.ClaimProbe {
 				l.stallClaimProbe(ctx, now)
 			}
 			l.cooldowns[strings.ToLower(ev.Channel)] = now.Add(l.cfg.StallCooldown)
