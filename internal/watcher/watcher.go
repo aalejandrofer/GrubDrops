@@ -700,16 +700,24 @@ func (w *Watcher) Run(ctx context.Context) error {
 	backoff := time.Duration(0)
 	const maxBackoff = 5 * time.Minute
 
-	// Kick idle-sleep ramp (see nextKickIdleWait). Reset to 0 whenever a
-	// step makes real forward progress, so it restarts at the 30s floor the
-	// next time the account goes idle instead of resuming a stale ramp.
+	// Kick idle-sleep ramp (see nextKickIdleWait). Reset to 0 only when the
+	// watcher actually starts watching a stream — NOT on every non-idle
+	// step. pickCampaign->StatePickStream and pickStream's no-live-channel
+	// path->StatePickCampaign both return nil too, so resetting on "any
+	// nil, non-idle state" (the original version of this fix) zeroed
+	// idleWait every round for an account with matched-but-offline
+	// campaigns: the ramp never climbed past its first step, which is
+	// worse than the flat recheckInterval it replaced. Gating the reset on
+	// StateWatching specifically means it only fires once a live channel
+	// was actually found, restarting the ramp at its 30s floor the next
+	// time the account goes idle.
 	idleWait := time.Duration(0)
 
 	for {
 		err := w.step(ctx)
 		if err == nil {
 			backoff = 0
-			if s := w.State(); s != StateSleeping && s != StateAwaitingConnect {
+			if w.State() == StateWatching {
 				idleWait = 0
 			}
 		} else if errors.Is(err, errIdle) {
