@@ -73,6 +73,17 @@ type Config struct {
 	ClaimProbe bool
 	// CatchUpEvery spaces catch-up claim probes (default 3s).
 	CatchUpEvery time.Duration
+	// EnrollDiscovery (TV-client Twitch sessions) turns on watch-to-enroll
+	// discovery. A TV token can't read the campaign list, but Inventory
+	// lists every campaign the viewer is enrolled in, and Twitch enrolls a
+	// viewer who watches a channel that counts toward a campaign. So when
+	// the planner has nothing to do, the loop watches the top live
+	// drops-enabled channel of the next whitelisted game (round-robin over
+	// Games) for EnrollWatch, then reconciles. A game is probed at most
+	// once per EnrollGameCooldown. Kick and Android sessions leave it off.
+	EnrollDiscovery    bool
+	EnrollWatch        time.Duration // default EnrollWatch (10m)
+	EnrollGameCooldown time.Duration // default EnrollGameCooldown (6h)
 
 	Now            func() time.Time
 	ReconcileEvery time.Duration // default 15m
@@ -82,6 +93,12 @@ type Config struct {
 	StallCooldown  time.Duration // default 30m
 	DownCooldown   time.Duration // default 2m
 }
+
+// Enroll discovery defaults (see Config.EnrollDiscovery).
+const (
+	EnrollWatch        = 10 * time.Minute
+	EnrollGameCooldown = 6 * time.Hour
+)
 
 // maxLiveCampaigns bounds channel lookups per refresh.
 const maxLiveCampaigns = 8
@@ -149,6 +166,26 @@ type Loop struct {
 	catchUpQ []string
 	catchUpT *time.Timer
 	catchUpC <-chan time.Time
+	// Enroll discovery (EnrollDiscovery). enroll is the running enroll
+	// watch (nil when none); enrollC fires once its EnrollWatch is up.
+	// enrollProbed holds each game's last completed probe (lower-cased
+	// name), enrollEmpty the last lookup that found no usable channel
+	// (retried after LiveEvery), enrollNext the round-robin cursor into
+	// Games. In memory only: a restart may probe each game once more.
+	enroll       *enrollRun
+	enrollT      *time.Timer
+	enrollC      <-chan time.Time
+	enrollProbed map[string]time.Time
+	enrollEmpty  map[string]time.Time
+	enrollNext   int
+}
+
+// enrollRun is one enroll-discovery watch: game Games[idx] on stream.
+type enrollRun struct {
+	game    string
+	idx     int
+	stream  platform.Stream
+	started time.Time
 }
 
 // New assembles the loop, checking the backend's pipeline capabilities once.
@@ -185,6 +222,12 @@ func New(cfg Config) (*Loop, error) {
 	if cfg.CatchUpEvery <= 0 {
 		cfg.CatchUpEvery = 3 * time.Second
 	}
+	if cfg.EnrollWatch <= 0 {
+		cfg.EnrollWatch = EnrollWatch
+	}
+	if cfg.EnrollGameCooldown <= 0 {
+		cfg.EnrollGameCooldown = EnrollGameCooldown
+	}
 	cfg.Session.AccountID = cfg.AccountID
 	if cfg.Session.Games == nil {
 		cfg.Session.Games = cfg.Games
@@ -205,6 +248,8 @@ func New(cfg Config) (*Loop, error) {
 		pendingHistory: map[string]bool{},
 		stallCount:     map[string]int{},
 		probed:         map[string]bool{},
+		enrollProbed:   map[string]time.Time{},
+		enrollEmpty:    map[string]time.Time{},
 	}
 	l.prober, _ = cfg.Backend.(platform.ChannelProber)
 	l.subs, _ = cfg.Backend.(platform.ChannelSubscriber)
@@ -267,6 +312,7 @@ func (l *Loop) Run(ctx context.Context) error {
 		if l.catchUpT != nil {
 			l.catchUpT.Stop()
 		}
+		l.stopEnrollTimer()
 	}()
 	l.reconcile(ctx)
 	if l.authBlocked {
@@ -302,6 +348,8 @@ func (l *Loop) Run(ctx context.Context) error {
 			l.catchUpC, l.catchUpT = nil, nil
 			l.catchUpOne(ctx)
 			l.armCatchUp()
+		case <-l.enrollC:
+			l.finishEnroll(ctx)
 		}
 		if l.authBlocked {
 			return nil
@@ -489,6 +537,9 @@ func (l *Loop) catchUpOne(ctx context.Context) {
 func (l *Loop) onIntegrityBlocked(ctx context.Context) {
 	slog.Warn("pipeline: integrity blocked, marking account needs_auth", "kind", "auth", "account", l.cfg.AccountID)
 	l.authBlocked = true
+	if l.enroll != nil {
+		l.endEnroll("auth_blocked")
+	}
 	l.stopSession()
 	l.current = nil
 	l.mu.Lock()
@@ -754,6 +805,12 @@ func (l *Loop) onSession(ctx context.Context, ev session.Event) {
 		if l.isCurrent(ev.Channel) {
 			l.cooldowns[strings.ToLower(ev.Channel)] = now.Add(l.cfg.DownCooldown)
 		}
+		if e := l.enroll; e != nil && strings.EqualFold(e.stream.Channel, ev.Channel) {
+			// Cool the channel and end the watch unprobed: the replan that
+			// follows retries the same game on its next channel.
+			l.cooldowns[strings.ToLower(ev.Channel)] = now.Add(l.cfg.DownCooldown)
+			l.endEnroll("stream_down")
+		}
 	case session.Stalled:
 		if l.isCurrent(ev.Channel) {
 			if l.cfg.ClaimProbe {
@@ -942,8 +999,29 @@ func sameServeSet(a, b []string) bool {
 	return true
 }
 
+// replan runs the planner and applies its decision. Enroll discovery sits
+// on top of it, loop-side, so the planner stays pure: an Idle decision
+// keeps (or starts) an enroll watch; anything else preempts it at once.
 func (l *Loop) replan(ctx context.Context) {
 	d := planner.Plan(l.plannerInput())
+	if l.enroll != nil {
+		if d.Kind == planner.Idle {
+			if l.current != nil {
+				l.current.Serves, l.current.Reason = d.Serves, d.Reason
+			}
+			l.updateSnapshot()
+			return
+		}
+		l.endEnroll("preempted")
+	}
+	l.apply(ctx, d)
+	if l.current != nil && l.current.Kind == planner.Idle && l.enroll == nil {
+		l.maybeEnroll(ctx)
+		l.updateSnapshot()
+	}
+}
+
+func (l *Loop) apply(ctx context.Context, d planner.Decision) {
 	if l.current != nil && l.current.Same(d) {
 		servesChanged := !sameServeSet(l.current.Serves, d.Serves)
 		l.current.Serves, l.current.Reason = d.Serves, d.Reason
@@ -979,10 +1057,6 @@ func (l *Loop) replan(ctx context.Context) {
 }
 
 func (l *Loop) startSession(ctx context.Context, d planner.Decision) {
-	sctx, cancel := context.WithCancel(ctx)
-	l.sessCancel = cancel
-	l.gen++
-	l.lastInv = nil
 	if want := d.Channel.ChannelID; l.subs != nil && want != l.subscribed {
 		l.unsubscribe()
 		if want != "" {
@@ -990,14 +1064,24 @@ func (l *Loop) startSession(ctx context.Context, d planner.Decision) {
 			l.subscribed = want
 		}
 	}
+	stall := l.cfg.StallPolls
+	if d.Kind == planner.ForceWatch {
+		stall = 0 // channel-points farming has no drop progress to stall on
+	}
+	l.runSession(ctx, d.Channel, d.Serves, stall)
+}
+
+// runSession starts one session goroutine under a fresh generation stamp.
+func (l *Loop) runSession(ctx context.Context, stream platform.Stream, serves []string, stallPolls int) {
+	sctx, cancel := context.WithCancel(ctx)
+	l.sessCancel = cancel
+	l.gen++
+	l.lastInv = nil
 	ticker := time.NewTicker(l.cfg.BeatEvery)
 	cfg := session.Config{
-		Backend: l.cfg.Backend, Session: l.cfg.Session, Stream: d.Channel,
-		Serves: d.Serves, Ticks: ticker.C, StallPolls: l.cfg.StallPolls, Gen: l.gen,
+		Backend: l.cfg.Backend, Session: l.cfg.Session, Stream: stream,
+		Serves: serves, Ticks: ticker.C, StallPolls: stallPolls, Gen: l.gen,
 		AccountID: l.cfg.AccountID,
-	}
-	if d.Kind == planner.ForceWatch {
-		cfg.StallPolls = 0 // channel-points farming has no drop progress to stall on
 	}
 	done := make(chan struct{})
 	l.sessDone = done
@@ -1062,7 +1146,11 @@ func stateString(d *planner.Decision) string {
 
 func (l *Loop) updateSnapshot() {
 	s := watcher.Snapshot{AccountID: l.cfg.AccountID, State: stateString(l.current)}
-	if d := l.current; d != nil && d.Kind != planner.Idle {
+	if e := l.enroll; e != nil {
+		s.State = "discovering"
+		s.Channel, s.ViewerCount, s.StartedAt = e.stream.Channel, e.stream.ViewerCount, e.started
+		s.CampaignGame = e.game
+	} else if d := l.current; d != nil && d.Kind != planner.Idle {
 		s.Channel, s.ViewerCount, s.StartedAt = d.Channel.Channel, d.Channel.ViewerCount, l.lastSwap
 		if len(d.Serves) > 0 {
 			b, c := l.benefit(d.Serves[0])

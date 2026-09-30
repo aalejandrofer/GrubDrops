@@ -45,6 +45,13 @@ type fakeBackend struct {
 	// ClaimDrop call's drop id in order.
 	claimByDrop map[string]platform.ClaimResult
 	claimedIDs  []string
+	// gameLive answers ListEligibleChannels for a synthetic open campaign
+	// (ID "", Game set): the Twitch directory fallback enroll discovery
+	// uses. gameLookups counts those calls per game.
+	gameLive    map[string][]platform.Stream
+	gameLookups map[string]int
+	// onStartWatch, when set, runs (under mu) on every StartWatch.
+	onStartWatch func(channel string)
 }
 
 func (f *fakeBackend) ListActiveCampaigns(_ context.Context, s platform.Session) ([]platform.Campaign, error) {
@@ -58,9 +65,16 @@ func (f *fakeBackend) DropProgress(context.Context, platform.Session, []platform
 	defer f.mu.Unlock()
 	return append([]platform.DropProgress(nil), f.progress...), nil
 }
-func (f *fakeBackend) ListEligibleChannels(context.Context, platform.Session, platform.Campaign) ([]platform.Stream, error) {
+func (f *fakeBackend) ListEligibleChannels(_ context.Context, _ platform.Session, c platform.Campaign) ([]platform.Stream, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if c.ID == "" && c.Game != "" {
+		if f.gameLookups == nil {
+			f.gameLookups = map[string]int{}
+		}
+		f.gameLookups[c.Game]++
+		return append([]platform.Stream(nil), f.gameLive[c.Game]...), nil
+	}
 	return append([]platform.Stream(nil), f.live...), nil
 }
 func (f *fakeBackend) InventoryProgress(context.Context, platform.Session) ([]platform.Progress, error) {
@@ -72,6 +86,9 @@ func (f *fakeBackend) StartWatch(_ context.Context, _ platform.Session, s platfo
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.watching = append(f.watching, s.Channel)
+	if f.onStartWatch != nil {
+		f.onStartWatch(s.Channel)
+	}
 	return platform.WatchHandle{Channel: s.Channel}, nil
 }
 func (f *fakeBackend) Heartbeat(_ context.Context, h platform.WatchHandle) error {

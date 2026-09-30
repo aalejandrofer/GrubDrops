@@ -498,7 +498,8 @@ func run() error {
 				ProgressNotifyStepPct: progressStep,
 				// Twitch hides drops claimed outside the app once their
 				// campaign leaves the Inventory; Kick keeps them listed.
-				ClaimProbe: a.Platform == "twitch",
+				ClaimProbe:      a.Platform == "twitch",
+				EnrollDiscovery: enrollDiscoveryFor(a.Platform, sess),
 			})
 			if err == nil {
 				logger.Info("pipeline v2 enabled for account", "account", a.ID, "platform", a.Platform)
@@ -969,6 +970,15 @@ func pipelineModeFor(ctx context.Context, q *gen.Queries, accountID string) stri
 		return "v1"
 	}
 	return "v2"
+}
+
+// enrollDiscoveryFor turns on pipeline v2 watch-to-enroll discovery for
+// TV-client Twitch sessions: they can't read the campaign list, so they
+// find campaigns by watching a drops-enabled channel per whitelisted game
+// until Inventory lists what Twitch enrolled them in. Android sessions see
+// the list directly and Kick has no such gap, so both stay off.
+func enrollDiscoveryFor(platformName string, sess platform.Session) bool {
+	return platformName == "twitch" && sess.ClientID == twitch.ClientTV
 }
 
 // matchAnyChannel reports whether any campaign channel is one of logins.

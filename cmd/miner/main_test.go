@@ -9,9 +9,20 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/aalejandrofer/grubdrops/internal/api"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform/twitch"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
+
+// TestEnrollDiscoveryFor: watch-to-enroll discovery is for TV-client Twitch
+// sessions only; Android (legacy empty ClientID) and Kick stay off.
+func TestEnrollDiscoveryFor(t *testing.T) {
+	assert.True(t, enrollDiscoveryFor("twitch", platform.Session{ClientID: twitch.ClientTV}))
+	assert.False(t, enrollDiscoveryFor("twitch", platform.Session{}), "Android / legacy session")
+	assert.False(t, enrollDiscoveryFor("twitch", platform.Session{ClientID: "android"}))
+	assert.False(t, enrollDiscoveryFor("kick", platform.Session{ClientID: twitch.ClientTV}))
+}
 
 func TestLoadAccountChannels(t *testing.T) {
 	ctx := context.Background()
