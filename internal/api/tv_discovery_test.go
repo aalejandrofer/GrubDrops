@@ -209,26 +209,34 @@ func TestDashAlerts_EmptyWhenNoAlerts(t *testing.T) {
 	require.False(t, strings.Contains(out, `class="alerts"`))
 }
 
-// End-to-end: an enabled Twitch account with a TV session and no whitelist
-// produces a dashboard page whose Alerts include the warning-variant
-// tv_discovery entry (collectPage is the real dashboard view-model builder).
-func TestDashboardCollectPage_TVDiscoveryBanner(t *testing.T) {
+// collectPage does NOT compute the tv_discovery alert — it's only added by
+// the full-page handler. This guards against the alert decryption running on
+// every polled HTMX partial (cards/telemetry, every 10s).
+func TestDashboardCollectPage_NoTVDiscoveryComputed(t *testing.T) {
 	ctx, q, sessions := tvDiscoverySetup(t)
 	createTwitchAccount(t, ctx, q, "acc_tv", true)
 	require.NoError(t, sessions.Put(ctx, "acc_tv", platform.Session{ClientID: twitch.ClientTV}))
 
 	d := dashboardDeps{q: q, sessions: sessions, start: time.Now(), loc: timeutil.NewZone(time.UTC)}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	page := d.collectPage(req)
 
-	require.Len(t, page.Alerts, 1)
-	require.Equal(t, "tv_discovery", page.Alerts[0].Kind)
-	require.True(t, page.Alerts[0].Warning)
+	// collectPage should return alerts from buildDashAlerts only, not tvDiscoveryAlert.
+	page := d.collectPage(req)
+	for _, a := range page.Alerts {
+		require.NotEqual(t, "tv_discovery", a.Kind, "collectPage must not compute TV discovery alert")
+	}
+
+	// Verify tvDiscoveryAlert still works when called directly (as the page handler does).
+	tv := tvDiscoveryAlert(ctx, q, sessions, "en")
+	require.NotNil(t, tv)
+	require.Equal(t, "tv_discovery", tv.Kind)
+	require.True(t, tv.Warning)
 }
 
-// An Android-only install (no TV session anywhere) must not raise the
-// banner on the dashboard.
-func TestDashboardCollectPage_NoBannerForAndroidOnly(t *testing.T) {
+// collectPage excludes tv_discovery alert even when called with sessions present,
+// since the page handler is responsible for adding it (not collectPage). This
+// ensures polled partials (cards/telemetry) never trigger session decryption.
+func TestDashboardCollectPage_ExcludesTVDiscoveryAlertAlways(t *testing.T) {
 	ctx, q, sessions := tvDiscoverySetup(t)
 	createTwitchAccount(t, ctx, q, "acc_android", true)
 	require.NoError(t, sessions.Put(ctx, "acc_android", platform.Session{ClientID: ""}))
@@ -238,7 +246,7 @@ func TestDashboardCollectPage_NoBannerForAndroidOnly(t *testing.T) {
 	page := d.collectPage(req)
 
 	for _, a := range page.Alerts {
-		require.NotEqual(t, "tv_discovery", a.Kind)
+		require.NotEqual(t, "tv_discovery", a.Kind, "collectPage must never compute TV discovery alert")
 	}
 }
 

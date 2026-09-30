@@ -319,11 +319,6 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 	// Build alerts: any account in needs_auth state or sleeping with 0
 	// eligible drops gets a top banner pointing at the right CTA.
 	alerts := buildDashAlerts(r.Context(), d.q, cards, lang)
-	// tv_discovery goes first — it's an install-wide notice, not tied to
-	// one account, so it leads the other per-account alerts.
-	if tv := tvDiscoveryAlert(r.Context(), d.q, d.sessions, lang); tv != nil {
-		alerts = append([]dashAlert{*tv}, alerts...)
-	}
 
 	camps := activeCampsFromDiscovery(r.Context(), d.sch, d.channelCounters, d.q, lang)
 
@@ -966,12 +961,20 @@ func (d dashboardDeps) page(w http.ResponseWriter, r *http.Request) {
 	if d.sm != nil {
 		flash = d.sm.PopString(r.Context(), "flash")
 	}
+	page := d.collectPage(r)
+	// tv_discovery alert goes first — it's an install-wide notice, not tied to
+	// one account, so it leads the other per-account alerts. Only computed on
+	// full-page renders, not on polled HTMX partials (cards/telemetry).
+	lang := i18n.DetectLang(r)
+	if tv := tvDiscoveryAlert(r.Context(), d.q, d.sessions, lang); tv != nil {
+		page.Alerts = append([]dashAlert{*tv}, page.Alerts...)
+	}
 	render(w, r, d.t, "dashboard.html", templateData{
 		AuthedAdmin: true,
 		CSRFToken:   csrfToken(r),
 		Active:      "dashboard",
 		Flash:       flash,
-		Page:        d.collectPage(r),
+		Page:        page,
 	})
 }
 
