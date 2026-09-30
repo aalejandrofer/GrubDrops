@@ -242,6 +242,31 @@ func TestLoop_CatchUpClaimProbe_NewAccountAlreadyClaimed(t *testing.T) {
 	assert.Equal(t, dropstate.Eligible, st.get("d3").Status)
 }
 
+// Fix round 1 ruling: an ALREADY_CLAIMED catch-up answer is a historical
+// claim (recorded in history, no notification); only a claim that succeeded
+// just now (OK) notifies. Revert-proof: make commitProbeResult always call
+// commit and the Already count becomes 1.
+func TestLoop_CatchUpClaimProbe_NotifiesOnlyOK(t *testing.T) {
+	f, st, cfg := catchUpSetup(t, 2)
+	f.claimByDrop = map[string]platform.ClaimResult{
+		"d1": {Outcome: platform.ClaimAlready},
+		"d2": {Outcome: platform.ClaimOK},
+	}
+	h := &memHistory{}
+	cfg.History = h
+	n := &recNotifier{}
+	cfg.Notifier = n
+	run(t, cfg)
+	require.Eventually(t, func() bool {
+		return st.get("d1").Status == dropstate.Claimed && st.get("d2").Status == dropstate.Claimed
+	}, 2*time.Second, 2*time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
+	assert.Equal(t, 1, n.count("claim"), "only the OK claim notifies")
+	h.mu.Lock()
+	assert.ElementsMatch(t, []string{"d1", "d2"}, h.recorded, "both claims still reach the claim history")
+	h.mu.Unlock()
+}
+
 // NeedsLink maps to the needs_link block.
 func TestLoop_CatchUpClaimProbe_NeedsLinkBlocks(t *testing.T) {
 	f, st, cfg := catchUpSetup(t, 1)

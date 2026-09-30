@@ -262,6 +262,12 @@ func (l *Loop) Run(ctx context.Context) error {
 		return err
 	}
 	defer l.stopSession()
+	// Registered before the first reconcile, which may arm the timer.
+	defer func() {
+		if l.catchUpT != nil {
+			l.catchUpT.Stop()
+		}
+	}()
 	l.reconcile(ctx)
 	if l.authBlocked {
 		return nil
@@ -277,11 +283,6 @@ func (l *Loop) Run(ctx context.Context) error {
 	liveT := time.NewTicker(l.cfg.LiveEvery)
 	defer recT.Stop()
 	defer liveT.Stop()
-	defer func() {
-		if l.catchUpT != nil {
-			l.catchUpT.Stop()
-		}
-	}()
 	for {
 		select {
 		case <-ctx.Done():
@@ -476,7 +477,7 @@ func (l *Loop) catchUpOne(ctx context.Context) {
 		slog.Info("pipeline catch-up claim-probe", "kind", kind, "account", l.cfg.AccountID, "drop", id,
 			"outcome", res.Outcome.String(), "detail", res.Detail)
 		if !next.IsZero() {
-			l.commit(ctx, next)
+			l.commitProbeResult(ctx, next, res.Outcome)
 		}
 		return
 	}
@@ -510,7 +511,23 @@ func (l *Loop) benefit(dropID string) (platform.DropBenefit, platform.Campaign) 
 }
 
 // commit stores a row and handles the transition into claimed.
-func (l *Loop) commit(ctx context.Context, next dropstate.Row) {
+func (l *Loop) commit(ctx context.Context, next dropstate.Row) { l.commitRow(ctx, next, true) }
+
+// commitQuiet is commit without the claim notification, for historical
+// claims a blind probe uncovers (ClaimAlready): the claim history is still
+// recorded, but nothing was claimed just now, so nothing is announced.
+func (l *Loop) commitQuiet(ctx context.Context, next dropstate.Row) { l.commitRow(ctx, next, false) }
+
+// commitProbeResult commits a probe outcome row, quietly for ClaimAlready.
+func (l *Loop) commitProbeResult(ctx context.Context, next dropstate.Row, o platform.ClaimOutcome) {
+	if o == platform.ClaimAlready {
+		l.commitQuiet(ctx, next)
+		return
+	}
+	l.commit(ctx, next)
+}
+
+func (l *Loop) commitRow(ctx context.Context, next dropstate.Row, notify bool) {
 	prev := l.rows[next.DropID]
 	l.rows[next.DropID] = next
 	if next.Status != dropstate.Eligible {
@@ -531,7 +548,7 @@ func (l *Loop) commit(ctx context.Context, next dropstate.Row) {
 	}
 	slog.Info("pipeline drop claimed", "kind", "claim", "account", l.cfg.AccountID, "drop", next.DropID, "source", string(next.Source))
 	// Only notify live transitions, not historical claims seen on first sync.
-	if !prev.IsZero() && next.Source == dropstate.FromPlatform {
+	if notify && !prev.IsZero() && next.Source == dropstate.FromPlatform {
 		l.notify(ctx, "claim", c, b, nil)
 	}
 }
@@ -685,6 +702,9 @@ func (l *Loop) keepCurrentLive(ctx context.Context, live map[string][]platform.S
 			}
 		}
 	}
+	// A restricted campaign with an unknown allow-list is re-probed too (the
+	// probe filters by game only); the exposure is bounded by the stall
+	// detector, which cools a channel that stops crediting.
 	for _, id := range campIDs {
 		c, ok := l.campaign(id)
 		if !ok {
@@ -783,7 +803,7 @@ func (l *Loop) stallClaimProbe(ctx context.Context, now time.Time) {
 		}
 		slog.Info("pipeline stall claim-probe", "kind", kind, "account", l.cfg.AccountID, "drop", id,
 			"outcome", res.Outcome.String(), "detail", res.Detail)
-		l.commit(ctx, next)
+		l.commitProbeResult(ctx, next, res.Outcome)
 	}
 }
 

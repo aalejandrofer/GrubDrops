@@ -546,6 +546,18 @@ func (n *recNotifier) Notify(_ context.Context, event string, _ map[string]any) 
 	return nil
 }
 
+func (n *recNotifier) count(event string) int {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	c := 0
+	for _, e := range n.events {
+		if e == event {
+			c++
+		}
+	}
+	return c
+}
+
 // TestMaybeNotifyProgress_MilestoneNeverLowers covers item 5: a later,
 // lower reading of Minutes (e.g. a stale re-sync) must not lower the
 // recorded milestone nor re-fire a notification once real progress passes it.
@@ -809,7 +821,8 @@ func (f *fakeBackend) watchedChannels() []string {
 // (a) An Eligible served drop absent from the inventory is probed on its
 // SECOND stall (ch1 stalls: plain cooldown; ch2 stalls: one claim).
 // ALREADY_CLAIMED marks it claimed from the platform, records history,
-// notifies once, and the planner moves on instead of re-watching it.
+// does not notify (historical claim), and the planner moves on instead of
+// re-watching it.
 func TestLoop_StallClaimProbe_AlreadyClaimedMarksClaimed(t *testing.T) {
 	f, st, h, cfg := probeSetup(t)
 	f.claimRes = platform.ClaimResult{Outcome: platform.ClaimAlready}
@@ -838,7 +851,19 @@ func TestLoop_StallClaimProbe_AlreadyClaimedMarksClaimed(t *testing.T) {
 		}
 	}
 	n.mu.Unlock()
-	assert.Equal(t, 1, claimEvents, "exactly one claim notification")
+	assert.Equal(t, 0, claimEvents, "ALREADY_CLAIMED is a historical claim: no claim notification")
+}
+
+// A stall probe answered OK did claim the drop just now, so it notifies once.
+func TestLoop_StallClaimProbe_OKNotifiesOnce(t *testing.T) {
+	f, st, _, cfg := probeSetup(t)
+	f.claimRes = platform.ClaimResult{Outcome: platform.ClaimOK}
+	n := &recNotifier{}
+	cfg.Notifier = n
+	run(t, cfg)
+	require.Eventually(t, func() bool { return st.get("d1").Status == dropstate.Claimed }, 3*time.Second, 5*time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, 1, n.count("claim"))
 }
 
 // A single stall is a plain cooldown: no claim is sent.
