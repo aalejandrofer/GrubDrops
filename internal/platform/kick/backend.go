@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/auth/browser"
 	"github.com/aalejandrofer/grubdrops/internal/dockerctl"
+	"github.com/aalejandrofer/grubdrops/internal/gameslug"
 	"github.com/aalejandrofer/grubdrops/internal/netutil"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
@@ -63,6 +65,7 @@ type Backend struct {
 	channelsByAcc    map[string][]string
 	campaignChannels map[string][]kickChannel // campaignID -> eligible channels (slug+id)
 	categoryChannels map[string][]kickChannel // game/category -> union of participating channels across campaigns
+	categorySlugs    map[string]string       // game display name -> authoritative category slug (payload-provided)
 
 	// reaperCancel stops the sidecar reaper goroutine on Close().
 	reaperCancel context.CancelFunc
@@ -129,6 +132,7 @@ func New(c *browser.Client, ctl dockerctl.Controller, template string, port int,
 		channelsByAcc:    map[string][]string{},
 		campaignChannels: map[string][]kickChannel{},
 		categoryChannels: map[string][]kickChannel{},
+		categorySlugs:    map[string]string{},
 	}
 	if ctl != nil {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -405,6 +409,14 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 			}
 			b.mu.Unlock()
 		}
+		// Remember the payload's authoritative category slug (when present) so
+		// the open-campaign directory fallback addresses the right category
+		// instead of re-deriving the slug from the display name.
+		if c.Game != "" && c.GameSlug != "" {
+			b.mu.Lock()
+			b.categorySlugs[c.Game] = c.GameSlug
+			b.mu.Unlock()
+		}
 		camp := platform.Campaign{
 			ID:              c.ID,
 			Platform:        "kick",
@@ -482,6 +494,21 @@ func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, 
 		return live, nil
 	}
 
+	// Directory fallback for OPEN campaigns: when the pooled candidates (own +
+	// category union) yielded nothing live — typically because no sibling
+	// campaign of this game embeds channels (e.g. "WoW Forever", the only WoW
+	// campaign, so the category pool is empty) — ask the public category
+	// directory for currently-live channels. Every discovered candidate still
+	// passes probeLive's live + on-category verification, so a wrong slug
+	// (the failure mode that got the old generic livestreams feed removed)
+	// can only produce zero results, never junk picks. Restricted campaigns
+	// never reach here — only their own listed channels can accrue.
+	if openCampaign {
+		if live := b.discoverCategoryChannels(ctx, s, c); len(live) > 0 {
+			return live, nil
+		}
+	}
+
 	// Fallback: channels the operator registered manually. Returned as-is (no
 	// liveness probe) — an explicit operator override, and the watch loop will
 	// drop a dead one on the next heartbeat.
@@ -526,6 +553,49 @@ func (b *Backend) probeLive(ctx context.Context, s platform.Session, c platform.
 		live = append(live, platform.Stream{Channel: ch.Slug, ChannelID: id, ViewerCount: viewers, DropsEnabled: true})
 	}
 	return live
+}
+
+// discoverCategoryChannels is the open-campaign directory fallback: fetch the
+// public /stream/livestreams/{category} feed for the campaign's category,
+// merge the discovered slugs into the category pool (so subsequent picks see
+// them without a re-fetch), and return the ones that are live and actually
+// streaming the campaign's category. Returns nil when the category slug can't
+// be resolved, the feed errors, or nothing verifies — the caller falls
+// through to the manual operator channels.
+func (b *Backend) discoverCategoryChannels(ctx context.Context, s platform.Session, c platform.Campaign) []platform.Stream {
+	b.mu.Lock()
+	slug := b.categorySlugs[c.Game]
+	b.mu.Unlock()
+	if slug == "" && c.Game != "" {
+		slug = gameslug.Slug(c.Game)
+	}
+	if slug == "" {
+		return nil
+	}
+	streams, err := b.api.DiscoverChannelsForCategory(ctx, s, slug)
+	if err != nil {
+		slog.Debug("kick category directory fetch failed", "game", c.Game, "slug", slug, "err", err)
+		return nil
+	}
+	if len(streams) == 0 {
+		return nil
+	}
+	// Probe biggest-first so probeLive's cap lands on the most-watched (and
+	// therefore most stable) candidates. The directory only lists is_live
+	// channels, but the category still needs re-verifying per channel: a
+	// wrong slug yields channels streaming a DIFFERENT game, which accrues
+	// nothing — that's exactly what probeLive's category check rejects.
+	sort.SliceStable(streams, func(i, j int) bool { return streams[i].ViewerCount > streams[j].ViewerCount })
+	discovered := make([]kickChannel, 0, len(streams))
+	for _, st := range streams {
+		discovered = append(discovered, kickChannel{Slug: st.Channel})
+	}
+	b.mu.Lock()
+	if c.Game != "" {
+		b.categoryChannels[c.Game] = mergeChannels(b.categoryChannels[c.Game], discovered)
+	}
+	b.mu.Unlock()
+	return b.probeLive(ctx, s, c, discovered)
 }
 
 // reliableChannels are broadcasters known to stream their drops category

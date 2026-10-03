@@ -161,6 +161,7 @@ type kickCampaign struct {
 	ID         string
 	Name       string
 	Game       string
+	GameSlug   string // authoritative category slug when the payload carries one
 	Status     string
 	StartsAt   string
 	EndsAt     string
@@ -207,6 +208,7 @@ func (a *api) Campaigns(ctx context.Context, sess platform.Session) ([]kickCampa
 			ID:         mstr(m, "id", "campaign_id", "campaignId", "uuid"),
 			Name:       mstr(m, "name", "title"),
 			Game:       gameName(m),
+			GameSlug:   gameSlug(m),
 			Status:     mstr(m, "status", "state"),
 			StartsAt:   mstr(m, "starts_at", "startsAt", "start_at", "start_time"),
 			EndsAt:     mstr(m, "ends_at", "endsAt", "end_at", "end_time"),
@@ -534,6 +536,26 @@ func gameName(m map[string]any) string {
 	for _, k := range []string{"game", "category"} {
 		if sub, ok := m[k].(map[string]any); ok {
 			if s := mstr(sub, "name", "slug", "title"); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+// gameSlug extracts the campaign's category slug when the payload carries
+// one: a top-level game_slug/category_slug sibling, or a nested
+// game/category object's slug. Empty when absent — callers fall back to
+// deriving the slug from the display name (gameslug.Slug). Keeping the
+// authoritative slug matters because derived slugs can diverge from Kick's
+// real category paths (renames, punctuation — cf. Twitch issue #61).
+func gameSlug(m map[string]any) string {
+	if s := mstr(m, "game_slug", "gameSlug", "category_slug", "categorySlug"); s != "" {
+		return s
+	}
+	for _, k := range []string{"game", "category"} {
+		if sub, ok := m[k].(map[string]any); ok {
+			if s := mstr(sub, "slug"); s != "" {
 				return s
 			}
 		}
