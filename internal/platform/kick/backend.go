@@ -382,22 +382,28 @@ func kickRewardsToBenefits(campaignID string, rewards []kickReward) []platform.D
 
 func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) ([]platform.Campaign, error) {
 	// Drops campaigns over the utls HTTP client (GET /api/v1/drops/campaigns).
-	// The per-account whitelist filters the result — never hardcode a game.
+	// Non-whitelisted campaigns are emitted as SHELL rows (status + game +
+	// name, no Benefits) so the /drops Discoverable tab can surface them and
+	// the user can opt the game in — mirroring the Twitch backend, which treats
+	// GameFilter as a should-fetch-details gate rather than a drop-the-campaign
+	// gate. The watcher applies its own AllowGame before mining and never picks
+	// a campaign with empty Benefits, so shells are never mined.
 	camps, err := b.api.Campaigns(ctx, s)
 	if err != nil {
 		return nil, fmt.Errorf("kick campaigns: %w", err)
 	}
 	out := make([]platform.Campaign, 0, len(camps))
 	for _, c := range camps {
-		if s.GameFilter != nil && c.Game != "" && !s.GameFilter(c.Game) {
-			continue
+		whitelisted := s.GameFilter == nil || c.Game == "" || s.GameFilter(c.Game)
+		var benefits []platform.DropBenefit
+		if whitelisted {
+			benefits = kickRewardsToBenefits(c.ID, c.Rewards)
 		}
-		benefits := kickRewardsToBenefits(c.ID, c.Rewards)
 		slugs := make([]string, 0, len(c.Channels))
 		for _, ch := range c.Channels {
 			slugs = append(slugs, ch.Slug)
 		}
-		if c.ID != "" && len(c.Channels) > 0 {
+		if whitelisted && c.ID != "" && len(c.Channels) > 0 {
 			b.mu.Lock()
 			b.campaignChannels[c.ID] = c.Channels // slug+id, for the watch handshake
 			// Kick drops accrue on ANY participating live channel in the
@@ -411,7 +417,9 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 		}
 		// Remember the payload's authoritative category slug (when present) so
 		// the open-campaign directory fallback addresses the right category
-		// instead of re-deriving the slug from the display name.
+		// instead of re-deriving the slug from the display name. Cached for
+		// shell rows too — it costs nothing and is ready the moment the user
+		// whitelists the game.
 		if c.Game != "" && c.GameSlug != "" {
 			b.mu.Lock()
 			b.categorySlugs[c.Game] = c.GameSlug

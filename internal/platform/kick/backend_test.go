@@ -74,13 +74,32 @@ func TestKickBackend_ListActiveCampaigns_MapsAndFilters(t *testing.T) {
 		assert.Equal(t, c.ID, c.Benefits[0].CampaignID)
 	}
 
-	// GameFilter prunes to Rust only.
+	// GameFilter turns non-whitelisted campaigns into SHELL rows (Twitch
+	// parity): still emitted with status + game + name so the /drops
+	// Discoverable tab can surface them, but with EMPTY Benefits so the
+	// watcher never mines them. Previously they were dropped outright,
+	// which made non-whitelisted Kick campaigns invisible — the user
+	// couldn't discover "WoW Forever" to whitelist it (#60).
 	s := sess("acc1")
 	s.GameFilter = func(g string) bool { return g == "Rust" }
 	only, err := b.ListActiveCampaigns(context.Background(), s)
 	require.NoError(t, err)
-	require.Len(t, only, 1)
-	assert.Equal(t, "Rust", only[0].Game)
+	require.Len(t, only, 2)
+
+	var rust, cs *platform.Campaign
+	for i := range only {
+		switch only[i].Game {
+		case "Rust":
+			rust = &only[i]
+		case "Counter-Strike":
+			cs = &only[i]
+		}
+	}
+	require.NotNil(t, rust, "whitelisted campaign still emitted")
+	require.NotNil(t, cs, "non-whitelisted campaign emitted as shell row")
+	require.NotEmpty(t, rust.Benefits, "whitelisted campaign keeps its benefits")
+	assert.Empty(t, cs.Benefits, "shell row must carry no benefits")
+	assert.Equal(t, "active", cs.Status, "shell row keeps its status for the Discoverable tab")
 }
 
 // Kick exposes no per-campaign "is the external account linked" signal (unlike
@@ -377,6 +396,30 @@ func TestKickBackend_DirectoryDiscoveryPoolsForLaterPicks(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, out2, 1)
 	assert.Equal(t, "pooledchan", out2[0].Channel)
+}
+
+// Shell rows must not populate the channel pools: a game nobody mines
+// shouldn't contribute candidates (or claim IDs) to mining state.
+func TestKickBackend_ShellRowsSkipChannelPools(t *testing.T) {
+	f := &fakeDoer{resp: map[string]fakeResp{
+		"https://web.kick.com/api/v1/drops/campaigns": {200, `{"data":[
+			{"id":"c-shell","game":"ShellGame","name":"Not Whitelisted","status":"active",
+			 "channels":[{"slug":"shellchan","id":"1"}],
+			 "rewards":[{"id":"b1","required_units":60}]}
+		]}`},
+	}}
+	b := withFake(f)
+	s := sess("acc1")
+	s.GameFilter = func(g string) bool { return g == "Rust" } // nothing whitelisted matches
+	_, err := b.ListActiveCampaigns(context.Background(), s)
+	require.NoError(t, err)
+
+	b.mu.Lock()
+	_, hasCampaign := b.campaignChannels["c-shell"]
+	_, hasCategory := b.categoryChannels["ShellGame"]
+	b.mu.Unlock()
+	assert.False(t, hasCampaign, "shell row must not populate campaignChannels")
+	assert.False(t, hasCategory, "shell row must not populate categoryChannels")
 }
 
 func TestKickBackend_DeviceLoginRejected(t *testing.T) {
