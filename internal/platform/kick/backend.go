@@ -580,7 +580,7 @@ func (b *Backend) discoverCategoryChannels(ctx context.Context, s platform.Sessi
 	if slug == "" {
 		return nil
 	}
-	streams, err := b.api.DiscoverChannelsForCategory(ctx, s, slug)
+	streams, err := b.api.DiscoverChannelsForCategory(ctx, s, slug, c.Game)
 	if err != nil {
 		slog.Debug("kick category directory fetch failed", "game", c.Game, "slug", slug, "err", err)
 		return nil

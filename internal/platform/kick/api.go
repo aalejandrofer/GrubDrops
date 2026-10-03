@@ -77,8 +77,15 @@ func newAPI() *api { return &api{d: newHTTPDoer(nil)} }
 
 // ---- Public channel discovery (no auth required) -------------------------
 
-// livestreamsResp is the /stream/livestreams/{category} shape (verified live).
+// livestreamsResp is the /stream/livestreams/{category} shape (verified live
+// 2026-10-03). The feed is PAGINATED (per_page=5, ?page=N works) and — as of
+// that check — serves a GLOBAL feed that ignores the {category} path segment,
+// so entries must be filtered client-side against their embedded categories.
+// Each entry carries the channel slug and its own category list, which makes
+// that filter authoritative rather than inferred.
 type livestreamsResp struct {
+	CurrentPage int  `json:"current_page"`
+	NextPageURL any `json:"next_page_url"` // string or null
 	Data []struct {
 		ID           int64  `json:"id"` // livestream id (used for the watch ping)
 		SessionTitle string `json:"session_title"`
@@ -87,37 +94,92 @@ type livestreamsResp struct {
 		Channel      struct {
 			Slug string `json:"slug"` // channel login, e.g. "tippie"
 		} `json:"channel"`
+		Categories []struct {
+			Name string `json:"name"`
+			Slug string `json:"slug"`
+		} `json:"categories"`
 	} `json:"data"`
 }
+
+// discoverMaxPages caps how many directory pages one fallback fetch walks
+// (per_page=5, so 4 pages ≈ 20 candidates — probeLive caps verification at
+// 12 anyway). Later watcher cycles keep scanning, so a category missing from
+// this window still gets picked up over successive picks.
+const discoverMaxPages = 4
 
 // DiscoverChannelsForCategory lists currently-live channels in a Kick category
 // (game). Public endpoint — works without a logged-in session. This is the
 // auto-discovery that removes manual one-channel-at-a-time entry.
-func (a *api) DiscoverChannelsForCategory(ctx context.Context, sess platform.Session, categorySlug string) ([]platform.Stream, error) {
-	body, status, err := a.d.do(ctx, sess, http.MethodGet, discoveryBase+"/stream/livestreams/"+categorySlug, nil)
-	if err != nil {
-		return nil, err
-	}
-	if status != 200 {
-		return nil, fmt.Errorf("livestreams %s: status %d", categorySlug, status)
-	}
-	var resp livestreamsResp
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("decode livestreams: %w", err)
-	}
-	out := make([]platform.Stream, 0, len(resp.Data))
-	for _, s := range resp.Data {
-		if !s.IsLive || s.Channel.Slug == "" {
-			continue
+//
+// An entry qualifies when any of its embedded categories matches the wanted
+// one — by slug, or by display name against gameName (case/space-insensitive;
+// the campaign may only carry the display name). Matching client-side keeps
+// this correct whether or not the endpoint honors the category segment, and
+// the caller (probeLive) independently re-verifies every candidate is live
+// and on-category before it's committed, so a sloppy match can't produce a
+// junk pick.
+func (a *api) DiscoverChannelsForCategory(ctx context.Context, sess platform.Session, categorySlug, gameName string) ([]platform.Stream, error) {
+	out := []platform.Stream{}
+	for page := 1; page <= discoverMaxPages; page++ {
+		url := fmt.Sprintf("%s/stream/livestreams/%s?page=%d", discoveryBase, categorySlug, page)
+		body, status, err := a.d.do(ctx, sess, http.MethodGet, url, nil)
+		if err != nil {
+			if page > 1 {
+				break // earlier pages already parsed — return what we have
+			}
+			return nil, err
 		}
-		out = append(out, platform.Stream{
-			Channel:      s.Channel.Slug,
-			ViewerCount:  s.ViewerCount,
-			DropsEnabled: true,
-			ChannelID:    fmt.Sprintf("%d", s.ID), // livestream id — used by the watch ping
-		})
+		if status != 200 {
+			if page > 1 {
+				break
+			}
+			return nil, fmt.Errorf("livestreams %s: status %d", categorySlug, status)
+		}
+		var resp livestreamsResp
+		if err := json.Unmarshal(body, &resp); err != nil {
+			if page > 1 {
+				break
+			}
+			return nil, fmt.Errorf("decode livestreams: %w", err)
+		}
+		for _, s := range resp.Data {
+			if !s.IsLive || s.Channel.Slug == "" {
+				continue
+			}
+			if !entryMatchesCategory(s.Categories, categorySlug, gameName) {
+				continue
+			}
+			out = append(out, platform.Stream{
+				Channel:      s.Channel.Slug,
+				ViewerCount:  s.ViewerCount,
+				DropsEnabled: true,
+				ChannelID:    fmt.Sprintf("%d", s.ID), // livestream id — used by the watch ping
+			})
+		}
+		if len(resp.Data) == 0 {
+			break
+		}
 	}
 	return out, nil
+}
+
+// entryMatchesCategory reports whether any of the entry's embedded categories
+// is the wanted one. Slug match is exact; name match is case/space-insensitive
+// against the game's display name ("PUBG: BATTLEGROUNDS" vs "PUBG:
+// Battlegrounds" etc).
+func entryMatchesCategory(cats []struct {
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}, categorySlug, gameName string) bool {
+	for _, c := range cats {
+		if categorySlug != "" && strings.EqualFold(strings.TrimSpace(c.Slug), strings.TrimSpace(categorySlug)) {
+			return true
+		}
+		if gameName != "" && strings.EqualFold(strings.TrimSpace(c.Name), strings.TrimSpace(gameName)) {
+			return true
+		}
+	}
+	return false
 }
 
 // Avatar returns the authenticated account's profile-picture URL. AUTHED.
