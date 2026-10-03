@@ -65,7 +65,7 @@ type Backend struct {
 	channelsByAcc    map[string][]string
 	campaignChannels map[string][]kickChannel // campaignID -> eligible channels (slug+id)
 	categoryChannels map[string][]kickChannel // game/category -> union of participating channels across campaigns
-	categorySlugs    map[string]string       // game display name -> authoritative category slug (payload-provided)
+	categorySlugs    map[string]string        // game display name -> authoritative category slug (payload-provided)
 
 	// reaperCancel stops the sidecar reaper goroutine on Close().
 	reaperCancel context.CancelFunc

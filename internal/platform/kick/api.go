@@ -84,9 +84,9 @@ func newAPI() *api { return &api{d: newHTTPDoer(nil)} }
 // Each entry carries the channel slug and its own category list, which makes
 // that filter authoritative rather than inferred.
 type livestreamsResp struct {
-	CurrentPage int  `json:"current_page"`
+	CurrentPage int `json:"current_page"`
 	NextPageURL any `json:"next_page_url"` // string or null
-	Data []struct {
+	Data        []struct {
 		ID           int64  `json:"id"` // livestream id (used for the watch ping)
 		SessionTitle string `json:"session_title"`
 		IsLive       bool   `json:"is_live"`

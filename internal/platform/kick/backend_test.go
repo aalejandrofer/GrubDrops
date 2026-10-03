@@ -267,7 +267,7 @@ func TestKickBackend_OpenCampaignDirectoryFallback(t *testing.T) {
 		]}`},
 		// probeLive verification: both live + streaming the campaign's game.
 		"https://kick.com/api/v2/channels/rewardstation/livestream": {200, `{"data":{"id":111,"viewer_count":4200,"categories":[{"name":"World of Warcraft","slug":"world-of-warcraft"}]}}`},
-		"https://kick.com/api/v2/channels/wowstreamer/livestream":  {200, `{"data":{"id":222,"viewer_count":80,"categories":[{"name":"World of Warcraft","slug":"world-of-warcraft"}]}}`},
+		"https://kick.com/api/v2/channels/wowstreamer/livestream":   {200, `{"data":{"id":222,"viewer_count":80,"categories":[{"name":"World of Warcraft","slug":"world-of-warcraft"}]}}`},
 	}}
 	b := withFake(f)
 	_, err := b.ListActiveCampaigns(context.Background(), sess("acc1"))
