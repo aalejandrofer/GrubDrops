@@ -74,13 +74,32 @@ func TestKickBackend_ListActiveCampaigns_MapsAndFilters(t *testing.T) {
 		assert.Equal(t, c.ID, c.Benefits[0].CampaignID)
 	}
 
-	// GameFilter prunes to Rust only.
+	// GameFilter turns non-whitelisted campaigns into SHELL rows (Twitch
+	// parity): still emitted with status + game + name so the /drops
+	// Discoverable tab can surface them, but with EMPTY Benefits so the
+	// watcher never mines them. Previously they were dropped outright,
+	// which made non-whitelisted Kick campaigns invisible — the user
+	// couldn't discover "WoW Forever" to whitelist it (#60).
 	s := sess("acc1")
 	s.GameFilter = func(g string) bool { return g == "Rust" }
 	only, err := b.ListActiveCampaigns(context.Background(), s)
 	require.NoError(t, err)
-	require.Len(t, only, 1)
-	assert.Equal(t, "Rust", only[0].Game)
+	require.Len(t, only, 2)
+
+	var rust, cs *platform.Campaign
+	for i := range only {
+		switch only[i].Game {
+		case "Rust":
+			rust = &only[i]
+		case "Counter-Strike":
+			cs = &only[i]
+		}
+	}
+	require.NotNil(t, rust, "whitelisted campaign still emitted")
+	require.NotNil(t, cs, "non-whitelisted campaign emitted as shell row")
+	require.NotEmpty(t, rust.Benefits, "whitelisted campaign keeps its benefits")
+	assert.Empty(t, cs.Benefits, "shell row must carry no benefits")
+	assert.Equal(t, "active", cs.Status, "shell row keeps its status for the Discoverable tab")
 }
 
 // Kick exposes no per-campaign "is the external account linked" signal (unlike
@@ -219,6 +238,206 @@ func TestKickBackend_RejectsWrongCategoryChannel(t *testing.T) {
 		platform.Campaign{ID: "c1", Game: "Rust"})
 	require.NoError(t, err)
 	assert.Empty(t, out)
+}
+
+// --- open-campaign directory fallback (issue #60) ---------------------------
+//
+// An OPEN campaign whose category pool is EMPTY (no sibling campaign embeds
+// channels — e.g. "WoW Forever", the only WoW campaign) must fall back to the
+// public /stream/livestreams/{category} directory, with every discovered
+// candidate still verified live + on-category by probeLive.
+
+func TestKickBackend_OpenCampaignDirectoryFallback(t *testing.T) {
+	f := &fakeDoer{resp: map[string]fakeResp{
+		// One OPEN WoW campaign, no channels anywhere in the payload.
+		"https://web.kick.com/api/v1/drops/campaigns": {200, `{"data":[
+			{"id":"c-wow","game":"World of Warcraft","name":"WoW Forever","status":"active",
+			 "rewards":[{"id":"b1","required_units":60}]}
+		]}`},
+		// The public directory feed (2026-10-03 live shape: paginated, entries
+		// carry their own categories). Includes one off-category entry that
+		// the client-side filter must drop before probing.
+		"https://kick.com/stream/livestreams/world-of-warcraft?page=1": {200, `{"current_page":1,"data":[
+			{"id":111,"is_live":true,"viewer_count":4200,"channel":{"slug":"rewardstation"},
+			 "categories":[{"name":"World of Warcraft","slug":"world-of-warcraft"}]},
+			{"id":222,"is_live":true,"viewer_count":80,"channel":{"slug":"wowstreamer"},
+			 "categories":[{"name":"World of Warcraft","slug":"world-of-warcraft"}]},
+			{"id":333,"is_live":true,"viewer_count":5,"channel":{"slug":"slotsfan"},
+			 "categories":[{"name":"Slots","slug":"slots"}]}
+		]}`},
+		// probeLive verification: both live + streaming the campaign's game.
+		"https://kick.com/api/v2/channels/rewardstation/livestream": {200, `{"data":{"id":111,"viewer_count":4200,"categories":[{"name":"World of Warcraft","slug":"world-of-warcraft"}]}}`},
+		"https://kick.com/api/v2/channels/wowstreamer/livestream":   {200, `{"data":{"id":222,"viewer_count":80,"categories":[{"name":"World of Warcraft","slug":"world-of-warcraft"}]}}`},
+	}}
+	b := withFake(f)
+	_, err := b.ListActiveCampaigns(context.Background(), sess("acc1"))
+	require.NoError(t, err)
+
+	out, err := b.ListEligibleChannels(context.Background(), sess("acc1"),
+		platform.Campaign{ID: "c-wow", Game: "World of Warcraft"})
+	require.NoError(t, err)
+	require.Len(t, out, 2)
+	// Viewer-sorted: biggest first so probeLive's cap lands on stable channels.
+	assert.Equal(t, "rewardstation", out[0].Channel)
+	assert.Equal(t, "wowstreamer", out[1].Channel)
+	// ChannelID falls back to the livestream id for directory-discovered
+	// slugs (the watch handshake accepts it).
+	assert.Equal(t, "111", out[0].ChannelID)
+
+	// The directory was addressed with the slug derived from the game name
+	// (payload carried no game_slug), and the off-category entry was never
+	// probed.
+	assert.Contains(t, f.calls, fakeCall{method: "GET", path: "https://kick.com/stream/livestreams/world-of-warcraft?page=1"})
+	for _, c := range f.calls {
+		assert.NotContains(t, c.path, "slotsfan", "off-category entry must be filtered before probing")
+	}
+}
+
+// A payload-provided game_slug is authoritative: the directory must be
+// addressed with it, not the name-derived slug.
+func TestKickBackend_DirectoryFallbackUsesPayloadSlug(t *testing.T) {
+	f := &fakeDoer{resp: map[string]fakeResp{
+		"https://web.kick.com/api/v1/drops/campaigns": {200, `{"data":[
+			{"id":"c1","game":"Some Game","game_slug":"the-real-slug","status":"active",
+			 "rewards":[{"id":"b1","required_units":60}]}
+		]}`},
+		"https://kick.com/stream/livestreams/the-real-slug?page=1": {200, `{"data":[
+			{"id":9,"is_live":true,"viewer_count":10,"channel":{"slug":"someone"},
+			 "categories":[{"name":"Some Game","slug":"the-real-slug"}]}
+		]}`},
+		"https://kick.com/api/v2/channels/someone/livestream": {200, `{"data":{"id":9,"viewer_count":10,"categories":[{"name":"Some Game"}]}}`},
+	}}
+	b := withFake(f)
+	_, err := b.ListActiveCampaigns(context.Background(), sess("acc1"))
+	require.NoError(t, err)
+
+	out, err := b.ListEligibleChannels(context.Background(), sess("acc1"),
+		platform.Campaign{ID: "c1", Game: "Some Game"})
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	assert.Equal(t, "someone", out[0].Channel)
+	assert.Contains(t, f.calls, fakeCall{method: "GET", path: "https://kick.com/stream/livestreams/the-real-slug?page=1"})
+}
+
+// The junk guard that got the old generic feed removed must hold for the
+// directory fallback too — at BOTH layers: entries whose embedded categories
+// don't match are dropped client-side (never probed), and anything that slips
+// through is rejected by probeLive's own category check.
+func TestKickBackend_DirectoryFallbackRejectsWrongCategory(t *testing.T) {
+	f := &fakeDoer{resp: map[string]fakeResp{
+		"https://web.kick.com/api/v1/drops/campaigns": {200, `{"data":[
+			{"id":"c1","game":"Rust","status":"active","rewards":[{"id":"b1","required_units":60}]}
+		]}`},
+		// Directory returns channels on another game (the global-feed reality).
+		"https://kick.com/stream/livestreams/rust?page=1": {200, `{"data":[
+			{"id":7,"is_live":true,"viewer_count":5,"channel":{"slug":"slotsfan"},
+			 "categories":[{"name":"Slots","slug":"slots"}]}
+		]}`},
+		// probeLive verification for slotsfan would say Slots — but the
+		// client-side filter must keep it from ever being probed.
+		"https://kick.com/api/v2/channels/slotsfan/livestream": {200, `{"data":{"id":7,"viewer_count":5,"categories":[{"name":"Slots"}]}}`},
+	}}
+	b := withFake(f)
+	_, err := b.ListActiveCampaigns(context.Background(), sess("acc1"))
+	require.NoError(t, err)
+
+	out, err := b.ListEligibleChannels(context.Background(), sess("acc1"),
+		platform.Campaign{ID: "c1", Game: "Rust"})
+	require.NoError(t, err)
+	assert.Empty(t, out, "wrong-category directory channels must not be returned")
+	for _, c := range f.calls {
+		assert.NotContains(t, c.path, "slotsfan", "wrong-category entry must be filtered before probing")
+	}
+}
+
+// A RESTRICTED campaign (own channels[]) must never consult the directory —
+// only its listed channels can accrue.
+func TestKickBackend_RestrictedCampaignSkipsDirectory(t *testing.T) {
+	f := &fakeDoer{resp: map[string]fakeResp{
+		// Restricted campaign with one offline channel.
+		"https://web.kick.com/api/v1/drops/campaigns": {200, `{"data":[
+			{"id":"c1","game":"Rust","status":"active",
+			 "channels":[{"slug":"offlinechan","id":"3"}],
+			 "rewards":[{"id":"b1","required_units":60}]}
+		]}`},
+		"https://kick.com/api/v2/channels/offlinechan/livestream": {200, `{"data":null}`},
+		// If the directory were consulted it would return a live channel —
+		// the test asserts it is NOT called.
+		"https://kick.com/stream/livestreams/rust?page=1": {200, `{"data":[
+			{"id":55,"is_live":true,"viewer_count":900,"channel":{"slug":"should-not-appear"},
+			 "categories":[{"name":"Rust","slug":"rust"}]}
+		]}`},
+	}}
+	b := withFake(f)
+	_, err := b.ListActiveCampaigns(context.Background(), sess("acc1"))
+	require.NoError(t, err)
+
+	out, err := b.ListEligibleChannels(context.Background(), sess("acc1"),
+		platform.Campaign{ID: "c1", Game: "Rust"})
+	require.NoError(t, err)
+	assert.Empty(t, out, "offline restricted channel yields nothing")
+	for _, c := range f.calls {
+		assert.NotContains(t, c.path, "/stream/livestreams/",
+			"restricted campaign must not hit the directory feed")
+	}
+}
+
+// Directory-discovered slugs merge into the category pool: a second
+// ListEligibleChannels finds them even when the directory subsequently
+// 404s — the pool, not the feed, is the durable candidate source.
+func TestKickBackend_DirectoryDiscoveryPoolsForLaterPicks(t *testing.T) {
+	f := &fakeDoer{resp: map[string]fakeResp{
+		"https://web.kick.com/api/v1/drops/campaigns": {200, `{"data":[
+			{"id":"c1","game":"Rust","status":"active","rewards":[{"id":"b1","required_units":60}]}
+		]}`},
+		"https://kick.com/stream/livestreams/rust?page=1": {200, `{"data":[
+			{"id":31,"is_live":true,"viewer_count":100,"channel":{"slug":"pooledchan"},
+			 "categories":[{"name":"Rust","slug":"rust"}]}
+		]}`},
+		"https://kick.com/api/v2/channels/pooledchan/livestream": {200, `{"data":{"id":31,"viewer_count":100,"categories":[{"name":"Rust"}]}}`},
+	}}
+	b := withFake(f)
+	_, err := b.ListActiveCampaigns(context.Background(), sess("acc1"))
+	require.NoError(t, err)
+
+	// First pick: directory fallback discovers + verifies pooledchan.
+	out, err := b.ListEligibleChannels(context.Background(), sess("acc1"),
+		platform.Campaign{ID: "c1", Game: "Rust"})
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	assert.Equal(t, "pooledchan", out[0].Channel)
+
+	// Kill the directory feed; the second pick must still resolve via the pool.
+	f.resp["https://kick.com/stream/livestreams/rust?page=1"] = fakeResp{404, `{}`}
+	out2, err := b.ListEligibleChannels(context.Background(), sess("acc1"),
+		platform.Campaign{ID: "c1", Game: "Rust"})
+	require.NoError(t, err)
+	require.Len(t, out2, 1)
+	assert.Equal(t, "pooledchan", out2[0].Channel)
+}
+
+// Shell rows must not populate the channel pools: a game nobody mines
+// shouldn't contribute candidates (or claim IDs) to mining state.
+func TestKickBackend_ShellRowsSkipChannelPools(t *testing.T) {
+	f := &fakeDoer{resp: map[string]fakeResp{
+		"https://web.kick.com/api/v1/drops/campaigns": {200, `{"data":[
+			{"id":"c-shell","game":"ShellGame","name":"Not Whitelisted","status":"active",
+			 "channels":[{"slug":"shellchan","id":"1"}],
+			 "rewards":[{"id":"b1","required_units":60}]}
+		]}`},
+	}}
+	b := withFake(f)
+	s := sess("acc1")
+	s.GameFilter = func(g string) bool { return g == "Rust" } // nothing whitelisted matches
+	_, err := b.ListActiveCampaigns(context.Background(), s)
+	require.NoError(t, err)
+
+	b.mu.Lock()
+	_, hasCampaign := b.campaignChannels["c-shell"]
+	_, hasCategory := b.categoryChannels["ShellGame"]
+	b.mu.Unlock()
+	assert.False(t, hasCampaign, "shell row must not populate campaignChannels")
+	assert.False(t, hasCategory, "shell row must not populate categoryChannels")
 }
 
 func TestKickBackend_DeviceLoginRejected(t *testing.T) {
