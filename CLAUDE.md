@@ -87,3 +87,8 @@ the emoji-section + bold-subject format above.
 - **`AGENTS.md`** — build/test/run commands, repo layout, and the same
   architecture + platform constraints, for AI coding agents. Keep the shared
   sections (architecture, platform gotchas, sqlc) in sync with this file.
+
+## Portable handoff
+
+Read `docs/HANDOFF.md` and `docs/PROJECT_MEMORY.md` when resuming on another
+computer. Keep project decisions and follow-ups in these tracked notes.

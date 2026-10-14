@@ -27,7 +27,7 @@ docker build -f deploy/Dockerfile.miner .   # build the miner image
 
 ```bash
 mkdir -p data
-GRUB_MASTER_KEY=$(head -c32 /dev/urandom | base64) \
+GRUB_MASTER_KEY="$(go run ./cmd/miner keygen)" \
   GRUB_DB_PATH=./data/miner.db GRUB_SECURE_COOKIES=0 \
   go run ./cmd/miner
 ```
@@ -94,3 +94,8 @@ change to `docs/CHANGELOG.md` under `## [Unreleased]` as you commit. Tag a `v*`
 version only after the verification gate in `CLAUDE.md` passes (green build +
 tests + transport canary for non-accrual changes; a live drop for accrual/claim
 changes). The `v*` tag triggers the ghcr image build.
+
+## Portable handoff
+
+Read `docs/HANDOFF.md` and `docs/PROJECT_MEMORY.md` when resuming on another
+computer. Keep project decisions and follow-ups in these tracked notes.

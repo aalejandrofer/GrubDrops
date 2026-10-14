@@ -6,6 +6,9 @@ All notable changes to GrubDrops.
 
 ### Added
 
+- Portable new-computer handoff and consolidated project memory with release
+  direction, verification gaps, historical backlog and engineering lessons.
+
 - Pipeline v2 (opt-in, `GRUB_PIPELINE=v2` or kv `pipeline_override:<account>`): drop state now comes from each campaign's platform details, so drops claimed on the website or with a lost claim response show as claimed and mining moves on (#50).
 - Streamer priority for pipeline v2: per-account priority streamers are watched first, then any live channel in the category (#49). Seeded from the existing null-game channel list. Until the settings editor lands, v2 reads a one-time copy of the null-game channel list taken at upgrade.
 - `drop_state` and `account_streamer_priority` tables (migration 0016), with a one-time backfill from claim history, manual marks and ghost-skips.
@@ -14,6 +17,8 @@ All notable changes to GrubDrops.
 - Accounts on the Twitch TV login find campaigns by briefly watching a top drops-enabled channel for each whitelisted game when there is nothing else to mine, so Twitch enrolls them and the campaigns appear. (Pipeline v2: 10 minutes per game, each game at most once every 6 hours; dashboard state `discovering`.) (the dashboard shows these accounts as Discovering)
 
 ### Changed
+
+- Agent local-run instructions generate a valid age master key via `keygen`.
 
 - Twitch claim code split into status fetch + classification (behaviour unchanged).
 - Scheduler reads dashboard snapshots and discoveries through interfaces, so v1 and v2 runners both report state.
