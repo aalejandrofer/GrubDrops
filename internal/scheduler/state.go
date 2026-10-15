@@ -27,17 +27,22 @@ func idleState(r runner) string {
 	return "needs_auth"
 }
 
+// snapshotter is any runner that can describe its current work. Both the v1
+// *watcher.Watcher and the pipeline v2 loop implement it.
+type snapshotter interface {
+	Snapshot() watcher.Snapshot
+}
+
 func (s *Scheduler) Snapshot() []AccountState {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := make([]AccountState, 0, len(s.entries))
 	for _, e := range s.entries {
-		w, ok := e.runner.(*watcher.Watcher)
-		if !ok {
-			out = append(out, AccountState{AccountID: e.id, State: idleState(e.runner)})
+		if sn, ok := e.runner.(snapshotter); ok {
+			out = append(out, AccountState{AccountID: e.id, State: sn.Snapshot().State})
 			continue
 		}
-		out = append(out, AccountState{AccountID: e.id, State: w.State().String()})
+		out = append(out, AccountState{AccountID: e.id, State: idleState(e.runner)})
 	}
 	return out
 }
@@ -51,12 +56,11 @@ func (s *Scheduler) WatcherSnapshots() []watcher.Snapshot {
 	defer s.mu.Unlock()
 	out := make([]watcher.Snapshot, 0, len(s.entries))
 	for _, e := range s.entries {
-		w, ok := e.runner.(*watcher.Watcher)
-		if !ok {
-			out = append(out, watcher.Snapshot{AccountID: e.id, State: idleState(e.runner)})
+		if sn, ok := e.runner.(snapshotter); ok {
+			out = append(out, sn.Snapshot())
 			continue
 		}
-		out = append(out, w.Snapshot())
+		out = append(out, watcher.Snapshot{AccountID: e.id, State: idleState(e.runner)})
 	}
 	return out
 }

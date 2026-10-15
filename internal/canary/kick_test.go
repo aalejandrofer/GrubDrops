@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ var wsUpgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { retu
 // probe actually sent the expected cadence.
 type kickFakeServer struct {
 	srv       *httptest.Server
+	mu        sync.Mutex
 	typesRecv []string // frame types received FROM the probe
 	pongsRecv int      // "pong" messages the probe receives (sent by this server)
 }
@@ -76,7 +78,9 @@ func newKickFakeWS(t *testing.T) *kickFakeServer {
 				return
 			}
 			typ, _ := m["type"].(string)
+			f.mu.Lock()
 			f.typesRecv = append(f.typesRecv, typ)
+			f.mu.Unlock()
 		}
 	})
 
@@ -130,9 +134,12 @@ func TestKickProbe_OK(t *testing.T) {
 	assert.False(t, result.CheckedAt.IsZero(), "CheckedAt should be set")
 
 	// The server should have seen at least one channel_handshake from the probe.
-	require.NotEmpty(t, fakeWS.typesRecv, "server should have received frames from the probe")
-	assert.Contains(t, fakeWS.typesRecv, "channel_handshake",
-		"probe must send at least one channel_handshake; received: %v", fakeWS.typesRecv)
+	fakeWS.mu.Lock()
+	typesRecv := append([]string(nil), fakeWS.typesRecv...)
+	fakeWS.mu.Unlock()
+	require.NotEmpty(t, typesRecv, "server should have received frames from the probe")
+	assert.Contains(t, typesRecv, "channel_handshake",
+		"probe must send at least one channel_handshake; received: %v", typesRecv)
 }
 
 // TestKickProbe_ConnFail verifies that KickProbe.Run returns Result{OK: false}

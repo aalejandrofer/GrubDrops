@@ -14,6 +14,7 @@ type Querier interface {
 	AddAccountGame(ctx context.Context, arg AddAccountGameParams) error
 	AddForceChannel(ctx context.Context, arg AddForceChannelParams) error
 	AddGlobalGame(ctx context.Context, arg AddGlobalGameParams) error
+	AddStreamerPriority(ctx context.Context, arg AddStreamerPriorityParams) error
 	AdminExists(ctx context.Context) (bool, error)
 	ClearAccountChannels(ctx context.Context, accountID string) error
 	ClearAccountGames(ctx context.Context, accountID string) error
@@ -49,6 +50,7 @@ type Querier interface {
 	DeleteKV(ctx context.Context, key string) error
 	GetAccount(ctx context.Context, id string) (Account, error)
 	GetAdmin(ctx context.Context) (Admin, error)
+	GetBenefitCampaign(ctx context.Context, id string) (GetBenefitCampaignRow, error)
 	GetCampaign(ctx context.Context, id string) (Campaign, error)
 	GetProgress(ctx context.Context, arg GetProgressParams) (Progress, error)
 	GetSession(ctx context.Context, accountID string) (Session, error)
@@ -68,12 +70,14 @@ type Querier interface {
 	// skips re-mining these: a claim is keyed by benefit id which is unique per
 	// drop instance, so owning a claim means THIS exact drop is done.
 	ListClaimedBenefitIDsForAccount(ctx context.Context, accountID string) ([]string, error)
+	ListClaimsForBackfill(ctx context.Context) ([]ListClaimsForBackfillRow, error)
 	// Which accounts have claimed each benefit in a campaign. Powers the
 	// per-account COLLECTED marks on the /drops expanded item list.
 	ListClaimsForCampaign(ctx context.Context, campaignID string) ([]ListClaimsForCampaignRow, error)
 	// Campaigns currently in flight (starts_at <= now < ends_at).
 	// Whitelist filtering is applied in Go.
 	ListCurrentCampaigns(ctx context.Context, arg ListCurrentCampaignsParams) ([]Campaign, error)
+	ListDropStates(ctx context.Context, accountID string) ([]DropState, error)
 	ListEnabledAccounts(ctx context.Context) ([]Account, error)
 	ListForceChannels(ctx context.Context, accountID string) ([]ListForceChannelsRow, error)
 	ListGlobalGames(ctx context.Context) ([]ListGlobalGamesRow, error)
@@ -81,6 +85,7 @@ type Querier interface {
 	// Campaigns that have ended. Whitelist filtering is applied in Go.
 	ListPastCampaigns(ctx context.Context, arg ListPastCampaignsParams) ([]Campaign, error)
 	ListRecentClaims(ctx context.Context, limit int64) ([]ListRecentClaimsRow, error)
+	ListStreamerPriority(ctx context.Context, accountID string) ([]ListStreamerPriorityRow, error)
 	ListUnclaimedProgressForAccount(ctx context.Context, arg ListUnclaimedProgressForAccountParams) ([]Progress, error)
 	// Campaigns announced but not yet started. Whitelist filtering is
 	// applied in Go.
@@ -88,6 +93,7 @@ type Querier interface {
 	RemoveAccountChannel(ctx context.Context, arg RemoveAccountChannelParams) error
 	RemoveAccountGame(ctx context.Context, arg RemoveAccountGameParams) error
 	RemoveForceChannel(ctx context.Context, arg RemoveForceChannelParams) error
+	RemoveStreamerPriority(ctx context.Context, arg RemoveStreamerPriorityParams) error
 	SetAccountEnabled(ctx context.Context, arg SetAccountEnabledParams) error
 	// Lifetime watch minutes: sum of per-benefit progress. Persistent, so it
 	// survives restarts (unlike the heartbeat log ring used for today's count).
@@ -100,6 +106,7 @@ type Querier interface {
 	UpsertAdmin(ctx context.Context, arg UpsertAdminParams) error
 	UpsertBenefit(ctx context.Context, arg UpsertBenefitParams) error
 	UpsertCampaign(ctx context.Context, arg UpsertCampaignParams) error
+	UpsertDropState(ctx context.Context, arg UpsertDropStateParams) error
 	UpsertGame(ctx context.Context, arg UpsertGameParams) error
 	UpsertProgress(ctx context.Context, arg UpsertProgressParams) error
 	UpsertSession(ctx context.Context, arg UpsertSessionParams) error

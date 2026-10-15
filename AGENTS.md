@@ -27,7 +27,7 @@ docker build -f deploy/Dockerfile.miner .   # build the miner image
 
 ```bash
 mkdir -p data
-GRUB_MASTER_KEY=$(head -c32 /dev/urandom | base64) \
+GRUB_MASTER_KEY="$(go run ./cmd/miner keygen)" \
   GRUB_DB_PATH=./data/miner.db GRUB_SECURE_COOKIES=0 \
   go run ./cmd/miner
 ```
@@ -63,10 +63,13 @@ proto/                  buf config + gRPC defs for the sidecar — core, not dea
 
 ## Platform gotchas
 
-- **Twitch = Android device-code OAuth over direct HTTP.** Never send a
-  `Client-Integrity` header — adding it is a self-inflicted integrity wall. Do
-  not re-implement logged-out catalog scraping; `/drops/campaigns` while logged
-  out is just a login wall.
+- **Twitch clients: Android (legacy sessions) and TV (device-code logins since
+  v1.4.0) over direct HTTP.** Never send a `Client-Integrity` header on the
+  Android or TV client; adding it there is a self-inflicted integrity wall. The
+  `Client-Integrity` header is allowed ONLY on the web-client profile
+  (browser-captured sessions), where Twitch requires it. Do not re-implement
+  logged-out catalog scraping; `/drops/campaigns` while logged out is just a
+  login wall.
 - **Twitch credit beacon is gated by `HeartbeatInterval`** (1 minute credited
   per beacon), so anything above 60s under-credits. Keep it at 60s. Kick is
   immune.
@@ -91,3 +94,8 @@ change to `docs/CHANGELOG.md` under `## [Unreleased]` as you commit. Tag a `v*`
 version only after the verification gate in `CLAUDE.md` passes (green build +
 tests + transport canary for non-accrual changes; a live drop for accrual/claim
 changes). The `v*` tag triggers the ghcr image build.
+
+## Portable handoff
+
+Read `docs/HANDOFF.md` and `docs/PROJECT_MEMORY.md` when resuming on another
+computer. Keep project decisions and follow-ups in these tracked notes.

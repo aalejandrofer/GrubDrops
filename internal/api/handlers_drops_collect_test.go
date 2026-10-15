@@ -276,3 +276,44 @@ func renderCampaignItems_render(t *testing.T, detail campaignDetailRow) string {
 	require.NoError(t, tmpl.ExecuteTemplate(&buf, "drops_campaign_items", detail))
 	return buf.String()
 }
+
+// TestCollectAll_EndedCampaignIsPastWhateverItsStatus: a campaign whose end
+// time has passed belongs to Past even when its stored status still says
+// "active" (e.g. TV AvailableDrops rows never refreshed to expired). It
+// must never show in Current or the Current Discoverable list.
+func TestCollectAll_EndedCampaignIsPastWhateverItsStatus(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	q := gen.New(db)
+
+	now := time.Now().Unix()
+	for _, c := range []struct{ id, game string }{{"ended-wl", "Rust"}, {"ended-nogame", ""}} {
+		require.NoError(t, q.UpsertCampaign(ctx, gen.UpsertCampaignParams{
+			ID: c.id, Platform: "twitch", Game: c.game, Name: c.id,
+			StartsAt: now - 7200, EndsAt: now - 60, Status: "active",
+			RawJson: "{}", DiscoveredAt: now, Kind: "drop", AccountLinked: 1,
+		}))
+	}
+
+	d := &dropsDeps{q: q, loc: timeutil.NewZone(time.UTC)}
+	allow := map[string]struct{}{"rust": {}}
+	ids := func(rows []dropsRow) map[string]bool {
+		out := map[string]bool{}
+		for _, r := range rows {
+			out[r.CampaignID] = true
+		}
+		return out
+	}
+
+	past, current, _, unlistedCur, err := d.collectAll(ctx, allow, true, now, 200, tabCurrent)
+	require.NoError(t, err)
+	require.True(t, ids(past)["ended-wl"], "ended whitelisted campaign shows as past")
+	require.False(t, ids(current)["ended-wl"], "ended campaign must not show as current despite status=active")
+	require.False(t, ids(unlistedCur)["ended-nogame"], "ended game-less campaign must not show in Current Discoverable")
+
+	_, _, _, unlistedPast, err := d.collectAll(ctx, allow, true, now, 200, tabPast)
+	require.NoError(t, err)
+	require.True(t, ids(unlistedPast)["ended-nogame"], "ended game-less campaign is listed under Past")
+}

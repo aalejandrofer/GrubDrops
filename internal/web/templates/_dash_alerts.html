@@ -1,0 +1,19 @@
+{{/* Shared top-of-page alert/banner component (dashAlert). Reused by
+     dashboard.html and drops.html so both pages render CTA banners
+     (needs_auth, no_games, tv_discovery, ...) from the same markup + CSS. */}}
+{{define "dash_alerts"}}
+{{if .Alerts}}
+<section class="alerts">
+  {{range .Alerts}}
+  <div class="alert alert-{{.Kind}}{{if .Warning}} warning{{end}}">
+    <span class="alert-tag">{{t (printf "dashboard.%s" .Kind)}}</span>
+    <span class="alert-body">
+      <strong>{{.Account}}</strong>
+      — {{t (printf "dashboard.alert_%s" .Kind)}}
+    </span>
+    <a class="btn sm alert-cta" href="{{.URL}}">{{.Action}}</a>
+  </div>
+  {{end}}
+</section>
+{{end}}
+{{end}}

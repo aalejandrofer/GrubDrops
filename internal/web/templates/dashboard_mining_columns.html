@@ -46,6 +46,8 @@
         <span class="meta">{{t "mining.claim_in_flight"}}</span>
       {{else if eq .State "force_watch"}}
         <span class="drop" style="color:var(--green)">{{t "mining.force_watching"}}{{if .Channel}} {{.Channel}}{{end}}</span>
+      {{else if eq .State "discovering"}}
+        <span class="drop" style="color:var(--blue)">{{t "mining.discovering"}}{{if .Channel}} {{.Channel}}{{end}}</span>
       {{else if eq .State "pick_stream"}}
         {{if .DropCampaign}}<span class="drop">{{.DropCampaign}}</span>{{end}}
         <span class="meta">{{t "mining.scanning_channels"}}</span>
@@ -66,6 +68,7 @@
       {{else if eq .State "sleeping"}}{{t "mining.sleeping"}}
       {{else if eq .State "awaiting_connect"}}{{t "mining.awaiting_connect"}}
       {{else if eq .State "pick_stream"}}{{t "mining.scanning"}}
+      {{else if eq .State "discovering"}}{{t "mining.discovering"}}
       {{else if eq .State "pick_campaign"}}{{t "mining.picking"}}
       {{else if eq .State "idle"}}{{t "mining.idle"}}
       {{else}}{{.State}}{{end}}
@@ -118,6 +121,19 @@
     <div class="acc-exp-row">
       <span class="acc-exp-k">{{t "mining.state"}}</span>
       <span class="acc-exp-v" style="color:var(--green)">{{t "mining.force_watching"}}{{if .Uptime}} · {{.Uptime}} {{t "mining.on_stream"}}{{end}}</span>
+    </div>
+    {{else if eq .State "discovering"}}
+    <div class="acc-exp-row">
+      <span class="acc-exp-k">{{t "mining.game"}}</span>
+      <span class="acc-exp-v">{{if .ChannelGame}}{{.ChannelGame}}{{end}}</span>
+    </div>
+    <div class="acc-exp-row">
+      <span class="acc-exp-k">{{t "mining.channel"}}</span>
+      <span class="acc-exp-v">{{if .Channel}}<a href="{{.ChannelURL}}" target="_blank" rel="noopener">{{.Channel}} ↗</a>{{end}}</span>
+    </div>
+    <div class="acc-exp-row">
+      <span class="acc-exp-k">{{t "mining.state"}}</span>
+      <span class="acc-exp-v" style="color:var(--blue)">{{t "mining.discovering"}}{{if .Uptime}} · {{.Uptime}} {{t "mining.on_stream"}}{{end}}</span>
     </div>
     {{else}}
     <div class="acc-exp-row">

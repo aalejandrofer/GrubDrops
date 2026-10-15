@@ -54,6 +54,10 @@
   "dashboard.action_device_code": "切换到设备代码登录 →",
   "dashboard.action_connect": "关联账号 →",
   "dashboard.action_add_games": "添加游戏 →",
+  "dashboard.tv_discovery": "发现受限",
+  "dashboard.tv_discovery_title": "掉宝发现功能受限。",
+  "dashboard.alert_tv_discovery": "Twitch 不再为新登录列出活动，因此 GrubDrops 只能找到白名单游戏的掉宝。",
+  "dashboard.action_whitelist_games": "加入游戏白名单 →",
 
   "dashboard_modal.account": "账号",
   "dashboard_modal.close": "关闭",
@@ -222,6 +226,7 @@
   "mining.scanning": "扫描中",
   "mining.scanning_channels": "正在扫描频道",
   "mining.force_watching": "观看中",
+  "mining.discovering": "探索中",
   "mining.picking": "选择中",
   "mining.idle": "空闲",
   "mining.reload_account": "重新加载此账号",

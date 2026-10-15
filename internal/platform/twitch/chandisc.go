@@ -37,6 +37,7 @@ type availableDropsFull struct {
 			StartAt string `json:"startAt"`
 			EndAt   string `json:"endAt"`
 			Game    struct {
+				ID   string `json:"id"`
 				Name string `json:"name"`
 			} `json:"game"`
 			TimeBasedDrops []tvDrop `json:"timeBasedDrops"`
@@ -159,6 +160,12 @@ func (d *discovery) listByChannels(ctx context.Context, sess platform.Session, c
 				continue
 			}
 			for _, vc := range resp.Channel.ViewerDropCampaigns {
+				// AvailableDrops also returns the streamer's own channel
+				// campaigns (no game) and campaigns for other games. Keep
+				// only the game being walked; they flooded /drops otherwise.
+				if !vcMatchesGame(vc.Game.ID, s.GameID, vc.Game.Name, slug) {
+					continue
+				}
 				start, end := parseISO(vc.StartAt), parseISO(vc.EndAt)
 				add(platform.Campaign{
 					ID: vc.ID, Platform: "twitch", Game: vc.Game.Name, Name: vc.Name,
@@ -238,6 +245,21 @@ func (d *discovery) listByChannels(ctx context.Context, sess platform.Session, c
 		out = append(out, *camps[id])
 	}
 	return out, allowed, nil
+}
+
+// vcMatchesGame reports whether an AvailableDrops campaign belongs to the
+// game being walked. The campaign's game ID and the directory stream's
+// game ID -- both already read off Twitch's own payloads (the directory
+// query resolves streamGameID; see listForGameDirectory) -- are the
+// authoritative signal: a display name can vary between the two payloads
+// (localization, punctuation) even for the identical game. The
+// slug-vs-directory-slug compare is only a fallback for when either side's
+// ID is empty (older/incomplete payload shapes).
+func vcMatchesGame(vcGameID, streamGameID, vcGameName, slug string) bool {
+	if vcGameID != "" && streamGameID != "" {
+		return vcGameID == streamGameID
+	}
+	return vcGameName != "" && gameslug.Slug(vcGameName) == slug
 }
 
 func appendUnique(xs []string, x string) []string {

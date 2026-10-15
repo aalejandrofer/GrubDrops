@@ -136,3 +136,33 @@ func TestBackend_FetchAvatar_NullUser(t *testing.T) {
 	_, err := b.FetchAvatar(context.Background(), platform.Session{AccessToken: "tok"})
 	require.Error(t, err)
 }
+
+// TestBackend_ListEligibleChannels_SyntheticGameCampaign pins the path
+// pipeline v2 enroll discovery relies on: a synthetic open campaign (no
+// ID, only a game name) has no allow-list, so the backend answers from the
+// DROPS_ENABLED game directory with streams flagged DropsEnabled.
+func TestBackend_ListEligibleChannels_SyntheticGameCampaign(t *testing.T) {
+	var slug, filters any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req gqlRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		require.Equal(t, OpGameDirectory.Name, req.OperationName)
+		slug = req.Variables["slug"]
+		if opts, ok := req.Variables["options"].(map[string]any); ok {
+			filters = opts["systemFilters"]
+		}
+		_, _ = w.Write([]byte(dirRust))
+	}))
+	defer srv.Close()
+
+	b := newForTest(srv.URL)
+	out, err := b.ListEligibleChannels(context.Background(), platform.Session{AccessToken: "tok", ClientID: ClientTV},
+		platform.Campaign{Platform: "twitch", Game: "Rust"})
+	require.NoError(t, err)
+	assert.Equal(t, "rust", slug)
+	assert.Equal(t, []any{"DROPS_ENABLED"}, filters)
+	require.Len(t, out, 2)
+	assert.Equal(t, "alpha", out[0].Channel)
+	assert.True(t, out[0].DropsEnabled)
+	assert.Equal(t, "c1", out[0].ChannelID)
+}

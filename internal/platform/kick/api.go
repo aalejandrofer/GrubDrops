@@ -374,6 +374,7 @@ type progressReward struct {
 	Name       string
 	Fraction   float64 // 0..1 watched toward this reward
 	Claimed    bool
+	Required   int // required_units
 }
 
 // progressDetail returns every in-progress reward with its parent campaign id,
@@ -401,6 +402,7 @@ func (a *api) progressDetail(ctx context.Context, sess platform.Session) ([]prog
 				Name:       mstr(rm, "name", "title"),
 				Fraction:   mfloat(rm, "progress", "progress_fraction"),
 				Claimed:    mbool(rm, "claimed", "is_claimed", "isClaimed"),
+				Required:   mnum(rm, "required_units", "required_minutes", "requiredMinutes", "minutes"),
 			})
 		}
 	}

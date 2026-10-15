@@ -239,3 +239,29 @@ func TestCompletedByAllConnected_NilQueriesCountsTotalOnly(t *testing.T) {
 	assert.Equal(t, 2, total)
 	assert.Equal(t, 0, done)
 }
+
+// TestMineCardFromSnap_Discovering mirrors the "force_watch" case: the v2
+// enroll loop reports Snapshot State "discovering" while it briefly watches
+// a channel to enroll the account in a campaign (see
+// internal/pipeline/loop/enroll.go). The dashboard mining row must show it
+// like a live activity (channel + game), not the raw state word, so the
+// i18n key resolves and the pill/label mirror force_watch's handling.
+func TestMineCardFromSnap_Discovering(t *testing.T) {
+	acc := gen.Account{ID: "acc1", Platform: "twitch", DisplayName: "Foo", Enabled: 1}
+	started := time.Now().Add(-2 * time.Minute)
+	snap := watcher.Snapshot{
+		AccountID:    "acc1",
+		State:        "discovering",
+		Channel:      "some_channel",
+		ViewerCount:  42,
+		CampaignGame: "Some Game",
+		StartedAt:    started,
+	}
+	card := mineCardFromSnap(acc, snap, "en")
+	assert.Equal(t, "discovering", card.State)
+	assert.Equal(t, "mining.discovering", card.StateSub)
+	assert.Equal(t, "some_channel", card.Channel)
+	assert.Equal(t, "Some Game", card.ChannelGame)
+	assert.Equal(t, channelURL("twitch", "some_channel"), card.ChannelURL)
+	assert.NotEmpty(t, card.Uptime)
+}

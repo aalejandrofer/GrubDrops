@@ -107,10 +107,37 @@ func (s *Scheduler) Reload(parent context.Context, builders []EntryBuilder) erro
 	s.mu.Lock()
 	s.entries = nil
 	s.mu.Unlock()
-	for _, b := range builders {
-		s.AddEntry(b())
+	for _, e := range buildEntriesConcurrently(builders) {
+		s.AddEntry(e)
 	}
 	return s.Start(parent)
+}
+
+// reloadBuildConcurrency caps how many EntryBuilders run at once. A single
+// slow builder (e.g. a browser-sidecar cold start) must not serialize every
+// other account's rebuild, but an unbounded fan-out on a large roster would
+// hammer the backend/session-store all at once; 4 balances the two.
+const reloadBuildConcurrency = 4
+
+// buildEntriesConcurrently runs builders with a cap of reloadBuildConcurrency
+// concurrent workers and returns their entries in the SAME order as
+// builders, regardless of completion order.
+func buildEntriesConcurrently(builders []EntryBuilder) []entry {
+	entries := make([]entry, len(builders))
+	sem := make(chan struct{}, reloadBuildConcurrency)
+	var wg sync.WaitGroup
+	for i, b := range builders {
+		i, b := i, b
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			entries[i] = b()
+		}()
+	}
+	wg.Wait()
+	return entries
 }
 
 // ReloadAccount restarts a SINGLE account's entry (build a fresh one) while

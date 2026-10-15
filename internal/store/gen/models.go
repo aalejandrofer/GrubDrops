@@ -49,6 +49,13 @@ type AccountGame struct {
 	Rank      int64  `json:"rank"`
 }
 
+type AccountStreamerPriority struct {
+	AccountID string `json:"account_id"`
+	Platform  string `json:"platform"`
+	Login     string `json:"login"`
+	Rank      int64  `json:"rank"`
+}
+
 type Admin struct {
 	ID           int64  `json:"id"`
 	PasswordHash string `json:"password_hash"`
@@ -90,6 +97,22 @@ type Claim struct {
 	BenefitID     string `json:"benefit_id"`
 	ClaimedAt     int64  `json:"claimed_at"`
 	ValueMetaJson string `json:"value_meta_json"`
+}
+
+type DropState struct {
+	AccountID   string `json:"account_id"`
+	DropID      string `json:"drop_id"`
+	CampaignID  string `json:"campaign_id"`
+	Platform    string `json:"platform"`
+	Status      string `json:"status"`
+	BlockReason string `json:"block_reason"`
+	Minutes     int64  `json:"minutes"`
+	Required    int64  `json:"required"`
+	Source      string `json:"source"`
+	FailCount   int64  `json:"fail_count"`
+	RetryAfter  int64  `json:"retry_after"`
+	SyncedAt    int64  `json:"synced_at"`
+	UpdatedAt   int64  `json:"updated_at"`
 }
 
 type Game struct {
