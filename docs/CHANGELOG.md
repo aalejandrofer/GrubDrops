@@ -9,7 +9,7 @@ All notable changes to GrubDrops.
 - Portable new-computer handoff and consolidated project memory with release
   direction, verification gaps, historical backlog and engineering lessons.
 
-- Pipeline v2 (opt-in, `GRUB_PIPELINE=v2` or kv `pipeline_override:<account>`): drop state now comes from each campaign's platform details, so drops claimed on the website or with a lost claim response show as claimed and mining moves on (#50).
+- Pipeline v2 (default, with `GRUB_PIPELINE=v1` or kv `pipeline_override:<account>=v1` for legacy fallback): drop state now comes from each campaign's platform details, so drops claimed on the website or with a lost claim response show as claimed and mining moves on (#50).
 - Streamer priority for pipeline v2: per-account priority streamers are watched first, then any live channel in the category (#49). Seeded from the existing null-game channel list. Until the settings editor lands, v2 reads a one-time copy of the null-game channel list taken at upgrade.
 - `drop_state` and `account_streamer_priority` tables (migration 0016), with a one-time backfill from claim history, manual marks and ghost-skips.
 - Accounts on the Twitch TV login share the full campaign list found by any Android-login account in the same GrubDrops, so campaigns hidden from the TV client (for example behind a global badge campaign) are still found.
@@ -27,6 +27,7 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- Synchronize the Kick canary test server frame log so race-enabled verification can read it safely.
 - Streamers' own channel campaigns with no game no longer flood the drops page, and campaigns past their end time show as ended.
 - Twitch TV-channel discovery now matches a campaign's game by ID first (falling back to the display-name slug only when either ID is missing), so a campaign whose display name doesn't match the live directory's is no longer wrongly skipped.
 - The shared Twitch discovery catalog no longer accumulates stale entries from recycled account backends; sources older than the TTL are evicted, not just ignored.
@@ -59,6 +60,11 @@ All notable changes to GrubDrops.
 - A newly added Twitch account that already finished its drops is recognised within a few syncs instead of being watched drop by drop.
 - A Twitch claim notification no longer overrides a drop you skipped or that needs a linked account.
 - v2 no longer bounces between two channels every few minutes when a channel drops out of Twitch's directory list.
+
+### Docs
+
+- Synced the pipeline v2 branch with master, preserving the current auth warning and all unreleased pipeline changes, and recorded the canary race fix and verification results in project memory.
+- Added a warning that GrubDrops is currently not working as expected.
 
 ## [1.4.2] — 2026-09-28
 

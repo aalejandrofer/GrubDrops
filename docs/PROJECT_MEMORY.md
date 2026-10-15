@@ -41,7 +41,10 @@ passed. Android details may return `self=nil` for already-claimed campaigns;
 second-stall claim probe was added, and empty claim status must mean failure.
 Still owed in the latest pipeline notes: live Kick accrual and Android Twitch
 accrual on v2. Unit tests alone cannot satisfy the accrual/claim release gate.
-A pre-existing `internal/canary` `TestKickProbe_OK` race was recorded; recheck.
+The recorded `internal/canary` `TestKickProbe_OK` race was reproduced and fixed
+on 2026-10-15 by synchronizing the fake server frame log. The full canary
+package passed five runs under `-race`; build, unit tests and vet also passed
+after syncing the pipeline branch with master. Live verification remains open.
 
 Latest deployment preference supersedes the older staging-only rule: the user
 allowed production to double as the v2 test environment. Stop its Watchtower
