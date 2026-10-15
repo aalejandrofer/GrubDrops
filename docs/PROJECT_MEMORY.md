@@ -16,6 +16,33 @@ reimplementing them. Its AGENTS.md/CLAUDE.md already allow Client-Integrity only
 for a web-client profile while forbidding it on Android/TV. That exception is
 branch context; the user-provided session rule still forbids adding the header.
 
+## Live verification (2026-10-15)
+
+Executable tested: pipeline branch commit `09582cf`, after syncing master and
+fixing the canary test race. GitHub build/test and CodeQL checks passed.
+
+- Kick Chrome-mode watch-time was verified on a live cosmetic Rust drop:
+  232/240 minutes progressed to 240/240. A separate process claimed the reward
+  while the daemon was paused. After resuming, v2 marked it platform-claimed
+  on its next progress poll, approximately 54 seconds after the external claim,
+  and moved to idle rather than continuing to mine the completed campaign.
+- Twitch and Kick transport canaries passed. All test sessions authenticated.
+- Twitch v2 accrual did not pass: the legacy Android account's Battlefield 6
+  inventory stayed at 16 minutes, and the TV account's ARC Raiders inventory
+  stayed at 9 minutes despite repeated successful 60-second heartbeats. Live
+  directory probes confirmed populated channel, broadcast, game IDs and game
+  names. Channel rotation occurred, but no credited minutes were observed.
+- A short control using the legacy watcher on the same Twitch accounts and
+  games also left the counters at 16 and 9 minutes. This does not isolate a
+  v2-specific regression; the underlying Twitch accrual cause remains unknown.
+- TV watch-to-enroll and shared-catalog discovery paths were exercised. This
+  does not establish successful TV accrual on the current platform behavior.
+- Production was resumed after testing. Refreshed encrypted sessions and the
+  verified Kick claim were preserved. Staging retains the tested v2 image and
+  evidence, with all copied accounts disabled to prevent duplicate mining.
+- Twitch live claims remain unverified. Keep the release tag on hold; a green
+  transport canary is not evidence that Twitch credits watch-time.
+
 ## Latest recorded direction (2026-09-30)
 
 - Pipeline v2 core and other non-UI work target **1.4.5**. V2 should become the
@@ -39,8 +66,9 @@ Recorded live proof: TV-client Twitch v2 accrual near 1:1, reconciliation and a
 real claim succeeded on staging on 2026-09-28. Kick claimed-reward retention probe
 passed. Android details may return `self=nil` for already-claimed campaigns;
 second-stall claim probe was added, and empty claim status must mean failure.
-Still owed in the latest pipeline notes: live Kick accrual and Android Twitch
-accrual on v2. Unit tests alone cannot satisfy the accrual/claim release gate.
+The October 15 test below supersedes the earlier Kick accrual gap. Twitch
+accrual and claims still need live proof. Unit tests alone cannot satisfy the
+accrual/claim release gate.
 The recorded `internal/canary` `TestKickProbe_OK` race was reproduced and fixed
 on 2026-10-15 by synchronizing the fake server frame log. The full canary
 package passed five runs under `-race`; build, unit tests and vet also passed

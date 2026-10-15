@@ -63,6 +63,7 @@ All notable changes to GrubDrops.
 
 ### Docs
 
+- Recorded live Kick accrual and external-claim reconciliation proof, and the remaining Twitch accrual release blocker.
 - Synced the pipeline v2 branch with master, preserving the current auth warning and all unreleased pipeline changes, and recorded the canary race fix and verification results in project memory.
 - Added a warning that GrubDrops is currently not working as expected.
 
