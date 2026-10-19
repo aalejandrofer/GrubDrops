@@ -86,8 +86,45 @@ proto/                  buf config + gRPC defs for the sidecar — core, not dea
 
 ## Releasing
 
-A commit is not a release. Day-to-day work lands on `master` freely. Log every
-change to `docs/CHANGELOG.md` under `## [Unreleased]` as you commit. Tag a `v*`
-version only after the verification gate in `CLAUDE.md` passes (green build +
-tests + transport canary for non-accrual changes; a live drop for accrual/claim
-changes). The `v*` tag triggers the ghcr image build.
+A commit is **not** a release. Day-to-day work lands on `master` freely.
+
+1. **Log every change to `docs/CHANGELOG.md`** under `## [Unreleased]`
+   (Added / Changed / Fixed / Removed) as you commit — every bug fix, addition,
+   removal, and change, no matter how small. This is the complete running record.
+2. **Verify before cutting a version.** Live drops are rarely available to test
+   against, so the gate is tiered:
+   - **Default gate (no live drop available):** a green build + passing unit tests
+     + a green Kick WS transport canary (Heartbeat Health Checker). This is enough
+     to tag changes that do **not** touch accrual/claim logic (UI, settings,
+     watcher lifecycle, discovery, plumbing). Cover the fix with a unit test —
+     that's the durable proof, since most of the time a live drop can't be.
+   - **Accrual/claim changes:** when a change touches how watch-time accrues or how
+     a drop is claimed (Twitch beacon, Kick WS/IVS watch path, claim flow), confirm
+     against a **live drop** before tagging (Twitch and/or Kick, whichever the
+     change touches). If no live drop is available, hold the tag in `[Unreleased]`
+     until one is — do not tag accrual changes on unit tests alone.
+3. Once verified: move `[Unreleased]` to the new version in `docs/CHANGELOG.md`, push
+   the `v*` tag (this triggers the ghcr image build), and write the patch notes
+   in the GitHub **Releases** tab — **cherry-pick** the user-facing highlights
+   from `[Unreleased]`. The release notes are a curated subset, not the whole
+   changelog.
+
+A broken miner must never ship under a version tag.
+
+### Release notes format
+
+Never a paragraph wall. Lead with a one-line **highlight**, then group entries
+under these emoji section headers, in this order (omit empty sections):
+
+- **🌱 Added** — new features
+- **⚙️ Changed** — behaviour / UX changes
+- **🐛 Fixed** — bug fixes
+- **🔥 Removed** — removed features, flags, or paths
+
+Bold the subject of each bullet; write what changed + why it matters in plain
+user-facing language, not commit-speak. The notes are a curated subset of
+`[Unreleased]`, not the raw changelog.
+
+Release **title** = bare version only (e.g. `v1.2.5`). Release **notes** are
+humanized (run the humanizer skill): plain voice, **no em/en dashes**, but keep
+the emoji-section + bold-subject format above.
