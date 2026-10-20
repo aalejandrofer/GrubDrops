@@ -190,3 +190,29 @@ func TestKickScraper_AttachesGameFilter(t *testing.T) {
 	require.NotNil(t, b.gotSession.GameFilter)
 	assert.True(t, b.gotSession.GameFilter("Rust"))
 }
+
+// The scraper must pass through shell rows (empty Benefits) the backend emits
+// for non-whitelisted games — that's how they reach the campaigns table and
+// the /drops Discoverable tab. The old scraper re-applied the whitelist and
+// dropped them, making non-whitelisted Kick campaigns invisible (#60).
+func TestKickScraper_PassesThroughShellRows(t *testing.T) {
+	b := &stubBackend{result: []platform.Campaign{
+		{ID: "kick-rust", Platform: "kick", Game: "Rust", Benefits: []platform.DropBenefit{{ID: "b1", RequiredMinutes: 60}}},
+		{ID: "kick-wow", Platform: "kick", Game: "World of Warcraft", Name: "WoW Forever"}, // shell: no Benefits
+	}}
+	source := func(context.Context) (string, platform.Session, bool, error) {
+		return "acc-kick", platform.Session{}, true, nil
+	}
+	s := NewKickScraper(b, source)
+	camps, err := s.Scrape(context.Background(), []string{"rust"})
+	require.NoError(t, err)
+	require.Len(t, camps, 2, "shell rows must survive the scraper")
+	var sawShell bool
+	for _, c := range camps {
+		if c.ID == "kick-wow" {
+			sawShell = true
+			assert.Empty(t, c.Benefits, "shell row must carry no benefits")
+		}
+	}
+	assert.True(t, sawShell, "non-whitelisted shell row missing from scraper output")
+}
