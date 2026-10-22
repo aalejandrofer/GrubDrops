@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand/v2"
 	"sort"
 	"strings"
 	"sync"
@@ -157,6 +158,11 @@ type Config struct {
 	// watch yields back to mining periodically so a live whitelisted drop
 	// always wins.
 	ForceWatcher ForceWatchSource
+
+	// FollowRaids reports whether raids from the watched channel should be
+	// joined. Read per raid so a settings change applies without a reload.
+	// Nil means follow.
+	FollowRaids func() bool
 }
 
 // ForceTask is a channel to force-watch while idle. Watched indefinitely
@@ -166,6 +172,9 @@ type ForceTask struct {
 	// Alternates are lower-priority channels tried, in order, when Channel
 	// is not watchable (e.g. offline).
 	Alternates []string
+	// WatchPercent is the share of time (1-100) the account should spend
+	// watching; the rest is spent resting. 0 or 100 means watch continuously.
+	WatchPercent int
 }
 
 // ForceWatchSource is the watcher's view of the per-account force-watch
@@ -186,7 +195,13 @@ type Watcher struct {
 	currentBenefit  *platform.DropBenefit
 	currentStream   *platform.Stream
 	// forceTask is the active force-watch task (StateForceWatch), or nil.
-	forceTask       *ForceTask
+	forceTask *ForceTask
+	// forceWatched is watch time already spent in the current force-watch
+	// session; forceSessionLen is when that session ends and a rest starts;
+	// forceRestUntil keeps force-watch off until the rest is over.
+	forceWatched    time.Duration
+	forceSessionLen time.Duration
+	forceRestUntil  time.Time
 	handle          *platform.WatchHandle
 	watchStartedAt  time.Time
 	lastPollAt      time.Time // last inventory/progress poll (for the "last poll" UI)
@@ -379,6 +394,7 @@ func (w *Watcher) handlePubSubStreamDown(channelID string) {
 	forceWatching := w.forceTask != nil && w.state == StateForceWatch
 	handle := *w.handle
 	if forceWatching {
+		w.accrueForceWatchedLocked()
 		w.handle = nil
 		w.currentStream = nil
 	}
@@ -400,7 +416,7 @@ func (w *Watcher) handlePubSubStreamDown(channelID string) {
 func (w *Watcher) handlePubSubStreamUp(_ string) {}
 
 func (w *Watcher) handlePubSubRaid(channelID, raidID string) {
-	if raidID == "" {
+	if raidID == "" || (w.cfg.FollowRaids != nil && !w.cfg.FollowRaids()) {
 		return
 	}
 	w.mu.Lock()
@@ -414,6 +430,9 @@ func (w *Watcher) handlePubSubRaid(channelID, raidID string) {
 		return
 	}
 	go func() {
+		// A short random pause so the join doesn't land the instant the raid
+		// is announced, every time.
+		time.Sleep(raidJoinDelay())
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := joiner.JoinRaid(ctx, w.cfg.Session, raidID); err != nil {
@@ -547,6 +566,7 @@ func (w *Watcher) unsubscribeCurrentChannel() {
 // single watch slot.
 func (w *Watcher) stopCurrentWatch(ctx context.Context) {
 	w.mu.Lock()
+	w.accrueForceWatchedLocked()
 	handle := w.handle
 	var channelID string
 	if w.currentStream != nil {
@@ -628,6 +648,7 @@ func (w *Watcher) LastDiscovery() ([]platform.Campaign, time.Time) {
 // state. Safe to call from any goroutine; returns a copy.
 type Snapshot struct {
 	AccountID       string
+	ForceRestUntil  time.Time // zero unless force-watch is resting
 	State           string
 	CampaignID      string
 	CampaignName    string
@@ -668,6 +689,7 @@ func (w *Watcher) Snapshot() Snapshot {
 	s.MinutesWatched = w.lastProgressMin
 	s.StartedAt = w.watchStartedAt
 	s.LastPollAt = w.lastPollAt
+	s.ForceRestUntil = w.forceRestUntil
 	return s
 }
 
@@ -855,6 +877,26 @@ const claimFailSkipThreshold = 3
 // the idle branch with its accrued minutes if nothing else is mineable.
 const forceWatchYieldInterval = 5 * time.Minute
 
+// forceSessionLength picks how long a force-watch session runs before the
+// account rests. Randomised (60-120 min) so breaks never fall on a fixed
+// schedule. A var so tests can pin it.
+var forceSessionLength = func() time.Duration {
+	return time.Duration(60+rand.IntN(61)) * time.Minute
+}
+
+// raidJoinDelay is the random pause (3-15 s) before joining an announced raid.
+var raidJoinDelay = func() time.Duration {
+	return time.Duration(3+rand.IntN(13)) * time.Second
+}
+
+// accrueForceWatchedLocked adds the running force-watch's elapsed time to the
+// session total. Call with w.mu held, before the watch handle is cleared.
+func (w *Watcher) accrueForceWatchedLocked() {
+	if w.forceTask != nil && w.handle != nil {
+		w.forceWatched += time.Since(w.watchStartedAt)
+	}
+}
+
 // Watch-loop network cadences are derived per-watcher from TickInterval and
 // HeartbeatInterval — the beacon (watch ping) and inventory poll both run on
 // heartbeatEveryTicks() (default once a minute, configurable), and the
@@ -928,7 +970,7 @@ func (w *Watcher) maybeStartForceTask(ctx context.Context) bool {
 		return false
 	}
 	w.mu.Lock()
-	busy := w.forceTask != nil
+	busy := w.forceTask != nil || time.Now().Before(w.forceRestUntil)
 	w.mu.Unlock()
 	if busy {
 		return false
@@ -1017,6 +1059,32 @@ func (w *Watcher) forceWatch(ctx context.Context) error {
 			return fmt.Errorf("force watch heartbeat: %w", err)
 		}
 		slog.Warn("force-watch heartbeat error", "kind", "error", "account", w.cfg.AccountID, "err", err)
+	}
+
+	// Rest once the session's share of watching is used up, so the account
+	// is not on a stream non-stop. Resting is session*(100-p)/p long, which
+	// makes watching p% of the time overall.
+	if p := task.WatchPercent; p > 0 && p < 100 {
+		w.mu.Lock()
+		if w.forceSessionLen == 0 {
+			w.forceSessionLen = forceSessionLength()
+		}
+		session := w.forceSessionLen
+		watched := w.forceWatched + time.Since(started)
+		w.mu.Unlock()
+		if watched >= session {
+			w.stopCurrentWatch(ctx)
+			rest := session * time.Duration(100-p) / time.Duration(p)
+			w.mu.Lock()
+			w.forceTask = nil
+			w.forceWatched, w.forceSessionLen = 0, 0
+			w.forceRestUntil = time.Now().Add(rest)
+			w.mu.Unlock()
+			slog.Info("force-watch resting", "kind", "state", "account", w.cfg.AccountID,
+				"watched", watched.Round(time.Minute), "rest", rest.Round(time.Minute))
+			w.setState(ctx, StatePickCampaign)
+			return nil
+		}
 	}
 
 	// Periodically yield back to mining so a newly-live whitelisted drop

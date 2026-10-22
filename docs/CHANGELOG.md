@@ -10,6 +10,11 @@ All notable changes to GrubDrops.
   Kick account watches for channel points: on/off switch, drag-to-reorder
   list, add/remove, and the channel currently being watched. This replaces the
   Channel Points card on the account page.
+- **Watch time setting per account** (default 75%, minimum 50%). The account
+  watches in random 60-120 minute sessions, then rests so that share of time
+  is spent watching. The page shows when a rest ends. 100% watches non-stop.
+- **Follow raids setting per Twitch account** (default on). Joins are delayed
+  by a random 3-15 seconds.
 - Twitch channel-point bonuses are checked on watch start and credited
   heartbeats.
 - Raid-update events from currently watched Twitch channels are joined

@@ -184,8 +184,14 @@ live. An account does not need any games whitelisted for this to work.
 
 On Twitch, GrubDrops also claims the bonus chest when it starts watching a
 stream and again on every credited minute, and joins raids from the channel
-being watched. Kick points accrue just by watching, so only the watching is
-automated there.
+being watched (after a random 3-15 s pause; switch it off per account).
+Kick points accrue just by watching, so only the watching is automated there.
+
+**Safe by default.** Watching non-stop 24/7 is the easiest pattern to flag, so
+each account has a **Watch time** setting (default 75%, minimum 50%). It
+watches in random 60-120 minute sessions and rests between them so that
+about 75% of the time is spent watching. Each account only ever watches one
+channel at a time.
 
 ## How it works
 

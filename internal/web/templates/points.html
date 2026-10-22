@@ -27,7 +27,7 @@
   <section class="settings-card">
     <header class="section-h">
       <h3>{{.Name}}</h3>
-      <span class="meta" style="color:var(--{{if eq .Platform "twitch"}}purple{{else}}kick{{end}})">{{.Platform}}{{if .Watching}} · <span style="color:var(--green)">{{t "points.watching"}} {{.Watching}}</span>{{end}}</span>
+      <span class="meta" style="color:var(--{{if eq .Platform "twitch"}}purple{{else}}kick{{end}})">{{.Platform}}{{if .Watching}} · <span style="color:var(--green)">{{t "points.watching"}} {{.Watching}}</span>{{end}}{{if .RestUntil}} · <span style="color:var(--amber)">{{t "points.resting_until"}} {{.RestUntil}}</span>{{end}}</span>
     </header>
 
     <form method="post" action="/accounts/{{.ID}}/force-watch">
@@ -38,6 +38,28 @@
         <span class="d">{{if .Enabled}}{{t "account.force_on"}}{{else}}{{t "account.force_off"}}{{end}}</span>
         <button class="btn-linear" type="submit">{{if .Enabled}}{{t "account.force_disable"}}{{else}}{{t "account.force_enable"}}{{end}} →</button>
       </div></div>
+    </form>
+
+    <form method="post" action="/accounts/{{.ID}}/points-settings">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <div class="kvedit">
+        <div class="row">
+          <span class="k">{{t "points.watch_time"}}</span>
+          <span class="d">{{t "points.watch_time_desc"}}</span>
+          <span class="v"><input type="number" name="watch_percent" min="{{.MinPercent}}" max="100" step="5" value="{{.WatchPercent}}" style="width:5em"> %</span>
+        </div>
+        {{if eq .Platform "twitch"}}
+        <div class="row">
+          <span class="k">{{t "points.follow_raids"}}</span>
+          <span class="d">{{t "points.follow_raids_desc"}}</span>
+          <span class="v"><label class="cb"><input type="checkbox" name="follow_raids" value="1" {{if .FollowRaids}}checked{{end}}> {{t "account.on"}}</label></span>
+        </div>
+        {{end}}
+        <div class="row">
+          <span class="hint">{{t "points.safe_hint"}}</span>
+          <button class="btn-linear" type="submit">{{t "points.save"}} →</button>
+        </div>
+      </div>
     </form>
 
     <form method="post" action="/accounts/{{.ID}}/force-channels" class="force-form">

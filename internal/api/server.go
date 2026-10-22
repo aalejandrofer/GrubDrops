@@ -300,6 +300,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/accounts/{id}/force-channels/add", accs.addForceChannel)
 	authed.Post("/accounts/{id}/force-channels/remove", accs.removeForceChannel)
 	authed.Post("/accounts/{id}/force-watch", accs.forceWatchToggle)
+	authed.Post("/accounts/{id}/points-settings", accs.pointsSettings)
 	authed.Post("/accounts/{id}/reload", accs.reloadOne)
 	authed.Post("/accounts/{id}/toggle", accs.toggleEnabled)
 	authed.Post("/accounts/{id}/delete", accs.delete)
@@ -343,7 +344,7 @@ func NewRouter(d Deps) http.Handler {
 	}
 	dropsH := &dropsDeps{q: d.Q, t: d.Templates, reload: d.Reload, sessions: d.Sessions, registry: d.Registry, loc: d.Zone, sm: d.Session}
 	historyH := &historyDeps{q: d.Q, ring: d.LogRing, t: d.Templates, loc: d.Zone}
-	pointsH := &pointsDeps{q: d.Q, sch: d.Scheduler, t: d.Templates, sm: d.Session}
+	pointsH := &pointsDeps{q: d.Q, sch: d.Scheduler, t: d.Templates, sm: d.Session, loc: d.Zone}
 
 	authed.Get("/settings", settingsH.get)
 	authed.Get("/priority", settingsH.getPriority)          // top-level nav item, moved out of Settings

@@ -487,6 +487,7 @@ func run() error {
 			SkipRecorder:   skipRecorder,
 			SkipClearer:    skipClearer,
 			ForceWatcher:   forceWatchStore{q: q},
+			FollowRaids:    func() bool { return api.PointsFollowRaids(context.Background(), q, a.ID) },
 		})
 		return scheduler.NewEntry(a.ID, w), nil
 	}
@@ -1017,7 +1018,10 @@ func (f forceWatchStore) Next(ctx context.Context, accountID string) (watcher.Fo
 	if err != nil || len(rows) == 0 {
 		return watcher.ForceTask{}, false
 	}
-	task := watcher.ForceTask{Channel: rows[0].Channel}
+	task := watcher.ForceTask{
+		Channel:      rows[0].Channel,
+		WatchPercent: api.PointsWatchPercent(ctx, f.q, accountID),
+	}
 	for _, r := range rows[1:] {
 		task.Alternates = append(task.Alternates, r.Channel)
 	}
