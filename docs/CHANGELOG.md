@@ -6,10 +6,31 @@ All notable changes to GrubDrops.
 
 ### Added
 
+- **Points page** (top nav). One place to choose the channels every Twitch and
+  Kick account watches for channel points: on/off switch, drag-to-reorder
+  list, add/remove, and the channel currently being watched. This replaces the
+  Channel Points card on the account page.
 - Twitch channel-point bonuses are checked on watch start and credited
   heartbeats.
 - Raid-update events from currently watched Twitch channels are joined
   automatically.
+
+### Changed
+
+- Channel points watching tries each channel in list order and uses the first
+  live one, instead of only ever trying the top channel.
+- Changing an account's channel points settings restarts only that account,
+  not every account.
+
+### Fixed
+
+- **Channel points mining now runs for accounts with no games whitelisted.**
+  Those accounts were parked as idle and never started watching.
+- **Twitch channel points watches now count.** A watch started from a bare
+  channel name sent beacons without broadcast and game ids, which Twitch
+  discards. They are now looked up first, and an offline channel is skipped.
+- New channels are added to the end of the list. They used to land at the top
+  alongside the existing first channel.
 
 ### Docs
 

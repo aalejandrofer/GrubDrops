@@ -163,6 +163,9 @@ type Config struct {
 // (no fixed duration) until a real drop preempts it or it is removed.
 type ForceTask struct {
 	Channel string
+	// Alternates are lower-priority channels tried, in order, when Channel
+	// is not watchable (e.g. offline).
+	Alternates []string
 }
 
 // ForceWatchSource is the watcher's view of the per-account force-watch
@@ -960,14 +963,31 @@ func (w *Watcher) forceWatch(ctx context.Context) error {
 
 	// First tick: start the watch.
 	if handle == nil {
-		s := platform.Stream{Channel: task.Channel}
-		h, err := w.cfg.Backend.StartWatch(ctx, w.cfg.Session, s)
-		if err != nil {
+		// Try the configured channels in priority order; the first one that
+		// starts (i.e. is live) wins, so an offline top channel does not
+		// starve the rest of the list.
+		var (
+			s   platform.Stream
+			h   platform.WatchHandle
+			err error
+		)
+		for _, ch := range append([]string{task.Channel}, task.Alternates...) {
+			s = platform.Stream{Channel: ch}
+			if h, err = w.cfg.Backend.StartWatch(ctx, w.cfg.Session, s); err == nil {
+				w.mu.Lock()
+				task.Channel = ch
+				w.mu.Unlock()
+				break
+			}
 			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
 				return fmt.Errorf("force watch start: %w", err)
 			}
-			slog.Warn("force-watch StartWatch failed; back to mining",
-				"kind", "error", "account", w.cfg.AccountID, "channel", task.Channel, "err", err)
+			slog.Info("force-watch channel not watchable; trying next",
+				"kind", "state", "account", w.cfg.AccountID, "channel", ch, "err", err)
+		}
+		if err != nil {
+			slog.Warn("force-watch found no watchable channel; back to mining",
+				"kind", "error", "account", w.cfg.AccountID, "err", err)
 			w.mu.Lock()
 			w.forceTask = nil
 			w.mu.Unlock()

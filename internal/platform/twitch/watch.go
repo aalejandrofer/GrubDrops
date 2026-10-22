@@ -54,6 +54,27 @@ type watchInternal struct {
 func (w *watch) start(ctx context.Context, sess platform.Session, stream platform.Stream) (platform.WatchHandle, error) {
 	// The minute-watched heartbeat is tracked against the broadcaster +
 	// game IDs — propagate them from stream metadata.
+	if stream.BroadcastID == "" {
+		// A bare channel (force-watch) carries no stream metadata, and Twitch
+		// discards minute-watched beacons without broadcast/game ids. Resolve
+		// them now; an offline channel fails the start so the caller can try
+		// the next candidate.
+		var sd streamLiveData
+		if err := w.c.gql(ctx, sess.AccessToken, OpGetStreamInfo, map[string]any{"channel": stream.Channel}, &sd); err != nil {
+			return platform.WatchHandle{}, fmt.Errorf("stream info %s: %w", stream.Channel, err)
+		}
+		if sd.User.Stream == nil {
+			return platform.WatchHandle{}, fmt.Errorf("twitch watch: %s is offline", stream.Channel)
+		}
+		stream.ChannelID, stream.BroadcastID = sd.User.ID, sd.User.Stream.ID
+		game := sd.User.Stream.Game
+		if game == nil {
+			game = sd.User.BroadcastSettings.Game
+		}
+		if game != nil {
+			stream.GameID, stream.Game = game.ID, game.DisplayName
+		}
+	}
 	userID, err := w.resolveUserID(ctx, sess)
 	if err != nil {
 		return platform.WatchHandle{}, fmt.Errorf("resolve user id: %w", err)

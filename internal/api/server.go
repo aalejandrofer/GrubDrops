@@ -343,6 +343,7 @@ func NewRouter(d Deps) http.Handler {
 	}
 	dropsH := &dropsDeps{q: d.Q, t: d.Templates, reload: d.Reload, sessions: d.Sessions, registry: d.Registry, loc: d.Zone, sm: d.Session}
 	historyH := &historyDeps{q: d.Q, ring: d.LogRing, t: d.Templates, loc: d.Zone}
+	pointsH := &pointsDeps{q: d.Q, sch: d.Scheduler, t: d.Templates, sm: d.Session}
 
 	authed.Get("/settings", settingsH.get)
 	authed.Get("/priority", settingsH.getPriority)          // top-level nav item, moved out of Settings
@@ -377,6 +378,7 @@ func NewRouter(d Deps) http.Handler {
 	imgH := &imageProxyDeps{registry: d.Registry}
 	authed.Get("/img/kick", imgH.kick)
 	authed.Get("/history", historyH.get)
+	authed.Get("/points", pointsH.get)
 
 	r.Mount("/", withSession(csrf(updateBadge(d.UpdateStatus, d.Version)(authed))))
 	return r

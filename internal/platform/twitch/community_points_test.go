@@ -57,7 +57,7 @@ func TestWatchClaimsAvailableChannelPointsOnStartAndHeartbeat(t *testing.T) {
 	c.homeURL = srv.URL
 	wt := &watch{c: c, cachedUserID: 42, spadeURLs: map[string]string{}}
 	sess := platform.Session{AccessToken: "tok"}
-	h, err := wt.start(context.Background(), sess, platform.Stream{Channel: "goldenstreamer"})
+	h, err := wt.start(context.Background(), sess, platform.Stream{Channel: "goldenstreamer", BroadcastID: "b1"})
 	require.NoError(t, err)
 	assert.Equal(t, "12345", h.ChannelID)
 	require.NoError(t, wt.heartbeat(context.Background(), h))

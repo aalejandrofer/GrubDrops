@@ -433,7 +433,10 @@ func run() error {
 		if err != nil {
 			return scheduler.Entry{}, err
 		}
-		if !hasAnyGame(allow) {
+		// An account with channel-points mining configured still needs a
+		// watcher even without a game whitelist: it force-watches while idle.
+		_, forcing := forceWatchStore{q: q}.Next(ctx, a.ID)
+		if !hasAnyGame(allow) && !forcing {
 			logger.Info("account has empty game whitelist, idle until games are picked",
 				"account", a.ID)
 			// Authed but nothing to mine yet — surface as "no_games", NOT
@@ -1014,7 +1017,11 @@ func (f forceWatchStore) Next(ctx context.Context, accountID string) (watcher.Fo
 	if err != nil || len(rows) == 0 {
 		return watcher.ForceTask{}, false
 	}
-	return watcher.ForceTask{Channel: rows[0].Channel}, true
+	task := watcher.ForceTask{Channel: rows[0].Channel}
+	for _, r := range rows[1:] {
+		task.Alternates = append(task.Alternates, r.Channel)
+	}
+	return task, true
 }
 
 // parseDuration parses a Go duration string (e.g. "5m", "30s") with a

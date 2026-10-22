@@ -179,10 +179,7 @@ type accountDetailPage struct {
 	AllGames      []gameRow
 	SelectedGames []gameRow // ordered by rank
 	Channels      []string  // per-account channel whitelist, ordered by rank
-	// ForceChannels are permanent channel-points channels (watched 24/7
-	// when idle); ForceWatchEnabled is the per-account toggle.
-	ForceChannels     []string
-	ForceWatchEnabled bool
+	// (channel-points settings live on /points)
 }
 
 type gameRow struct {
@@ -228,23 +225,13 @@ func (d accountsDeps) detail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var forceChannels []string
-	if fcRows, err := d.q.ListForceChannels(r.Context(), id); err == nil {
-		for _, rch := range fcRows {
-			forceChannels = append(forceChannels, rch.Channel)
-		}
-	}
-	forceEnabled := false
-	if v, err := d.q.GetSettingString(r.Context(), ForceWatchEnabledKey(id)); err == nil && string(v) == "1" {
-		forceEnabled = true
-	}
+	// Channel-points (force-watch) settings live on /points.
 
 	render(w, r, d.t, "accounts_detail.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
 		Flash: d.sm.PopString(r.Context(), "flash"),
 		Page: accountDetailPage{
 			Account: row, AllGames: allRows, SelectedGames: selected, Channels: channels,
-			ForceChannels: forceChannels, ForceWatchEnabled: forceEnabled,
 		},
 		Active: "accounts",
 	})
@@ -597,8 +584,22 @@ func (d accountsDeps) removeChannel(w http.ResponseWriter, r *http.Request) {
 // watcher's force-watch source in cmd/miner.
 func ForceWatchEnabledKey(accountID string) string { return "force_watch:" + accountID }
 
-// addForceChannel handles POST /accounts/:id/force-channels/add — adds a
-// permanent channel-points channel (watched 24/7 when idle).
+// reloadForce restarts just this account's watcher so a channel-points change
+// applies now without interrupting every other account's mining.
+func (d accountsDeps) reloadForce(id string) {
+	if d.reloadAccount == nil {
+		return
+	}
+	ctx := d.rootCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	d.reloadAccount(ctx, id)
+}
+
+// addForceChannel handles POST /accounts/:id/force-channels/add — appends a
+// channel-points channel to the end of the account's priority list. A channel
+// already on the list keeps its place.
 func (d accountsDeps) addForceChannel(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
@@ -607,17 +608,33 @@ func (d accountsDeps) addForceChannel(w http.ResponseWriter, r *http.Request) {
 	}
 	ch := strings.ToLower(strings.TrimSpace(r.FormValue("channel")))
 	if ch != "" {
-		now := time.Now().Unix()
+		existing, err := d.q.ListForceChannels(r.Context(), id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		rank := int64(0)
+		dup := false
+		for _, e := range existing {
+			dup = dup || e.Channel == ch
+			if e.Rank >= rank {
+				rank = e.Rank + 1
+			}
+		}
+		if dup {
+			http.Redirect(w, r, "/points", http.StatusSeeOther)
+			return
+		}
 		if err := d.q.AddForceChannel(r.Context(), gen.AddForceChannelParams{
-			AccountID: id, Channel: ch, Rank: 0, CreatedAt: now,
+			AccountID: id, Channel: ch, Rank: rank, CreatedAt: time.Now().Unix(),
 		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		d.applyReload(r.Context())
+		d.reloadForce(id)
 		d.sm.Put(r.Context(), "flash", "flash.force_channel_added")
 	}
-	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
+	http.Redirect(w, r, "/points", http.StatusSeeOther)
 }
 
 // removeForceChannel handles POST /accounts/:id/force-channels/remove.
@@ -635,10 +652,10 @@ func (d accountsDeps) removeForceChannel(w http.ResponseWriter, r *http.Request)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		d.applyReload(r.Context())
+		d.reloadForce(id)
 		d.sm.Put(r.Context(), "flash", "flash.force_channel_removed")
 	}
-	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
+	http.Redirect(w, r, "/points", http.StatusSeeOther)
 }
 
 // forceChannelsReorder handles POST /accounts/:id/force-channels — rewrites
@@ -678,9 +695,9 @@ func (d accountsDeps) forceChannelsReorder(w http.ResponseWriter, r *http.Reques
 		}
 		rank++
 	}
-	d.applyReload(r.Context())
+	d.reloadForce(id)
 	d.sm.Put(r.Context(), "flash", "flash.force_saved")
-	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
+	http.Redirect(w, r, "/points", http.StatusSeeOther)
 }
 
 // forceWatchToggle handles POST /accounts/:id/force-watch — flips the
@@ -702,13 +719,13 @@ func (d accountsDeps) forceWatchToggle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	d.applyReload(r.Context())
+	d.reloadForce(id)
 	if enabled {
 		d.sm.Put(r.Context(), "flash", "flash.force_watch_enabled")
 	} else {
 		d.sm.Put(r.Context(), "flash", "flash.force_watch_disabled")
 	}
-	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
+	http.Redirect(w, r, "/points", http.StatusSeeOther)
 }
 
 func genID() string {

@@ -192,7 +192,7 @@ func TestWatch_HeartbeatFailsOnNon204(t *testing.T) {
 	c := spadeTestClient(t, srv)
 	wt := &watch{c: c, cachedUserID: 12345, spadeURLs: map[string]string{}}
 	h, err := wt.start(context.Background(), platform.Session{AccessToken: "tok"},
-		platform.Stream{Channel: channel})
+		platform.Stream{Channel: channel, ChannelID: "c1", BroadcastID: "b1"})
 	require.NoError(t, err)
 	err = wt.heartbeat(context.Background(), h)
 	require.Error(t, err, "both beacon attempts failed — heartbeat must error")

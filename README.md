@@ -174,13 +174,18 @@ Add games either way — by name, no need to wait for a campaign to appear first
 Discovery starts crawling that game on the next tick and live campaigns show up
 on `/drops`.
 
-## Channel Points and raids
+## Channel Points
 
-To farm Twitch Channel Points while no eligible drops are available, open
-**Accounts → account → Channel Points (force-watch)**, enable it, and add
-channels. GrubDrops claims available bonuses when it starts watching and on
-each credited heartbeat. It also joins raids announced by channels it is
-currently watching.
+Open **Points** in the top nav to farm channel points while an account has no
+drop to mine. Each Twitch and Kick account has an on/off switch and a
+drag-to-reorder channel list; it watches the first live channel on its list,
+skips offline ones, and hands back to mining whenever a whitelisted drop goes
+live. An account does not need any games whitelisted for this to work.
+
+On Twitch, GrubDrops also claims the bonus chest when it starts watching a
+stream and again on every credited minute, and joins raids from the channel
+being watched. Kick points accrue just by watching, so only the watching is
+automated there.
 
 ## How it works
 

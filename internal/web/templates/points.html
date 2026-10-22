@@ -1,0 +1,141 @@
+{{define "points.html"}}{{template "layout" .}}{{end}}
+
+{{define "title"}}{{t "points.title"}}{{end}}
+
+{{define "content"}}
+<div class="shell">
+  <div class="ph">
+    <div>
+      <div class="kicker">{{t "points.kicker"}}</div>
+      <h1>{{t "points.heading"}}</h1>
+    </div>
+  </div>
+
+  <div class="settings-stack">
+  <section class="settings-card">
+    <p class="hint" style="margin:0 0 10px;">{{t "points.desc"}}</p>
+    <p class="hint" style="margin:0 0 10px;">{{t "points.twitch_extras"}}</p>
+    <p class="hint" style="margin:0 0 10px;">{{t "points.kick_note"}}</p>
+    <p class="hint" style="margin:0;color:var(--accent);">⚠ {{t "account.force_warning"}}</p>
+  </section>
+
+  {{if not .Page}}
+  <section class="settings-card"><div class="empty">{{t "points.no_accounts"}}</div></section>
+  {{end}}
+
+  {{range .Page}}
+  <section class="settings-card">
+    <header class="section-h">
+      <h3>{{.Name}}</h3>
+      <span class="meta" style="color:var(--{{if eq .Platform "twitch"}}purple{{else}}kick{{end}})">{{.Platform}}{{if .Watching}} · <span style="color:var(--green)">{{t "points.watching"}} {{.Watching}}</span>{{end}}</span>
+    </header>
+
+    <form method="post" action="/accounts/{{.ID}}/force-watch">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <input type="hidden" name="enabled" value="{{if .Enabled}}0{{else}}1{{end}}">
+      <div class="kvedit"><div class="row">
+        <span class="k">{{t "account.force_toggle"}}</span>
+        <span class="d">{{if .Enabled}}{{t "account.force_on"}}{{else}}{{t "account.force_off"}}{{end}}</span>
+        <button class="btn-linear" type="submit">{{if .Enabled}}{{t "account.force_disable"}}{{else}}{{t "account.force_enable"}}{{end}} →</button>
+      </div></div>
+    </form>
+
+    <form method="post" action="/accounts/{{.ID}}/force-channels" class="force-form">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <div class="kicker" style="margin-top:14px;">{{t "account.force_reorder"}}</div>
+      <ul class="rank-list force-list">
+        {{range .Channels}}
+        <li draggable="true" data-channel="{{.}}">
+          <span>{{.}}</span>
+          <button type="button" class="rank-rm" onclick="fcRemove(this)">{{t "account.remove"}} ×</button>
+        </li>
+        {{end}}
+        {{if not .Channels}}
+        <li class="rank-empty">{{t "account.force_empty"}}</li>
+        {{end}}
+      </ul>
+      <div class="row">
+        <span class="hint">{{t "points.priority_hint"}}</span>
+        <button class="btn-linear" type="submit">{{t "account.force_save"}} →</button>
+      </div>
+    </form>
+
+    <form method="post" action="/accounts/{{.ID}}/force-channels/add" class="add-by-name">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <div class="kvedit"><div class="row">
+        <span class="k">{{t "account.force_add"}}</span>
+        <span class="d">{{t "account.force_add_desc"}}</span>
+        <span class="v grow"><input type="text" name="channel" placeholder="{{t "account.channel_placeholder"}}" required></span>
+        <button class="btn-linear" type="submit">{{t "account.add"}} →</button>
+      </div></div>
+    </form>
+  </section>
+  {{end}}
+  </div>{{/* .settings-stack */}}
+</div>
+
+<script>
+// Per-account channel lists: drag to reorder (top = tried first), remove
+// client-side, and persist the order on save (the reorder handler rewrites
+// the list from the submitted channel fields).
+(function() {
+  window.fcRemove = function(btn) {
+    const li = btn.closest('li');
+    if (li) li.remove();
+  };
+
+  document.querySelectorAll('.force-form').forEach(function(form) {
+    const list = form.querySelector('.force-list');
+    let dragSrc = null;
+
+    function clearCues() {
+      list.querySelectorAll('.drag-over-top, .drag-over-bot').forEach(n =>
+        n.classList.remove('drag-over-top', 'drag-over-bot'));
+    }
+    function addInputs() {
+      form.querySelectorAll('input[name="channel"]').forEach(n => n.remove());
+      list.querySelectorAll('li[data-channel]').forEach(li => {
+        const i = document.createElement('input');
+        i.type = 'hidden';
+        i.name = 'channel';
+        i.value = li.dataset.channel;
+        form.appendChild(i);
+      });
+    }
+    function bind(li) {
+      li.addEventListener('dragstart', function(e) {
+        dragSrc = li;
+        try { e.dataTransfer.effectAllowed = 'move'; } catch (_) {}
+        li.classList.add('dragging');
+      });
+      li.addEventListener('dragend', function() {
+        li.classList.remove('dragging'); clearCues(); dragSrc = null;
+      });
+      li.addEventListener('dragover', function(e) {
+        if (!dragSrc || dragSrc === li) return;
+        e.preventDefault();
+        const rect = li.getBoundingClientRect();
+        const before = (e.clientY - rect.top) < rect.height / 2;
+        clearCues();
+        li.classList.add(before ? 'drag-over-top' : 'drag-over-bot');
+      });
+      li.addEventListener('dragleave', function() {
+        li.classList.remove('drag-over-top', 'drag-over-bot');
+      });
+      li.addEventListener('drop', function(e) {
+        if (!dragSrc || dragSrc === li) return;
+        e.preventDefault(); e.stopPropagation();
+        const rect = li.getBoundingClientRect();
+        const before = (e.clientY - rect.top) < rect.height / 2;
+        list.insertBefore(dragSrc, before ? li : li.nextSibling);
+        clearCues();
+      });
+    }
+    list.querySelectorAll('li[data-channel]').forEach(bind);
+    list.addEventListener('dragover', function(e) { if (dragSrc) e.preventDefault(); });
+    form.addEventListener('formdata', addInputs);
+    form.addEventListener('submit', addInputs);
+  });
+})();
+</script>
+{{end}}
