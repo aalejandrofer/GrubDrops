@@ -492,6 +492,11 @@ func run() error {
 			ForceWatcher:   forceWatchStore{q: q},
 			FollowRaids:    func() bool { return api.PointsFollowRaids(context.Background(), q, a.ID) },
 			PointsOnly:     pointsOnly,
+			// time.Local is set to the display zone at boot, so the window is in
+			// the user's local time.
+			SleepUntil: func(now time.Time) (time.Time, bool) {
+				return api.PointsSleepWindow(context.Background(), q, a.ID).Until(now.In(time.Local), a.ID)
+			},
 		})
 		return scheduler.NewEntry(a.ID, w), nil
 	}
@@ -1022,10 +1027,7 @@ func (f forceWatchStore) Next(ctx context.Context, accountID string) (watcher.Fo
 	if err != nil || len(rows) == 0 {
 		return watcher.ForceTask{}, false
 	}
-	task := watcher.ForceTask{
-		Channel:      rows[0].Channel,
-		WatchPercent: api.PointsWatchPercent(ctx, f.q, accountID),
-	}
+	task := watcher.ForceTask{Channel: rows[0].Channel}
 	for _, r := range rows[1:] {
 		task.Alternates = append(task.Alternates, r.Channel)
 	}

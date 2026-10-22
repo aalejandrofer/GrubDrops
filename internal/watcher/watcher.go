@@ -167,6 +167,11 @@ type Config struct {
 	// PointsOnly turns drop mining off: the account only force-watches its
 	// channel-points channels and watches nothing when none is selected.
 	PointsOnly bool
+
+	// SleepUntil reports whether now is inside the account's sleep window and
+	// when that window ends. Force-watch (channel points) does not run during
+	// it. Nil means no sleep window.
+	SleepUntil func(now time.Time) (time.Time, bool)
 }
 
 // ForceTask is a channel to force-watch while idle. Watched indefinitely
@@ -176,9 +181,6 @@ type ForceTask struct {
 	// Alternates are lower-priority channels tried, in order, when Channel
 	// is not watchable (e.g. offline).
 	Alternates []string
-	// WatchPercent is the share of time (1-100) the account should spend
-	// watching; the rest is spent resting. 0 or 100 means watch continuously.
-	WatchPercent int
 }
 
 // ForceWatchSource is the watcher's view of the per-account force-watch
@@ -199,13 +201,7 @@ type Watcher struct {
 	currentBenefit  *platform.DropBenefit
 	currentStream   *platform.Stream
 	// forceTask is the active force-watch task (StateForceWatch), or nil.
-	forceTask *ForceTask
-	// forceWatched is watch time already spent in the current force-watch
-	// session; forceSessionLen is when that session ends and a rest starts;
-	// forceRestUntil keeps force-watch off until the rest is over.
-	forceWatched    time.Duration
-	forceSessionLen time.Duration
-	forceRestUntil  time.Time
+	forceTask       *ForceTask
 	handle          *platform.WatchHandle
 	watchStartedAt  time.Time
 	lastPollAt      time.Time // last inventory/progress poll (for the "last poll" UI)
@@ -398,7 +394,6 @@ func (w *Watcher) handlePubSubStreamDown(channelID string) {
 	forceWatching := w.forceTask != nil && w.state == StateForceWatch
 	handle := *w.handle
 	if forceWatching {
-		w.accrueForceWatchedLocked()
 		w.handle = nil
 		w.currentStream = nil
 	}
@@ -570,7 +565,6 @@ func (w *Watcher) unsubscribeCurrentChannel() {
 // single watch slot.
 func (w *Watcher) stopCurrentWatch(ctx context.Context) {
 	w.mu.Lock()
-	w.accrueForceWatchedLocked()
 	handle := w.handle
 	var channelID string
 	if w.currentStream != nil {
@@ -693,7 +687,7 @@ func (w *Watcher) Snapshot() Snapshot {
 	s.MinutesWatched = w.lastProgressMin
 	s.StartedAt = w.watchStartedAt
 	s.LastPollAt = w.lastPollAt
-	s.ForceRestUntil = w.forceRestUntil
+	s.ForceRestUntil, _ = w.sleepUntil()
 	return s
 }
 
@@ -885,24 +879,19 @@ const forceWatchYieldInterval = 5 * time.Minute
 // channel before re-evaluating the priority list.
 const pointsOnlyRecheckInterval = 30 * time.Minute
 
-// forceSessionLength picks how long a force-watch session runs before the
-// account rests. Randomised (60-120 min) so breaks never fall on a fixed
-// schedule. A var so tests can pin it.
-var forceSessionLength = func() time.Duration {
-	return time.Duration(60+rand.IntN(61)) * time.Minute
-}
-
 // raidJoinDelay is the random pause (3-15 s) before joining an announced raid.
 var raidJoinDelay = func() time.Duration {
 	return time.Duration(3+rand.IntN(13)) * time.Second
 }
 
-// accrueForceWatchedLocked adds the running force-watch's elapsed time to the
-// session total. Call with w.mu held, before the watch handle is cleared.
-func (w *Watcher) accrueForceWatchedLocked() {
-	if w.forceTask != nil && w.handle != nil {
-		w.forceWatched += time.Since(w.watchStartedAt)
+// sleepUntil reports whether the account is inside its sleep window and, if
+// so, when the window ends. The window is a time of day rather than a share
+// of watch time, so it never cuts a stream at an arbitrary point.
+func (w *Watcher) sleepUntil() (time.Time, bool) {
+	if w.cfg.SleepUntil == nil {
+		return time.Time{}, false
 	}
+	return w.cfg.SleepUntil(time.Now())
 }
 
 // Watch-loop network cadences are derived per-watcher from TickInterval and
@@ -984,9 +973,12 @@ func (w *Watcher) maybeStartForceTask(ctx context.Context) bool {
 		return false
 	}
 	w.mu.Lock()
-	busy := w.forceTask != nil || time.Now().Before(w.forceRestUntil)
+	busy := w.forceTask != nil
 	w.mu.Unlock()
 	if busy {
+		return false
+	}
+	if _, asleep := w.sleepUntil(); asleep {
 		return false
 	}
 	task, ok := w.cfg.ForceWatcher.Next(ctx, w.cfg.AccountID)
@@ -1075,30 +1067,16 @@ func (w *Watcher) forceWatch(ctx context.Context) error {
 		slog.Warn("force-watch heartbeat error", "kind", "error", "account", w.cfg.AccountID, "err", err)
 	}
 
-	// Rest once the session's share of watching is used up, so the account
-	// is not on a stream non-stop. Resting is session*(100-p)/p long, which
-	// makes watching p% of the time overall.
-	if p := task.WatchPercent; p > 0 && p < 100 {
+	// Stop for the sleep window: a human is not on a stream round the clock.
+	if until, asleep := w.sleepUntil(); asleep {
+		w.stopCurrentWatch(ctx)
 		w.mu.Lock()
-		if w.forceSessionLen == 0 {
-			w.forceSessionLen = forceSessionLength()
-		}
-		session := w.forceSessionLen
-		watched := w.forceWatched + time.Since(started)
+		w.forceTask = nil
 		w.mu.Unlock()
-		if watched >= session {
-			w.stopCurrentWatch(ctx)
-			rest := session * time.Duration(100-p) / time.Duration(p)
-			w.mu.Lock()
-			w.forceTask = nil
-			w.forceWatched, w.forceSessionLen = 0, 0
-			w.forceRestUntil = time.Now().Add(rest)
-			w.mu.Unlock()
-			slog.Info("force-watch resting", "kind", "state", "account", w.cfg.AccountID,
-				"watched", watched.Round(time.Minute), "rest", rest.Round(time.Minute))
-			w.setState(ctx, StatePickCampaign)
-			return nil
-		}
+		slog.Info("force-watch sleeping", "kind", "state", "account", w.cfg.AccountID,
+			"until", until.Format("15:04"))
+		w.setState(ctx, StatePickCampaign)
+		return nil
 	}
 
 	// Periodically yield back to mining so a newly-live whitelisted drop

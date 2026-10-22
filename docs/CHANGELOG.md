@@ -13,9 +13,10 @@ All notable changes to GrubDrops.
 - **Mode switch per account on the Points page: Drops + points, or Points
   only.** Points only never mines drops or picks a stream by itself; it watches
   just the channels you selected, and nothing when none is selected.
-- **Watch time setting per account** (default 75%, minimum 50%). The account
-  watches in random 60-120 minute sessions, then rests so that share of time
-  is spent watching. The page shows when a rest ends. 100% watches non-stop.
+- **Sleep window per account** (default 02:00-08:00 local, shifted up to 20
+  minutes a day). Channel-points watching pauses during it and resumes after,
+  so an account is not on a stream round the clock. The page shows when it
+  wakes. Turn it off to watch non-stop.
 - **Follow raids setting per Twitch account** (default on). Joins are delayed
   by a random 3-15 seconds.
 - Twitch channel-point bonuses are checked on watch start and credited

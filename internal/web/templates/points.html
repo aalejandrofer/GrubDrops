@@ -27,7 +27,7 @@
   <section class="settings-card">
     <header class="section-h">
       <h3>{{.Name}}</h3>
-      <span class="meta" style="color:var(--{{if eq .Platform "twitch"}}purple{{else}}kick{{end}})">{{.Platform}}{{if .Watching}} · <span style="color:var(--green)">{{t "points.watching"}} {{.Watching}}</span>{{end}}{{if .RestUntil}} · <span style="color:var(--amber)">{{t "points.resting_until"}} {{.RestUntil}}</span>{{end}}</span>
+      <span class="meta" style="color:var(--{{if eq .Platform "twitch"}}purple{{else}}kick{{end}})">{{.Platform}}{{if .Watching}} · <span style="color:var(--green)">{{t "points.watching"}} {{.Watching}}</span>{{end}}{{if .AsleepUntil}} · <span style="color:var(--amber)">{{t "points.sleeping_until"}} {{.AsleepUntil}}</span>{{end}}</span>
     </header>
 
     <form method="post" action="/accounts/{{.ID}}/force-watch">
@@ -52,9 +52,12 @@
           </span>
         </div>
         <div class="row">
-          <span class="k">{{t "points.watch_time"}}</span>
-          <span class="d">{{t "points.watch_time_desc"}}</span>
-          <span class="v"><input type="number" name="watch_percent" min="{{.MinPercent}}" max="100" step="5" value="{{.WatchPercent}}" style="width:5em"> %</span>
+          <span class="k">{{t "points.sleep"}}</span>
+          <span class="d">{{t "points.sleep_desc"}}</span>
+          <span class="v">
+            <label class="cb"><input type="checkbox" name="sleep" value="1" {{if .Sleep.Enabled}}checked{{end}}> {{t "account.on"}}</label>
+            <input type="time" name="sleep_start" value="{{.Sleep.StartHM}}"> – <input type="time" name="sleep_end" value="{{.Sleep.EndHM}}">
+          </span>
         </div>
         {{if eq .Platform "twitch"}}
         <div class="row">

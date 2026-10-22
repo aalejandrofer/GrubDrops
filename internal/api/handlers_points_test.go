@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
@@ -83,10 +84,9 @@ func TestPointsPage_ListsAccountsAndEditsRedirectBack(t *testing.T) {
 		"channels render in saved priority order")
 }
 
-// Watch time defaults to a safe 75%, is clamped to the 50-100 range, and raids
-// are on until switched off. Kick has no raid setting, so a save must not
-// write one for it.
-func TestPointsSettings_DefaultsClampAndPerPlatform(t *testing.T) {
+// Sleep window defaults to 02:00-08:00, invalid times keep the previous ones,
+// raids are on until switched off, and Kick has no raid setting.
+func TestPointsSettings_DefaultsAndPerPlatform(t *testing.T) {
 	ctx := context.Background()
 	db, err := store.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
@@ -99,8 +99,10 @@ func TestPointsSettings_DefaultsClampAndPerPlatform(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	assert.Equal(t, 75, PointsWatchPercent(ctx, q, "acc-tw"), "safe default")
+	def := PointsSleepWindow(ctx, q, "acc-tw")
+	assert.Equal(t, SleepWindow{Enabled: true, Start: 120, End: 480}, def, "safe default")
 	assert.True(t, PointsFollowRaids(ctx, q, "acc-tw"), "raids default on")
+	assert.False(t, PointsOnly(ctx, q, "acc-tw"), "drops + points by default")
 
 	sm := scs.New()
 	var reloaded []string
@@ -119,29 +121,30 @@ func TestPointsSettings_DefaultsClampAndPerPlatform(t *testing.T) {
 		assert.Equal(t, "/points", rec.Header().Get("Location"))
 	}
 
-	save("acc-tw", url.Values{"watch_percent": {"80"}}) // raids box unticked
-	assert.Equal(t, 80, PointsWatchPercent(ctx, q, "acc-tw"))
+	save("acc-tw", url.Values{"sleep": {"1"}, "sleep_start": {"23:30"}, "sleep_end": {"07:15"}}) // raids box unticked
+	assert.Equal(t, SleepWindow{Enabled: true, Start: 23*60 + 30, End: 7*60 + 15}, PointsSleepWindow(ctx, q, "acc-tw"))
 	assert.False(t, PointsFollowRaids(ctx, q, "acc-tw"), "unticked box turns raids off")
 
-	save("acc-tw", url.Values{"watch_percent": {"10"}, "follow_raids": {"1"}})
-	assert.Equal(t, MinWatchPercent, PointsWatchPercent(ctx, q, "acc-tw"), "clamped up to the floor")
+	save("acc-tw", url.Values{"sleep": {"1"}, "sleep_start": {"junk"}, "sleep_end": {"07:15"}, "follow_raids": {"1"}})
+	assert.Equal(t, SleepWindow{Enabled: true, Start: 23*60 + 30, End: 7*60 + 15}, PointsSleepWindow(ctx, q, "acc-tw"), "bad time keeps the old window")
 	assert.True(t, PointsFollowRaids(ctx, q, "acc-tw"))
 
-	save("acc-tw", url.Values{"watch_percent": {"500"}, "follow_raids": {"1"}})
-	assert.Equal(t, 100, PointsWatchPercent(ctx, q, "acc-tw"), "clamped down to 100")
+	save("acc-tw", url.Values{"sleep_start": {"01:00"}, "sleep_end": {"05:00"}}) // sleep box unticked
+	w := PointsSleepWindow(ctx, q, "acc-tw")
+	assert.False(t, w.Enabled, "unticked box turns the sleep window off")
+	_, asleep := w.Until(time.Date(2026, 10, 10, 3, 0, 0, 0, time.UTC), "acc-tw")
+	assert.False(t, asleep)
 
-	assert.False(t, PointsOnly(ctx, q, "acc-tw"), "drops + points by default")
-	save("acc-tw", url.Values{"watch_percent": {"75"}, "mode": {"points"}})
+	save("acc-tw", url.Values{"mode": {"points"}})
 	assert.True(t, PointsOnly(ctx, q, "acc-tw"))
-	save("acc-tw", url.Values{"watch_percent": {"75"}, "mode": {"drops"}})
+	save("acc-tw", url.Values{"mode": {"drops"}})
 	assert.False(t, PointsOnly(ctx, q, "acc-tw"))
+	assert.Equal(t, []string{"acc-tw", "acc-tw"}, reloaded, "only a mode change restarts the watcher")
 
-	save("acc-kk", url.Values{"watch_percent": {"60"}})
-	assert.Equal(t, 60, PointsWatchPercent(ctx, q, "acc-kk"))
+	save("acc-kk", url.Values{"sleep": {"1"}, "sleep_start": {"03:00"}, "sleep_end": {"09:00"}})
+	assert.Equal(t, 180, PointsSleepWindow(ctx, q, "acc-kk").Start)
 	_, err = q.GetSettingString(ctx, PointsFollowRaidsKey("acc-kk"))
 	assert.Error(t, err, "no raid setting is stored for Kick")
-
-	assert.Equal(t, []string{"acc-tw", "acc-tw"}, reloaded, "only a mode change restarts the watcher")
 
 	tmpl, err := web.Templates()
 	require.NoError(t, err)
@@ -150,6 +153,5 @@ func TestPointsSettings_DefaultsClampAndPerPlatform(t *testing.T) {
 	(&pointsDeps{q: q, t: tmpl, sm: sm}).get(rec, req)
 	body := rec.Body.String()
 	assert.Equal(t, 1, strings.Count(body, `name="follow_raids"`), "raid checkbox only on the Twitch card")
-	assert.Contains(t, body, `name="watch_percent"`)
-	assert.Contains(t, body, `value="60"`)
+	assert.Contains(t, body, `name="sleep_start" value="03:00"`)
 }

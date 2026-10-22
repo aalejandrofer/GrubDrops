@@ -192,10 +192,11 @@ stream and again on every credited minute, and joins raids from the channel
 being watched (after a random 3-15 s pause; switch it off per account).
 Kick points accrue just by watching, so only the watching is automated there.
 
-**Safe by default.** Watching non-stop 24/7 is the easiest pattern to flag, so
-each account has a **Watch time** setting (default 75%, minimum 50%). It
-watches in random 60-120 minute sessions and rests between them so that
-about 75% of the time is spent watching. Each account only ever watches one
+**Safe by default.** Watching round the clock is the easiest pattern to flag,
+so each account has a **Sleep window** (default 02:00-08:00 local, shifted by
+up to 20 minutes each day). Channel-points watching pauses during it, like a
+person asleep, and drops are not affected. Streams end on their own schedule,
+so nothing is cut at an arbitrary point. Each account only ever watches one
 channel at a time.
 
 ## How it works
