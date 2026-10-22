@@ -50,6 +50,16 @@ func PointsFollowRaids(ctx context.Context, q *gen.Queries, accountID string) bo
 	return err != nil || string(v) != "0"
 }
 
+// PointsOnlyKey is the per-account KV flag for points-only mode: the account
+// never mines drops and only watches its selected channel-points channels.
+func PointsOnlyKey(accountID string) string { return "points_only:" + accountID }
+
+// PointsOnly reports whether the account is in points-only mode (default off).
+func PointsOnly(ctx context.Context, q *gen.Queries, accountID string) bool {
+	v, err := q.GetSettingString(ctx, PointsOnlyKey(accountID))
+	return err == nil && string(v) == "1"
+}
+
 // pointsDeps owns /points: one place to pick the channels each Twitch/Kick
 // account watches for channel points. The channel and on/off mutations reuse
 // the per-account force-watch endpoints on accountsDeps.
@@ -62,6 +72,7 @@ type pointsDeps struct {
 }
 
 type pointsAccount struct {
+	PointsOnly   bool // true: never mines drops, only the selected channels
 	ID           string
 	Name         string
 	Platform     string
@@ -100,6 +111,7 @@ func (d *pointsDeps) get(w http.ResponseWriter, r *http.Request) {
 			Watching: watching[a.ID], RestUntil: restUntil[a.ID],
 			WatchPercent: PointsWatchPercent(ctx, d.q, a.ID),
 			FollowRaids:  PointsFollowRaids(ctx, d.q, a.ID),
+			PointsOnly:   PointsOnly(ctx, d.q, a.ID),
 			MinPercent:   MinWatchPercent,
 		}
 		if v, err := d.q.GetSettingString(ctx, ForceWatchEnabledKey(a.ID)); err == nil && string(v) == "1" {
@@ -121,8 +133,9 @@ func (d *pointsDeps) get(w http.ResponseWriter, r *http.Request) {
 }
 
 // pointsSettings handles POST /accounts/:id/points-settings — saves the
-// account's watch-time share and (Twitch only) whether it follows raids.
-// Both are read live, so no watcher restart is needed.
+// account's mode (drops + points vs points only), watch-time share and
+// (Twitch only) whether it follows raids. Watch time and raids are read live;
+// a mode change restarts just this account's watcher.
 func (d accountsDeps) pointsSettings(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	acc, err := d.q.GetAccount(r.Context(), id)
@@ -143,6 +156,18 @@ func (d accountsDeps) pointsSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if !save(PointsWatchPercentKey(id), strconv.Itoa(pct)) {
 		return
+	}
+	wasOnly := PointsOnly(r.Context(), d.q, id)
+	only := r.FormValue("mode") == "points"
+	mode := "0"
+	if only {
+		mode = "1"
+	}
+	if !save(PointsOnlyKey(id), mode) {
+		return
+	}
+	if only != wasOnly {
+		d.reloadForce(id)
 	}
 	if acc.Platform == "twitch" {
 		raids := "0"

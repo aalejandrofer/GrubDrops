@@ -182,6 +182,11 @@ drag-to-reorder channel list; it watches the first live channel on its list,
 skips offline ones, and hands back to mining whenever a whitelisted drop goes
 live. An account does not need any games whitelisted for this to work.
 
+Each account also has a **Mode** switch: *Drops + points* (drops first, the
+channel list only when there is nothing to mine) or *Points only* (never mines
+drops or picks a stream on its own, watches just the channels you selected,
+and nothing if none is selected).
+
 On Twitch, GrubDrops also claims the bonus chest when it starts watching a
 stream and again on every credited minute, and joins raids from the channel
 being watched (after a random 3-15 s pause; switch it off per account).

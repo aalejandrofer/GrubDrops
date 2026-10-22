@@ -10,6 +10,9 @@ All notable changes to GrubDrops.
   Kick account watches for channel points: on/off switch, drag-to-reorder
   list, add/remove, and the channel currently being watched. This replaces the
   Channel Points card on the account page.
+- **Mode switch per account on the Points page: Drops + points, or Points
+  only.** Points only never mines drops or picks a stream by itself; it watches
+  just the channels you selected, and nothing when none is selected.
 - **Watch time setting per account** (default 75%, minimum 50%). The account
   watches in random 60-120 minute sessions, then rests so that share of time
   is spent watching. The page shows when a rest ends. 100% watches non-stop.

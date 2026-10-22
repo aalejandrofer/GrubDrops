@@ -44,6 +44,14 @@
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
       <div class="kvedit">
         <div class="row">
+          <span class="k">{{t "points.mode"}}</span>
+          <span class="d">{{if .PointsOnly}}{{t "points.mode_points_desc"}}{{else}}{{t "points.mode_drops_desc"}}{{end}}</span>
+          <span class="v">
+            <label class="cb"><input type="radio" name="mode" value="drops" {{if not .PointsOnly}}checked{{end}}> {{t "points.mode_drops"}}</label>
+            <label class="cb"><input type="radio" name="mode" value="points" {{if .PointsOnly}}checked{{end}}> {{t "points.mode_points"}}</label>
+          </span>
+        </div>
+        <div class="row">
           <span class="k">{{t "points.watch_time"}}</span>
           <span class="d">{{t "points.watch_time_desc"}}</span>
           <span class="v"><input type="number" name="watch_percent" min="{{.MinPercent}}" max="100" step="5" value="{{.WatchPercent}}" style="width:5em"> %</span>

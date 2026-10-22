@@ -435,8 +435,11 @@ func run() error {
 		}
 		// An account with channel-points mining configured still needs a
 		// watcher even without a game whitelist: it force-watches while idle.
+		// A points-only account always gets one: it needs no whitelist, and
+		// picks up a channel added later without a reload.
 		_, forcing := forceWatchStore{q: q}.Next(ctx, a.ID)
-		if !hasAnyGame(allow) && !forcing {
+		pointsOnly := api.PointsOnly(ctx, q, a.ID)
+		if !hasAnyGame(allow) && !forcing && !pointsOnly {
 			logger.Info("account has empty game whitelist, idle until games are picked",
 				"account", a.ID)
 			// Authed but nothing to mine yet — surface as "no_games", NOT
@@ -488,6 +491,7 @@ func run() error {
 			SkipClearer:    skipClearer,
 			ForceWatcher:   forceWatchStore{q: q},
 			FollowRaids:    func() bool { return api.PointsFollowRaids(context.Background(), q, a.ID) },
+			PointsOnly:     pointsOnly,
 		})
 		return scheduler.NewEntry(a.ID, w), nil
 	}

@@ -163,6 +163,10 @@ type Config struct {
 	// joined. Read per raid so a settings change applies without a reload.
 	// Nil means follow.
 	FollowRaids func() bool
+
+	// PointsOnly turns drop mining off: the account only force-watches its
+	// channel-points channels and watches nothing when none is selected.
+	PointsOnly bool
 }
 
 // ForceTask is a channel to force-watch while idle. Watched indefinitely
@@ -877,6 +881,10 @@ const claimFailSkipThreshold = 3
 // the idle branch with its accrued minutes if nothing else is mineable.
 const forceWatchYieldInterval = 5 * time.Minute
 
+// pointsOnlyRecheckInterval is how long a points-only account stays on a
+// channel before re-evaluating the priority list.
+const pointsOnlyRecheckInterval = 30 * time.Minute
+
 // forceSessionLength picks how long a force-watch session runs before the
 // account rests. Randomised (60-120 min) so breaks never fall on a fixed
 // schedule. A var so tests can pin it.
@@ -939,6 +947,12 @@ const stalledChannelCooldown = 30 * time.Minute
 func (w *Watcher) step(ctx context.Context) error {
 	switch w.State() {
 	case StateIdle, StatePickCampaign:
+		if w.cfg.PointsOnly {
+			// No drop discovery or mining: park in sleeping, whose idle
+			// branch starts the selected points channel if there is one.
+			w.setState(ctx, StateSleeping)
+			return nil
+		}
 		return w.pickCampaign(ctx)
 	case StateForceWatch:
 		return w.forceWatch(ctx)
@@ -1089,7 +1103,13 @@ func (w *Watcher) forceWatch(ctx context.Context) error {
 
 	// Periodically yield back to mining so a newly-live whitelisted drop
 	// preempts us. If still idle, the idle branch restarts force-watch.
-	if time.Since(started) >= forceWatchYieldInterval {
+	// Points-only accounts have no drops to yield to; they only re-check
+	// less often so a higher-priority channel that went live is picked up.
+	yield := forceWatchYieldInterval
+	if w.cfg.PointsOnly {
+		yield = pointsOnlyRecheckInterval
+	}
+	if time.Since(started) >= yield {
 		w.stopCurrentWatch(ctx)
 		w.mu.Lock()
 		w.forceTask = nil

@@ -103,7 +103,9 @@ func TestPointsSettings_DefaultsClampAndPerPlatform(t *testing.T) {
 	assert.True(t, PointsFollowRaids(ctx, q, "acc-tw"), "raids default on")
 
 	sm := scs.New()
-	acc := accountsDeps{q: q, db: db, sm: sm, rootCtx: ctx}
+	var reloaded []string
+	acc := accountsDeps{q: q, db: db, sm: sm, rootCtx: ctx,
+		reloadAccount: func(_ context.Context, id string) { reloaded = append(reloaded, id) }}
 	save := func(id string, form url.Values) {
 		req := httptest.NewRequest("POST", "/accounts/"+id+"/points-settings", strings.NewReader(form.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -128,10 +130,18 @@ func TestPointsSettings_DefaultsClampAndPerPlatform(t *testing.T) {
 	save("acc-tw", url.Values{"watch_percent": {"500"}, "follow_raids": {"1"}})
 	assert.Equal(t, 100, PointsWatchPercent(ctx, q, "acc-tw"), "clamped down to 100")
 
+	assert.False(t, PointsOnly(ctx, q, "acc-tw"), "drops + points by default")
+	save("acc-tw", url.Values{"watch_percent": {"75"}, "mode": {"points"}})
+	assert.True(t, PointsOnly(ctx, q, "acc-tw"))
+	save("acc-tw", url.Values{"watch_percent": {"75"}, "mode": {"drops"}})
+	assert.False(t, PointsOnly(ctx, q, "acc-tw"))
+
 	save("acc-kk", url.Values{"watch_percent": {"60"}})
 	assert.Equal(t, 60, PointsWatchPercent(ctx, q, "acc-kk"))
 	_, err = q.GetSettingString(ctx, PointsFollowRaidsKey("acc-kk"))
 	assert.Error(t, err, "no raid setting is stored for Kick")
+
+	assert.Equal(t, []string{"acc-tw", "acc-tw"}, reloaded, "only a mode change restarts the watcher")
 
 	tmpl, err := web.Templates()
 	require.NoError(t, err)
