@@ -20,138 +20,142 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/web"
 )
 
-// The Points page lists every Twitch and Kick account with its saved channels
-// and toggle, and the force-watch endpoints it posts to send the user back to
-// it and restart only the edited account.
-func TestPointsPage_ListsAccountsAndEditsRedirectBack(t *testing.T) {
-	ctx := context.Background()
-	db, err := store.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	q := gen.New(db)
-	for _, a := range [][2]string{{"acc-tw", "twitch"}, {"acc-kk", "kick"}} {
-		_, err := db.ExecContext(ctx,
-			`INSERT INTO accounts (id, platform, display_name, status, fingerprint_json, enabled, created_at, updated_at)
-			VALUES (?, ?, ?, 'idle', '{}', 1, 1, 1)`, a[0], a[1], "name-"+a[1])
-		require.NoError(t, err)
-	}
-
-	sm := scs.New()
-	var reloaded []string
-	acc := accountsDeps{q: q, db: db, sm: sm, rootCtx: ctx,
-		reloadAccount: func(_ context.Context, id string) { reloaded = append(reloaded, id) }}
-
-	post := func(id, path string, form url.Values, h func(http.ResponseWriter, *http.Request)) *httptest.ResponseRecorder {
-		req := httptest.NewRequest("POST", path, strings.NewReader(form.Encode()))
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req, _ = loadSession(t, sm, req)
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", id)
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-		rec := httptest.NewRecorder()
-		h(rec, req)
-		return rec
-	}
-
-	for _, rec := range []*httptest.ResponseRecorder{
-		post("acc-tw", "/accounts/acc-tw/force-channels/add", url.Values{"channel": {"XQC"}}, acc.addForceChannel),
-		post("acc-tw", "/accounts/acc-tw/force-channels/add", url.Values{"channel": {"shroud"}}, acc.addForceChannel),
-		post("acc-kk", "/accounts/acc-kk/force-channels/add", url.Values{"channel": {"trainwreckstv"}}, acc.addForceChannel),
-		post("acc-tw", "/accounts/acc-tw/force-watch", url.Values{"enabled": {"1"}}, acc.forceWatchToggle),
-	} {
-		require.Equal(t, http.StatusSeeOther, rec.Code)
-		assert.Equal(t, "/points", rec.Header().Get("Location"))
-	}
-	assert.Equal(t, []string{"acc-tw", "acc-tw", "acc-kk", "acc-tw"}, reloaded, "only the edited account restarts")
-
-	tmpl, err := web.Templates()
-	require.NoError(t, err)
-	pts := &pointsDeps{q: q, t: tmpl, sm: sm}
-	req, _ := loadSession(t, sm, httptest.NewRequest("GET", "/points", nil))
-	rec := httptest.NewRecorder()
-	pts.get(rec, req)
-	require.Equal(t, http.StatusOK, rec.Code)
-
-	body := rec.Body.String()
-	for _, want := range []string{
-		"name-twitch", "name-kick",
-		`data-channel="xqc"`, `data-channel="shroud"`, `data-channel="trainwreckstv"`,
-		`action="/accounts/acc-tw/force-watch"`, `action="/accounts/acc-kk/force-channels/add"`,
-	} {
-		assert.Contains(t, body, want)
-	}
-	assert.Less(t, strings.Index(body, `data-channel="xqc"`), strings.Index(body, `data-channel="shroud"`),
-		"channels render in saved priority order")
+type pointsEnv struct {
+	t   *testing.T
+	ctx context.Context
+	q   *gen.Queries
+	sm  *scs.SessionManager
+	acc accountsDeps
+	pts *pointsDeps
+	rld []string
 }
 
-// Sleep window defaults to 02:00-08:00, invalid times keep the previous ones,
-// raids are on until switched off, and Kick has no raid setting.
-func TestPointsSettings_DefaultsAndPerPlatform(t *testing.T) {
+func newPointsEnv(t *testing.T) *pointsEnv {
+	t.Helper()
 	ctx := context.Background()
 	db, err := store.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
-	q := gen.New(db)
 	for _, a := range [][2]string{{"acc-tw", "twitch"}, {"acc-kk", "kick"}} {
 		_, err := db.ExecContext(ctx,
 			`INSERT INTO accounts (id, platform, display_name, status, fingerprint_json, enabled, created_at, updated_at)
 			VALUES (?, ?, ?, 'idle', '{}', 1, 1, 1)`, a[0], a[1], "name-"+a[1])
 		require.NoError(t, err)
 	}
-
-	def := PointsSleepWindow(ctx, q, "acc-tw")
-	assert.Equal(t, SleepWindow{Enabled: true, Start: 120, End: 480}, def, "safe default")
-	assert.True(t, PointsFollowRaids(ctx, q, "acc-tw"), "raids default on")
-	assert.False(t, PointsOnly(ctx, q, "acc-tw"), "drops + points by default")
-
-	sm := scs.New()
-	var reloaded []string
-	acc := accountsDeps{q: q, db: db, sm: sm, rootCtx: ctx,
-		reloadAccount: func(_ context.Context, id string) { reloaded = append(reloaded, id) }}
-	save := func(id string, form url.Values) {
-		req := httptest.NewRequest("POST", "/accounts/"+id+"/points-settings", strings.NewReader(form.Encode()))
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req, _ = loadSession(t, sm, req)
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("id", id)
-		req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-		rec := httptest.NewRecorder()
-		acc.pointsSettings(rec, req)
-		require.Equal(t, http.StatusSeeOther, rec.Code)
-		assert.Equal(t, "/points", rec.Header().Get("Location"))
-	}
-
-	save("acc-tw", url.Values{"sleep": {"1"}, "sleep_start": {"23:30"}, "sleep_end": {"07:15"}}) // raids box unticked
-	assert.Equal(t, SleepWindow{Enabled: true, Start: 23*60 + 30, End: 7*60 + 15}, PointsSleepWindow(ctx, q, "acc-tw"))
-	assert.False(t, PointsFollowRaids(ctx, q, "acc-tw"), "unticked box turns raids off")
-
-	save("acc-tw", url.Values{"sleep": {"1"}, "sleep_start": {"junk"}, "sleep_end": {"07:15"}, "follow_raids": {"1"}})
-	assert.Equal(t, SleepWindow{Enabled: true, Start: 23*60 + 30, End: 7*60 + 15}, PointsSleepWindow(ctx, q, "acc-tw"), "bad time keeps the old window")
-	assert.True(t, PointsFollowRaids(ctx, q, "acc-tw"))
-
-	save("acc-tw", url.Values{"sleep_start": {"01:00"}, "sleep_end": {"05:00"}}) // sleep box unticked
-	w := PointsSleepWindow(ctx, q, "acc-tw")
-	assert.False(t, w.Enabled, "unticked box turns the sleep window off")
-	_, asleep := w.Until(time.Date(2026, 10, 10, 3, 0, 0, 0, time.UTC), "acc-tw")
-	assert.False(t, asleep)
-
-	save("acc-tw", url.Values{"mode": {"points"}})
-	assert.True(t, PointsOnly(ctx, q, "acc-tw"))
-	save("acc-tw", url.Values{"mode": {"drops"}})
-	assert.False(t, PointsOnly(ctx, q, "acc-tw"))
-	assert.Equal(t, []string{"acc-tw", "acc-tw"}, reloaded, "only a mode change restarts the watcher")
-
-	save("acc-kk", url.Values{"sleep": {"1"}, "sleep_start": {"03:00"}, "sleep_end": {"09:00"}})
-	assert.Equal(t, 180, PointsSleepWindow(ctx, q, "acc-kk").Start)
-	_, err = q.GetSettingString(ctx, PointsFollowRaidsKey("acc-kk"))
-	assert.Error(t, err, "no raid setting is stored for Kick")
-
 	tmpl, err := web.Templates()
 	require.NoError(t, err)
-	req, _ := loadSession(t, sm, httptest.NewRequest("GET", "/points", nil))
+	e := &pointsEnv{t: t, ctx: ctx, q: gen.New(db), sm: scs.New()}
+	e.acc = accountsDeps{q: e.q, db: db, sm: e.sm, rootCtx: ctx,
+		reloadAccount: func(_ context.Context, id string) { e.rld = append(e.rld, id) }}
+	e.pts = &pointsDeps{q: e.q, t: tmpl, sm: e.sm}
+	return e
+}
+
+func (e *pointsEnv) post(id, path string, form url.Values, h func(http.ResponseWriter, *http.Request)) *httptest.ResponseRecorder {
+	req := httptest.NewRequest("POST", path, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req, _ = loadSession(e.t, e.sm, req)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	rec := httptest.NewRecorder()
-	(&pointsDeps{q: q, t: tmpl, sm: sm}).get(rec, req)
-	body := rec.Body.String()
-	assert.Equal(t, 1, strings.Count(body, `name="follow_raids"`), "raid checkbox only on the Twitch card")
-	assert.Contains(t, body, `name="sleep_start" value="03:00"`)
+	h(rec, req)
+	return rec
+}
+
+func (e *pointsEnv) page(tab string) string {
+	req, _ := loadSession(e.t, e.sm, httptest.NewRequest("GET", "/points?tab="+tab, nil))
+	rec := httptest.NewRecorder()
+	e.pts.get(rec, req)
+	require.Equal(e.t, http.StatusOK, rec.Code)
+	return rec.Body.String()
+}
+
+// Each platform has its own tab listing only its accounts, and the edit
+// endpoints send the user back to the tab of the account they edited.
+func TestPointsTabs_SplitByPlatformAndRedirectBack(t *testing.T) {
+	e := newPointsEnv(t)
+	for _, c := range []struct {
+		id, tab, channel string
+	}{
+		{"acc-tw", "twitch", "XQC"}, {"acc-tw", "twitch", "shroud"}, {"acc-kk", "kick", "trainwreckstv"},
+	} {
+		rec := e.post(c.id, "/accounts/"+c.id+"/force-channels/add", url.Values{"channel": {c.channel}}, e.acc.addForceChannel)
+		require.Equal(t, http.StatusSeeOther, rec.Code)
+		assert.Equal(t, "/points?tab="+c.tab, rec.Header().Get("Location"))
+	}
+	rec := e.post("acc-tw", "/accounts/acc-tw/force-watch", url.Values{"enabled": {"1"}}, e.acc.forceWatchToggle)
+	assert.Equal(t, "/points?tab=twitch", rec.Header().Get("Location"))
+	assert.Equal(t, []string{"acc-tw", "acc-tw", "acc-kk", "acc-tw"}, e.rld, "only the edited account restarts")
+
+	tw := e.page("twitch")
+	assert.Contains(t, tw, "name-twitch")
+	assert.NotContains(t, tw, "name-kick")
+	assert.Contains(t, tw, `data-channel="xqc"`)
+	assert.Contains(t, tw, `data-channel="shroud"`)
+	assert.Less(t, strings.Index(tw, `data-channel="xqc"`), strings.Index(tw, `data-channel="shroud"`),
+		"channels render in saved priority order")
+	assert.Contains(t, tw, `action="/accounts/acc-tw/force-watch"`)
+
+	kk := e.page("kick")
+	assert.Contains(t, kk, "name-kick")
+	assert.NotContains(t, kk, "name-twitch")
+	assert.Contains(t, kk, `data-channel="trainwreckstv"`)
+
+	assert.Contains(t, e.page("nonsense"), "name-twitch", "unknown tab falls back to Twitch")
+	assert.NotContains(t, tw, `name="sleep_start"`, "safety settings live only on their own tab")
+}
+
+// One safety setting set serves every account: it defaults to a 02:00-08:00
+// sleep window with raids on, keeps the old times when new ones are invalid,
+// and applies to Twitch and Kick alike.
+func TestPointsSafety_SharedAcrossPlatforms(t *testing.T) {
+	e := newPointsEnv(t)
+	assert.Equal(t, SleepWindow{Enabled: true, Start: 120, End: 480}, PointsSleepWindow(e.ctx, e.q), "safe default")
+	assert.True(t, PointsFollowRaids(e.ctx, e.q), "raids default on")
+
+	save := func(form url.Values) {
+		rec := e.post("", "/points/safety", form, e.pts.saveSafety)
+		require.Equal(t, http.StatusSeeOther, rec.Code)
+		assert.Equal(t, "/points?tab=safety", rec.Header().Get("Location"))
+	}
+
+	save(url.Values{"sleep": {"1"}, "sleep_start": {"23:30"}, "sleep_end": {"07:15"}}) // raids box unticked
+	w := PointsSleepWindow(e.ctx, e.q)
+	assert.Equal(t, SleepWindow{Enabled: true, Start: 23*60 + 30, End: 7*60 + 15}, w)
+	assert.False(t, PointsFollowRaids(e.ctx, e.q), "unticked box turns raids off")
+
+	save(url.Values{"sleep": {"1"}, "sleep_start": {"junk"}, "sleep_end": {"07:15"}, "follow_raids": {"1"}})
+	assert.Equal(t, w, PointsSleepWindow(e.ctx, e.q), "bad time keeps the old window")
+	assert.True(t, PointsFollowRaids(e.ctx, e.q))
+
+	// The same window is what both platforms' accounts sleep by.
+	night := time.Date(2026, 10, 10, 23, 50, 0, 0, time.UTC)
+	for _, id := range []string{"acc-tw", "acc-kk"} {
+		_, asleep := PointsSleepWindow(e.ctx, e.q).Until(night, id)
+		assert.True(t, asleep, id)
+	}
+
+	save(url.Values{"sleep_start": {"01:00"}, "sleep_end": {"05:00"}, "follow_raids": {"1"}}) // sleep box unticked
+	off := PointsSleepWindow(e.ctx, e.q)
+	assert.False(t, off.Enabled, "unticked box turns the sleep window off")
+	_, asleep := off.Until(night, "acc-tw")
+	assert.False(t, asleep)
+
+	save(url.Values{"sleep": {"1"}, "sleep_start": {"03:00"}, "sleep_end": {"09:00"}, "follow_raids": {"1"}})
+	assert.Contains(t, e.page("safety"), `name="sleep_start" value="03:00"`)
+}
+
+// The per-account mode switch only restarts the account when it changes.
+func TestPointsMode_RestartsOnlyOnChange(t *testing.T) {
+	e := newPointsEnv(t)
+	assert.False(t, PointsOnly(e.ctx, e.q, "acc-kk"), "drops + points by default")
+
+	rec := e.post("acc-kk", "/accounts/acc-kk/points-mode", url.Values{"mode": {"points"}}, e.acc.pointsMode)
+	assert.Equal(t, "/points?tab=kick", rec.Header().Get("Location"))
+	assert.True(t, PointsOnly(e.ctx, e.q, "acc-kk"))
+	e.post("acc-kk", "/accounts/acc-kk/points-mode", url.Values{"mode": {"points"}}, e.acc.pointsMode)
+	e.post("acc-kk", "/accounts/acc-kk/points-mode", url.Values{"mode": {"drops"}}, e.acc.pointsMode)
+	assert.False(t, PointsOnly(e.ctx, e.q, "acc-kk"))
+	assert.Equal(t, []string{"acc-kk", "acc-kk"}, e.rld)
 }

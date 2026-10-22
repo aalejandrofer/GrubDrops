@@ -3,6 +3,7 @@
 {{define "title"}}{{t "points.title"}}{{end}}
 
 {{define "content"}}
+{{with .Page}}
 <div class="shell">
   <div class="ph">
     <div>
@@ -11,23 +12,56 @@
     </div>
   </div>
 
+  <div class="drops-tabs" role="tablist">
+    <a role="tab" class="drops-tab {{if eq .Tab "twitch"}}on{{end}}" href="/points?tab=twitch">{{t "points.tab_twitch"}}</a>
+    <a role="tab" class="drops-tab {{if eq .Tab "kick"}}on{{end}}" href="/points?tab=kick">{{t "points.tab_kick"}}</a>
+    <a role="tab" class="drops-tab {{if eq .Tab "safety"}}on{{end}}" href="/points?tab=safety">{{t "points.tab_safety"}}</a>
+  </div>
+
   <div class="settings-stack">
+  {{if eq .Tab "safety"}}
+  <section class="settings-card">
+    <header class="section-h"><h3>{{t "points.tab_safety"}}</h3></header>
+    <p class="hint" style="margin:0 0 10px;">{{t "points.safety_desc"}}</p>
+    <p class="hint" style="margin:0 0 14px;color:var(--accent);">⚠ {{t "account.force_warning"}}</p>
+    <form method="post" action="/points/safety">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <div class="kvedit">
+        <div class="row">
+          <span class="k">{{t "points.sleep"}}</span>
+          <span class="d">{{t "points.sleep_desc"}}</span>
+          <span class="v">
+            <label class="cb"><input type="checkbox" name="sleep" value="1" {{if .Sleep.Enabled}}checked{{end}}> {{t "account.on"}}</label>
+            <input type="time" name="sleep_start" value="{{.Sleep.StartHM}}"> – <input type="time" name="sleep_end" value="{{.Sleep.EndHM}}">
+          </span>
+        </div>
+        <div class="row">
+          <span class="k">{{t "points.follow_raids"}}</span>
+          <span class="d">{{t "points.follow_raids_desc"}}</span>
+          <span class="v"><label class="cb"><input type="checkbox" name="follow_raids" value="1" {{if .FollowRaids}}checked{{end}}> {{t "account.on"}}</label></span>
+        </div>
+        <div class="row">
+          <span class="hint">{{t "points.safe_hint"}}</span>
+          <button class="btn-linear" type="submit">{{t "points.save"}} →</button>
+        </div>
+      </div>
+    </form>
+  </section>
+  {{else}}
   <section class="settings-card">
     <p class="hint" style="margin:0 0 10px;">{{t "points.desc"}}</p>
-    <p class="hint" style="margin:0 0 10px;">{{t "points.twitch_extras"}}</p>
-    <p class="hint" style="margin:0 0 10px;">{{t "points.kick_note"}}</p>
-    <p class="hint" style="margin:0;color:var(--accent);">⚠ {{t "account.force_warning"}}</p>
+    <p class="hint" style="margin:0;">{{if eq .Tab "twitch"}}{{t "points.twitch_extras"}}{{else}}{{t "points.kick_note"}}{{end}}</p>
   </section>
 
-  {{if not .Page}}
+  {{if not .Accounts}}
   <section class="settings-card"><div class="empty">{{t "points.no_accounts"}}</div></section>
   {{end}}
 
-  {{range .Page}}
+  {{range .Accounts}}
   <section class="settings-card">
     <header class="section-h">
       <h3>{{.Name}}</h3>
-      <span class="meta" style="color:var(--{{if eq .Platform "twitch"}}purple{{else}}kick{{end}})">{{.Platform}}{{if .Watching}} · <span style="color:var(--green)">{{t "points.watching"}} {{.Watching}}</span>{{end}}{{if .AsleepUntil}} · <span style="color:var(--amber)">{{t "points.sleeping_until"}} {{.AsleepUntil}}</span>{{end}}</span>
+      <span class="meta">{{if .Watching}}<span style="color:var(--green)">{{t "points.watching"}} {{.Watching}}</span>{{end}}{{if .AsleepUntil}}{{if .Watching}} · {{end}}<span style="color:var(--amber)">{{t "points.sleeping_until"}} {{.AsleepUntil}}</span>{{end}}</span>
     </header>
 
     <form method="post" action="/accounts/{{.ID}}/force-watch">
@@ -40,37 +74,17 @@
       </div></div>
     </form>
 
-    <form method="post" action="/accounts/{{.ID}}/points-settings">
+    <form method="post" action="/accounts/{{.ID}}/points-mode">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-      <div class="kvedit">
-        <div class="row">
-          <span class="k">{{t "points.mode"}}</span>
-          <span class="d">{{if .PointsOnly}}{{t "points.mode_points_desc"}}{{else}}{{t "points.mode_drops_desc"}}{{end}}</span>
-          <span class="v">
-            <label class="cb"><input type="radio" name="mode" value="drops" {{if not .PointsOnly}}checked{{end}}> {{t "points.mode_drops"}}</label>
-            <label class="cb"><input type="radio" name="mode" value="points" {{if .PointsOnly}}checked{{end}}> {{t "points.mode_points"}}</label>
-          </span>
-        </div>
-        <div class="row">
-          <span class="k">{{t "points.sleep"}}</span>
-          <span class="d">{{t "points.sleep_desc"}}</span>
-          <span class="v">
-            <label class="cb"><input type="checkbox" name="sleep" value="1" {{if .Sleep.Enabled}}checked{{end}}> {{t "account.on"}}</label>
-            <input type="time" name="sleep_start" value="{{.Sleep.StartHM}}"> – <input type="time" name="sleep_end" value="{{.Sleep.EndHM}}">
-          </span>
-        </div>
-        {{if eq .Platform "twitch"}}
-        <div class="row">
-          <span class="k">{{t "points.follow_raids"}}</span>
-          <span class="d">{{t "points.follow_raids_desc"}}</span>
-          <span class="v"><label class="cb"><input type="checkbox" name="follow_raids" value="1" {{if .FollowRaids}}checked{{end}}> {{t "account.on"}}</label></span>
-        </div>
-        {{end}}
-        <div class="row">
-          <span class="hint">{{t "points.safe_hint"}}</span>
-          <button class="btn-linear" type="submit">{{t "points.save"}} →</button>
-        </div>
-      </div>
+      <div class="kvedit"><div class="row">
+        <span class="k">{{t "points.mode"}}</span>
+        <span class="d">{{if .PointsOnly}}{{t "points.mode_points_desc"}}{{else}}{{t "points.mode_drops_desc"}}{{end}}</span>
+        <span class="v">
+          <label class="cb"><input type="radio" name="mode" value="drops" {{if not .PointsOnly}}checked{{end}}> {{t "points.mode_drops"}}</label>
+          <label class="cb"><input type="radio" name="mode" value="points" {{if .PointsOnly}}checked{{end}}> {{t "points.mode_points"}}</label>
+        </span>
+        <button class="btn-linear" type="submit">{{t "points.save"}} →</button>
+      </div></div>
     </form>
 
     <form method="post" action="/accounts/{{.ID}}/force-channels" class="force-form">
@@ -104,8 +118,10 @@
     </form>
   </section>
   {{end}}
+  {{end}}
   </div>{{/* .settings-stack */}}
 </div>
+{{end}}{{/* .Page */}}
 
 <script>
 // Per-account channel lists: drag to reorder (top = tried first), remove

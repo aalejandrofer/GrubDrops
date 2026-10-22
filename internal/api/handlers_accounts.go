@@ -602,7 +602,8 @@ func (d accountsDeps) reloadForce(id string) {
 // already on the list keeps its place.
 func (d accountsDeps) addForceChannel(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+	acc, err := d.q.GetAccount(r.Context(), id)
+	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
@@ -622,7 +623,7 @@ func (d accountsDeps) addForceChannel(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if dup {
-			http.Redirect(w, r, "/points", http.StatusSeeOther)
+			pointsRedirect(w, r, acc.Platform)
 			return
 		}
 		if err := d.q.AddForceChannel(r.Context(), gen.AddForceChannelParams{
@@ -634,13 +635,14 @@ func (d accountsDeps) addForceChannel(w http.ResponseWriter, r *http.Request) {
 		d.reloadForce(id)
 		d.sm.Put(r.Context(), "flash", "flash.force_channel_added")
 	}
-	http.Redirect(w, r, "/points", http.StatusSeeOther)
+	pointsRedirect(w, r, acc.Platform)
 }
 
 // removeForceChannel handles POST /accounts/:id/force-channels/remove.
 func (d accountsDeps) removeForceChannel(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+	acc, err := d.q.GetAccount(r.Context(), id)
+	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
@@ -655,7 +657,7 @@ func (d accountsDeps) removeForceChannel(w http.ResponseWriter, r *http.Request)
 		d.reloadForce(id)
 		d.sm.Put(r.Context(), "flash", "flash.force_channel_removed")
 	}
-	http.Redirect(w, r, "/points", http.StatusSeeOther)
+	pointsRedirect(w, r, acc.Platform)
 }
 
 // forceChannelsReorder handles POST /accounts/:id/force-channels — rewrites
@@ -663,7 +665,8 @@ func (d accountsDeps) removeForceChannel(w http.ResponseWriter, r *http.Request)
 // the slice becomes the rank (rank 0 = the channel watched first when idle).
 func (d accountsDeps) forceChannelsReorder(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+	acc, err := d.q.GetAccount(r.Context(), id)
+	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
@@ -697,14 +700,15 @@ func (d accountsDeps) forceChannelsReorder(w http.ResponseWriter, r *http.Reques
 	}
 	d.reloadForce(id)
 	d.sm.Put(r.Context(), "flash", "flash.force_saved")
-	http.Redirect(w, r, "/points", http.StatusSeeOther)
+	pointsRedirect(w, r, acc.Platform)
 }
 
 // forceWatchToggle handles POST /accounts/:id/force-watch — flips the
 // channel-points 24/7 idle-mining toggle for the account.
 func (d accountsDeps) forceWatchToggle(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+	acc, err := d.q.GetAccount(r.Context(), id)
+	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
@@ -725,7 +729,7 @@ func (d accountsDeps) forceWatchToggle(w http.ResponseWriter, r *http.Request) {
 	} else {
 		d.sm.Put(r.Context(), "flash", "flash.force_watch_disabled")
 	}
-	http.Redirect(w, r, "/points", http.StatusSeeOther)
+	pointsRedirect(w, r, acc.Platform)
 }
 
 func genID() string {

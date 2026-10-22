@@ -300,7 +300,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/accounts/{id}/force-channels/add", accs.addForceChannel)
 	authed.Post("/accounts/{id}/force-channels/remove", accs.removeForceChannel)
 	authed.Post("/accounts/{id}/force-watch", accs.forceWatchToggle)
-	authed.Post("/accounts/{id}/points-settings", accs.pointsSettings)
+	authed.Post("/accounts/{id}/points-mode", accs.pointsMode)
 	authed.Post("/accounts/{id}/reload", accs.reloadOne)
 	authed.Post("/accounts/{id}/toggle", accs.toggleEnabled)
 	authed.Post("/accounts/{id}/delete", accs.delete)
@@ -380,6 +380,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/img/kick", imgH.kick)
 	authed.Get("/history", historyH.get)
 	authed.Get("/points", pointsH.get)
+	authed.Post("/points/safety", pointsH.saveSafety)
 
 	r.Mount("/", withSession(csrf(updateBadge(d.UpdateStatus, d.Version)(authed))))
 	return r

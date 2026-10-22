@@ -493,12 +493,12 @@ func run() error {
 			SkipRecorder:   skipRecorder,
 			SkipClearer:    skipClearer,
 			ForceWatcher:   forceWatchStore{q: q},
-			FollowRaids:    func() bool { return api.PointsFollowRaids(context.Background(), q, a.ID) },
+			FollowRaids:    func() bool { return api.PointsFollowRaids(context.Background(), q) },
 			PointsOnly:     pointsOnly,
 			// time.Local is set to the display zone at boot, so the window is in
 			// the user's local time.
 			SleepUntil: func(now time.Time) (time.Time, bool) {
-				return api.PointsSleepWindow(context.Background(), q, a.ID).Until(now.In(time.Local), a.ID)
+				return api.PointsSleepWindow(context.Background(), q).Until(now.In(time.Local), a.ID)
 			},
 		})
 		return scheduler.NewEntry(a.ID, w), nil

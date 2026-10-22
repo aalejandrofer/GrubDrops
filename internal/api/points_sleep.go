@@ -30,8 +30,9 @@ type SleepWindow struct {
 	Start, End int
 }
 
-// PointsSleepKey is the per-account KV key holding "HH:MM-HH:MM" or "off".
-func PointsSleepKey(accountID string) string { return "points_sleep:" + accountID }
+// pointsSleepKey is the shared KV key holding "HH:MM-HH:MM" or "off". One
+// window applies to every account on both platforms.
+const pointsSleepKey = "points_sleep"
 
 func clock(min int) string { return fmt.Sprintf("%02d:%02d", min/60, min%60) }
 
@@ -54,11 +55,11 @@ func parseClock(s string) (int, bool) {
 	return h*60 + m, true
 }
 
-// PointsSleepWindow returns the account's sleep window; unset means the
-// default 02:00-08:00.
-func PointsSleepWindow(ctx context.Context, q *gen.Queries, accountID string) SleepWindow {
+// PointsSleepWindow returns the shared sleep window; unset means the default
+// 02:00-08:00.
+func PointsSleepWindow(ctx context.Context, q *gen.Queries) SleepWindow {
 	def := SleepWindow{Enabled: true, Start: defaultSleepStart, End: defaultSleepEnd}
-	v, err := q.GetSettingString(ctx, PointsSleepKey(accountID))
+	v, err := q.GetSettingString(ctx, pointsSleepKey)
 	if err != nil {
 		return def
 	}

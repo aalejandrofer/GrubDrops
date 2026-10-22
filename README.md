@@ -176,7 +176,7 @@ on `/drops`.
 
 ## Channel Points
 
-Open **Points** in the top nav to farm channel points while an account has no
+Open **Points** in the top nav (tabs: **Twitch**, **Kick**, **Safety**) to farm channel points while an account has no
 drop to mine. Each Twitch and Kick account has an on/off switch and a
 drag-to-reorder channel list; it watches the first live channel on its list,
 skips offline ones, and hands back to mining whenever a whitelisted drop goes
@@ -189,15 +189,16 @@ and nothing if none is selected).
 
 On Twitch, GrubDrops also claims the bonus chest when it starts watching a
 stream and again on every credited minute, and joins raids from the channel
-being watched (after a random 3-15 s pause; switch it off per account).
+being watched (after a random 3-15 s pause; switch it off on the Safety tab).
 Kick points accrue just by watching, so only the watching is automated there.
 
-**Safe by default.** Watching round the clock is the easiest pattern to flag,
-so each account has a **Sleep window** (default 02:00-08:00 local, shifted by
-up to 20 minutes each day). Channel-points watching pauses during it, like a
-person asleep, and drops are not affected. Streams end on their own schedule,
-so nothing is cut at an arbitrary point. Each account only ever watches one
-channel at a time.
+**Safety** (shared by every account on both platforms). Watching round the
+clock is the easiest pattern to flag, so there is one **Sleep window**
+(default 02:00-08:00 local, each account's edges shifted by up to 20 minutes a
+day) during which channel-points watching pauses, like a person asleep. Drops
+are not affected, and streams end on their own schedule, so nothing is cut at
+an arbitrary point. The Safety tab also has the **Follow raids** switch
+(Twitch). Each account only ever watches one channel at a time.
 
 ## How it works
 
