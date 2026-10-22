@@ -788,7 +788,7 @@
   "points.kicker": "频道积分",
   "points.heading": "积分",
   "points.desc": "选择每个账号为赚取频道积分而观看的频道。账号没有可挖的掉宝时会观看列表中第一个正在直播的频道，白名单中的直播掉宝始终优先。",
-  "points.twitch_extras": "Twitch：开始观看直播时会领取奖励宝箱，之后每观看一分钟再检查一次；所观看频道发起的突袭会被加入（见“安全”）。",
+  "points.twitch_extras": "Twitch：同时观看列表中最多两个频道（Twitch 自身的上限）。开始观看时会在每个频道领取奖励宝箱，之后每分钟再检查一次；两个频道发起的突袭都会被加入（见“安全”）。",
   "points.kick_note": "Kick：积分靠观看累积，没有可领取的奖励，也没有可加入的突袭，因此只自动化观看。",
   "points.no_accounts": "此平台还没有账号。请在 设置 → 账号 中添加。",
   "points.tab_twitch": "Twitch",

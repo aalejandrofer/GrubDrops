@@ -788,7 +788,7 @@
   "points.kicker": "Channel points",
   "points.heading": "Points",
   "points.desc": "Pick the channels each account watches to earn channel points. An account watches the first live channel in its list whenever it has no drop to mine, and a live whitelisted drop always takes over.",
-  "points.twitch_extras": "Twitch: bonus chests are claimed when a stream starts being watched and then on every minute of watch time, and raids from the channel being watched are joined (see Safety).",
+  "points.twitch_extras": "Twitch: watches up to two channels from the list at once (Twitch's own limit). Bonus chests are claimed on each channel when watching starts and then every minute, and raids from either channel are joined (see Safety).",
   "points.kick_note": "Kick: points accrue by watching; there is no bonus to claim and no raid to join, so only the watching is automated.",
   "points.no_accounts": "No accounts on this platform yet. Add one under Settings → Accounts.",
   "points.tab_twitch": "Twitch",

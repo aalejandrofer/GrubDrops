@@ -90,6 +90,9 @@ func (d *pointsDeps) get(w http.ResponseWriter, r *http.Request) {
 			for _, s := range d.sch.WatcherSnapshots() {
 				if s.State == "force_watch" {
 					watching[s.AccountID] = s.Channel
+					if s.Channel2 != "" {
+						watching[s.AccountID] += ", " + s.Channel2
+					}
 				}
 			}
 		}

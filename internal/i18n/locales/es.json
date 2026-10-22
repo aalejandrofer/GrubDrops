@@ -788,7 +788,7 @@
   "points.kicker": "Puntos de canal",
   "points.heading": "Puntos",
   "points.desc": "Elige los canales que ve cada cuenta para ganar puntos de canal. Una cuenta ve el primer canal en directo de su lista cuando no tiene ningún drop que minar, y un drop en directo de la lista blanca siempre tiene preferencia.",
-  "points.twitch_extras": "Twitch: los cofres de bonificación se reclaman al empezar a ver una emisión y luego en cada minuto de visionado, y las raids del canal que se ve se unen (ver Seguridad).",
+  "points.twitch_extras": "Twitch: ve hasta dos canales de la lista a la vez (el límite de Twitch). Los cofres de bonificación se reclaman en cada canal al empezar a verlo y luego cada minuto, y las raids de cualquiera de los dos se unen (ver Seguridad).",
   "points.kick_note": "Kick: los puntos se acumulan viendo; no hay bonificación que reclamar ni raid a la que unirse, así que solo se automatiza el visionado.",
   "points.no_accounts": "Aún no hay cuentas en esta plataforma. Añade una en Ajustes → Cuentas.",
   "points.tab_twitch": "Twitch",

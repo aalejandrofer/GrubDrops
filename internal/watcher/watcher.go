@@ -181,6 +181,8 @@ type ForceTask struct {
 	// Alternates are lower-priority channels tried, in order, when Channel
 	// is not watchable (e.g. offline).
 	Alternates []string
+	// Slots is how many channels to watch at once: 2 on Twitch, 1 elsewhere.
+	Slots int
 }
 
 // ForceWatchSource is the watcher's view of the per-account force-watch
@@ -201,7 +203,11 @@ type Watcher struct {
 	currentBenefit  *platform.DropBenefit
 	currentStream   *platform.Stream
 	// forceTask is the active force-watch task (StateForceWatch), or nil.
-	forceTask       *ForceTask
+	forceTask *ForceTask
+	// second is the force-watch's second channel (Twitch), or nil;
+	// secondRetryAt throttles looking for one when none is live.
+	second          *forceSlot
+	secondRetryAt   time.Time
 	handle          *platform.WatchHandle
 	watchStartedAt  time.Time
 	lastPollAt      time.Time // last inventory/progress poll (for the "last poll" UI)
@@ -387,6 +393,13 @@ func (w *Watcher) handlePubSubDropClaim(dropID, instanceID string) {
 // resumes the same channel, while drop mining re-enters PickStream.
 func (w *Watcher) handlePubSubStreamDown(channelID string) {
 	w.mu.Lock()
+	if s := w.second; s != nil && s.stream.ChannelID == channelID {
+		w.second = nil
+		w.secondRetryAt = time.Time{} // look for a replacement on the next tick
+		w.mu.Unlock()
+		w.stopSlot(context.Background(), s)
+		return
+	}
 	if w.currentStream == nil || w.currentStream.ChannelID != channelID || w.handle == nil {
 		w.mu.Unlock()
 		return
@@ -419,7 +432,8 @@ func (w *Watcher) handlePubSubRaid(channelID, raidID string) {
 		return
 	}
 	w.mu.Lock()
-	watching := w.currentStream != nil && w.currentStream.ChannelID == channelID
+	watching := (w.currentStream != nil && w.currentStream.ChannelID == channelID) ||
+		(w.second != nil && w.second.stream.ChannelID == channelID)
 	w.mu.Unlock()
 	if !watching {
 		return
@@ -564,6 +578,7 @@ func (w *Watcher) unsubscribeCurrentChannel() {
 // only cancellable through this handle) leaks and holds the server's
 // single watch slot.
 func (w *Watcher) stopCurrentWatch(ctx context.Context) {
+	w.stopSecond(ctx)
 	w.mu.Lock()
 	handle := w.handle
 	var channelID string
@@ -657,6 +672,7 @@ type Snapshot struct {
 	RequiredMinutes int
 	MinutesWatched  int
 	Channel         string
+	Channel2        string // second force-watch channel (Twitch), "" when none
 	ViewerCount     int
 	StartedAt       time.Time
 	LastPollAt      time.Time
@@ -682,6 +698,9 @@ func (w *Watcher) Snapshot() Snapshot {
 	}
 	if w.currentStream != nil {
 		s.Channel = w.currentStream.Channel
+		if w.second != nil {
+			s.Channel2 = w.second.stream.Channel
+		}
 		s.ViewerCount = w.currentStream.ViewerCount
 	}
 	s.MinutesWatched = w.lastProgressMin
@@ -879,6 +898,118 @@ const forceWatchYieldInterval = 5 * time.Minute
 // channel before re-evaluating the priority list.
 const pointsOnlyRecheckInterval = 30 * time.Minute
 
+// secondRetryEvery is how often a force-watch with no live second channel
+// looks for one, so an empty list does not cost a stream lookup every tick.
+const secondRetryEvery = 5 * time.Minute
+
+// forceSlot is one running force-watch channel beyond the primary.
+type forceSlot struct {
+	stream platform.Stream
+	handle platform.WatchHandle
+}
+
+// channels is the task's channels in priority order.
+func (t *ForceTask) channels() []string {
+	return append([]string{t.Channel}, t.Alternates...)
+}
+
+// startForceChannel starts the first watchable channel of the task, in
+// priority order, skipping skip. It subscribes the channel to PubSub (raids,
+// stream-down) on success.
+func (w *Watcher) startForceChannel(ctx context.Context, task *ForceTask, skip string) (platform.Stream, platform.WatchHandle, error) {
+	lastErr := errors.New("no channel to watch")
+	for _, ch := range task.channels() {
+		if ch == skip {
+			continue
+		}
+		s := platform.Stream{Channel: ch}
+		h, err := w.cfg.Backend.StartWatch(ctx, w.cfg.Session, s)
+		if err == nil {
+			if s.ChannelID == "" {
+				s.ChannelID = h.ChannelID
+			}
+			if cs, ok := w.cfg.Backend.(platform.ChannelSubscriber); ok && s.ChannelID != "" {
+				cs.SubscribeChannel(w.cfg.AccountID, s.ChannelID)
+			}
+			return s, h, nil
+		}
+		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			return s, h, err
+		}
+		slog.Info("force-watch channel not watchable; trying next",
+			"kind", "state", "account", w.cfg.AccountID, "channel", ch, "err", err)
+		lastErr = err
+	}
+	return platform.Stream{}, platform.WatchHandle{}, lastErr
+}
+
+// maintainSecond keeps the second force-watch channel alive: it heartbeats a
+// running one and otherwise tries to start one (at most every
+// secondRetryEvery). A failure here never ends the force-watch; the primary
+// channel carries on.
+func (w *Watcher) maintainSecond(ctx context.Context, task *ForceTask) error {
+	if len(task.channels()) < 2 {
+		return nil
+	}
+	w.mu.Lock()
+	sec := w.second
+	retry := w.secondRetryAt
+	primary := ""
+	if w.currentStream != nil {
+		primary = w.currentStream.Channel
+	}
+	w.mu.Unlock()
+
+	if sec != nil {
+		if err := w.cfg.Backend.Heartbeat(ctx, sec.handle); err != nil {
+			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+				return fmt.Errorf("force watch second heartbeat: %w", err)
+			}
+			slog.Warn("force-watch second heartbeat error", "kind", "error", "account", w.cfg.AccountID,
+				"channel", sec.stream.Channel, "err", err)
+		}
+		return nil
+	}
+	if time.Now().Before(retry) {
+		return nil
+	}
+	s, h, err := w.startForceChannel(ctx, task, primary)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			return fmt.Errorf("force watch second start: %w", err)
+		}
+		w.mu.Lock()
+		w.secondRetryAt = time.Now().Add(secondRetryEvery)
+		w.mu.Unlock()
+		return nil
+	}
+	w.mu.Lock()
+	w.second = &forceSlot{stream: s, handle: h}
+	w.mu.Unlock()
+	slog.Info("force-watch second channel started", "kind", "state",
+		"account", w.cfg.AccountID, "channel", s.Channel)
+	return nil
+}
+
+// stopSlot stops a force slot's watch and drops its PubSub subscription.
+func (w *Watcher) stopSlot(ctx context.Context, s *forceSlot) {
+	_ = w.cfg.Backend.StopWatch(ctx, s.handle)
+	if cs, ok := w.cfg.Backend.(platform.ChannelSubscriber); ok && s.stream.ChannelID != "" {
+		cs.UnsubscribeChannel(w.cfg.AccountID, s.stream.ChannelID)
+	}
+}
+
+// stopSecond stops the second force-watch channel, if any.
+func (w *Watcher) stopSecond(ctx context.Context) {
+	w.mu.Lock()
+	s := w.second
+	w.second = nil
+	w.mu.Unlock()
+	if s != nil {
+		w.stopSlot(ctx, s)
+	}
+}
+
 // raidJoinDelay is the random pause (3-15 s) before joining an announced raid.
 var raidJoinDelay = func() time.Duration {
 	return time.Duration(3+rand.IntN(13)) * time.Second
@@ -1013,27 +1144,19 @@ func (w *Watcher) forceWatch(ctx context.Context) error {
 	if handle == nil {
 		// Try the configured channels in priority order; the first one that
 		// starts (i.e. is live) wins, so an offline top channel does not
-		// starve the rest of the list.
-		var (
-			s   platform.Stream
-			h   platform.WatchHandle
-			err error
-		)
-		for _, ch := range append([]string{task.Channel}, task.Alternates...) {
-			s = platform.Stream{Channel: ch}
-			if h, err = w.cfg.Backend.StartWatch(ctx, w.cfg.Session, s); err == nil {
-				w.mu.Lock()
-				task.Channel = ch
-				w.mu.Unlock()
-				break
-			}
+		// starve the rest of the list. A channel already on the second slot
+		// is skipped.
+		w.mu.Lock()
+		skip := ""
+		if w.second != nil {
+			skip = w.second.stream.Channel
+		}
+		w.mu.Unlock()
+		s, h, err := w.startForceChannel(ctx, task, skip)
+		if err != nil {
 			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
 				return fmt.Errorf("force watch start: %w", err)
 			}
-			slog.Info("force-watch channel not watchable; trying next",
-				"kind", "state", "account", w.cfg.AccountID, "channel", ch, "err", err)
-		}
-		if err != nil {
 			slog.Warn("force-watch found no watchable channel; back to mining",
 				"kind", "error", "account", w.cfg.AccountID, "err", err)
 			w.mu.Lock()
@@ -1042,9 +1165,6 @@ func (w *Watcher) forceWatch(ctx context.Context) error {
 			w.setState(ctx, StatePickCampaign)
 			return nil
 		}
-		if s.ChannelID == "" {
-			s.ChannelID = h.ChannelID
-		}
 		w.mu.Lock()
 		w.currentStream = &s
 		w.handle = &h
@@ -1052,10 +1172,7 @@ func (w *Watcher) forceWatch(ctx context.Context) error {
 		w.tickCount = 0
 		w.mu.Unlock()
 		slog.Info("force-watch started", "kind", "state",
-			"account", w.cfg.AccountID, "channel", task.Channel)
-		if cs, ok := w.cfg.Backend.(platform.ChannelSubscriber); ok && s.ChannelID != "" {
-			cs.SubscribeChannel(w.cfg.AccountID, s.ChannelID)
-		}
+			"account", w.cfg.AccountID, "channel", s.Channel)
 		return nil
 	}
 
@@ -1077,6 +1194,13 @@ func (w *Watcher) forceWatch(ctx context.Context) error {
 			"until", until.Format("15:04"))
 		w.setState(ctx, StatePickCampaign)
 		return nil
+	}
+
+	// Twitch accounts watch a second channel too (Twitch's own limit is two).
+	if task.Slots >= 2 {
+		if err := w.maintainSecond(ctx, task); err != nil {
+			return err
+		}
 	}
 
 	// Periodically yield back to mining so a newly-live whitelisted drop
