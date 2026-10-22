@@ -102,6 +102,9 @@ type dashMineCard struct {
 	ChannelGame    string
 	ChannelViews   string // formatted, e.g. "62.4k" or "—"
 	ChannelURL     string // direct watch link (platform-aware) or ""
+	// Second force-watch channel (Twitch watches two at once), or "".
+	Channel2    string
+	Channel2URL string
 
 	// Current drop
 	DropName     string
@@ -758,6 +761,10 @@ func mineCardFromSnap(a gen.Account, s watcher.Snapshot, lang string) dashMineCa
 		c.Channel = s.Channel
 		c.ChannelInitial = initial(s.Channel)
 		c.ChannelURL = channelURL(a.Platform, s.Channel)
+		if s.Channel2 != "" {
+			c.Channel2 = s.Channel2
+			c.Channel2URL = channelURL(a.Platform, s.Channel2)
+		}
 	case "pick_stream":
 		c.StateSub = "mining.scanning_channels"
 		c.DropName = s.BenefitName
