@@ -33,8 +33,10 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
-- **Channel points mining now runs for accounts with no games whitelisted.**
-  Those accounts were parked as idle and never started watching.
+- **Channel points mining now runs for accounts with no games whitelisted,
+  and mines no drops there.** Those accounts were parked as idle and never
+  started watching. With no whitelist they only watch the channels chosen on
+  the Points page, not every live drop.
 - **Twitch channel points watches now count.** A watch started from a bare
   channel name sent beacons without broadcast and game ids, which Twitch
   discards. They are now looked up first, and an offline channel is skipped.

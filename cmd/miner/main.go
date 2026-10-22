@@ -446,6 +446,9 @@ func run() error {
 			// the misleading "session expired" auth banner.
 			return scheduler.NewEntry(a.ID, nopRunner{reason: "no_games"}), nil
 		}
+		// Only a points account gets here with no whitelist. A nil AllowGame
+		// means "no filter, mine every game", so give it a deny-all instead.
+		allow, rank = denyAllIfNoGames(allow, rank)
 
 		// PriorityMode is a global setting — read once per build (i.e.
 		// per Reload). Watcher snapshots the value for the lifetime of
@@ -983,6 +986,16 @@ func loadAccountWhitelist(ctx context.Context, q *gen.Queries, accountID string)
 
 func hasAnyGame(allow func(string) bool) bool {
 	return allow != nil
+}
+
+// denyAllIfNoGames turns the "no whitelist" nil closures into ones that match
+// nothing. Passed through as nil, the watcher treats them as "allow every
+// game" and mines whatever drops are live.
+func denyAllIfNoGames(allow func(string) bool, rank func(string) int) (func(string) bool, func(string) int) {
+	if allow != nil {
+		return allow, rank
+	}
+	return func(string) bool { return false }, func(string) int { return 1 << 30 }
 }
 
 // loadAccountChannels materialises the per-account channel whitelist
