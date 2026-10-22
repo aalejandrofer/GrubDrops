@@ -4,6 +4,13 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Added
+
+- Twitch channel-point bonuses are checked on watch start and credited
+  heartbeats.
+- Raid-update events from currently watched Twitch channels are joined
+  automatically.
+
 ### Docs
 
 - Added a warning that GrubDrops is currently not working as expected.

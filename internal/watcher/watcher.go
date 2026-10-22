@@ -322,6 +322,7 @@ func New(cfg Config) *Watcher {
 			OnStreamDown:   w.handlePubSubStreamDown,
 			OnStreamUp:     w.handlePubSubStreamUp,
 			OnRewardCode:   w.handlePubSubRewardCode,
+			OnRaid:         w.handlePubSubRaid,
 		})
 	}
 	return w
@@ -364,20 +365,28 @@ func (w *Watcher) handlePubSubDropClaim(dropID, instanceID string) {
 }
 
 // handlePubSubStreamDown fires when the channel we're watching emits a
-// video-playback stream-down. Stops the current watch and re-enters
-// PickStream so the watcher swaps to another live broadcaster without
-// waiting for the periodic liveness probe.
+// video-playback stream-down. It stops the current watch; a force-watch
+// resumes the same channel, while drop mining re-enters PickStream.
 func (w *Watcher) handlePubSubStreamDown(channelID string) {
 	w.mu.Lock()
 	if w.currentStream == nil || w.currentStream.ChannelID != channelID || w.handle == nil {
 		w.mu.Unlock()
 		return
 	}
+	forceWatching := w.forceTask != nil && w.state == StateForceWatch
 	handle := *w.handle
+	if forceWatching {
+		w.handle = nil
+		w.currentStream = nil
+	}
 	w.mu.Unlock()
 	_ = w.cfg.Backend.StopWatch(context.Background(), handle)
 	if cs, ok := w.cfg.Backend.(platform.ChannelSubscriber); ok && channelID != "" {
 		cs.UnsubscribeChannel(w.cfg.AccountID, channelID)
+	}
+	if forceWatching {
+		w.setState(context.Background(), StateForceWatch)
+		return
 	}
 	w.setState(context.Background(), StatePickStream)
 }
@@ -386,6 +395,31 @@ func (w *Watcher) handlePubSubStreamDown(channelID string) {
 // the channel naturally on the next tick. Reserved for future
 // back-off reset logic.
 func (w *Watcher) handlePubSubStreamUp(_ string) {}
+
+func (w *Watcher) handlePubSubRaid(channelID, raidID string) {
+	if raidID == "" {
+		return
+	}
+	w.mu.Lock()
+	watching := w.currentStream != nil && w.currentStream.ChannelID == channelID
+	w.mu.Unlock()
+	if !watching {
+		return
+	}
+	joiner, ok := w.cfg.Backend.(platform.RaidJoiner)
+	if !ok {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := joiner.JoinRaid(ctx, w.cfg.Session, raidID); err != nil {
+			slog.Warn("watcher raid join failed", "account", w.cfg.AccountID, "err", err)
+			return
+		}
+		slog.Info("watcher joined raid", "account", w.cfg.AccountID, "raid", raidID)
+	}()
+}
 
 // handlePubSubRewardCode fires when an onsite-notification carries a
 // Mojang/Twitch redemption code. We don't know which benefit it maps
@@ -939,6 +973,9 @@ func (w *Watcher) forceWatch(ctx context.Context) error {
 			w.mu.Unlock()
 			w.setState(ctx, StatePickCampaign)
 			return nil
+		}
+		if s.ChannelID == "" {
+			s.ChannelID = h.ChannelID
 		}
 		w.mu.Lock()
 		w.currentStream = &s

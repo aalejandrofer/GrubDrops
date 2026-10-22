@@ -67,6 +67,9 @@ type PubSubHooks struct {
 	// notificationID dedupes; body is the raw notification text so
 	// the receiver can extract game/drop context.
 	OnRewardCode func(notificationID, code, body string)
+	// OnRaid fires for raid-update-v2 on raid.<channel_id>; the watcher
+	// asynchronously joins the raid while it is watching that channel.
+	OnRaid func(channelID, raidID string)
 }
 
 // PubSubAware is an optional backend capability. Backends that expose
@@ -77,12 +80,16 @@ type PubSubAware interface {
 	SetAccountPubSubHooks(accountID string, hooks PubSubHooks)
 }
 
-// ChannelSubscriber is an optional backend capability for adding /
-// removing per-channel real-time subscriptions during the watch
-// lifetime (Twitch video-playback-by-id topic).
+// ChannelSubscriber manages per-channel stream and raid PubSub subscriptions
+// during a watch.
 type ChannelSubscriber interface {
 	SubscribeChannel(accountID, channelID string)
 	UnsubscribeChannel(accountID, channelID string)
+}
+
+// RaidJoiner is implemented by backends that can join an active raid.
+type RaidJoiner interface {
+	JoinRaid(ctx context.Context, s Session, raidID string) error
 }
 
 // CurrentSession is the post-claim verification result. Empty

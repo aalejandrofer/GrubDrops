@@ -135,6 +135,7 @@ type Progress struct {
 
 type WatchHandle struct {
 	Channel   string
+	ChannelID string // broadcaster id used for Twitch PubSub subscriptions
 	AccountID string
 	Internal  any
 }

@@ -99,4 +99,18 @@ var (
 		Name: "DirectoryGameRedirect",
 		Hash: "1f0300090caceec51f33c5e20647aceff9017f740f223c3c532ba6fa59f6b6cc",
 	}
+	// Twitch channel-points bonus query and claim, reused from
+	// t348575/twitch-points-miner.
+	OpChannelPointsContext = Operation{
+		Name: "ChannelPointsContext",
+		Hash: "1530a003a7d374b0380b79db0be0534f30ff46e61cffa2bc0e2468a909fbc024",
+	}
+	OpClaimCommunityPoints = Operation{
+		Name: "ClaimCommunityPoints",
+		Hash: "46aaeebe02c99afdf4fc97c7c0cba964124bf6b0af229395f1f6d1feed05b3d0",
+	}
+	OpJoinRaid = Operation{
+		Name: "JoinRaid",
+		Hash: "c6a332a86d1087fbbb1a8623aa01bd1313d2386e7c63be60fdb2d1901f01a4ae",
+	}
 )

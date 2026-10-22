@@ -174,6 +174,14 @@ Add games either way — by name, no need to wait for a campaign to appear first
 Discovery starts crawling that game on the next tick and live campaigns show up
 on `/drops`.
 
+## Channel Points and raids
+
+To farm Twitch Channel Points while no eligible drops are available, open
+**Accounts → account → Channel Points (force-watch)**, enable it, and add
+channels. GrubDrops claims available bonuses when it starts watching and on
+each credited heartbeat. It also joins raids announced by channels it is
+currently watching.
+
 ## How it works
 
 - **Twitch:** device-code login, then GraphQL + PubSub to track progress and claim.

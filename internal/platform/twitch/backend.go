@@ -303,8 +303,8 @@ func (b *Backend) SetPubSubHandlers(h PubSubHandlers) {
 // was silently dropped and the watcher fell back to polling. The direct
 // backend runs a single shared PubSub client today, so accountID is
 // ignored; the hook fields map 1:1 onto the internal PubSubHandlers.
-// Must be called before the first ListActiveCampaigns (lazy bootstrap).
-// SetAccountPubSubHooks binds the per-account event callbacks.
+// Existing clients are updated in place so reloads bind events to the new
+// watcher.
 //
 // IMPORTANT: a *Backend is single-account-only. It holds ONE PubSub client
 // and ONE handler set, so binding a second, different account would silently
@@ -323,12 +323,17 @@ func (b *Backend) SetAccountPubSubHooks(accountID string, h platform.PubSubHooks
 				"bound", b.boundAccount, "incoming", accountID)
 		}
 	}
-	b.pubsubHandlers = PubSubHandlers{
+	handlers := PubSubHandlers{
 		OnDropProgress: h.OnDropProgress,
 		OnDropClaim:    h.OnDropClaim,
 		OnStreamDown:   h.OnStreamDown,
 		OnStreamUp:     h.OnStreamUp,
 		OnRewardCode:   h.OnRewardCode,
+		OnRaid:         h.OnRaid,
+	}
+	b.pubsubHandlers = handlers
+	if b.pubsub != nil {
+		b.pubsub.SetHandlers(handlers)
 	}
 	b.pubsubMu.Unlock()
 }
@@ -372,13 +377,8 @@ func (b *Backend) ensurePubSub(s platform.Session) {
 	}()
 }
 
-// SubscribeChannel adds (or refreshes) a video-playback-by-id.<id>
-// topic on the PubSub socket so stream-up/down events fire. Idempotent.
-// Caller passes the broadcaster's numeric channel id. The accountID is
-// accepted to satisfy platform.ChannelSubscriber (the direct backend
-// runs a single shared PubSub client today, so it's unused) — without
-// this 2-arg signature the watcher's ChannelSubscriber type assertion
-// fails silently and stream-down events never reach the watcher.
+// SubscribeChannel adds stream-playback and raid topics for a watched
+// broadcaster. Both are removed when the watch ends.
 func (b *Backend) SubscribeChannel(_ string, channelID string) {
 	b.pubsubMu.Lock()
 	client := b.pubsub
@@ -387,9 +387,10 @@ func (b *Backend) SubscribeChannel(_ string, channelID string) {
 		return
 	}
 	client.AddTopic(TopicVideoPlaybackByID(channelID))
+	client.AddTopic(TopicRaid(channelID))
 }
 
-// UnsubscribeChannel drops a video-playback-by-id.<id> topic.
+// UnsubscribeChannel drops stream-playback and raid topics for a broadcaster.
 func (b *Backend) UnsubscribeChannel(_ string, channelID string) {
 	b.pubsubMu.Lock()
 	client := b.pubsub
@@ -398,6 +399,7 @@ func (b *Backend) UnsubscribeChannel(_ string, channelID string) {
 		return
 	}
 	client.RemoveTopic(TopicVideoPlaybackByID(channelID))
+	client.RemoveTopic(TopicRaid(channelID))
 }
 
 func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, c platform.Campaign) ([]platform.Stream, error) {
@@ -441,6 +443,13 @@ func (b *Backend) Claim(ctx context.Context, s platform.Session, drop platform.D
 	// first watch; resolve failure is non-fatal (claim degrades).
 	userID, _ := b.watch.resolveUserID(ctx, s)
 	return b.claim.claim(ctx, s, drop, userID)
+}
+
+func (b *Backend) JoinRaid(ctx context.Context, s platform.Session, raidID string) error {
+	b.c.bind(s)
+	return b.c.gql(ctx, s.AccessToken, OpJoinRaid, map[string]any{
+		"input": map[string]string{"raidID": raidID},
+	}, nil)
 }
 
 // AvailableDropIDs satisfies platform.AvailableDropsChecker. Returns

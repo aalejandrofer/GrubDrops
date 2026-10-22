@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,6 +59,8 @@ type PubSubHandlers struct {
 	// dedupe; body is the raw notification text so the receiver can
 	// capture surrounding context (game / drop name) when persisting.
 	OnRewardCode func(notificationID, code, body string)
+	// OnRaid fires for a raid-update-v2 event on raid.<channel_id>.
+	OnRaid func(channelID, raidID string)
 }
 
 // PubSubClient holds one WebSocket connection and the topics LISTENed
@@ -66,9 +69,10 @@ type PubSubHandlers struct {
 // exponential backoff and re-subscribes its topic set on every
 // reconnect.
 type PubSubClient struct {
-	authToken string
-	handlers  PubSubHandlers
-	dial      netutil.DialContextFunc // optional; routes the WS dial through a proxy
+	authToken  string
+	handlersMu sync.RWMutex
+	handlers   PubSubHandlers
+	dial       netutil.DialContextFunc // optional; routes the WS dial through a proxy
 
 	mu      sync.Mutex
 	topics  map[string]struct{}
@@ -101,6 +105,18 @@ func NewPubSubClientWithDial(authToken string, handlers PubSubHandlers, dial net
 // sufficient to exercise dialAndPump's dial wiring in isolation.
 func newPubSubClientWithDial(dial netutil.DialContextFunc) *PubSubClient {
 	return NewPubSubClientWithDial("", PubSubHandlers{}, dial)
+}
+
+func (p *PubSubClient) SetHandlers(handlers PubSubHandlers) {
+	p.handlersMu.Lock()
+	p.handlers = handlers
+	p.handlersMu.Unlock()
+}
+
+func (p *PubSubClient) handlersSnapshot() PubSubHandlers {
+	p.handlersMu.RLock()
+	defer p.handlersMu.RUnlock()
+	return p.handlers
 }
 
 // Close stops the Run loop and closes the WebSocket connection.
@@ -317,8 +333,35 @@ func (p *PubSubClient) dispatch(topic string, payload []byte) {
 		// by the regular claim event.
 		p.dispatchNotification(payload)
 		return
+	case startsWith(topic, "raid."):
+		p.dispatchRaid(topic, payload)
 	default:
 		slog.Debug("pubsub unhandled topic", "topic", topic)
+	}
+}
+
+func (p *PubSubClient) dispatchRaid(topic string, payload []byte) {
+	channelID := strings.TrimPrefix(topic, "raid.")
+	if channelID == "" || channelID == topic {
+		return
+	}
+	var event struct {
+		Type string `json:"type"`
+		Raid struct {
+			ID       string `json:"id"`
+			SourceID string `json:"source_id"`
+		} `json:"raid"`
+	}
+	if err := json.Unmarshal(payload, &event); err != nil {
+		slog.Warn("pubsub raid event decode failed", "err", err)
+		return
+	}
+	if event.Type != "raid_update_v2" || event.Raid.ID == "" || event.Raid.SourceID != channelID {
+		return
+	}
+	handlers := p.handlersSnapshot()
+	if handlers.OnRaid != nil {
+		handlers.OnRaid(channelID, event.Raid.ID)
 	}
 }
 
@@ -346,8 +389,9 @@ func (p *PubSubClient) dispatchDropEvent(payload []byte) {
 		if err := json.Unmarshal(env.Data, &d); err != nil {
 			return
 		}
-		if p.handlers.OnDropProgress != nil {
-			p.handlers.OnDropProgress(d.DropID, d.CurrentProgressMin, d.RequiredProgressMin)
+		handlers := p.handlersSnapshot()
+		if handlers.OnDropProgress != nil {
+			handlers.OnDropProgress(d.DropID, d.CurrentProgressMin, d.RequiredProgressMin)
 		}
 	case "drop-claim":
 		var d struct {
@@ -357,8 +401,9 @@ func (p *PubSubClient) dispatchDropEvent(payload []byte) {
 		if err := json.Unmarshal(env.Data, &d); err != nil {
 			return
 		}
-		if p.handlers.OnDropClaim != nil {
-			p.handlers.OnDropClaim(d.DropID, d.DropInstanceID)
+		handlers := p.handlersSnapshot()
+		if handlers.OnDropClaim != nil {
+			handlers.OnDropClaim(d.DropID, d.DropInstanceID)
 		}
 	}
 }
@@ -418,8 +463,9 @@ func (p *PubSubClient) dispatchNotification(payload []byte) {
 		"notification_id", d.Notification.ID,
 		"notification_type", d.Notification.Type,
 		"code", code)
-	if p.handlers.OnRewardCode != nil {
-		p.handlers.OnRewardCode(d.Notification.ID, code, text)
+	handlers := p.handlersSnapshot()
+	if handlers.OnRewardCode != nil {
+		handlers.OnRewardCode(d.Notification.ID, code, text)
 	}
 }
 
@@ -441,14 +487,15 @@ func (p *PubSubClient) dispatchPlaybackEvent(topic string, payload []byte) {
 	if err := json.Unmarshal(payload, &env); err != nil {
 		return
 	}
+	handlers := p.handlersSnapshot()
 	switch env.Type {
 	case "stream-up":
-		if p.handlers.OnStreamUp != nil {
-			p.handlers.OnStreamUp(channelID)
+		if handlers.OnStreamUp != nil {
+			handlers.OnStreamUp(channelID)
 		}
 	case "stream-down":
-		if p.handlers.OnStreamDown != nil {
-			p.handlers.OnStreamDown(channelID)
+		if handlers.OnStreamDown != nil {
+			handlers.OnStreamDown(channelID)
 		}
 	}
 }
@@ -490,6 +537,11 @@ func TopicUserDropEvents(userID int64) string {
 // numeric Twitch ID.
 func TopicVideoPlaybackByID(channelID string) string {
 	return "video-playback-by-id." + channelID
+}
+
+// TopicRaid subscribes to raid events for a broadcaster.
+func TopicRaid(channelID string) string {
+	return "raid." + channelID
 }
 
 // TopicOnsiteNotifications subscribes to the user's notification

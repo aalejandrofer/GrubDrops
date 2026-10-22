@@ -307,10 +307,8 @@ func (b *BrowserBackend) SetPubSubHandlers(h PubSubHandlers) {
 	b.pubsubMu.Unlock()
 }
 
-// SetAccountPubSubHooks installs per-account PubSub callbacks. The
-// account's PubSub client uses these when it bootstraps via the next
-// ensurePubSub call. Existing clients are not retrofitted, so watchers
-// must call this BEFORE their first ListActiveCampaigns.
+// SetAccountPubSubHooks installs per-account callbacks, updating existing
+// clients so reloads bind events to the new watcher.
 //
 // Satisfies platform.PubSubAware.
 func (b *BrowserBackend) SetAccountPubSubHooks(accountID string, h platform.PubSubHooks) {
@@ -319,12 +317,21 @@ func (b *BrowserBackend) SetAccountPubSubHooks(accountID string, h platform.PubS
 	}
 	b.pubsubMu.Lock()
 	b.pubsubHooks[accountID] = h
+	if client := b.pubsubs[accountID]; client != nil {
+		client.SetHandlers(PubSubHandlers{
+			OnDropProgress: h.OnDropProgress,
+			OnDropClaim:    h.OnDropClaim,
+			OnStreamDown:   h.OnStreamDown,
+			OnStreamUp:     h.OnStreamUp,
+			OnRewardCode:   h.OnRewardCode,
+			OnRaid:         h.OnRaid,
+		})
+	}
 	b.pubsubMu.Unlock()
 }
 
-// SubscribeChannel adds a video-playback-by-id.<id> topic to the
-// account's PubSub socket. Use when a watcher starts a stream so
-// stream-down events fire instantly.
+// SubscribeChannel adds stream-playback and raid topics for a watched
+// broadcaster on the account's PubSub socket.
 func (b *BrowserBackend) SubscribeChannel(accountID, channelID string) {
 	b.pubsubMu.Lock()
 	c := b.pubsubs[accountID]
@@ -333,9 +340,11 @@ func (b *BrowserBackend) SubscribeChannel(accountID, channelID string) {
 		return
 	}
 	c.AddTopic(TopicVideoPlaybackByID(channelID))
+	c.AddTopic(TopicRaid(channelID))
 }
 
-// UnsubscribeChannel drops a video-playback-by-id topic.
+// UnsubscribeChannel drops stream-playback and raid topics from an account's
+// PubSub socket.
 func (b *BrowserBackend) UnsubscribeChannel(accountID, channelID string) {
 	b.pubsubMu.Lock()
 	c := b.pubsubs[accountID]
@@ -344,6 +353,7 @@ func (b *BrowserBackend) UnsubscribeChannel(accountID, channelID string) {
 		return
 	}
 	c.RemoveTopic(TopicVideoPlaybackByID(channelID))
+	c.RemoveTopic(TopicRaid(channelID))
 }
 
 // ensurePubSub lazily starts the PubSub WebSocket for an account.
@@ -365,6 +375,7 @@ func (b *BrowserBackend) ensurePubSub(s platform.Session, a *twitchAccount) {
 			OnStreamDown:   hooks.OnStreamDown,
 			OnStreamUp:     hooks.OnStreamUp,
 			OnRewardCode:   hooks.OnRewardCode,
+			OnRaid:         hooks.OnRaid,
 		}
 	}
 	b.pubsubMu.Unlock()
@@ -469,6 +480,17 @@ func (b *BrowserBackend) Claim(ctx context.Context, s platform.Session, drop pla
 	a.c.bind(s)
 	userID, _ := a.watch.resolveUserID(ctx, s)
 	return a.claim.claim(ctx, s, drop, userID)
+}
+
+func (b *BrowserBackend) JoinRaid(ctx context.Context, s platform.Session, raidID string) error {
+	if err := b.ensureAuthenticated(ctx, s); err != nil {
+		return err
+	}
+	a := b.accountFor(s.AccountID)
+	a.c.bind(s)
+	return a.c.gql(ctx, s.AccessToken, OpJoinRaid, map[string]any{
+		"input": map[string]string{"raidID": raidID},
+	}, nil)
 }
 
 // ClaimRewards satisfies platform.RewardClaimer. Delegates to the

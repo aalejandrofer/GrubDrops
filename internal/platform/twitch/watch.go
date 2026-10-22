@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"sync"
 	"time"
@@ -57,11 +58,21 @@ func (w *watch) start(ctx context.Context, sess platform.Session, stream platfor
 	if err != nil {
 		return platform.WatchHandle{}, fmt.Errorf("resolve user id: %w", err)
 	}
+	channelID, claimed, claimErr := w.claimAvailableCommunityPoints(ctx, sess.AccessToken, stream.Channel)
+	if claimErr != nil {
+		slog.Warn("claim channel-points bonus on watch start failed", "channel", stream.Channel, "err", claimErr)
+	} else if claimed {
+		slog.Info("claimed channel-points bonus", "channel", stream.Channel)
+	}
+	if channelID == "" {
+		channelID = stream.ChannelID
+	}
 	return platform.WatchHandle{
-		Channel: stream.Channel,
+		Channel:   stream.Channel,
+		ChannelID: channelID,
 		Internal: watchInternal{
 			Channel:     stream.Channel,
-			ChannelID:   stream.ChannelID,
+			ChannelID:   channelID,
 			BroadcastID: stream.BroadcastID,
 			GameID:      stream.GameID,
 			Game:        stream.Game,
@@ -124,19 +135,25 @@ func (w *watch) heartbeat(ctx context.Context, h platform.WatchHandle) error {
 		return fmt.Errorf("resolve spade url: %w", err)
 	}
 
-	if err := w.c.sendSpadeBeacon(ctx, internal.Token, spadeURL, events); err == nil {
-		return nil
+	if err := w.c.sendSpadeBeacon(ctx, internal.Token, spadeURL, events); err != nil {
+		// Evict and re-resolve once: the cached URL can go stale (Twitch
+		// rotates the analytics edge) and a fresh page fetch is the fix.
+		w.evictSpadeURL(internal.Channel)
+		spadeURL, err = w.c.resolveSpadeURL(ctx, internal.Token, internal.Channel)
+		if err != nil {
+			return fmt.Errorf("resolve spade url (retry): %w", err)
+		}
+		w.setSpadeURL(internal.Channel, spadeURL)
+		if err := w.c.sendSpadeBeacon(ctx, internal.Token, spadeURL, events); err != nil {
+			return err
+		}
 	}
-
-	// Evict and re-resolve once: the cached URL can go stale (Twitch
-	// rotates the analytics edge) and a fresh page fetch is the fix.
-	w.evictSpadeURL(internal.Channel)
-	spadeURL, err = w.c.resolveSpadeURL(ctx, internal.Token, internal.Channel)
-	if err != nil {
-		return fmt.Errorf("resolve spade url (retry): %w", err)
+	if _, claimed, err := w.claimAvailableCommunityPoints(ctx, internal.Token, internal.Channel); err != nil {
+		slog.Warn("claim channel-points bonus failed", "channel", internal.Channel, "err", err)
+	} else if claimed {
+		slog.Info("claimed channel-points bonus", "channel", internal.Channel)
 	}
-	w.setSpadeURL(internal.Channel, spadeURL)
-	return w.c.sendSpadeBeacon(ctx, internal.Token, spadeURL, events)
+	return nil
 }
 
 func (w *watch) stop(_ context.Context, _ platform.WatchHandle) error {
