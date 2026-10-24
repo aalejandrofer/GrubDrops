@@ -238,7 +238,10 @@ func minuteWatchedEvents(internal watchInternal) ([]byte, error) {
 			"logged_in":      true,
 			"minutes_logged": 1,
 			"muted":          false,
-			"user_id":        internal.UserID,
+			// Without player=site the beacon is accepted (204) but Twitch
+			// credits no channel points (verified live 2026-10-24).
+			"player":  "site",
+			"user_id": internal.UserID,
 		},
 	}
 	return json.Marshal([]any{event})

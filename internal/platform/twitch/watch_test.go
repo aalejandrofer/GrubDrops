@@ -119,6 +119,7 @@ func TestWatch_HeartbeatPostsSpadeBeacon(t *testing.T) {
 	assert.EqualValues(t, 1, props["minutes_logged"], "minutes_logged must be 1")
 	assert.Equal(t, true, props["is_live"], "is_live must be true")
 	assert.Equal(t, true, props["logged_in"], "logged_in must be true")
+	assert.Equal(t, "site", props["player"], "player=site is what makes Twitch credit channel points")
 
 	// The legacy envelope is gone — body is form-encoded, not a GQL JSON envelope.
 	assert.NotContains(t, beacon.body, "sendSpadeEvents",

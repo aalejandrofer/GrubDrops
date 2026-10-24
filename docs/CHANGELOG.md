@@ -39,6 +39,11 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- **Twitch accounts now actually earn channel points while watching.** The
+  watch beacon was accepted by Twitch but missing `player: "site"`, so no
+  points were credited (checked live: 10+ minutes of beacons, zero points;
+  with the field, +10 every 5 minutes and bonus chests appear).
+
 - **Channel points mining now runs for accounts with no games whitelisted,
   and mines no drops there.** Those accounts were parked as idle and never
   started watching. With no whitelist they only watch the channels chosen on
