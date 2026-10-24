@@ -76,15 +76,29 @@
 
     <form method="post" action="/accounts/{{.ID}}/points-mode">
       <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-      <div class="kvedit"><div class="row">
-        <span class="k">{{t "points.mode"}}</span>
-        <span class="d">{{if .PointsOnly}}{{t "points.mode_points_desc"}}{{else}}{{t "points.mode_drops_desc"}}{{end}}</span>
-        <span class="v">
-          <label class="cb"><input type="radio" name="mode" value="drops" {{if not .PointsOnly}}checked{{end}}> {{t "points.mode_drops"}}</label>
-          <label class="cb"><input type="radio" name="mode" value="points" {{if .PointsOnly}}checked{{end}}> {{t "points.mode_points"}}</label>
-        </span>
-        <button class="btn-linear" type="submit">{{t "points.save"}} →</button>
-      </div></div>
+      <div class="kvedit">
+        <div class="row">
+          <span class="k">{{t "points.mode"}}</span>
+          <span class="d">{{if .PointsOnly}}{{t "points.mode_points_desc"}}{{else}}{{t "points.mode_drops_desc"}}{{end}}</span>
+          <span class="v">
+            <label class="cb"><input type="radio" name="mode" value="drops" {{if not .PointsOnly}}checked{{end}}> {{t "points.mode_drops"}}</label>
+            <label class="cb"><input type="radio" name="mode" value="points" {{if .PointsOnly}}checked{{end}}> {{t "points.mode_points"}}</label>
+          </span>
+        </div>
+        {{if eq .Platform "twitch"}}
+        <div class="row">
+          <span class="k">{{t "points.streams"}}</span>
+          <span class="d">{{t "points.streams_desc"}}</span>
+          <span class="v">
+            <label class="cb"><input type="radio" name="streams" value="1" {{if eq .Streams 1}}checked{{end}}> {{t "points.streams_one"}}</label>
+            <label class="cb"><input type="radio" name="streams" value="2" {{if eq .Streams 2}}checked{{end}}> {{t "points.streams_two"}}</label>
+          </span>
+        </div>
+        {{end}}
+        <div class="row">
+          <button class="btn-linear" type="submit" style="margin-left:auto">{{t "points.save"}} →</button>
+        </div>
+      </div>
     </form>
 
     <form method="post" action="/accounts/{{.ID}}/force-channels" class="force-form">

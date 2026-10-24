@@ -18,10 +18,11 @@ All notable changes to GrubDrops.
   shifted up to 20 minutes a day) during which channel-points watching
   pauses, and the **follow raids** switch (Twitch, joins delayed by a random
   3-15 seconds). Turn the sleep window off to watch non-stop.
-- **Twitch accounts watch two channels at once for points** (the first two
-  live channels in the list; Twitch's own limit). Each channel gets its own
-  bonus claims and raid follows. The console card shows both channels.
-  Kick stays at one channel.
+- **Twitch accounts can watch two channels at once for points** (the first two
+  live channels in the list; Twitch's own limit). Switch between **1 stream**
+  and **2 streams** per account on the Twitch tab (default 2). Each channel
+  gets its own bonus claims and raid follows, and the console card shows both
+  channels. Kick stays at one channel.
 - **Twitch and Kick tabs on the Points page**, each listing that platform's
   accounts.
 - Twitch channel-point bonuses are checked on watch start and credited

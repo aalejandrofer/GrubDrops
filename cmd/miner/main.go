@@ -1041,9 +1041,10 @@ func (f forceWatchStore) Next(ctx context.Context, accountID string) (watcher.Fo
 		return watcher.ForceTask{}, false
 	}
 	task := watcher.ForceTask{Channel: rows[0].Channel, Slots: 1}
-	// Twitch allows watching two channels at once; Kick credits only one.
+	// Twitch allows watching two channels at once (switchable per account on
+	// the Points page); Kick credits only one.
 	if acc, err := f.q.GetAccount(ctx, accountID); err == nil && acc.Platform == "twitch" {
-		task.Slots = 2
+		task.Slots = api.PointsStreams(ctx, f.q, accountID)
 	}
 	for _, r := range rows[1:] {
 		task.Alternates = append(task.Alternates, r.Channel)

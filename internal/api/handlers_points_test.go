@@ -159,3 +159,29 @@ func TestPointsMode_RestartsOnlyOnChange(t *testing.T) {
 	assert.False(t, PointsOnly(e.ctx, e.q, "acc-kk"))
 	assert.Equal(t, []string{"acc-kk", "acc-kk"}, e.rld)
 }
+
+// Twitch accounts choose 1 or 2 streams (default 2); changing it restarts the
+// account, saving the same value does not, and Kick never stores one.
+func TestPointsStreams_TwitchOnlyAndRestartsOnChange(t *testing.T) {
+	e := newPointsEnv(t)
+	assert.Equal(t, 2, PointsStreams(e.ctx, e.q, "acc-tw"), "Twitch default keeps both slots")
+
+	post := func(id string, form url.Values) {
+		rec := e.post(id, "/accounts/"+id+"/points-mode", form, e.acc.pointsMode)
+		require.Equal(t, http.StatusSeeOther, rec.Code)
+	}
+	post("acc-tw", url.Values{"mode": {"drops"}, "streams": {"1"}})
+	assert.Equal(t, 1, PointsStreams(e.ctx, e.q, "acc-tw"))
+	post("acc-tw", url.Values{"mode": {"drops"}, "streams": {"1"}}) // unchanged
+	post("acc-tw", url.Values{"mode": {"drops"}, "streams": {"2"}})
+	assert.Equal(t, 2, PointsStreams(e.ctx, e.q, "acc-tw"))
+	assert.Equal(t, []string{"acc-tw", "acc-tw"}, e.rld, "only real changes restart the watcher")
+
+	post("acc-kk", url.Values{"mode": {"drops"}, "streams": {"2"}})
+	_, err := e.q.GetSettingString(e.ctx, PointsStreamsKey("acc-kk"))
+	assert.Error(t, err, "Kick has no streams setting")
+
+	tw := e.page("twitch")
+	assert.Contains(t, tw, `name="streams" value="2" checked`)
+	assert.NotContains(t, e.page("kick"), `name="streams"`)
+}

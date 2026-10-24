@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -44,6 +45,21 @@ func pointsRedirect(w http.ResponseWriter, r *http.Request, platform string) {
 	http.Redirect(w, r, "/points?tab="+platform, http.StatusSeeOther)
 }
 
+// PointsStreamsKey is the per-account KV key for how many channels a Twitch
+// account force-watches at once, "1" or "2".
+func PointsStreamsKey(accountID string) string { return "points_streams:" + accountID }
+
+// PointsStreams returns how many channels the account watches at once. Twitch
+// allows two, so that is the default; Kick credits one watch per account, so
+// callers only use it for Twitch.
+func PointsStreams(ctx context.Context, q *gen.Queries, accountID string) int {
+	v, err := q.GetSettingString(ctx, PointsStreamsKey(accountID))
+	if err == nil && string(v) == "1" {
+		return 1
+	}
+	return 2
+}
+
 // pointsDeps owns /points. Channel and on/off edits reuse the per-account
 // force-watch endpoints on accountsDeps.
 type pointsDeps struct {
@@ -63,6 +79,7 @@ type pointsAccount struct {
 	Channels    []string // priority order; the first live one is watched
 	Watching    string   // channel currently force-watched, "" when not
 	AsleepUntil string   // local HH:MM the current sleep window ends, "" when awake
+	Streams     int      // channels watched at once (Twitch: 1 or 2)
 }
 
 type pointsPage struct {
@@ -108,6 +125,7 @@ func (d *pointsDeps) get(w http.ResponseWriter, r *http.Request) {
 			row := pointsAccount{
 				ID: a.ID, Name: a.DisplayName, Platform: a.Platform,
 				Watching: watching[a.ID], PointsOnly: PointsOnly(ctx, d.q, a.ID),
+				Streams: PointsStreams(ctx, d.q, a.ID),
 			}
 			if end, asleep := page.Sleep.Until(time.Now().In(loc), a.ID); asleep {
 				row.AsleepUntil = end.Format("15:04")
@@ -165,7 +183,8 @@ func (d *pointsDeps) saveSafety(w http.ResponseWriter, r *http.Request) {
 }
 
 // pointsMode handles POST /accounts/:id/points-mode — switches the account
-// between Drops + points and Points only, restarting just its watcher.
+// between Drops + points and Points only and, on Twitch, between watching one
+// or two channels, restarting just its watcher when either changes.
 func (d accountsDeps) pointsMode(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	acc, err := d.q.GetAccount(r.Context(), id)
@@ -179,11 +198,30 @@ func (d accountsDeps) pointsMode(w http.ResponseWriter, r *http.Request) {
 	if only {
 		mode = "1"
 	}
-	if err := d.q.UpsertSettingString(r.Context(), gen.UpsertSettingStringParams{Key: PointsOnlyKey(id), Value: []byte(mode)}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	save := func(key, val string) bool {
+		if err := d.q.UpsertSettingString(r.Context(), gen.UpsertSettingStringParams{Key: key, Value: []byte(val)}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return false
+		}
+		return true
+	}
+	if !save(PointsOnlyKey(id), mode) {
 		return
 	}
-	if only != wasOnly {
+	changed := only != wasOnly
+	// Streams is a Twitch-only choice; Kick credits one watch per account.
+	if acc.Platform == "twitch" {
+		was := PointsStreams(r.Context(), d.q, id)
+		streams := 1
+		if r.FormValue("streams") == "2" {
+			streams = 2
+		}
+		if !save(PointsStreamsKey(id), strconv.Itoa(streams)) {
+			return
+		}
+		changed = changed || streams != was
+	}
+	if changed {
 		d.reloadForce(id)
 	}
 	d.sm.Put(r.Context(), "flash", "flash.points_saved")

@@ -187,8 +187,8 @@ channel list only when there is nothing to mine) or *Points only* (never mines
 drops or picks a stream on its own, watches just the channels you selected,
 and nothing if none is selected).
 
-On Twitch, an account watches up to two channels from its list at once (Twitch's
-own limit; Kick allows one), claims the bonus chest on each when it starts
+On Twitch, an account watches one or two channels from its list at once
+(switch on the Twitch tab; two is Twitch's own limit, Kick allows one), claims the bonus chest on each when it starts
 watching and again on every credited minute, and joins raids from either channel (after a random 3-15 s pause; switch it off on the Safety tab).
 Kick points accrue just by watching, so only the watching is automated there.
 
