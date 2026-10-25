@@ -42,7 +42,11 @@ func NewClaimLog(q *gen.Queries) *ClaimLog { return &ClaimLog{Q: q} }
 
 // Record upserts on (account, benefit). The first claimed_at and source stay.
 // A non-empty Code replaces the stored one, an empty Code keeps it.
+// A zero ClaimedAt records the current time.
 func (l *ClaimLog) Record(ctx context.Context, e ClaimEntry) error {
+	if e.ClaimedAt.IsZero() {
+		e.ClaimedAt = time.Now()
+	}
 	return l.Q.UpsertClaimLog(ctx, gen.UpsertClaimLogParams{
 		AccountID: e.AccountID, BenefitID: e.BenefitID, Platform: e.Platform,
 		Game: e.Game, CampaignID: e.CampaignID, CampaignName: e.CampaignName,

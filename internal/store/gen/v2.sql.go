@@ -341,7 +341,7 @@ const upsertClaimLog = `-- name: UpsertClaimLog :exec
 INSERT INTO claim_log (account_id, benefit_id, platform, game, campaign_id, campaign_name, benefit_name, image_url, code, source, claimed_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(account_id, benefit_id) DO UPDATE SET
-    platform      = excluded.platform,
+    platform      = CASE WHEN excluded.platform <> '' THEN excluded.platform ELSE claim_log.platform END,
     game          = CASE WHEN excluded.game <> '' THEN excluded.game ELSE claim_log.game END,
     campaign_id   = CASE WHEN excluded.campaign_id <> '' THEN excluded.campaign_id ELSE claim_log.campaign_id END,
     campaign_name = CASE WHEN excluded.campaign_name <> '' THEN excluded.campaign_name ELSE claim_log.campaign_name END,

@@ -57,6 +57,20 @@ func TestClaimLog_RecordKeepsFirstClaimAndSource(t *testing.T) {
 	require.Equal(t, "ABC", got[0].Code)
 }
 
+func TestClaimLog_ZeroTimeAndEmptyPlatform(t *testing.T) {
+	_, q := openV2(t)
+	l := NewClaimLog(q)
+	ctx := context.Background()
+	before := time.Now().Add(-time.Second)
+	require.NoError(t, l.Record(ctx, ClaimEntry{AccountID: "a1", Platform: "kick", BenefitID: "b1", Source: ClaimSourceGrubDrops}))
+	require.NoError(t, l.Record(ctx, ClaimEntry{AccountID: "a1", BenefitID: "b1", Source: ClaimSourceInventory}))
+	got, err := l.Recent(ctx, 10)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, "kick", got[0].Platform)
+	require.False(t, got[0].ClaimedAt.Before(before), "zero ClaimedAt records now, got %v", got[0].ClaimedAt)
+}
+
 func TestClaimLog_ClaimedIDsPerAccount(t *testing.T) {
 	_, q := openV2(t)
 	l := NewClaimLog(q)
@@ -90,7 +104,7 @@ func TestDropStates_ReplaceIsPerAccount(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 	row := func(acc, ben string) DropState {
-		return DropState{AccountID: acc, Platform: "twitch", Game: "G", CampaignID: "c", BenefitID: ben, State: "queued", UpdatedAt: now}
+		return DropState{AccountID: acc, Platform: "twitch", Game: "G", CampaignID: "c", BenefitID: ben, State: "eligible", UpdatedAt: now}
 	}
 	require.NoError(t, s.Replace(ctx, "a1", []DropState{row("a1", "b1"), row("a1", "b2")}))
 	require.NoError(t, s.Replace(ctx, "a2", []DropState{row("a2", "b1")}))
@@ -114,7 +128,7 @@ func TestDropStates_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	in := DropState{
 		AccountID: "a1", Platform: "kick", Game: "Game", CampaignID: "c1", CampaignName: "Camp",
-		BenefitID: "b1", BenefitName: "Ben", ImageURL: "http://img", State: "blocked", Reason: "not linked",
+		BenefitID: "b1", BenefitName: "Ben", ImageURL: "http://img", State: "blocked", Reason: "not_linked",
 		Minutes: 12, RequiredMinutes: 60,
 		EndsAt: time.Unix(1_800_000_000, 0), UpdatedAt: time.Unix(1_700_000_000, 0),
 	}
