@@ -158,3 +158,26 @@ func TestBuild_TargetMinutesFromInventory(t *testing.T) {
 		t.Fatalf("minutes %d", res.Queue[0].Minutes)
 	}
 }
+
+func TestBuild_RestrictedDoesNotJumpHigherGame(t *testing.T) {
+	b := camp("b", "kick", "Overwatch", ben("b1", 10))
+	b.AllowedChannels = []string{"x"}
+	res := Build(Input{
+		Games:     []Game{{Name: "Rust", Slug: "rust"}, {Name: "Overwatch", Slug: "overwatch"}},
+		Campaigns: []platform.Campaign{b, camp("a", "kick", "Rust", ben("a1", 100))},
+	})
+	eq(t, ids(res.Queue), []string{"a1", "b1"})
+}
+
+func TestBuild_SkippedBenefitDoesNotAffectCampaignRemaining(t *testing.T) {
+	res := Build(Input{
+		Games: rust,
+		Campaigns: []platform.Campaign{
+			camp("far", "kick", "Rust", ben("sk", 10), ben("f1", 100)),
+			camp("near", "kick", "Rust", ben("n1", 50)),
+		},
+		Progress: []platform.Progress{{BenefitID: "sk", MinutesWatched: 10}},
+		Skipped:  map[string]bool{"sk": true},
+	})
+	eq(t, ids(res.Queue), []string{"n1", "f1"})
+}

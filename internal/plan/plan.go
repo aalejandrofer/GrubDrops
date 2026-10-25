@@ -116,16 +116,13 @@ func Build(in Input) Result {
 		benefits := append([]platform.DropBenefit(nil), c.Benefits...)
 		sort.SliceStable(benefits, func(i, j int) bool { return benefits[i].RequiredMinutes < benefits[j].RequiredMinutes })
 
-		e := entry{rank: rank, restricted: len(c.AllowedChannels) > 0, remaining: -1}
+		e := entry{rank: rank, restricted: len(c.AllowedChannels) > 0, }
 		for _, b := range benefits {
 			if b.RequiredMinutes <= 0 || claimed[b.ID] || seen[b.ID] {
 				continue
 			}
 			seen[b.ID] = true
 			t := Target{Campaign: c, Benefit: b, Minutes: minutes[b.ID]}
-			if rem := max(0, b.RequiredMinutes-t.Minutes); e.remaining < 0 || rem < e.remaining {
-				e.remaining = rem
-			}
 			switch {
 			case unlinked:
 				e.blocked = append(e.blocked, Blocked{t, ReasonNotLinked})
@@ -135,6 +132,12 @@ func Build(in Input) Result {
 				e.blocked = append(e.blocked, Blocked{t, ReasonPrecondition})
 			default:
 				e.targets = append(e.targets, t)
+			}
+		}
+		// Min remaining counts queued targets only; Blocked benefits must not pull a campaign forward.
+		for i, t := range e.targets {
+			if rem := max(0, t.Benefit.RequiredMinutes-t.Minutes); i == 0 || rem < e.remaining {
+				e.remaining = rem
 			}
 		}
 		entries = append(entries, e)
