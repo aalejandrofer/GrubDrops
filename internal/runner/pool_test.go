@@ -245,3 +245,43 @@ func TestPool_RunnerReplacedByRunnerPushReachesNew(t *testing.T) {
 		t.Fatal("push reached the replaced Runner")
 	}
 }
+
+// panicBeat panics on the second Heartbeat, mid-watch.
+type panicBeat struct {
+	*platformtest.Fake
+	beats atomic.Int32
+}
+
+func (p *panicBeat) Heartbeat(ctx context.Context, h platform.WatchHandle) error {
+	if p.beats.Add(1) == 2 {
+		panic("beacon boom")
+	}
+	return p.Fake.Heartbeat(ctx, h)
+}
+
+func TestPool_RunnerPanicStopsWatch(t *testing.T) {
+	n := &spyN{}
+	p := NewPool(n)
+	defer p.Stop()
+	f := platformtest.NewFake()
+	f.Campaigns = []platform.Campaign{camp("c1", "Rust", "d1")}
+	f.Campaigns[0].Benefits[0].RequiredMinutes = 100000
+	f.Progress["d1"] = &platform.Progress{BenefitID: "d1"}
+	f.Streams["c1"] = []platform.Stream{{Channel: "a", ViewerCount: 1}}
+	r := New(Config{AccountID: "acc", Platform: "kick", Backend: &panicBeat{Fake: f}, Games: rustGames,
+		TickInterval: time.Millisecond})
+	_ = p.Reload(context.Background(), []Builder{func() Entry { return Entry{ID: "acc", Unit: r} }})
+	if !waitFor(func() bool {
+		n.mu.Lock()
+		defer n.mu.Unlock()
+		return len(n.ev) > 0
+	}, 2*time.Second) {
+		t.Fatal("no error notification")
+	}
+	if !hasCall(f, "Stop:a") {
+		t.Fatalf("watch leaked on panic: %v", f.Calls)
+	}
+	if s := r.Snapshot(); s.State == StateWatching {
+		t.Fatalf("snapshot still watching: %+v", s)
+	}
+}

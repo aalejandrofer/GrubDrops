@@ -373,6 +373,12 @@ func nextBackoff(cur time.Duration) time.Duration {
 // StartWatch, later ones every TickInterval. A step that left a non-watching
 // state unchanged waits TickInterval so it cannot spin.
 func (r *Runner) Run(ctx context.Context) error {
+	defer func() {
+		if p := recover(); p != nil {
+			r.cleanupAfterPanic()
+			panic(p)
+		}
+	}()
 	backoff := time.Duration(0)
 
 	exit := func() error {
@@ -436,6 +442,30 @@ func (r *Runner) Run(ctx context.Context) error {
 			return exit()
 		}
 	}
+}
+
+// cleanupAfterPanic stops the live watch and leaves a non-watching state so
+// a panicking step cannot leak the handle or sidecar. If r.mu stays held (the
+// panic unwound a locked section) it gives up rather than deadlock.
+func (r *Runner) cleanupAfterPanic() {
+	deadline := time.Now().Add(time.Second)
+	for !r.mu.TryLock() {
+		if time.Now().After(deadline) {
+			slog.Error("runner panic cleanup skipped; state lock held",
+				"kind", "error", "account", r.cfg.AccountID)
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	r.mu.Unlock()
+	r.stopWatch(context.Background()) // detached internally
+	r.mu.Lock()
+	prev := r.state
+	r.state = StateIdle
+	r.mu.Unlock()
+	slog.Error("runner panicked; watch stopped", "kind", "error",
+		"account", r.cfg.AccountID, "prev", string(prev))
+	r.changed()
 }
 
 // untilNextBeat is the time left before the current watch may beacon again.
