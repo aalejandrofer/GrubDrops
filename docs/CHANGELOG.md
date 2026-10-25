@@ -9,6 +9,7 @@ All notable changes to GrubDrops.
 - v2 planner (`internal/plan`) and per-account runner + pool (`internal/runner`), replacing the watcher and scheduler. Not wired in yet (rebuild/v2).
 - v2 collection tables (migration 0016) and a one-time `<db>.pre-v2` backup written by `store.Open` before an existing database migrates.
 - v2 store wrappers for the claim log, drop states, watch minutes, account scans, chosen games and skips.
+- v2 planner: inventory progress overrides a stale claim log entry, and `plan.Result` lists claimed drops of chosen active campaigns.
 
 ### Docs
 

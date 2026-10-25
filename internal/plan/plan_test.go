@@ -193,3 +193,82 @@ func TestBuild_SharedClaimedBenefitKeepsSiblingQueued(t *testing.T) {
 	})
 	eq(t, ids(res.Queue), []string{"d2"})
 }
+
+func claimedIDs(r Result) []string { return ids(r.Claimed) }
+
+func TestBuild_InventoryPartialOverridesLog(t *testing.T) {
+	res := Build(Input{
+		Games:     rust,
+		Campaigns: []platform.Campaign{camp("c", "kick", "Rust", ben("b1", 60))},
+		Claimed:   map[string]bool{"b1": true},
+		Progress:  []platform.Progress{{BenefitID: "b1", MinutesWatched: 20}},
+	})
+	eq(t, ids(res.Queue), []string{"b1"})
+	if res.Queue[0].Minutes != 20 {
+		t.Fatalf("minutes %d want 20", res.Queue[0].Minutes)
+	}
+	eq(t, claimedIDs(res), []string{})
+}
+
+func TestBuild_LogClaimSurvivesFullUnclaimedRow(t *testing.T) {
+	res := Build(Input{
+		Games:     rust,
+		Campaigns: []platform.Campaign{camp("c", "kick", "Rust", ben("b1", 60))},
+		Claimed:   map[string]bool{"b1": true},
+		Progress:  []platform.Progress{{BenefitID: "b1", MinutesWatched: 60}},
+	})
+	eq(t, ids(res.Queue), []string{})
+	eq(t, claimedIDs(res), []string{"b1"})
+}
+
+func TestBuild_LogClaimSurvivesAbsentRow(t *testing.T) {
+	res := Build(Input{
+		Games:     rust,
+		Campaigns: []platform.Campaign{camp("c", "kick", "Rust", ben("b1", 60))},
+		Claimed:   map[string]bool{"b1": true},
+	})
+	eq(t, claimedIDs(res), []string{"b1"})
+	if res.Claimed[0].Minutes != 60 {
+		t.Fatalf("minutes %d want 60", res.Claimed[0].Minutes)
+	}
+}
+
+func TestBuild_InventoryClaimedListed(t *testing.T) {
+	res := Build(Input{
+		Games:     rust,
+		Campaigns: []platform.Campaign{camp("c", "kick", "Rust", ben("b1", 60))},
+		Progress:  []platform.Progress{{BenefitID: "b1", MinutesWatched: 60, Claimed: true}},
+	})
+	eq(t, claimedIDs(res), []string{"b1"})
+	eq(t, ids(res.Queue), []string{})
+}
+
+func TestBuild_ClaimedOnlyChosenActive(t *testing.T) {
+	up := camp("up", "kick", "Rust", ben("b2", 60))
+	up.Status = "upcoming"
+	res := Build(Input{
+		Games: rust,
+		Campaigns: []platform.Campaign{
+			camp("ow", "kick", "Overwatch", ben("b1", 60)),
+			up,
+			camp("c", "kick", "Rust", ben("b3", 60)),
+		},
+		Claimed: map[string]bool{"b1": true, "b2": true, "b3": true},
+	})
+	eq(t, claimedIDs(res), []string{"b3"})
+}
+
+func TestBuild_PreconditionUsesOverride(t *testing.T) {
+	b2 := ben("b2", 60)
+	b2.Preconditions = []string{"b1"}
+	res := Build(Input{
+		Games:     rust,
+		Campaigns: []platform.Campaign{camp("c", "kick", "Rust", ben("b1", 60), b2)},
+		Claimed:   map[string]bool{"b1": true},
+		Progress:  []platform.Progress{{BenefitID: "b1", MinutesWatched: 10}},
+	})
+	eq(t, ids(res.Queue), []string{"b1"})
+	if len(res.Blocked) != 1 || res.Blocked[0].Benefit.ID != "b2" || res.Blocked[0].Reason != ReasonPrecondition {
+		t.Fatalf("blocked %+v", res.Blocked)
+	}
+}

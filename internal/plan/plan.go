@@ -12,10 +12,14 @@ import (
 type Game struct{ Name, Slug string }
 
 type Input struct {
-	Games       []Game // chosen games, priority order (index 0 = top)
-	Campaigns   []platform.Campaign
-	Progress    []platform.Progress
-	Claimed     map[string]bool // benefit IDs in GrubDrops' claim log for this account
+	Games     []Game // chosen games, priority order (index 0 = top)
+	Campaigns []platform.Campaign
+	Progress  []platform.Progress
+	// Benefit IDs in GrubDrops' claim log for this account. A log entry counts as
+	// claimed unless Progress holds an unclaimed row for the benefit with fewer
+	// MinutesWatched than its RequiredMinutes (the inventory says it is not done).
+	// An inventory row with Claimed set always counts.
+	Claimed     map[string]bool
 	Skipped     map[string]bool // benefit IDs the runner gave up on
 	ForceLinked map[string]bool // campaign IDs the user asserted are linked
 	Order       []string        // session Up next override, benefit IDs
@@ -43,6 +47,7 @@ type Blocked struct {
 type Result struct {
 	Queue   []Target
 	Blocked []Blocked
+	Claimed []Target // chosen-game, active benefits that count as claimed
 }
 
 // Match returns the index of the game whose name or slug equals game,
@@ -85,23 +90,43 @@ type entry struct {
 	remaining  int
 	targets    []Target
 	blocked    []Blocked
+	claimed    []Target
 }
 
 func Build(in Input) Result {
 	minutes := map[string]int{}
-	claimed := map[string]bool{}
-	for id, v := range in.Claimed {
-		if v {
-			claimed[id] = true
-		}
-	}
+	hasRow := map[string]bool{}
+	invClaimed := map[string]bool{}
 	for _, p := range in.Progress {
+		hasRow[p.BenefitID] = true
 		if p.MinutesWatched > minutes[p.BenefitID] {
 			minutes[p.BenefitID] = p.MinutesWatched
 		}
 		if p.Claimed {
-			claimed[p.BenefitID] = true
+			invClaimed[p.BenefitID] = true
 		}
+	}
+	// Required minutes per benefit, to resolve the log-versus-inventory override.
+	required := map[string]int{}
+	for _, c := range in.Campaigns {
+		for _, b := range c.Benefits {
+			if b.RequiredMinutes > required[b.ID] {
+				required[b.ID] = b.RequiredMinutes
+			}
+		}
+	}
+	claimed := map[string]bool{}
+	for id := range invClaimed {
+		claimed[id] = true
+	}
+	for id, v := range in.Claimed {
+		if !v || invClaimed[id] {
+			continue
+		}
+		if hasRow[id] && minutes[id] < required[id] {
+			continue // inventory shows it unfinished: the log is stale
+		}
+		claimed[id] = true
 	}
 
 	seen := map[string]bool{}
@@ -118,10 +143,18 @@ func Build(in Input) Result {
 
 		e := entry{rank: rank, restricted: len(c.AllowedChannels) > 0}
 		for _, b := range benefits {
-			if b.RequiredMinutes <= 0 || claimed[b.ID] || seen[b.ID] {
+			if b.RequiredMinutes <= 0 || seen[b.ID] {
 				continue
 			}
 			seen[b.ID] = true
+			if claimed[b.ID] {
+				m := b.RequiredMinutes
+				if hasRow[b.ID] {
+					m = minutes[b.ID]
+				}
+				e.claimed = append(e.claimed, Target{Campaign: c, Benefit: b, Minutes: m})
+				continue
+			}
 			t := Target{Campaign: c, Benefit: b, Minutes: minutes[b.ID]}
 			switch {
 			case unlinked:
@@ -158,6 +191,7 @@ func Build(in Input) Result {
 	for _, e := range entries {
 		res.Queue = append(res.Queue, e.targets...)
 		res.Blocked = append(res.Blocked, e.blocked...)
+		res.Claimed = append(res.Claimed, e.claimed...)
 	}
 	res.Queue = ApplyOrder(res.Queue, in.Order)
 	return res
