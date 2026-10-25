@@ -38,9 +38,10 @@ type claimRec struct {
 
 // fakeClaims is a ClaimLog recorder. ids is the claim log's content.
 type fakeClaims struct {
-	mu   sync.Mutex
-	ids  map[string]bool
-	recs []claimRec
+	mu     sync.Mutex
+	ids    map[string]bool
+	idsErr error
+	recs   []claimRec
 }
 
 func (c *fakeClaims) RecordClaim(_ context.Context, acc string, t plan.Target, code string) error {
@@ -50,6 +51,11 @@ func (c *fakeClaims) RecordClaim(_ context.Context, acc string, t plan.Target, c
 	return nil
 }
 func (c *fakeClaims) ClaimedBenefitIDs(context.Context, string) (map[string]bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.idsErr != nil {
+		return nil, c.idsErr
+	}
 	return c.ids, nil
 }
 

@@ -414,3 +414,168 @@ func TestRunner_ReaperShellRowCampaign(t *testing.T) {
 		t.Fatalf("calls=%v", rf.RewardCalls)
 	}
 }
+
+// sweepWatching watches b1 of c1 (Rust) with extra campaigns in the plan and
+// returns a setter for the next sweep result.
+func sweepWatching(t *testing.T, extra ...platform.Campaign) (*Runner, *spyNotifier, *fakeClaims, func([]platform.ClaimedReward)) {
+	t.Helper()
+	f := platformtest.NewFake()
+	sf := &platformtest.SweepFake{Fake: f}
+	f.Campaigns = append([]platform.Campaign{camp("c1", "Rust", "b1")}, extra...)
+	f.Streams["c1"] = []platform.Stream{{Channel: "a", ChannelID: "ida", ViewerCount: 5}}
+	var mu sync.Mutex
+	var swept []platform.ClaimedReward
+	sf.Sweep = func() []platform.ClaimedReward {
+		mu.Lock()
+		defer mu.Unlock()
+		out := swept
+		swept = nil
+		return out
+	}
+	n := &spyNotifier{}
+	cl := &fakeClaims{}
+	games := []plan.Game{{Name: "Rust"}, {Name: "Rust Console"}}
+	r := New(Config{AccountID: "acc", Platform: "kick", Backend: sf, Games: games, Notifier: n, Claims: cl})
+	steps(t, r, 2) // pick, start
+	if cur := r.Snapshot().Current; r.State() != StateWatching || cur == nil || cur.Benefit.ID != "b1" {
+		t.Fatalf("state=%s current=%+v", r.State(), cur)
+	}
+	return r, n, cl, func(c []platform.ClaimedReward) { mu.Lock(); swept = c; mu.Unlock() }
+}
+
+func named(c platform.Campaign, ids, names []string) platform.Campaign {
+	c.Benefits = nil
+	for i, id := range ids {
+		c.Benefits = append(c.Benefits, platform.DropBenefit{ID: id, Name: names[i], CampaignID: c.ID, RequiredMinutes: 60})
+	}
+	return c
+}
+
+func TestSweep_AmbiguousTitleRecordsNothing(t *testing.T) {
+	a := named(camp("c2", "Rust Console", ""), []string{"h1"}, []string{"Hoodie"})
+	b := named(camp("c3", "Rust Console", ""), []string{"h2"}, []string{"Hoodie"})
+	r, n, cl, sweep := sweepWatching(t, a, b)
+	sweep([]platform.ClaimedReward{{Game: "Rust", Title: "Hoodie"}})
+	steps(t, r, 1)
+	if len(cl.recs) != 0 {
+		t.Fatalf("ambiguous title recorded: %v", cl.recorded())
+	}
+	cn := n.of("claim")
+	if len(cn) != 1 || cn[0].fields["drop"] != "Hoodie" {
+		t.Fatalf("notify=%+v", cn)
+	}
+	if _, ok := cn[0].fields["game"]; ok {
+		t.Fatalf("ambiguous title kept a game: %+v", cn[0].fields)
+	}
+}
+
+func TestSweep_PrefersCurrentCampaign(t *testing.T) {
+	other := named(camp("c0", "Rust", ""), []string{"x1"}, []string{"Hoodie"})
+	f := platformtest.NewFake()
+	sf := &platformtest.SweepFake{Fake: f}
+	cur := named(camp("c1", "Rust", ""), []string{"b1", "b2"}, []string{"Main", "Hoodie"})
+	// c0 has no stream, so the runner mines c1; c0 still sits first in the queue.
+	f.Campaigns = []platform.Campaign{other, cur}
+	f.Streams["c1"] = []platform.Stream{{Channel: "a", ChannelID: "ida", ViewerCount: 5}}
+	var swept []platform.ClaimedReward
+	sf.Sweep = func() []platform.ClaimedReward { out := swept; swept = nil; return out }
+	cl := &fakeClaims{}
+	r := New(Config{AccountID: "acc", Platform: "kick", Backend: sf, Games: rustGames, Claims: cl})
+	steps(t, r, 2)
+	if c := r.Snapshot().Current; c == nil || c.Campaign.ID != "c1" {
+		t.Fatalf("current=%+v", c)
+	}
+	swept = []platform.ClaimedReward{{Title: "Hoodie"}}
+	steps(t, r, 1)
+	if got := cl.recorded(); len(got) != 1 || got[0] != "acc:b2:" {
+		t.Fatalf("recorded=%v", got)
+	}
+}
+
+func TestSweep_BlockedOnlyTitleRecordedUnderItsGame(t *testing.T) {
+	c := named(camp("c2", "Rust Console", ""), []string{"h1"}, []string{"Hoodie"})
+	c.AccountLinked, c.AccountLinkChecked = false, true
+	r, n, cl, sweep := sweepWatching(t, c)
+	r.mu.Lock()
+	nb := len(r.blocked)
+	r.mu.Unlock()
+	if nb != 1 {
+		t.Fatalf("blocked=%d", nb)
+	}
+	sweep([]platform.ClaimedReward{{Game: "Rust", Title: "Hoodie"}})
+	steps(t, r, 1)
+	if got := cl.recorded(); len(got) != 1 || got[0] != "acc:h1:" || cl.recs[0].Target.Campaign.Game != "Rust Console" {
+		t.Fatalf("recorded=%v", got)
+	}
+	if cn := n.of("claim"); len(cn) != 1 || cn[0].fields["game"] != "Rust Console" {
+		t.Fatalf("notify=%+v", cn)
+	}
+}
+
+func TestRewardCode_AfterClaimWithNoCurrent(t *testing.T) {
+	f := platformtest.NewFake()
+	r, _, cl, _ := claimSetup(f, 2)
+	steps(t, r, 5) // pick, start, tick, tick->claiming, claim
+	if r.Snapshot().Current != nil || len(cl.recs) != 1 {
+		t.Fatalf("current=%+v recs=%v", r.Snapshot().Current, cl.recorded())
+	}
+	r.onRewardCode("n", "XYZ", "Drop1")
+	if got := cl.recorded(); len(got) != 2 || got[1] != "acc:d1:XYZ" || cl.recs[1].Target.Campaign.Game != "Rust" {
+		t.Fatalf("recorded=%v", got)
+	}
+}
+
+func TestRewardCode_AfterMovingToNextDrop(t *testing.T) {
+	f := platformtest.NewFake()
+	r, _, cl, _ := claimSetup(f, 1, 3)
+	steps(t, r, 5) // pick, start, tick->claiming, claim, pick d2
+	if cur := r.Snapshot().Current; cur == nil || cur.Benefit.ID != "d2" {
+		t.Fatalf("current=%+v", cur)
+	}
+	r.onRewardCode("n", "XYZ", "Drop1")
+	got := cl.recorded()
+	if len(got) != 2 || got[1] != "acc:d1:XYZ" {
+		t.Fatalf("recorded=%v", got)
+	}
+}
+
+func TestRewardCode_StaleCodeDropped(t *testing.T) {
+	f := platformtest.NewFake()
+	r, _, cl, _ := claimSetup(f, 2)
+	steps(t, r, 5)
+	r.mu.Lock()
+	r.lastClaimedAt = time.Now().Add(-rewardCodeWindow - time.Minute)
+	r.mu.Unlock()
+	r.onRewardCode("n", "XYZ", "Drop1")
+	if got := cl.recorded(); len(got) != 1 {
+		t.Fatalf("stale code recorded: %v", got)
+	}
+}
+
+func TestRunner_NoStreamResetAfterWatch(t *testing.T) {
+	f := platformtest.NewFake()
+	c1, c3 := tiered("c1", "Rust", 1), tiered("c3", "Rust", 1)
+	c1.Benefits[0].ID, c3.Benefits[0].ID = "b1", "b3"
+	f.Campaigns = []platform.Campaign{c1, tiered("c2", "Rust", 1), c3}
+	f.Streams["c2"] = []platform.Stream{{Channel: "a", ChannelID: "ida", ViewerCount: 5}}
+	f.Streams["c3"] = []platform.Stream{{Channel: "c", ChannelID: "idc", ViewerCount: 5}}
+	for _, id := range []string{"b1", "d1", "b3"} {
+		f.Progress[id] = &platform.Progress{BenefitID: id}
+	}
+	r := newRunner(f, nil)
+	steps(t, r, 2) // pick c1, start: c1 offline, watch c2
+	if cur := r.Snapshot().Current; r.State() != StateWatching || cur == nil || cur.Campaign.ID != "c2" {
+		t.Fatalf("state=%s current=%+v calls=%v", r.State(), cur, f.Calls)
+	}
+	steps(t, r, 2) // tick -> claiming, claim
+	if f.CallCount("Claim:d1") != 1 || r.State() != StatePicking {
+		t.Fatalf("state=%s calls=%v", r.State(), f.Calls)
+	}
+	f.Mu.Lock()
+	f.Streams["c1"] = []platform.Stream{{Channel: "b", ChannelID: "idb", ViewerCount: 5}}
+	f.Mu.Unlock()
+	steps(t, r, 1) // pick
+	if cur := r.Snapshot().Current; cur == nil || cur.Campaign.ID != "c1" {
+		t.Fatalf("top campaign not retried: current=%+v", cur)
+	}
+}

@@ -130,12 +130,12 @@ func TestPubSub_StreamDownRestarts(t *testing.T) {
 	}
 }
 
-func TestPubSub_RewardCodeRecorded(t *testing.T) {
+func TestPubSub_RewardCodeWhileWatchingIgnored(t *testing.T) {
 	cl := &fakeClaims{}
 	_, p := psWatching(t, func(c *Config) { c.Claims = cl })
 	hooksOf(t, p).OnRewardCode("n", "CODE", "b")
-	if len(cl.recorded()) != 1 || cl.recorded()[0] != "acc:d1:CODE" {
-		t.Fatalf("codes=%v", cl.recorded())
+	if len(cl.recorded()) != 0 {
+		t.Fatalf("code recorded against an unclaimed drop: %v", cl.recorded())
 	}
 }
 

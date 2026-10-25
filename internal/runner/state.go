@@ -39,10 +39,11 @@ type ClaimLog interface {
 type Scan struct {
 	AccountID, Platform string
 	At                  time.Time
-	Err                 error // ListActiveCampaigns failed; the other fields are empty
+	Err                 error // campaign list or claim log read failed; the other fields are empty
 	Campaigns           []platform.Campaign
 	Progress            []platform.Progress
 	InventoryOK         bool            // Progress came from a successful read
+	InventoryErr        string          // why the inventory read failed; "" when InventoryOK
 	Logged              map[string]bool // claim-log benefit IDs the plan used
 	Result              plan.Result
 }

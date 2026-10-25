@@ -100,6 +100,7 @@ func (r *Runner) finishClaim(ctx context.Context, benefit platform.DropBenefit, 
 	if r.current != nil {
 		t := *r.current
 		target = &t
+		r.lastClaimed, r.lastClaimedAt = &t, time.Now()
 	}
 	r.mu.Unlock()
 	if r.cfg.Claims != nil && target != nil {
@@ -150,24 +151,12 @@ func (r *Runner) notifySwept(ctx context.Context, cr platform.ClaimedReward) {
 	}
 	r.notifiedSwept[cr.Title] = struct{}{}
 	// The backend's game is not trusted: resolve the title to a known target.
-	var target *plan.Target
-	for i := range r.queue {
-		if r.queue[i].Benefit.Name == cr.Title {
-			t := r.queue[i]
-			target = &t
-			break
-		}
-	}
-	if target == nil {
-		for i := range r.blocked {
-			if r.blocked[i].Benefit.Name == cr.Title {
-				t := r.blocked[i].Target
-				target = &t
-				break
-			}
-		}
-	}
+	target, ambiguous := r.resolveSweptLocked(cr.Title)
 	r.mu.Unlock()
+	if ambiguous {
+		slog.Info("runner swept reward title matches several drops; left to the next scan",
+			"kind", "claim", "account", r.cfg.AccountID, "title", cr.Title)
+	}
 
 	extra := map[string]any{"drop": cr.Title}
 	if target != nil {
@@ -195,6 +184,49 @@ func (r *Runner) notifySwept(ctx context.Context, cr platform.ClaimedReward) {
 		}
 		_ = r.cfg.Notifier.Notify(ctx, "claim", f)
 	}
+}
+
+// resolveSweptLocked maps a swept reward title to one planned target. It looks
+// in the current campaign, then the current game, then every queued and
+// blocked target, and stops at the first level with a match. Several distinct
+// matches at that level are ambiguous: no target. Caller holds r.mu.
+func (r *Runner) resolveSweptLocked(title string) (target *plan.Target, ambiguous bool) {
+	var all []plan.Target
+	for _, t := range r.queue {
+		if t.Benefit.Name == title {
+			all = append(all, t)
+		}
+	}
+	for _, b := range r.blocked {
+		if b.Benefit.Name == title {
+			all = append(all, b.Target)
+		}
+	}
+	levels := []func(plan.Target) bool{func(plan.Target) bool { return true }}
+	if cur := r.current; cur != nil {
+		levels = []func(plan.Target) bool{
+			func(t plan.Target) bool { return t.Campaign.ID == cur.Campaign.ID },
+			func(t plan.Target) bool { return t.Campaign.Game == cur.Campaign.Game },
+			levels[0],
+		}
+	}
+	for _, in := range levels {
+		var hit *plan.Target
+		for i := range all {
+			if !in(all[i]) {
+				continue
+			}
+			if hit != nil && hit.Benefit.ID != all[i].Benefit.ID {
+				return nil, true
+			}
+			hit = &all[i]
+		}
+		if hit != nil {
+			t := *hit
+			return &t, false
+		}
+	}
+	return nil, false
 }
 
 // reapRewards claims one-click reward campaigns (RewardClaimer backends) for

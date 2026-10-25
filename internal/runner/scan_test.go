@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aalejandrofer/grubdrops/internal/plan"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/platform/platformtest"
 )
@@ -180,10 +181,15 @@ func TestRunner_ClaimRecordsTarget(t *testing.T) {
 
 func TestRunner_RewardCodeRecordsTarget(t *testing.T) {
 	cl := &fakeClaims{}
-	_, p := psWatching(t, func(c *Config) { c.Claims = cl })
+	r, p := psWatching(t, func(c *Config) { c.Claims = cl })
+	p.Progress["d1"] = &platform.Progress{BenefitID: "d1", MinutesWatched: 60}
+	steps(t, r, 2) // tick -> claiming, claim
+	if r.State() != StatePicking || len(cl.recs) != 1 {
+		t.Fatalf("state=%s recs=%v", r.State(), cl.recorded())
+	}
 	hooksOf(t, p).OnRewardCode("n", "XYZ", "t")
-	if len(cl.recs) != 1 || cl.recs[0].Code != "XYZ" || cl.recs[0].Target.Benefit.ID != "d1" ||
-		cl.recs[0].Target.Campaign.Game != "Rust" {
+	if len(cl.recs) != 2 || cl.recs[1].Code != "XYZ" || cl.recs[1].Target.Benefit.ID != "d1" ||
+		cl.recs[1].Target.Campaign.Game != "Rust" {
 		t.Fatalf("%+v", cl.recs)
 	}
 }
@@ -218,5 +224,72 @@ func TestRunner_IntegrityBlockedListNeedsLogin(t *testing.T) {
 	steps(t, r, 1)
 	if r.State() != StateNeedsLogin {
 		t.Fatalf("state=%s", r.State())
+	}
+}
+
+func TestRunner_InventoryFailureScanFlag(t *testing.T) {
+	f := platformtest.NewFake()
+	f.Campaigns = []platform.Campaign{camp("c1", "Rust", "b1")}
+	f.Progress["b1"] = &platform.Progress{BenefitID: "b1", MinutesWatched: 9}
+	f.InventoryErr = errors.New("inventory down")
+	h := &hookRec{}
+	r := newRunner(f, h.apply)
+	steps(t, r, 1)
+	if len(h.scans) != 1 {
+		t.Fatalf("scans=%d", len(h.scans))
+	}
+	s := h.scans[0]
+	if s.Err != nil || s.InventoryOK || s.Progress != nil || s.InventoryErr != "inventory down" {
+		t.Fatalf("%+v", s)
+	}
+	if r.State() != StateStarting || r.Snapshot().Current == nil || r.Snapshot().Current.Benefit.ID != "b1" {
+		t.Fatalf("state=%s current=%+v", r.State(), r.Snapshot().Current)
+	}
+}
+
+func TestRunner_ClaimLogReadFailureIsScanError(t *testing.T) {
+	old := rescanEvery
+	t.Cleanup(func() { rescanEvery = old })
+
+	// Pick: the failed read is a step error, nothing is picked.
+	f := platformtest.NewFake()
+	f.Campaigns = []platform.Campaign{camp("c1", "Rust", "b1")}
+	cl := &fakeClaims{idsErr: errors.New("db locked")}
+	h := &hookRec{}
+	r := newRunner(f, func(c *Config) { c.Claims = cl; h.apply(c) })
+	if err := r.step(context.Background()); err == nil {
+		t.Fatal("want step error")
+	}
+	if len(h.scans) != 1 || h.scans[0].Err == nil || len(h.scans[0].Result.Queue) != 0 {
+		t.Fatalf("%+v", h.scans)
+	}
+	if r.Snapshot().Current != nil {
+		t.Fatalf("picked %+v", r.Snapshot().Current)
+	}
+
+	// Rescan while watching: the previous queue stays, the watch goes on.
+	f = platformtest.NewFake()
+	cl = &fakeClaims{}
+	h = &hookRec{}
+	r = watching(t, f, func(c *Config) { c.Claims = cl; h.apply(c) })
+	r.mu.Lock()
+	before := append([]plan.Target(nil), r.queue...)
+	r.mu.Unlock()
+	cl.mu.Lock()
+	cl.idsErr = errors.New("db locked")
+	cl.mu.Unlock()
+	rescanEvery = 0
+	steps(t, r, 1)
+	if h.nScans() != 2 || h.scans[1].Err == nil {
+		t.Fatalf("%+v", h.scans)
+	}
+	r.mu.Lock()
+	after := r.queue
+	r.mu.Unlock()
+	if len(before) != 1 || len(after) != 1 || after[0].Benefit.ID != before[0].Benefit.ID {
+		t.Fatalf("queue before=%v after=%v", before, after)
+	}
+	if r.State() != StateWatching {
+		t.Fatal(r.State())
 	}
 }

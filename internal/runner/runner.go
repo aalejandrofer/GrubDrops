@@ -4,6 +4,7 @@ package runner
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -28,6 +29,9 @@ var (
 
 const (
 	maxBackoff = 5 * time.Minute
+	// rewardCodeWindow is how long after a claim a reward code push is
+	// still attributed to the claimed target.
+	rewardCodeWindow = 10 * time.Minute
 )
 
 type Runner struct {
@@ -60,6 +64,10 @@ type Runner struct {
 	claimFailSkipped map[string]int
 	// notifiedSwept dedupes sweep notifications by reward title, per run.
 	notifiedSwept map[string]struct{}
+	// lastClaimed is the target the runner last claimed, at lastClaimedAt.
+	// A reward code push is attributed to it, never to current.
+	lastClaimed   *plan.Target
+	lastClaimedAt time.Time
 
 	// Per-watch safeguards (watch.go).
 	stalled          map[string]time.Time // channel -> cooldown end
@@ -230,13 +238,13 @@ func (r *Runner) pick(ctx context.Context) error {
 	}
 
 	r.mu.Lock()
+	// A fresh pick retries every campaign: start keeps its own no-stream set
+	// while it walks the queue, so a campaign offline earlier is not starved.
+	r.noStream = map[string]bool{}
 	var next *plan.Target
-	for i := range res.Queue {
-		if !r.noStream[res.Queue[i].Campaign.ID] {
-			t := res.Queue[i]
-			next = &t
-			break
-		}
+	if len(res.Queue) > 0 {
+		t := res.Queue[0]
+		next = &t
 	}
 	if next != nil {
 		r.current = next
@@ -251,7 +259,6 @@ func (r *Runner) pick(ctx context.Context) error {
 	}
 	r.current = nil
 	r.clearWatchViewLocked()
-	r.noStream = map[string]bool{}
 	awaiting := false
 	if len(res.Queue) == 0 {
 		for _, b := range res.Blocked {
@@ -272,7 +279,7 @@ func (r *Runner) pick(ctx context.Context) error {
 
 // scan lists campaigns, reads the inventory (unless the caller already has
 // it), builds the plan and stores the queue. It calls OnScan with the result,
-// or with Err set when the campaign list fails. It never touches current, the
+// or with Err set when the campaign list or the claim log read fails. It never touches current, the
 // watch handle or the state.
 func (r *Runner) scan(ctx context.Context, progress []platform.Progress, haveProgress bool) (plan.Result, error) {
 	// Stamped before the call so a failed scan also waits rescanEvery.
@@ -287,12 +294,14 @@ func (r *Runner) scan(ctx context.Context, progress []platform.Progress, havePro
 		return plan.Result{}, err
 	}
 	inventoryOK := haveProgress
+	inventoryErr := ""
 	if !haveProgress {
 		progress = nil
 		if len(camps) > 0 {
 			p, err := r.cfg.Backend.InventoryProgress(ctx, r.cfg.Session)
 			if err != nil {
 				slog.Warn("runner inventory failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
+				inventoryErr = err.Error()
 			} else {
 				progress = p
 				inventoryOK = true
@@ -309,7 +318,14 @@ func (r *Runner) scan(ctx context.Context, progress []platform.Progress, havePro
 	if r.cfg.Claims != nil {
 		m, err := r.cfg.Claims.ClaimedBenefitIDs(ctx, r.cfg.AccountID)
 		if err != nil {
+			// Planning without the log could re-queue a just-claimed drop:
+			// fail the scan and keep the previous queue.
 			slog.Warn("runner claim log read failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
+			err = fmt.Errorf("claim log: %w", err)
+			if r.cfg.OnScan != nil {
+				r.cfg.OnScan(ctx, Scan{AccountID: r.cfg.AccountID, Platform: r.cfg.Platform, At: time.Now(), Err: err})
+			}
+			return plan.Result{}, err
 		}
 		claimed = m
 	}
@@ -344,7 +360,7 @@ func (r *Runner) scan(ctx context.Context, progress []platform.Progress, havePro
 		r.cfg.OnScan(ctx, Scan{
 			AccountID: r.cfg.AccountID, Platform: r.cfg.Platform, At: now,
 			Campaigns: camps, Progress: progress, InventoryOK: inventoryOK,
-			Logged: claimed, Result: res,
+			InventoryErr: inventoryErr, Logged: claimed, Result: res,
 		})
 	}
 	return res, nil

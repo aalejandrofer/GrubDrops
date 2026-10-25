@@ -151,28 +151,33 @@ func (r *Runner) onStreamDown(channelID string) {
 	r.setState(context.Background(), StateStarting)
 }
 
-// onRewardCode logs a redemption code and stores it against the current
-// benefit. Without a current benefit it is logged only.
-func (r *Runner) onRewardCode(notificationID, code, _ string) {
+// onRewardCode logs a redemption code and stores it against the target the
+// runner last claimed, if that claim is under rewardCodeWindow old. It never
+// uses current: after a claim, current is already the next drop.
+func (r *Runner) onRewardCode(notificationID, code, title string) {
 	r.mu.Lock()
-	var cur *plan.Target
-	var benefit platform.DropBenefit
-	if r.current != nil {
-		t := *r.current
-		cur = &t
-		benefit = t.Benefit
+	var claimed *plan.Target
+	if r.lastClaimed != nil && time.Since(r.lastClaimedAt) <= rewardCodeWindow {
+		t := *r.lastClaimed
+		claimed = &t
 	}
 	r.mu.Unlock()
+	if claimed == nil {
+		slog.Info("runner reward code with no recent claim; not recorded", "kind", "claim",
+			"account", r.cfg.AccountID, "notification_id", notificationID, "code", code, "title", title)
+		return
+	}
+	benefit := claimed.Benefit
 	slog.Info("runner reward code captured", "kind", "claim", "account", r.cfg.AccountID,
 		"notification_id", notificationID, "code", code,
 		"benefit_id", benefit.ID, "benefit_name", benefit.Name)
-	if r.cfg.Claims == nil || cur == nil || benefit.ID == "" {
+	if r.cfg.Claims == nil || benefit.ID == "" {
 		return
 	}
 	// Detached: the hook has no run ctx.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := r.cfg.Claims.RecordClaim(ctx, r.cfg.AccountID, *cur, code); err != nil {
+	if err := r.cfg.Claims.RecordClaim(ctx, r.cfg.AccountID, *claimed, code); err != nil {
 		slog.Warn("runner record claim with code failed", "kind", "error",
 			"account", r.cfg.AccountID, "benefit", benefit.ID, "err", err)
 	}
