@@ -231,6 +231,7 @@ func (r *Runner) tick(ctx context.Context) error {
 			r.current.Benefit.InstanceID = p.InstanceID
 		}
 		r.mu.Unlock()
+		r.changed() // polls are the only progress source without PubSub (Kick)
 
 		if p.MinutesWatched >= benefit.RequiredMinutes {
 			r.maybeNotifyProgress(ctx, p.MinutesWatched, benefit.RequiredMinutes)
@@ -267,6 +268,7 @@ func (r *Runner) tick(ctx context.Context) error {
 		n := r.noProgress
 		prev := r.lastMin
 		r.mu.Unlock()
+		r.changed() // LastPollAt moved
 		switch {
 		case n >= vanishThreshold && prev > 0:
 			slog.Info("runner benefit vanished from inventory; treating as externally claimed", "kind", "state",

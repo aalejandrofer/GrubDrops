@@ -279,3 +279,21 @@ func TestShouldNotifyProgress_StepZeroDisables(t *testing.T) {
 		}
 	}
 }
+
+func TestWatch_PollNotifiesOnChange(t *testing.T) {
+	f := platformtest.NewFake() // Kick-style: no PubSub, polls are the only progress source
+	f.Progress["d1"] = &platform.Progress{BenefitID: "d1"}
+	var mins []int
+	r := watching(t, f, func(c *Config) {
+		c.OnChange = func(s Snapshot) {
+			if s.State == StateWatching {
+				mins = append(mins, s.MinutesWatched)
+			}
+		}
+	})
+	mins = nil
+	steps(t, r, 3)
+	if len(mins) < 3 || mins[0] != 1 || mins[1] != 2 || mins[2] != 3 {
+		t.Fatalf("OnChange minutes=%v, want 1,2,3", mins)
+	}
+}
