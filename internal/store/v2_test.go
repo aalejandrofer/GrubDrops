@@ -220,3 +220,18 @@ func TestSkips_SameKeysAs1x(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, got)
 }
+
+func TestChosenGames_SetDedupesKeepsFirst(t *testing.T) {
+	db, q := openV2(t)
+	ctx := context.Background()
+	for _, g := range []string{"g1", "g2"} {
+		require.NoError(t, q.UpsertGame(ctx, gen.UpsertGameParams{ID: g, Name: "Name " + g, Slug: "slug-" + g, Priority: 100}))
+	}
+	c := NewChosenGames(db, q)
+	require.NoError(t, c.Set(ctx, []string{"g2", "g1", "g2"}))
+	got, err := c.List(ctx)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	require.Equal(t, "g2", got[0].ID)
+	require.Equal(t, "g1", got[1].ID)
+}

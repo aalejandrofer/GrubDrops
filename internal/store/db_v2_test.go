@@ -137,3 +137,22 @@ func TestMigration0016_OldTablesUntouched(t *testing.T) {
 		require.Equal(t, n, count(t, db, tbl), tbl)
 	}
 }
+
+func TestOpen_StaleBackupTmpIgnored(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "m.db")
+	seedV15(t, path)
+	require.NoError(t, os.WriteFile(path+".pre-v2.tmp", []byte("partial vacuum garbage"), 0o600))
+
+	db, err := Open(ctx, path)
+	require.NoError(t, err)
+	defer db.Close()
+
+	_, err = os.Stat(path + ".pre-v2.tmp")
+	require.True(t, os.IsNotExist(err), "tmp must be gone")
+	bk := openReadOnly(t, path+".pre-v2")
+	var v int
+	require.NoError(t, bk.QueryRow(`SELECT max(version_id) FROM goose_db_version`).Scan(&v))
+	require.Equal(t, 15, v)
+	require.Equal(t, 1, count(t, bk, "accounts"))
+}

@@ -51,8 +51,9 @@ func Open(ctx context.Context, path string) (*sql.DB, error) {
 }
 
 // backupBeforeV2 writes path+".pre-v2" once, when an existing database is
-// below firstV2Migration. VACUUM INTO is WAL-safe. A failure aborts Open:
-// never migrate without the copy.
+// below firstV2Migration. VACUUM INTO is WAL-safe. It writes a .tmp file and
+// renames it, so a failed or killed vacuum leaves no .pre-v2 and the next boot
+// retries. A failure aborts Open: never migrate without the copy.
 func backupBeforeV2(ctx context.Context, db *sql.DB, path string) error {
 	ver, err := goose.GetDBVersionContext(ctx, db)
 	if err != nil {
@@ -67,8 +68,16 @@ func backupBeforeV2(ctx context.Context, db *sql.DB, path string) error {
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("stat pre-v2 backup: %w", err)
 	}
-	if _, err := db.ExecContext(ctx, "VACUUM INTO '"+strings.ReplaceAll(backup, "'", "''")+"'"); err != nil {
+	tmp := backup + ".tmp"
+	if err := os.Remove(tmp); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove stale pre-v2 tmp: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "VACUUM INTO '"+strings.ReplaceAll(tmp, "'", "''")+"'"); err != nil {
+		_ = os.Remove(tmp)
 		return fmt.Errorf("pre-v2 backup: %w", err)
+	}
+	if err := os.Rename(tmp, backup); err != nil {
+		return fmt.Errorf("pre-v2 backup rename: %w", err)
 	}
 	slog.Info("store pre-v2 backup written", "kind", "state", "path", backup)
 	return nil

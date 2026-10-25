@@ -15,6 +15,10 @@ All notable changes to GrubDrops.
 - v2 runner: a campaign with no live stream moves on to the next queued campaign without rescanning, and swept rewards are recorded in the claim log under their planned game.
 - v2 `collect.Collector`: persists drop states, found claims, scan times and watch minutes from the runner hooks, and serves as the runner claim log.
 
+### Fixed
+
+- v2 store: the pre-v2 backup is written to a `.tmp` file and renamed, so a failed or interrupted backup is retried on the next boot instead of leaving a partial `.pre-v2`.
+
 ### Docs
 
 - Added a warning that GrubDrops is currently not working as expected.

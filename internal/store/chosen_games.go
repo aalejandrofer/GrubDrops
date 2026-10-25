@@ -30,8 +30,9 @@ func (c *ChosenGames) List(ctx context.Context) ([]ChosenGame, error) {
 	return out, nil
 }
 
-// Set replaces the whole list in one transaction, rank = index. An unknown
-// game ID fails on the foreign key and leaves the old list in place.
+// Set replaces the whole list in one transaction. A repeated game ID keeps
+// its first position. An unknown game ID fails on the foreign key and leaves
+// the old list in place.
 func (c *ChosenGames) Set(ctx context.Context, gameIDs []string) error {
 	tx, err := c.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -42,10 +43,15 @@ func (c *ChosenGames) Set(ctx context.Context, gameIDs []string) error {
 	if err := q.ClearChosenGames(ctx); err != nil {
 		return err
 	}
-	for i, id := range gameIDs {
-		if err := q.AddChosenGame(ctx, gen.AddChosenGameParams{GameID: id, Rank: int64(i)}); err != nil {
+	seen := make(map[string]bool, len(gameIDs))
+	for _, id := range gameIDs {
+		if seen[id] {
+			continue
+		}
+		if err := q.AddChosenGame(ctx, gen.AddChosenGameParams{GameID: id, Rank: int64(len(seen))}); err != nil {
 			return err
 		}
+		seen[id] = true
 	}
 	return tx.Commit()
 }
