@@ -122,6 +122,7 @@ func (r *Runner) start(ctx context.Context) error {
 	r.viewers = s.ViewerCount
 	r.startedAt = time.Now()
 	r.tickN = 0
+	r.lastBeatAt = time.Time{}
 	r.noProgress = 0
 	r.noAdvance = 0
 	r.lastMin = 0
@@ -150,6 +151,9 @@ func (r *Runner) tick(ctx context.Context) error {
 	target := *r.current
 	r.tickN++
 	tickN := r.tickN
+	// Stamped before the call so beacons start TickInterval apart, as the
+	// 1.x ticker did.
+	r.lastBeatAt = time.Now()
 	r.mu.Unlock()
 	benefit := target.Benefit
 

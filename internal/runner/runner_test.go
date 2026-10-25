@@ -315,3 +315,142 @@ func TestNextBackoff(t *testing.T) {
 		}
 	}
 }
+
+// runUntil runs r in the background and returns a stop func that cancels it
+// and waits for Run to return.
+func runUntil(t *testing.T, r *Runner) func() {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- r.Run(ctx) }()
+	return func() {
+		cancel()
+		<-done
+	}
+}
+
+// callIndex returns the index of the n-th (1-based) call starting with
+// prefix, or -1.
+func callIndex(f *platformtest.Fake, prefix string, n int) int {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+	seen := 0
+	for i, c := range f.Calls {
+		if len(c) >= len(prefix) && c[:len(prefix)] == prefix {
+			seen++
+			if seen == n {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+func waitFor(cond func() bool, d time.Duration) bool {
+	deadline := time.Now().Add(d)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return true
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return cond()
+}
+
+func TestRunner_FirstBeaconRightAfterStart(t *testing.T) {
+	f := platformtest.NewFake()
+	f.Campaigns = []platform.Campaign{camp("c1", "Rust", "d1")}
+	f.Campaigns[0].Benefits[0].RequiredMinutes = 100000
+	f.Progress["d1"] = &platform.Progress{BenefitID: "d1"}
+	f.Streams["c1"] = []platform.Stream{{Channel: "a", ViewerCount: 1}}
+	r := newRunner(f, func(c *Config) { c.TickInterval = 60 * time.Second })
+	stop := runUntil(t, r)
+	defer stop()
+
+	if !waitFor(func() bool { return f.CallCount("Start:") > 0 }, time.Second) {
+		t.Fatalf("no Start within 1s: %v", f.Calls)
+	}
+	if !waitFor(func() bool { return f.CallCount("Heartbeat:") > 0 }, time.Second) {
+		t.Fatalf("no Heartbeat within 1s of Start: %v", f.Calls)
+	}
+	if s, h := callIndex(f, "Start:", 1), callIndex(f, "Heartbeat:", 1); h < s {
+		t.Fatalf("heartbeat before start: %v", f.Calls)
+	}
+}
+
+func TestRunner_ClaimThenNextDropNoTickWait(t *testing.T) {
+	f := platformtest.NewFake()
+	f.Campaigns = []platform.Campaign{camp("c1", "Rust", "d1", "d2")}
+	f.Campaigns[0].Benefits[0].RequiredMinutes = 1
+	f.Campaigns[0].Benefits[1].RequiredMinutes = 100000
+	f.Progress["d1"] = &platform.Progress{BenefitID: "d1"}
+	f.Streams["c1"] = []platform.Stream{{Channel: "a", ViewerCount: 1}}
+	r := newRunner(f, func(c *Config) { c.TickInterval = 60 * time.Second })
+	stop := runUntil(t, r)
+	defer stop()
+
+	if !waitFor(func() bool { return f.CallCount("Claim:d1") > 0 }, 2*time.Second) {
+		t.Fatalf("d1 not claimed within 2s: %v", f.Calls)
+	}
+	claimAt := time.Now()
+	ok := waitFor(func() bool {
+		c := callIndex(f, "Claim:d1", 1)
+		hb := callIndex(f, "Heartbeat:", 2)
+		return hb > c && c >= 0
+	}, time.Second)
+	if !ok {
+		t.Fatalf("no first beacon on the next drop within 1s of the claim: %v", f.Calls)
+	}
+	if d := time.Since(claimAt); d > time.Second {
+		t.Fatalf("next drop beacon after %v", d)
+	}
+	if s := r.Snapshot(); s.State != StateWatching || s.Current == nil || s.Current.Benefit.ID != "d2" {
+		t.Fatalf("snapshot %+v", s)
+	}
+}
+
+// beatTimes records the wall time of each Heartbeat.
+type beatTimes struct {
+	*platformtest.Fake
+	mu    sync.Mutex
+	times []time.Time
+}
+
+func (b *beatTimes) Heartbeat(ctx context.Context, h platform.WatchHandle) error {
+	b.mu.Lock()
+	b.times = append(b.times, time.Now())
+	b.mu.Unlock()
+	return b.Fake.Heartbeat(ctx, h)
+}
+
+func TestRunner_BeaconCadence(t *testing.T) {
+	const tick = 50 * time.Millisecond
+	f := platformtest.NewFake()
+	f.Campaigns = []platform.Campaign{camp("c1", "Rust", "d1")}
+	f.Campaigns[0].Benefits[0].RequiredMinutes = 100000
+	f.Progress["d1"] = &platform.Progress{BenefitID: "d1"}
+	f.Streams["c1"] = []platform.Stream{{Channel: "a", ViewerCount: 1}}
+	bt := &beatTimes{Fake: f}
+	r := New(Config{AccountID: "acc", Platform: "kick", Backend: bt, Games: rustGames, TickInterval: tick})
+	stop := runUntil(t, r)
+	if !waitFor(func() bool {
+		bt.mu.Lock()
+		defer bt.mu.Unlock()
+		return len(bt.times) >= 6
+	}, 3*time.Second) {
+		stop()
+		t.Fatal("too few heartbeats")
+	}
+	stop()
+	if n := f.CallCount("Start:"); n != 1 {
+		t.Fatalf("watch restarted (%d starts), cadence check invalid: %v", n, f.Calls)
+	}
+	bt.mu.Lock()
+	defer bt.mu.Unlock()
+	// 1ms slack covers the gap between stamping the beacon and entering the fake.
+	for i := 1; i < len(bt.times); i++ {
+		if d := bt.times[i].Sub(bt.times[i-1]); d < tick-time.Millisecond {
+			t.Fatalf("beacons %d and %d %v apart, want >= %v", i-1, i, d, tick)
+		}
+	}
+}

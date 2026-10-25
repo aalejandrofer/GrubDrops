@@ -42,6 +42,8 @@ type Runner struct {
 	startedAt  time.Time
 	lastPollAt time.Time
 	lastScanAt time.Time
+	lastBeatAt time.Time     // when the current watch last beaconed; zero = not yet
+	wake       chan struct{} // signalled on every state change, cap 1
 	queue      []plan.Target
 	blocked    []plan.Blocked
 	skipped    map[string]bool
@@ -92,6 +94,7 @@ func New(cfg Config) *Runner {
 		skipped:  map[string]bool{},
 		noStream: map[string]bool{},
 		stalled:  map[string]time.Time{},
+		wake:     make(chan struct{}, 1),
 
 		lastMilestone: -1,
 	}
@@ -162,6 +165,12 @@ func (r *Runner) setState(ctx context.Context, s State) {
 	prev := r.state
 	r.state = s
 	r.mu.Unlock()
+	if s != prev {
+		select {
+		case r.wake <- struct{}{}:
+		default:
+		}
+	}
 	slog.Info("runner state change",
 		"kind", "state", "account", r.cfg.AccountID, "state", string(s), "prev", string(prev))
 	if r.cfg.Notifier != nil {
@@ -354,9 +363,15 @@ func nextBackoff(cur time.Duration) time.Duration {
 }
 
 // Run drives step until ctx ends or a step needs user action.
+//
+// Transitions run back to back: a step that changed state (pick to start,
+// start to watching, watching to claiming, claim to pick, any rotation) is
+// followed at once by the next step, so no drop waits a beacon interval
+// between pick, start, first beacon and claim. Only watching waits, and only
+// for the next beacon: the first beacon of a watch goes out right after
+// StartWatch, later ones every TickInterval. A step that left a non-watching
+// state unchanged waits TickInterval so it cannot spin.
 func (r *Runner) Run(ctx context.Context) error {
-	t := time.NewTicker(r.cfg.TickInterval)
-	defer t.Stop()
 	backoff := time.Duration(0)
 
 	exit := func() error {
@@ -367,7 +382,12 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 
 	for {
+		if ctx.Err() != nil {
+			return exit()
+		}
+		before := r.State()
 		err := r.step(ctx)
+		after := r.State()
 		switch {
 		case err == nil:
 			backoff = 0
@@ -396,26 +416,57 @@ func (r *Runner) Run(ctx context.Context) error {
 			r.stopWatch(sctx)
 			cancel()
 			r.setState(ctx, StatePicking)
+			if !r.wait(ctx, backoff, StatePicking) {
+				return exit()
+			}
+			continue
 		}
 
-		var wait <-chan time.Time
-		var btimer *time.Timer
-		if backoff == 0 {
-			wait = t.C
-		} else {
-			btimer = time.NewTimer(backoff)
-			wait = btimer.C
+		var d time.Duration
+		switch {
+		case after == StateWatching:
+			d = r.untilNextBeat()
+		case after != before:
+			continue
+		default:
+			d = r.cfg.TickInterval
 		}
+		if !r.wait(ctx, d, after) {
+			return exit()
+		}
+	}
+}
+
+// untilNextBeat is the time left before the current watch may beacon again.
+// Zero before the first beacon of a watch.
+func (r *Runner) untilNextBeat() time.Duration {
+	r.mu.Lock()
+	last := r.lastBeatAt
+	r.mu.Unlock()
+	if last.IsZero() {
+		return 0
+	}
+	return time.Until(last.Add(r.cfg.TickInterval))
+}
+
+// wait sleeps d, returning early when the state moves off st (a PubSub claim
+// or stream-down push). It returns false when ctx ends.
+func (r *Runner) wait(ctx context.Context, d time.Duration, st State) bool {
+	if d <= 0 {
+		return ctx.Err() == nil
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	for {
 		select {
 		case <-ctx.Done():
-			if btimer != nil {
-				btimer.Stop()
+			return false
+		case <-timer.C:
+			return true
+		case <-r.wake:
+			if r.State() != st {
+				return true
 			}
-			return exit()
-		case <-wait:
-		}
-		if btimer != nil {
-			btimer.Stop()
 		}
 	}
 }
