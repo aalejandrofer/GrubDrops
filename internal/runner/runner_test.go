@@ -240,3 +240,71 @@ func TestRunner_RunBacksOffAndRecovers(t *testing.T) {
 		t.Fatalf("Run=%v", err)
 	}
 }
+
+func TestRunner_IdleKeepsStateDuringWait(t *testing.T) {
+	old := recheckInterval
+	recheckInterval = 150 * time.Millisecond
+	t.Cleanup(func() { recheckInterval = old })
+
+	f := platformtest.NewFake() // no campaigns -> sleeping
+	var mu sync.Mutex
+	type ev struct {
+		s State
+		t time.Time
+	}
+	var evs []ev
+	r := newRunner(f, func(c *Config) {
+		c.TickInterval = time.Millisecond
+		c.OnChange = func(s Snapshot) {
+			mu.Lock()
+			evs = append(evs, ev{s.State, time.Now()})
+			mu.Unlock()
+		}
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- r.Run(ctx) }()
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		mu.Lock()
+		n := len(evs)
+		mu.Unlock()
+		if n >= 2 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if st := r.State(); st != StateSleeping && st != StatePicking {
+		t.Fatal(st)
+	}
+	cancel()
+	<-done
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(evs) < 2 || evs[0].s != StateSleeping || evs[1].s != StatePicking {
+		t.Fatalf("events=%v", evs)
+	}
+	if d := evs[1].t.Sub(evs[0].t); d < recheckInterval {
+		t.Fatalf("picking set after %v, want >= %v", d, recheckInterval)
+	}
+}
+
+func TestNextBackoff(t *testing.T) {
+	old := stepErrBackoff
+	stepErrBackoff = 5 * time.Second
+	t.Cleanup(func() { stepErrBackoff = old })
+	d := time.Duration(0)
+	var got []time.Duration
+	for range 9 {
+		d = nextBackoff(d)
+		got = append(got, d)
+	}
+	want := []time.Duration{5, 10, 20, 40, 80, 160, 300, 300, 300}
+	for i := range want {
+		if got[i] != want[i]*time.Second {
+			t.Fatalf("step %d: %v want %vs", i, got[i], want[i])
+		}
+	}
+}

@@ -349,6 +349,14 @@ func (r *Runner) selfHeal(progress []platform.Progress) {
 	}
 }
 
+// nextBackoff returns stepErrBackoff for 0, else doubles cur up to maxBackoff.
+func nextBackoff(cur time.Duration) time.Duration {
+	if cur == 0 {
+		return stepErrBackoff
+	}
+	return min(cur*2, maxBackoff)
+}
+
 // Run drives step until ctx ends or a step needs user action.
 func (r *Runner) Run(ctx context.Context) error {
 	t := time.NewTicker(r.cfg.TickInterval)
@@ -371,7 +379,6 @@ func (r *Runner) Run(ctx context.Context) error {
 			return nil
 		case errors.Is(err, errIdle):
 			backoff = 0
-			r.setState(ctx, StatePicking)
 			timer := time.NewTimer(recheckInterval)
 			select {
 			case <-ctx.Done():
@@ -379,16 +386,13 @@ func (r *Runner) Run(ctx context.Context) error {
 				return exit()
 			case <-timer.C:
 			}
+			r.setState(ctx, StatePicking)
 			continue
 		default:
 			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
 				return exit()
 			}
-			if backoff == 0 {
-				backoff = stepErrBackoff
-			} else {
-				backoff = min(backoff*2, maxBackoff)
-			}
+			backoff = nextBackoff(backoff)
 			slog.Warn("runner step error; retrying after backoff",
 				"kind", "error", "account", r.cfg.AccountID, "state", string(r.State()),
 				"backoff", backoff, "err", err)
