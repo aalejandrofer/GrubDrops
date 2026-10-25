@@ -4,6 +4,10 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Added
+
+- v2 planner (`internal/plan`) and per-account runner + pool (`internal/runner`), replacing the watcher and scheduler. Not wired in yet (rebuild/v2).
+
 ### Docs
 
 - Added a warning that GrubDrops is currently not working as expected.
