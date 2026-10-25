@@ -14,25 +14,22 @@ import (
 // means no enabled Kick account has a usable session right now.
 type kickSessionSource func(ctx context.Context) (string, platform.Session, bool, error)
 
-// KickScraper reuses the chromedp sidecar (via the existing kick.Backend)
-// to enumerate active drop campaigns. Per ref_kickdropsminer.md, Kick is
-// browser-only — Cloudflare's JS challenge defeats every pure-HTTP path
-// — so a working sidecar is non-negotiable. When the sidecar isn't
-// configured (GRUB_BROWSER_URL empty) the registry never registers a
-// Kick backend, so this Scraper's Backend is nil and Scrape no-ops.
+// KickScraper enumerates active drop campaigns through the shared kick.Backend
+// (pure-HTTP utls client; the chromedp sidecar is no longer used for Kick
+// data — Kick's API 403s CDP browsers but accepts the Chrome TLS fingerprint).
+// The backend needs no sidecar, but the registry only registers it when a
+// Kick account exists, so a nil Backend still means "graceful no-op".
 //
 // Like TwitchScraper we borrow ONE enabled Kick account's session (the
-// first ListEnabledAccounts row whose platform is "kick"). The session
-// pins the Cloudflare cookie + xsrf token the sidecar needs to land on
-// kick.com without tripping the challenge. Without any Kick account
-// logged in we cannot scrape — Cloudflare will block the navigation.
+// first ListEnabledAccounts row whose platform is "kick") — the authed
+// /api/v1/drops/campaigns call needs its cookies.
 //
-// Whitelist note: kick.Backend.ListActiveCampaigns scrapes
-// https://kick.com/drops via the sidecar and surfaces every active
-// drop campaign Kick advertises, regardless of game. The per-account
-// GameFilter on the session prunes results down to whitelisted games
-// inside the backend (and we re-apply the same filter here as a
-// belt-and-suspenders guard).
+// Whitelist note: the session's GameFilter (built from the whitelist union)
+// makes the backend emit non-whitelisted campaigns as SHELL rows — status +
+// game + name, no Benefits — exactly like the Twitch scraper. Those shells
+// persist to the campaigns table so the /drops Discoverable tab can list
+// them and the user can opt the game in; the watcher's own AllowGame keeps
+// them out of mining.
 type KickScraper struct {
 	Backend platform.Backend
 	Source  kickSessionSource
@@ -76,8 +73,8 @@ func (s *KickScraper) Name() string { return "kick" }
 
 func (s *KickScraper) Scrape(ctx context.Context, whitelist []string) ([]platform.Campaign, error) {
 	if s == nil || s.Backend == nil || s.Source == nil {
-		// No sidecar configured (GRUB_BROWSER_URL empty) — graceful
-		// no-op so the Scraper just logs once and continues.
+		// No Kick backend registered — graceful no-op so the Scraper just
+		// logs once and continues.
 		return nil, nil
 	}
 	accountID, sess, ok, err := s.Source(ctx)
@@ -85,15 +82,13 @@ func (s *KickScraper) Scrape(ctx context.Context, whitelist []string) ([]platfor
 		return nil, fmt.Errorf("kick scraper: load session: %w", err)
 	}
 	if !ok {
-		// No Kick account logged in — Cloudflare will reject the
-		// sidecar navigation, so don't even try.
+		// No Kick account logged in — nothing to scrape with.
 		return nil, nil
 	}
 	if accountID != "" {
 		sess.AccountID = accountID
 	}
-	allow := buildAllowList(whitelist)
-	sess.GameFilter = allow
+	sess.GameFilter = buildAllowList(whitelist)
 
 	camps, err := s.Backend.ListActiveCampaigns(ctx, sess)
 	if err != nil {
@@ -102,11 +97,10 @@ func (s *KickScraper) Scrape(ctx context.Context, whitelist []string) ([]platfor
 		}
 		return nil, fmt.Errorf("kick ListActiveCampaigns: %w", err)
 	}
-	out := make([]platform.Campaign, 0, len(camps))
-	for _, c := range camps {
-		if allow(c.Game) {
-			out = append(out, c)
-		}
-	}
-	return out, nil
+	// Emit every campaign the backend returned — whitelisted with full
+	// benefits, non-whitelisted as shell rows (Benefits empty, set by
+	// ListActiveCampaigns when GameFilter rejected the game). The /drops
+	// Discoverable tab consumes the shell rows; the watcher's mining loop
+	// ignores them via its own AllowGame check.
+	return camps, nil
 }
