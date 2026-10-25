@@ -69,12 +69,20 @@ func (c *Collector) OnScan(ctx context.Context, s runner.Scan) {
 		}
 	}
 	scan := store.AccountScan{AccountID: s.AccountID, ScannedAt: s.At}
+	if !s.InventoryOK && s.InventoryErr != "" {
+		scan.Error = "inventory: " + s.InventoryErr
+	}
 	if s.InventoryOK || len(s.Campaigns) == 0 {
 		rows := Derive(s, now)
 		c.mu.Lock()
 		if err := c.States.Replace(ctx, s.AccountID, rows); err != nil {
 			c.mu.Unlock()
 			c.logErr("collect: replace drop states failed", s.AccountID, err)
+			// Old rows stay, so ReconciledAt stays too.
+			scan.Error = "drop states: " + err.Error()
+			if err := c.Scans.Put(ctx, scan); err != nil {
+				c.logErr("collect: record scan failed", s.AccountID, err)
+			}
 			return
 		}
 		cache := make(map[string]store.DropState, len(rows))
@@ -163,4 +171,13 @@ func (c *Collector) RecordClaim(ctx context.Context, accountID string, t plan.Ta
 
 func (c *Collector) ClaimedBenefitIDs(ctx context.Context, accountID string) (map[string]bool, error) {
 	return c.Claims.ClaimedBenefitIDs(ctx, accountID)
+}
+
+// Forget drops an account's board scan and cached drop states, e.g. after
+// the account is deleted. Stored rows go with the account's cascade.
+func (c *Collector) Forget(accountID string) {
+	c.Board.Forget(accountID)
+	c.mu.Lock()
+	delete(c.last, accountID)
+	c.mu.Unlock()
 }

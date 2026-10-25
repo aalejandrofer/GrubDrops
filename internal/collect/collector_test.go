@@ -96,7 +96,7 @@ func TestCollector_InventoryFailureKeepsStates(t *testing.T) {
 	c.OnScan(ctx, cbaseScan())
 	later := cscanAt.Add(time.Hour)
 	s := cbaseScan()
-	s.At, s.InventoryOK = later, false
+	s.At, s.InventoryOK, s.InventoryErr = later, false, "inventory down"
 	s.Result = plan.Result{Queue: []plan.Target{ctarget("b1", 60, 0), ctarget("b2", 60, 0)}}
 	c.OnScan(ctx, s)
 	st := statesByBenefit(t, c)
@@ -106,6 +106,38 @@ func TestCollector_InventoryFailureKeepsStates(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, scans[0].ScannedAt.Equal(later))
 	require.True(t, scans[0].ReconciledAt.Equal(cscanAt))
+	require.Equal(t, "inventory: inventory down", scans[0].Error)
+}
+
+func TestCollector_ReplaceFailureStillRecordsScan(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	c.OnScan(ctx, cbaseScan())
+	_, err := c.States.DB.ExecContext(ctx, `CREATE TRIGGER ds_fail BEFORE INSERT ON drop_states BEGIN SELECT RAISE(ABORT, 'nope'); END`)
+	require.NoError(t, err)
+	later := cscanAt.Add(time.Hour)
+	s := cbaseScan()
+	s.At = later
+	c.OnScan(ctx, s)
+	scans, err := c.Scans.List(ctx)
+	require.NoError(t, err)
+	require.Len(t, scans, 1)
+	require.True(t, scans[0].ScannedAt.Equal(later))
+	require.True(t, scans[0].ReconciledAt.Equal(cscanAt))
+	require.Contains(t, scans[0].Error, "drop states: ")
+	require.Len(t, statesByBenefit(t, c), 2)
+}
+
+func TestCollector_Forget(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	c.OnScan(ctx, cbaseScan())
+	c.Forget("a1")
+	g := c.Board.Games([]plan.Game{{Name: "Rust", Slug: "rust"}})
+	require.Empty(t, g[0].Campaigns)
+	// the cache is gone too, so progress writes nothing
+	c.OnProgress(ctx, "a1", []platform.Progress{{BenefitID: "b1", MinutesWatched: 50}})
+	require.Equal(t, 30, statesByBenefit(t, c)["b1"].Minutes)
 }
 
 func TestCollector_NoCampaignsClearsStates(t *testing.T) {
@@ -237,8 +269,27 @@ func TestCollector_ConcurrentHooks(t *testing.T) {
 	c := newCollector(t)
 	ctx := context.Background()
 	c.OnScan(ctx, cbaseScan())
+	now := time.Now().Unix()
+	_, err := c.Scans.Q.CreateAccount(ctx, gen.CreateAccountParams{
+		ID: "a2", Platform: "twitch", DisplayName: "a2", Status: "idle",
+		FingerprintJson: "{}", Enabled: 1, CreatedAt: now, UpdatedAt: now,
+	})
+	require.NoError(t, err)
 	const workers, n = 4, 50
 	var wg sync.WaitGroup
+	for _, acc := range []string{"a1", "a2"} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < n; i++ {
+				s := cbaseScan()
+				s.AccountID = acc
+				s.At = cscanAt.Add(time.Duration(i) * time.Second)
+				c.OnScan(ctx, s)
+				_ = c.Board.Games([]plan.Game{{Name: "Rust", Slug: "rust"}})
+			}
+		}()
+	}
 	for w := 0; w < workers; w++ {
 		wg.Add(1)
 		go func() {
