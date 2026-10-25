@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops · 03 Drop board</title>
+<link rel="stylesheet" href="../_assets/base.css">
+<style>
+  .app { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100vh; }
+
+  /* Sidebar */
+  .side { border-right: 1px solid var(--border-soft); background: var(--bg); padding: 14px 10px; display: flex; flex-direction: column; gap: 18px; position: sticky; top: 0; height: 100vh; }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 4px 8px; font-weight: 600; font-size: 14px; }
+  .brand img { width: 22px; height: 22px; border-radius: 5px; }
+  .nav { display: flex; flex-direction: column; gap: 1px; }
+  .nav a { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; color: var(--muted); font-size: 13px; font-weight: 500; }
+  .nav a:hover { background: var(--surface); color: var(--text); }
+  .nav a.on { background: var(--surface-2); color: var(--text); }
+  .nav svg { width: 16px; height: 16px; flex: none; }
+  .nav .count { margin-left: auto; font: 11px var(--mono); color: var(--red); background: var(--red-soft); padding: 0 6px; border-radius: 10px; }
+  .side-label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; padding: 0 8px 6px; font-weight: 600; }
+  .games a { display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: 13px; color: var(--muted); border-radius: 6px; }
+  .games a:hover { background: var(--surface); color: var(--text); }
+  .games .rank { font: 11px var(--mono); color: var(--dim); width: 12px; }
+  .games .st { margin-left: auto; width: 6px; height: 6px; border-radius: 50%; }
+  .side-foot { margin-top: auto; padding: 8px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+
+  /* Main */
+  main { padding: 20px 28px 64px; min-width: 0; }
+  .head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .head h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+  .head .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .head .sub b { color: var(--text); font-weight: 500; }
+  .crumbs { color: var(--dim); font-size: 12px; font-family: var(--mono); }
+
+  .board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+  .col { background: var(--surface); border: 1px solid var(--border-soft); border-radius: 10px; padding: 10px; min-width: 0; }
+  .col-h { display: flex; align-items: center; gap: 8px; padding: 2px 4px 10px; font-size: 13px; font-weight: 600; }
+  .col-h .n { font: 11px var(--mono); color: var(--muted); background: var(--surface-3); border-radius: 10px; padding: 0 6px; }
+  .col-h svg { width: 14px; height: 14px; }
+  .col-h .meta { margin-left: auto; font-size: 12px; color: var(--dim); font-weight: 400; }
+  .stack { display: flex; flex-direction: column; gap: 8px; }
+
+  .card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .card:hover { border-color: #3d444d; }
+  .card .t { font-size: 13px; font-weight: 500; line-height: 1.35; }
+  .card .c { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .row .r { margin-left: auto; font-family: var(--mono); font-size: 11px; }
+  .acct { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); background: var(--surface-3); border-radius: 4px; padding: 1px 6px 1px 5px; }
+  .pm { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+  .pm.tw { background: var(--twitch); }
+  .pm.kk { background: var(--kick); }
+  .bar { height: 4px; border-radius: 2px; background: var(--surface-3); margin-top: 10px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted); }
+  .tag.live { color: var(--green); border-color: rgba(63,185,80,.35); }
+  .tag.wait { color: var(--amber); border-color: rgba(210,153,34,.35); }
+
+  /* Pinned problem card */
+  .card.problem { background: var(--red-soft); border-color: rgba(248,81,73,.45); position: relative; }
+  .card.problem .pin { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--red); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+  .card.problem .pin svg { width: 12px; height: 12px; }
+  .card.problem .c { color: #f0a8a3; }
+  .fix { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; font-weight: 500; background: var(--red); color: #fff; border: 0; border-radius: 6px; padding: 4px 10px; }
+  .fix:hover { background: #ff6a62; }
+  .fix svg { width: 12px; height: 12px; }
+
+  .card.muted { background: transparent; border-style: dashed; }
+  .card.muted .t { color: var(--muted); }
+  .divider { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; padding: 6px 4px 0; font-weight: 600; }
+  .check { width: 14px; height: 14px; color: var(--green); flex: none; }
+  .claim { display: flex; gap: 10px; align-items: flex-start; }
+  .col-foot { display: block; margin-top: 10px; padding: 6px 4px 2px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border-soft); }
+  .col-foot:hover { color: var(--accent); }
+
+  @media (max-width: 1000px) {
+    .board { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .col.claimed { grid-column: 1 / -1; }
+  }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: minmax(0, 1fr); }
+    .side { position: static; height: auto; flex-direction: row; align-items: center; padding: 10px 16px; gap: 10px; border-right: 0; border-bottom: 1px solid var(--border-soft); }
+    .brand span, .side-games, .side-foot { display: none; }
+    .brand { padding: 0; }
+    .nav { flex-direction: row; gap: 2px; overflow: hidden; }
+    .nav a { padding: 6px 8px; }
+    .nav a .lbl { display: none; }
+    .nav a.on .lbl { display: inline; }
+    main { padding: 16px 16px 72px; }
+    .board { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><img src="../_assets/logo.png" alt=""><span>GrubDrops</span></div>
+    <nav class="nav">
+      <a href="#" class="on"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2.5" width="3.5" height="11" rx="1"/><rect x="6.25" y="2.5" width="3.5" height="7" rx="1"/><rect x="10.5" y="2.5" width="3.5" height="9" rx="1"/></svg><span class="lbl">Home</span></a>
+      <a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.75" y="4.5" width="12.5" height="7.5" rx="3"/><path d="M5 7v2M4 8h2M10.5 7.5h.01M12 9h.01" stroke-linecap="round"/></svg><span class="lbl">Games</span></a>
+      <a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="12" height="8" rx="1"/><path d="M1.5 4h13v2h-13zM8 4v10M8 4C6.5 1.5 4 2 4.5 3.5 5 4 8 4 8 4zM8 4c1.5-2.5 4-2 3.5-.5C11 4 8 4 8 4z" stroke-linejoin="round"/></svg><span class="lbl">Rewards</span></a>
+      <a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.25"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" stroke-linecap="round"/></svg><span class="lbl">Settings</span><span class="count">1</span></a>
+    </nav>
+    <div class="side-games">
+      <div class="side-label">Your games</div>
+      <div class="games">
+        <a href="#"><span class="rank">1</span>Rust<span class="st" style="background:var(--green)"></span></a>
+        <a href="#"><span class="rank">2</span>Marvel Rivals<span class="st" style="background:var(--amber)"></span></a>
+        <a href="#"><span class="rank">3</span>Overwatch<span class="st" style="background:var(--dim)"></span></a>
+      </div>
+    </div>
+    <div class="side-foot"><span class="pulse"></span>Running · 2 of 3 mining</div>
+  </aside>
+
+  <main>
+    <div class="head">
+      <div>
+        <h1>Drop board</h1>
+        <div class="sub"><b>Mining Rust on 2 accounts.</b> Next drop in 18 min.</div>
+      </div>
+      <div class="crumbs">updated just now</div>
+    </div>
+
+    <div class="board">
+      <!-- Mining -->
+      <section class="col">
+        <div class="col-h">
+          <svg viewBox="0 0 16 16" fill="none" stroke="var(--accent)" stroke-width="1.6"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 1 6 6" stroke-linecap="round"/></svg>
+          Mining <span class="n">2</span>
+        </div>
+        <div class="stack">
+          <article class="card problem">
+            <div class="pin"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 1.5 11 10.5H1z" stroke-linejoin="round"/><path d="M6 5v2.5M6 9h.01" stroke-linecap="round"/></svg>Needs you</div>
+            <div class="t">grub_alt can't mine</div>
+            <div class="c">Twitch session expired. Log in again to resume.</div>
+            <button class="fix"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 6a4 4 0 1 1-1.2-2.85M10 1.5v2.5H7.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Re-login</button>
+          </article>
+
+          <article class="card">
+            <div class="t">Hazmat Suit Skin</div>
+            <div class="c">Rust · Twitch Drops Round 41</div>
+            <div class="bar"><i style="width:70%"></i></div>
+            <div class="row"><span class="acct"><span class="pm tw"></span>grubfan</span>on hJune<span class="r">42/60 · 18m</span></div>
+          </article>
+
+          <article class="card">
+            <div class="t">Kick Garage Door</div>
+            <div class="c">Rust · Kick</div>
+            <div class="bar"><i style="width:79%"></i></div>
+            <div class="row"><span class="acct"><span class="pm kk"></span>grubfan_kick</span>on posty<span class="r">95/120 · 25m</span></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- Up next -->
+      <section class="col">
+        <div class="col-h">
+          <svg viewBox="0 0 16 16" fill="none" stroke="var(--muted)" stroke-width="1.6"><circle cx="8" cy="8" r="6" stroke-dasharray="2.5 2.2"/></svg>
+          Up next <span class="n">3</span>
+        </div>
+        <div class="stack">
+          <article class="card">
+            <div class="t">2 more Rust drops</div>
+            <div class="c">Queued in Round 41 after Hazmat Suit Skin</div>
+            <div class="row"><span class="acct"><span class="pm tw"></span>grubfan</span><span class="r">after 18m</span></div>
+          </article>
+          <article class="card">
+            <div class="t">Marvel Rivals</div>
+            <div class="c">Campaign live. Waits until Rust is done.</div>
+            <div class="row"><span class="tag wait">Waiting</span><span class="r">priority 2</span></div>
+          </article>
+          <article class="card muted">
+            <div class="t">Overwatch</div>
+            <div class="c">No campaign live right now.</div>
+            <div class="row"><span class="tag">Idle</span><span class="r">priority 3</span></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- Claimed today -->
+      <section class="col claimed">
+        <div class="col-h">
+          <svg viewBox="0 0 16 16" fill="none" stroke="var(--green)" stroke-width="1.6"><circle cx="8" cy="8" r="6"/><path d="m5.3 8.2 1.8 1.8 3.6-3.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Claimed today <span class="n">2</span>
+          <span class="meta">27 all time</span>
+        </div>
+        <div class="stack">
+          <article class="card">
+            <div class="claim">
+              <svg class="check" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m3 7.3 2.6 2.6L11 4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <div style="min-width:0;flex:1">
+                <div class="t">Rust Wood Box Skin</div>
+                <div class="c">Rust · 09:12</div>
+              </div>
+            </div>
+          </article>
+          <article class="card">
+            <div class="claim">
+              <svg class="check" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m3 7.3 2.6 2.6L11 4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <div style="min-width:0;flex:1">
+                <div class="t">Marvel Rivals Spray</div>
+                <div class="c">Marvel Rivals · 07:40</div>
+              </div>
+            </div>
+          </article>
+          <div class="divider">Yesterday</div>
+          <article class="card muted">
+            <div class="claim">
+              <svg class="check" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--dim)"><path d="m3 7.3 2.6 2.6L11 4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <div style="min-width:0;flex:1">
+                <div class="t">Kick Rust Hoodie</div>
+                <div class="c">Rust · 22:05</div>
+              </div>
+            </div>
+          </article>
+        </div>
+        <a href="#" class="col-foot">All rewards</a>
+      </section>
+    </div>
+  </main>
+</div>
+<div class="mock-tag">03 · Drop board · <a href="../">all mockups</a></div>
+</body>
+</html>

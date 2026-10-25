@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops · r2 03 Drop flow · Games</title>
+<link rel="stylesheet" href="../_assets/base.css">
+<style>
+  .app { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100vh; }
+
+  /* Sidebar */
+  .side { border-right: 1px solid var(--border-soft); background: var(--bg); padding: 14px 10px; display: flex; flex-direction: column; gap: 18px; position: sticky; top: 0; height: 100vh; }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 4px 8px; font-weight: 600; font-size: 14px; }
+  .brand img { width: 22px; height: 22px; border-radius: 5px; }
+  .nav { display: flex; flex-direction: column; gap: 1px; }
+  .nav a { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; color: var(--muted); font-size: 13px; font-weight: 500; }
+  .nav a:hover { background: var(--surface); color: var(--text); }
+  .nav a.on { background: var(--surface-2); color: var(--text); }
+  .nav svg { width: 16px; height: 16px; flex: none; }
+  .nav .count { margin-left: auto; font: 11px var(--mono); color: var(--red); background: var(--red-soft); padding: 0 6px; border-radius: 10px; }
+  .side-label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; padding: 0 8px 6px; font-weight: 600; }
+  .games-mini a { display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: 13px; color: var(--muted); border-radius: 6px; }
+  .games-mini a:hover { background: var(--surface); color: var(--text); }
+  .games-mini .rank { font: 11px var(--mono); color: var(--dim); width: 12px; }
+  .games-mini .st { margin-left: auto; width: 6px; height: 6px; border-radius: 50%; }
+  .side-foot { margin-top: auto; padding: 8px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); flex: none; }
+
+  /* Main */
+  main { padding: 20px 28px 72px; min-width: 0; max-width: 1180px; }
+  .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+  .head h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+  .head .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .head .sub b { color: var(--text); font-weight: 500; }
+  .crumbs { color: var(--dim); font-size: 12px; font-family: var(--mono); }
+
+  /* Section heading: a label, not a column header */
+  .sec { margin-top: 26px; min-width: 0; }
+  .sec:first-of-type { margin-top: 0; }
+  .sec-h { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; min-height: 26px; flex-wrap: wrap; }
+  .sec-h h2 { margin: 0; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .sec-h h2 svg { width: 14px; height: 14px; flex: none; }
+  .sec-h .meta { font-size: 12px; color: var(--dim); }
+  .sec-h .end { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .n { font: 11px var(--mono); color: var(--muted); background: var(--surface-3); border-radius: 10px; padding: 0 6px; }
+
+  .panel { background: var(--surface); border: 1px solid var(--border-soft); border-radius: 10px; overflow: hidden; }
+  .panel > * + * { border-top: 1px solid var(--border-soft); }
+
+  .acct { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); background: var(--surface-3); border-radius: 4px; padding: 1px 6px 1px 5px; white-space: nowrap; }
+  .pm { width: 8px; height: 8px; border-radius: 2px; flex: none; display: inline-block; }
+  .pm.tw { background: var(--twitch); }
+  .pm.kk { background: var(--kick); }
+  .bar { height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+  .tag.live { color: var(--green); border-color: rgba(63,185,80,.35); }
+  .tag.wait { color: var(--amber); border-color: rgba(210,153,34,.35); }
+  .tag.bad { color: var(--red); border-color: rgba(248,81,73,.4); }
+  .mono { font-family: var(--mono); font-size: 11px; }
+  .muted { color: var(--muted); }
+  .dim { color: var(--dim); }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; color: var(--text); white-space: nowrap; }
+  .btn:hover { border-color: #3d444d; background: var(--surface-3); }
+  .btn svg { width: 12px; height: 12px; }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn.ghost:hover { color: var(--text); background: var(--surface-2); }
+  .btn.red { background: var(--red); border-color: var(--red); color: #fff; }
+  .btn.red:hover { background: #ff6a62; }
+  .btn.primary { background: var(--accent-strong); border-color: var(--accent-strong); color: #fff; }
+  .btn.primary:hover { background: var(--accent); }
+  .btn[disabled] { opacity: .45; cursor: default; }
+  .link { color: var(--muted); font-size: 12px; }
+  .link:hover { color: var(--accent); }
+
+  /* Reorder controls */
+  .handle { width: 14px; height: 14px; color: var(--dim); cursor: grab; flex: none; }
+  .mv { display: inline-flex; gap: 2px; flex: none; }
+  .mv button { width: 24px; height: 24px; display: grid; place-items: center; background: transparent; border: 1px solid transparent; border-radius: 5px; color: var(--dim); padding: 0; }
+  .mv button:hover:not([disabled]) { color: var(--text); background: var(--surface-3); border-color: var(--border); }
+  .mv button[disabled] { opacity: .3; cursor: default; }
+  .mv svg { width: 12px; height: 12px; }
+  .dragging { opacity: .5; }
+  .drop-over { box-shadow: inset 0 2px 0 var(--accent); }
+
+  @media (max-width: 760px) {
+    .app { grid-template-columns: minmax(0, 1fr); }
+    .side { position: static; height: auto; flex-direction: row; align-items: center; padding: 10px 16px; gap: 10px; border-right: 0; border-bottom: 1px solid var(--border-soft); }
+    .brand span, .side-games, .side-foot { display: none; }
+    .brand { padding: 0; }
+    .nav { flex-direction: row; gap: 2px; overflow: hidden; }
+    .nav a { padding: 6px 8px; }
+    .nav a .lbl { display: none; }
+    .nav a.on .lbl { display: inline; }
+    .nav .count { margin-left: 2px; }
+    main { padding: 16px 16px 72px; }
+  }
+  main { max-width: 880px; }
+  .scan { display: inline-flex; align-items: center; gap: 8px; font: 12px var(--mono); color: var(--muted); }
+  .scan .pulse { width: 6px; height: 6px; }
+
+  /* Add game */
+  .add { position: relative; }
+  .search { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0 12px; height: 38px; }
+  .search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .search svg { width: 14px; height: 14px; color: var(--dim); flex: none; }
+  .search input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--text); font: inherit; font-size: 13px; }
+  .search input::placeholder { color: var(--dim); }
+  .search kbd { font: 11px var(--mono); color: var(--dim); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; }
+  .sugg { list-style: none; margin: 6px 0 0; padding: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; }
+  .sugg:empty { display: none; }
+  .sugg li { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 6px; }
+  .sugg li:hover, .sugg li.hl { background: var(--surface-3); }
+  .sugg .nm { font-size: 13px; font-weight: 500; }
+  .sugg .nm mark { background: none; color: var(--accent); }
+  .sugg .c { font-size: 12px; color: var(--muted); }
+  .sugg .end { margin-left: auto; display: flex; align-items: center; gap: 10px; flex: none; }
+  .hint { margin-top: 8px; font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 6px; }
+  .hint svg { width: 12px; height: 12px; flex: none; }
+
+  /* Priority list */
+  .rule { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 12px; color: var(--muted); background: var(--surface-2); }
+  .rule svg { width: 14px; height: 14px; color: var(--dim); flex: none; }
+  .rule a { color: var(--accent); }
+  .saved { font-size: 12px; color: var(--green); display: inline-flex; align-items: center; gap: 5px; opacity: 0; transition: opacity .2s; }
+  .saved.on { opacity: 1; }
+  .saved svg { width: 12px; height: 12px; }
+  .prio { list-style: none; margin: 0; padding: 0; }
+  .prio > li { display: grid; grid-template-columns: 14px 18px 34px minmax(0, 1fr) auto auto; gap: 12px; align-items: start; padding: 14px 10px 14px 12px; background: var(--surface); }
+  .prio > li + li { border-top: 1px solid var(--border-soft); }
+  .prio > li:hover .handle { color: var(--muted); }
+  .prio .handle, .prio .idx, .prio .mv, .prio .rm { margin-top: 8px; }
+  .prio .idx { font: 11px var(--mono); color: var(--dim); text-align: center; }
+  .art { width: 34px; height: 34px; border-radius: 7px; background: var(--surface-3) repeating-linear-gradient(135deg, transparent 0 5px, rgba(255,255,255,.03) 5px 10px); border: 1px solid var(--border); display: grid; place-items: center; font: 600 11px var(--mono); color: var(--muted); letter-spacing: .02em; }
+  .g-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 34px; }
+  .g-h .nm { font-size: 14px; font-weight: 600; }
+  .camps { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .camps li { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+  .camps .cn { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .camps .cn span { color: var(--dim); }
+  .camps .end { font: 11px var(--mono); color: var(--dim); white-space: nowrap; }
+  .none { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  .rm { width: 24px; height: 24px; display: grid; place-items: center; background: transparent; border: 1px solid transparent; border-radius: 5px; color: var(--dim); padding: 0; }
+  .rm:hover { color: var(--red); background: var(--red-soft); }
+  .rm svg { width: 12px; height: 12px; }
+  .prio > li.idle .nm { color: var(--muted); }
+  .prio > li.fresh { background: linear-gradient(90deg, var(--accent-soft), transparent 60%), var(--surface); }
+
+  @media (max-width: 760px) {
+    .prio > li { grid-template-columns: 14px minmax(0, 1fr) auto auto; gap: 8px; }
+    .prio .idx, .prio .art { display: none; }
+    .prio .handle, .prio .mv, .prio .rm { margin-top: 3px; }
+    .camps li { grid-template-columns: 8px minmax(0, 1fr); }
+    .camps .end { grid-column: 2; }
+    .sugg li { flex-wrap: wrap; }
+    .sugg .c { display: none; }
+    .search kbd { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><img src="../_assets/logo.png" alt=""><span>GrubDrops</span></div>
+    <nav class="nav">
+      <a href="index.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 7 8 2.5 13.5 7v6.5h-4v-4h-3v4h-4z" stroke-linejoin="round"/></svg><span class="lbl">Home</span></a>
+      <a href="games.html" class="on"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.75" y="4.5" width="12.5" height="7.5" rx="3"/><path d="M5 7v2M4 8h2M10.5 7.5h.01M12 9h.01" stroke-linecap="round"/></svg><span class="lbl">Games</span></a>
+      <a href="rewards.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="12" height="8" rx="1"/><path d="M1.5 4h13v2h-13zM8 4v10M8 4C6.5 1.5 4 2 4.5 3.5 5 4 8 4 8 4zM8 4c1.5-2.5 4-2 3.5-.5C11 4 8 4 8 4z" stroke-linejoin="round"/></svg><span class="lbl">Rewards</span></a>
+      <a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.25"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" stroke-linecap="round"/></svg><span class="lbl">Settings</span><span class="count" title="1 account needs login">1</span></a>
+    </nav>
+    <div class="side-games">
+      <div class="side-label">Your games</div>
+      <div class="games-mini">
+        <a href="games.html"><span class="rank">1</span>Rust<span class="st" style="background:var(--green)"></span></a>
+        <a href="games.html"><span class="rank">2</span>Marvel Rivals<span class="st" style="background:var(--amber)"></span></a>
+        <a href="games.html"><span class="rank">3</span>Overwatch<span class="st" style="background:var(--dim)"></span></a>
+      </div>
+    </div>
+    <div class="side-foot"><span class="pulse"></span>Running · 2 of 3 mining</div>
+  </aside>
+  <main>
+    <div class="head">
+      <div>
+        <h1>Games</h1>
+        <div class="sub">GrubDrops mines only these games, top one first.</div>
+      </div>
+      <div class="scan"><span class="pulse"></span><span id="scanline">3 games · last scan 41 s</span></div>
+    </div>
+
+    <section class="sec add">
+      <div class="sec-h"><h2>Add a game</h2></div>
+      <label class="search">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3" stroke-linecap="round"/></svg>
+        <input id="q" value="dead" placeholder="Search games" autocomplete="off" aria-label="Search games">
+        <kbd>/</kbd>
+      </label>
+      <ul class="sugg" id="sugg"></ul>
+      <div class="hint"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="6" cy="6" r="4.5"/><path d="M6 3.5V6l1.6 1" stroke-linecap="round"/></svg>Each extra game adds a little scan time.</div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-h">
+        <h2>Priority <span class="n" id="gcount">3</span></h2>
+        <span class="saved" id="saved"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Saved</span>
+      </div>
+      <div class="panel">
+        <div class="rule">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>
+          <span>Order here is permanent. <a href="index.html">Home</a> can change it for one session only.</span>
+        </div>
+        <ol class="prio" id="prio">
+          <li data-id="rust">
+            <svg class="handle" viewBox="0 0 14 14" fill="currentColor"><circle cx="5" cy="3.5" r="1"/><circle cx="9" cy="3.5" r="1"/><circle cx="5" cy="7" r="1"/><circle cx="9" cy="7" r="1"/><circle cx="5" cy="10.5" r="1"/><circle cx="9" cy="10.5" r="1"/></svg>
+            <span class="idx">1</span>
+            <span class="art">RU</span>
+            <div style="min-width:0">
+              <div class="g-h"><span class="nm">Rust</span><span class="tag live">Mining</span></div>
+              <ul class="camps">
+                <li><span class="pm tw"></span><span class="cn">Round 41 <span>· 3 drops</span></span><span class="end">ends Oct 31</span></li>
+                <li><span class="pm kk"></span><span class="cn">Kick x Rust <span>· 2 drops</span></span><span class="end">ends Nov 2</span></li>
+              </ul>
+            </div>
+            <span class="mv"><button data-up aria-label="Move up"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m3 7.5 3-3 3 3" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button data-down aria-label="Move down"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m3 4.5 3 3 3-3" stroke-linecap="round" stroke-linejoin="round"/></svg></button></span>
+            <button class="rm" aria-label="Remove Rust"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m3 3 6 6M9 3 3 9" stroke-linecap="round"/></svg></button>
+          </li>
+          <li data-id="mr">
+            <svg class="handle" viewBox="0 0 14 14" fill="currentColor"><circle cx="5" cy="3.5" r="1"/><circle cx="9" cy="3.5" r="1"/><circle cx="5" cy="7" r="1"/><circle cx="9" cy="7" r="1"/><circle cx="5" cy="10.5" r="1"/><circle cx="9" cy="10.5" r="1"/></svg>
+            <span class="idx">2</span>
+            <span class="art">MR</span>
+            <div style="min-width:0">
+              <div class="g-h"><span class="nm">Marvel Rivals</span><span class="tag wait">Waiting</span></div>
+              <ul class="camps">
+                <li><span class="pm tw"></span><span class="cn">Season 4 Twitch Drops <span>· 2 drops</span></span><span class="end">ends Nov 8</span></li>
+              </ul>
+              <div class="none">Starts when an account is free from Rust.</div>
+            </div>
+            <span class="mv"><button data-up aria-label="Move up"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m3 7.5 3-3 3 3" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button data-down aria-label="Move down"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m3 4.5 3 3 3-3" stroke-linecap="round" stroke-linejoin="round"/></svg></button></span>
+            <button class="rm" aria-label="Remove Marvel Rivals"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m3 3 6 6M9 3 3 9" stroke-linecap="round"/></svg></button>
+          </li>
+          <li data-id="ow" class="idle">
+            <svg class="handle" viewBox="0 0 14 14" fill="currentColor"><circle cx="5" cy="3.5" r="1"/><circle cx="9" cy="3.5" r="1"/><circle cx="5" cy="7" r="1"/><circle cx="9" cy="7" r="1"/><circle cx="5" cy="10.5" r="1"/><circle cx="9" cy="10.5" r="1"/></svg>
+            <span class="idx">3</span>
+            <span class="art">OW</span>
+            <div style="min-width:0">
+              <div class="g-h"><span class="nm">Overwatch</span><span class="tag">No campaign</span></div>
+              <div class="none">Nothing live. Last seen Oct 21. We'll pick it up when one starts.</div>
+            </div>
+            <span class="mv"><button data-up aria-label="Move up"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m3 7.5 3-3 3 3" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button data-down aria-label="Move down"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m3 4.5 3 3 3-3" stroke-linecap="round" stroke-linejoin="round"/></svg></button></span>
+            <button class="rm" aria-label="Remove Overwatch"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m3 3 6 6M9 3 3 9" stroke-linecap="round"/></svg></button>
+          </li>
+        </ol>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="mock-tag">r2 · 03 Drop flow · Games · <a href="../">all mockups</a></div>
+<script>
+// Tiny fake reorder: up/down buttons plus native drag on rows.
+function initReorder(list, onChange) {
+  const rows = () => Array.from(list.children);
+  function refresh() {
+    const all = rows();
+    all.forEach((li, i) => {
+      li.draggable = true;
+      const idx = li.querySelector('.idx');
+      if (idx) idx.textContent = i + 1;
+      const up = li.querySelector('[data-up]');
+      const dn = li.querySelector('[data-down]');
+      if (up) up.disabled = i === 0;
+      if (dn) dn.disabled = i === all.length - 1;
+    });
+    if (onChange) onChange(all.map(li => li.dataset.id));
+  }
+  list.addEventListener('click', e => {
+    const b = e.target.closest('button[data-up], button[data-down]');
+    if (!b) return;
+    const li = rowOf(e);
+    if (b.hasAttribute('data-up') && li.previousElementSibling) list.insertBefore(li, li.previousElementSibling);
+    if (b.hasAttribute('data-down') && li.nextElementSibling) list.insertBefore(li.nextElementSibling, li);
+    refresh();
+    if (!b.disabled) b.focus();
+  });
+  let dragged = null;
+  const rowOf = e => { let el = e.target; while (el && el.parentElement !== list) el = el.parentElement; return el; };
+  const clear = () => rows().forEach(r => r.classList.remove('drop-over'));
+  list.addEventListener('dragstart', e => { dragged = rowOf(e); if (!dragged) return; dragged.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', ''); });
+  list.addEventListener('dragend', () => { if (dragged) dragged.classList.remove('dragging'); clear(); dragged = null; });
+  list.addEventListener('dragover', e => { const li = rowOf(e); if (!dragged || !li || li === dragged) return; e.preventDefault(); clear(); li.classList.add('drop-over'); });
+  list.addEventListener('drop', e => {
+    const li = rowOf(e);
+    if (!dragged || !li || li === dragged) return;
+    e.preventDefault();
+    const r = li.getBoundingClientRect();
+    list.insertBefore(dragged, e.clientY > r.top + r.height / 2 ? li.nextSibling : li);
+    refresh();
+  });
+  refresh();
+  return { refresh };
+}
+  const prio = document.getElementById('prio');
+  const saved = document.getElementById('saved');
+  const blank = prio.querySelector('li[data-id="ow"]').cloneNode(true);
+  let first = true, t;
+  const pr = initReorder(prio, () => {
+    document.getElementById('gcount').textContent = prio.children.length;
+    document.getElementById('scanline').textContent = prio.children.length + ' games · last scan 41 s';
+    if (first) { first = false; return; }
+    saved.classList.add('on'); clearTimeout(t); t = setTimeout(() => saved.classList.remove('on'), 1400);
+  });
+  prio.addEventListener('click', e => {
+    const rm = e.target.closest('.rm');
+    if (rm) { rm.closest('li').remove(); pr.refresh(); }
+  });
+
+  // Fake catalog search
+  const known = ['Deadlock', 'Dead by Daylight', 'Apex Legends', 'Valorant', 'Rocket League'];
+  const q = document.getElementById('q');
+  const sugg = document.getElementById('sugg');
+  const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function render() {
+    const v = q.value.trim();
+    sugg.innerHTML = '';
+    if (!v) return;
+    const have = Array.from(prio.querySelectorAll('.nm')).map(n => n.textContent.toLowerCase());
+    const hits = known.filter(k => k.toLowerCase().includes(v.toLowerCase()) && !have.includes(k.toLowerCase()));
+    const rows = hits.length ? hits : [v];
+    rows.forEach((name, i) => {
+      const li = document.createElement('li');
+      if (i === 0) li.className = 'hl';
+      const at = name.toLowerCase().indexOf(v.toLowerCase());
+      const label = at >= 0 && hits.length ? esc(name.slice(0, at)) + '<mark>' + esc(name.slice(at, at + v.length)) + '</mark>' + esc(name.slice(at + v.length)) : esc(name);
+      li.innerHTML = '<div style="min-width:0"><div class="nm">' + label + '</div><div class="c">No campaign known yet. We\'ll watch for campaigns.</div></div>' +
+        '<span class="end"><button class="btn primary">Add</button></span>';
+      li.querySelector('button').addEventListener('click', () => add(name));
+      sugg.appendChild(li);
+    });
+  }
+  function add(name) {
+    const li = document.createElement('li');
+    li.className = 'idle fresh';
+    li.dataset.id = name;
+    li.innerHTML = blank.innerHTML;
+    li.querySelector('.art').textContent = name.slice(0, 2).toUpperCase();
+    li.querySelector('.g-h').innerHTML = '<span class="nm"></span><span class="tag">Watching</span>';
+    li.querySelector('.nm').textContent = name;
+    li.querySelector('.none').textContent = "No campaign known. We'll watch for campaigns.";
+    li.querySelector('.rm').setAttribute('aria-label', 'Remove ' + name);
+    prio.appendChild(li);
+    q.value = '';
+    render();
+    pr.refresh();
+  }
+  q.addEventListener('input', render);
+  document.addEventListener('keydown', e => { if (e.key === '/' && document.activeElement !== q) { e.preventDefault(); q.focus(); } });
+  render();
+</script>
+</body>
+</html>

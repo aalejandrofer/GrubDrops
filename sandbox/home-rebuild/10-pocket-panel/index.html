@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops · 10 Pocket</title>
+<link rel="stylesheet" href="../_assets/base.css">
+<style>
+  body { min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 40px 16px; }
+  .panel { width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 16px 48px rgba(0,0,0,.45); }
+
+  .top { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+  .brand img { width: 22px; height: 22px; border-radius: 6px; }
+  .live { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .live i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+  .alert { margin: 0 16px; display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 12px; border-radius: 999px; background: var(--red-soft); border: 1px solid rgba(248,81,73,.35); color: var(--red); font-size: 13px; font-weight: 500; }
+  .alert svg { width: 14px; height: 14px; flex: none; }
+  .alert span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .alert a { flex: none; background: var(--red); color: #fff; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+  .alert a:hover { filter: brightness(1.1); }
+
+  .stage { padding: 20px 16px 8px; text-align: center; touch-action: pan-y; user-select: none; }
+  .ring { position: relative; width: 216px; height: 216px; margin: 0 auto; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring .track { stroke: var(--surface-3); }
+  .ring .arc { stroke: var(--accent); transition: stroke-dashoffset .5s ease, stroke .3s; }
+  .ring .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .ring .eta { font-size: 44px; font-weight: 600; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .ring .eta small { font-size: 18px; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-left: 2px; }
+  .ring .cap { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .ring .mins { font: 11px var(--mono); color: var(--dim); margin-top: 2px; }
+
+  .drop { margin-top: 16px; }
+  .drop .name { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  .drop .meta { font-size: 13px; color: var(--muted); margin-top: 2px; display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+  .mark { display: inline-block; width: 8px; height: 8px; border-radius: 2px; }
+
+  .dots { display: flex; justify-content: center; gap: 6px; margin-top: 16px; }
+  .dots button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 4px; background: var(--surface-3); transition: width .2s, background .2s; }
+  .dots button.on { width: 20px; background: var(--text); }
+  .dots button.err { background: var(--red); opacity: .55; }
+  .dots button.err.on { opacity: 1; }
+  .swipe { font-size: 11px; color: var(--dim); margin-top: 8px; }
+
+  .lines { margin: 16px 16px 16px; border-top: 1px solid var(--border-soft); }
+  .line { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; font-size: 13px; border-bottom: 1px solid var(--border-soft); }
+  .line:last-child { border-bottom: 0; }
+  .line .k { color: var(--muted); }
+  .line .v { text-align: right; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .line .v.mono { font-family: var(--mono); font-size: 12px; }
+
+  .tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--border); background: var(--bg); padding: 6px 4px 8px; }
+  .tabs a { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; color: var(--dim); font-size: 11px; font-weight: 500; border-radius: 8px; position: relative; }
+  .tabs a svg { width: 20px; height: 20px; }
+  .tabs a.on { color: var(--accent); }
+  .tabs a:hover { color: var(--text); }
+  .tabs .badge { position: absolute; top: 4px; left: calc(50% + 6px); width: 7px; height: 7px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 2px var(--bg); }
+
+  /* signed-out state */
+  .panel.is-err .ring .arc { stroke: var(--red); }
+  .panel.is-err .ring .eta { font-size: 20px; letter-spacing: -0.01em; color: var(--red); }
+
+  @media (max-width: 480px) {
+    body { padding: 0; }
+    .panel { max-width: none; min-height: 100vh; border-radius: 0; border: 0; box-shadow: none; }
+    .tabs { margin-top: auto; position: sticky; bottom: 0; padding-bottom: 14px; }
+  }
+</style>
+</head>
+<body>
+<div class="panel" id="panel">
+  <header class="top">
+    <div class="brand"><img src="../_assets/logo.png" alt="">GrubDrops</div>
+    <div class="live"><i></i>2 of 3 mining</div>
+  </header>
+
+  <div class="alert" role="alert">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.25"/><path d="M8 4.75v3.5M8 10.75h.01"/></svg>
+    <span>grub_alt signed out</span>
+    <a href="#">Re-login</a>
+  </div>
+
+  <section class="stage" id="stage">
+    <div class="ring">
+      <svg viewBox="0 0 200 200" aria-hidden="true">
+        <circle class="track" cx="100" cy="100" r="88" fill="none" stroke-width="10"/>
+        <circle class="arc" id="arc" cx="100" cy="100" r="88" fill="none" stroke-width="10" stroke-linecap="round" stroke-dasharray="552.9" stroke-dashoffset="165.9"/>
+      </svg>
+      <div class="center">
+        <div class="eta" id="eta">18<small>min</small></div>
+        <div class="cap" id="cap">until claim</div>
+        <div class="mins" id="mins">42 / 60</div>
+      </div>
+    </div>
+
+    <div class="drop">
+      <div class="name" id="name">Hazmat Suit Skin</div>
+      <div class="meta" id="meta"><span class="mark" style="background:var(--twitch)"></span>grubfan · Rust · hJune</div>
+    </div>
+
+    <div class="dots" role="tablist" aria-label="Accounts">
+      <button class="on" data-i="0" aria-label="grubfan"></button>
+      <button data-i="1" aria-label="grubfan_kick"></button>
+      <button class="err" data-i="2" aria-label="grub_alt, signed out"></button>
+    </div>
+    <div class="swipe">Swipe for other accounts</div>
+  </section>
+
+  <div class="lines">
+    <div class="line"><span class="k">Up next</span><span class="v" id="next">2 more Rust drops queued</span></div>
+    <div class="line"><span class="k">Claimed today</span><span class="v">3 <span style="color:var(--dim)">· 27 all time</span></span></div>
+    <div class="line"><span class="k">Last claim</span><span class="v mono">Rust Wood Box Skin · 09:12</span></div>
+  </div>
+
+  <nav class="tabs">
+    <a href="#" class="on"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9 10 3l7 6v8h-4.5v-4.5h-5V17H3z"/></svg>Home</a>
+    <a href="#"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5.5" width="16" height="10" rx="4"/><path d="M6.25 8.75v3M4.75 10.25h3M13 9.5h.01M14.75 11.25h.01"/></svg>Games</a>
+    <a href="#"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="7.5" width="15" height="10" rx="1.5"/><path d="M2 7.5h16M10 7.5v10M10 7.5S8 3 5.75 4 7.5 7.5 10 7.5zM10 7.5s2-4.5 4.25-3.5S12.5 7.5 10 7.5z"/></svg>Rewards</a>
+    <a href="#"><span class="badge"></span><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="2.5"/><path d="M10 2v2.5M10 15.5V18M2 10h2.5M15.5 10H18M4.3 4.3l1.8 1.8M13.9 13.9l1.8 1.8M4.3 15.7l1.8-1.8M13.9 6.1l1.8-1.8"/></svg>Settings</a>
+  </nav>
+</div>
+<div class="mock-tag">10 · Pocket · <a href="../">all mockups</a></div>
+
+<script>
+(function () {
+  var C = 552.9;
+  var A = [
+    { name: 'Hazmat Suit Skin', who: 'grubfan · Rust · hJune', c: 'var(--twitch)', eta: '18<small>min</small>', cap: 'until claim', mins: '42 / 60', p: 42 / 60, next: '2 more Rust drops queued' },
+    { name: 'Kick Garage Door', who: 'grubfan_kick · Rust · posty', c: 'var(--kick)', eta: '25<small>min</small>', cap: 'until claim', mins: '95 / 120', p: 95 / 120, next: 'Marvel Rivals, when free' },
+    { name: 'Not mining', who: 'grub_alt · session expired', c: 'var(--twitch)', eta: 'Signed out', cap: 'Re-login in Settings', mins: '', p: 0, next: 'Nothing until re-login', err: true }
+  ];
+  var i = 0, panel = document.getElementById('panel'), dots = document.querySelectorAll('.dots button');
+  function $(id) { return document.getElementById(id); }
+  function show(n) {
+    i = (n + A.length) % A.length;
+    var a = A[i];
+    $('arc').style.strokeDashoffset = a.err ? 0 : C * (1 - a.p);
+    $('eta').innerHTML = a.eta; $('cap').textContent = a.cap; $('mins').textContent = a.mins;
+    $('name').textContent = a.name;
+    $('meta').innerHTML = '<span class="mark" style="background:' + a.c + '"></span>' + a.who;
+    $('next').textContent = a.next;
+    panel.classList.toggle('is-err', !!a.err);
+    dots.forEach(function (d, k) { d.classList.toggle('on', k === i); });
+  }
+  dots.forEach(function (d) { d.addEventListener('click', function () { show(+d.dataset.i); }); });
+  var x0 = null, st = $('stage');
+  st.addEventListener('pointerdown', function (e) { x0 = e.clientX; });
+  st.addEventListener('pointerup', function (e) { if (x0 === null) return; var dx = e.clientX - x0; x0 = null; if (Math.abs(dx) > 40) show(i + (dx < 0 ? 1 : -1)); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'ArrowRight') show(i + 1); if (e.key === 'ArrowLeft') show(i - 1); });
+})();
+</script>
+</body>
+</html>

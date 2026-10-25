@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops · 05 Today timeline</title>
+<link rel="stylesheet" href="../_assets/base.css">
+<style>
+  /* Top bar */
+  .top { border-bottom: 1px solid var(--border-soft); background: var(--bg); position: sticky; top: 0; z-index: 10; }
+  .top-inner { max-width: 720px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; gap: 24px; height: 52px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; flex-shrink: 0; }
+  .brand img { width: 22px; height: 22px; border-radius: 5px; }
+  .tabs { display: flex; gap: 2px; height: 100%; overflow-x: auto; scrollbar-width: none; }
+  .tabs a { display: flex; align-items: center; padding: 0 10px; color: var(--muted); font-size: 13px; font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+  .tabs a:hover { color: var(--text); }
+  .tabs a.on { color: var(--text); border-bottom-color: var(--accent); }
+
+  main { max-width: 720px; margin: 0 auto; padding: 32px 24px 96px; }
+
+  /* Date heading */
+  .day { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 28px; }
+  .day h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .day h1 span { color: var(--dim); font-weight: 500; }
+  .day .clock { font: 12px var(--mono); color: var(--muted); }
+
+  /* Timeline */
+  .tl { position: relative; list-style: none; margin: 0; padding: 0; }
+  .tl::before { content: ""; position: absolute; left: 63px; top: 6px; bottom: 6px; width: 1px; background: var(--border-soft); }
+  .sec { display: grid; grid-template-columns: 56px 16px 1fr; column-gap: 12px; margin: 28px 0 10px; }
+  .sec:first-child { margin-top: 0; }
+  .sec h2 { grid-column: 3; margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); }
+
+  .item { position: relative; display: grid; grid-template-columns: 56px 16px 1fr; column-gap: 12px; padding: 10px 0; }
+  .time { font: 12px/20px var(--mono); color: var(--muted); text-align: right; }
+  .node { position: relative; display: flex; justify-content: center; padding-top: 5px; }
+  .node i { display: block; width: 9px; height: 9px; border-radius: 50%; background: var(--bg); border: 1.5px solid var(--dim); position: relative; z-index: 1; }
+  .item.live .node i { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  .item.next .node i { border-style: dashed; border-color: var(--muted); }
+  .item.done .node i { background: var(--green); border-color: var(--green); }
+  .item.alert .node i { background: var(--red); border-color: var(--red); box-shadow: 0 0 0 4px var(--red-soft); }
+  .item.muted .node i { border-color: var(--border); }
+
+  .body { min-width: 0; }
+  .t { font-size: 14px; font-weight: 500; line-height: 20px; }
+  .t .g { color: var(--muted); font-weight: 400; }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .meta .sep { color: var(--border); }
+  .mono { font-family: var(--mono); }
+
+  /* Account chip */
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px 0 3px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font-size: 12px; color: var(--text); white-space: nowrap; }
+  .av { width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; font: 600 9px var(--font); color: #0d1117; position: relative; }
+  .av.tw { background: #b591ff; }
+  .av.kk { background: #8ff36a; }
+  .av::after { content: ""; position: absolute; right: -2px; bottom: -2px; width: 7px; height: 7px; border-radius: 2px; border: 1.5px solid var(--surface); }
+  .av.tw::after { background: var(--twitch); }
+  .av.kk::after { background: var(--kick); }
+  .chip.bad { border-color: rgba(248,81,73,.45); background: var(--red-soft); }
+
+  /* Live card */
+  .card { margin-top: 8px; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); padding: 12px 14px; }
+  .card-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .drop { font-size: 15px; font-weight: 600; }
+  .eta { font: 500 12px var(--mono); color: var(--accent); white-space: nowrap; }
+  .camp { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .bar { height: 4px; border-radius: 2px; background: var(--surface-3); margin: 12px 0 10px; overflow: hidden; }
+  .bar b { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+  .card .meta { margin-top: 0; }
+
+  /* Alert */
+  .alert-box { margin-top: 6px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid rgba(248,81,73,.4); background: var(--red-soft); border-radius: var(--radius); }
+  .alert-box p { margin: 0; font-size: 13px; color: var(--text); }
+  .alert-box p span { color: var(--muted); }
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid var(--border); background: var(--surface-2); }
+  .btn.red { background: var(--red); border-color: var(--red); color: #fff; }
+  .btn.red:hover { background: #ff6a62; }
+
+  .item.done .t, .item.muted .t { font-weight: 400; }
+  .item.muted .t { color: var(--muted); }
+  .item.done .t .g { color: var(--dim); }
+
+  .foot { margin: 28px 0 0 80px; font-size: 12px; color: var(--muted); display: flex; gap: 16px; flex-wrap: wrap; }
+  .foot a { color: var(--accent); }
+
+  @media (max-width: 560px) {
+    .top-inner { padding: 0 16px; gap: 14px; }
+    .brand span { display: none; }
+    main { padding: 24px 16px 96px; }
+    .tl::before { left: 7px; }
+    .sec, .item { grid-template-columns: 16px 1fr; column-gap: 12px; }
+    .sec h2 { grid-column: 2; }
+    .time { grid-column: 2; grid-row: 1; text-align: left; font-size: 11px; line-height: 16px; color: var(--dim); }
+    .node { grid-column: 1; grid-row: 1 / span 2; padding-top: 3px; }
+    .body { grid-column: 2; }
+    .foot { margin-left: 28px; }
+    .day h1 { font-size: 19px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <a class="brand" href="#"><img src="../_assets/logo.png" alt=""><span>GrubDrops</span></a>
+    <nav class="tabs">
+      <a class="on" href="#">Home</a>
+      <a href="#">Games</a>
+      <a href="#">Rewards</a>
+      <a href="#">Settings</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="day">
+    <h1>Today <span>· Sat 25 Oct</span></h1>
+    <div class="clock">now 10:24</div>
+  </div>
+
+  <ol class="tl">
+
+    <!-- Problem: pinned at the very top -->
+    <li class="item alert">
+      <div class="time" style="color:var(--red)">10:03</div>
+      <div class="node"><i></i></div>
+      <div class="body">
+        <div class="t">Session expired</div>
+        <div class="alert-box">
+          <p><span class="chip bad"><span class="av tw">G</span>grub_alt</span>&nbsp; is not mining. <span>Log in again to resume.</span></p>
+          <a class="btn red" href="#">Re-login</a>
+        </div>
+      </div>
+    </li>
+
+    <li class="sec"><h2>Now</h2></li>
+
+    <li class="item live">
+      <div class="time">now</div>
+      <div class="node"><i></i></div>
+      <div class="body">
+        <div class="card">
+          <div class="card-row">
+            <div class="drop">Hazmat Suit Skin</div>
+            <div class="eta">~18 min</div>
+          </div>
+          <div class="camp">Rust · Rust Twitch Drops Round 41</div>
+          <div class="bar"><b style="width:70%"></b></div>
+          <div class="meta">
+            <span class="chip"><span class="av tw">G</span>grubfan</span>
+            <span>watching <span class="mono">hJune</span></span>
+            <span class="sep">/</span>
+            <span class="mono">42 / 60 min</span>
+          </div>
+        </div>
+      </div>
+    </li>
+
+    <li class="item live">
+      <div class="time">now</div>
+      <div class="node"><i></i></div>
+      <div class="body">
+        <div class="card">
+          <div class="card-row">
+            <div class="drop">Kick Garage Door</div>
+            <div class="eta">~25 min</div>
+          </div>
+          <div class="camp">Rust · Kick</div>
+          <div class="bar"><b style="width:79%"></b></div>
+          <div class="meta">
+            <span class="chip"><span class="av kk">G</span>grubfan_kick</span>
+            <span>watching <span class="mono">posty</span></span>
+            <span class="sep">/</span>
+            <span class="mono">95 / 120 min</span>
+          </div>
+        </div>
+      </div>
+    </li>
+
+    <li class="sec"><h2>Up next</h2></li>
+
+    <li class="item next">
+      <div class="time">~10:42</div>
+      <div class="node"><i></i></div>
+      <div class="body">
+        <div class="t">Hazmat Suit Skin claims <span class="g">· then 2 more Rust drops start</span></div>
+        <div class="meta"><span class="chip"><span class="av tw">G</span>grubfan</span><span>Round 41, drops 2 and 3 queued</span></div>
+      </div>
+    </li>
+
+    <li class="item next">
+      <div class="time">~10:49</div>
+      <div class="node"><i></i></div>
+      <div class="body">
+        <div class="t">Kick Garage Door claims</div>
+        <div class="meta"><span class="chip"><span class="av kk">G</span>grubfan_kick</span></div>
+      </div>
+    </li>
+
+    <li class="item muted">
+      <div class="time">later</div>
+      <div class="node"><i></i></div>
+      <div class="body">
+        <div class="t">Marvel Rivals is live and waiting <span class="g">· starts when an account frees up from Rust</span></div>
+      </div>
+    </li>
+
+    <li class="item muted">
+      <div class="time">—</div>
+      <div class="node"><i></i></div>
+      <div class="body">
+        <div class="t">Overwatch has no campaign live</div>
+      </div>
+    </li>
+
+    <li class="sec"><h2>Earlier today</h2></li>
+
+    <li class="item done">
+      <div class="time">09:12</div>
+      <div class="node"><i></i></div>
+      <div class="body">
+        <div class="t">Claimed Rust Wood Box Skin <span class="g">· Rust</span></div>
+      </div>
+    </li>
+
+    <li class="item done">
+      <div class="time">07:40</div>
+      <div class="node"><i></i></div>
+      <div class="body">
+        <div class="t">Claimed Marvel Rivals Spray <span class="g">· Marvel Rivals</span></div>
+      </div>
+    </li>
+
+    <li class="item done" style="opacity:.6">
+      <div class="time">yest. 22:05</div>
+      <div class="node"><i></i></div>
+      <div class="body">
+        <div class="t">Claimed Kick Rust Hoodie <span class="g">· Rust</span></div>
+      </div>
+    </li>
+  </ol>
+
+  <div class="foot">
+    <span>27 rewards claimed all time</span>
+    <a href="#">View rewards</a>
+  </div>
+</main>
+
+<div class="mock-tag">05 · Today timeline · <a href="../">all mockups</a></div>
+</body>
+</html>

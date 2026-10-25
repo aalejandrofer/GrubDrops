@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops · r4 · Settings</title>
+<link rel="stylesheet" href="../_assets/base.css">
+<style>
+  /* r4 contrast floor: secondary (t2) and tertiary (t3) text, both AA on bg and every surface */
+  :root { --t2: #a3acb7; --t3: #8b949e; }
+
+  svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  [hidden] { display: none !important; }
+
+  /* Shell: top bar + container (same as r3-h3 / r4 pages) */
+  .top { position: sticky; top: 0; z-index: 20; background: rgba(13,17,23,.92); border-bottom: 1px solid var(--border-soft); backdrop-filter: blur(6px); }
+  .top-in { max-width: 1160px; margin: 0 auto; height: 52px; padding: 0 24px; display: flex; align-items: center; gap: 28px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -.01em; }
+  .brand img { width: 24px; height: 24px; border-radius: 6px; }
+  .tabs { display: flex; gap: 2px; }
+  .tabs a { padding: 6px 10px; border-radius: 6px; color: var(--t2); font-weight: 500; font-size: 13.5px; }
+  .tabs a:hover { color: var(--text); background: var(--surface); }
+  .tabs a.on { color: var(--text); background: var(--surface-2); }
+  main { max-width: 1160px; margin: 0 auto; padding: 28px 24px 96px; }
+
+  /* Page header: title, plain status, amber problem chip */
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .head-l { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; min-width: 0; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .now { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--green); }
+  .now .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+  .now .sep { color: var(--t3); }
+  .alert { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--amber); background: var(--amber-soft); border: 1px solid rgba(210,153,34,.3); padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .alert:hover { border-color: var(--amber); }
+  .alert:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .stamp { color: var(--t3); font-size: 12px; font-family: var(--mono); }
+
+  /* Version + popover (change 7) */
+  .ver-wrap { margin-left: auto; position: relative; }
+  .ver { font: 12px var(--mono); color: var(--text); white-space: nowrap; background: none; border: 0; padding: 4px 6px; border-radius: 6px; }
+  .ver.update { color: #58a6ff; }
+  .ver:hover { background: var(--surface); }
+  .ver:focus-visible { outline: 2px solid #58a6ff; outline-offset: 1px; }
+  .pop { position: absolute; right: 0; top: calc(100% + 8px); width: 320px; max-width: calc(100vw - 32px); background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; box-shadow: 0 12px 32px rgba(0,0,0,.45); z-index: 30; }
+  .pop h3 { margin: 0 0 2px; font-size: 13.5px; font-weight: 600; }
+  .pop .sub { margin: 0 0 10px; color: var(--t2); font-size: 12px; font-family: var(--mono); }
+  .pop ul { margin: 0 0 12px; padding: 0 0 0 16px; font-size: 13px; color: var(--text); display: grid; gap: 3px; }
+  .pop ul li::marker { color: var(--t3); }
+  .pop .more { display: inline-flex; align-items: center; gap: 4px; margin-top: 10px; font-size: 12.5px; color: #58a6ff; }
+  .pop .more:hover { text-decoration: underline; }
+
+  /* Command block (popover + Updates) */
+  .cmd { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 8px; padding: 6px 6px 6px 10px; min-width: 0; }
+  .cmd code { flex: 1; min-width: 0; font: 12px/1.5 var(--mono); color: var(--text); overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+  .cmd code::-webkit-scrollbar { display: none; }
+  .cmd code::before { content: "$ "; color: var(--t3); }
+  .copy { flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--t2); }
+  .copy:hover { color: var(--text); border-color: var(--t2); }
+  .copy.done { color: var(--green); border-color: rgba(63,185,80,.4); }
+
+  /* Settings layout: sticky sub-nav + stacked sections */
+  .layout { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 40px; align-items: start; }
+  .subnav { position: sticky; top: 76px; display: grid; gap: 2px; }
+  .subnav a { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; color: var(--t2); font-size: 13.5px; font-weight: 500; }
+  .subnav a:hover { color: var(--text); background: var(--surface); }
+  .subnav a.on { color: var(--text); background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent); }
+  .subnav .badge { margin-left: auto; width: 7px; height: 7px; border-radius: 50%; background: var(--amber); }
+
+  section.set { scroll-margin-top: 72px; padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--border-soft); }
+  section.set:last-child { border-bottom: 0; margin-bottom: 0; }
+  .sec-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .sec-head h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+  .sec-head p { margin: 2px 0 0; color: var(--t2); font-size: 13px; }
+
+  .panel { border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); }
+  .row { display: flex; align-items: center; gap: 14px; padding: 12px 16px; min-width: 0; }
+  .row + .row { border-top: 1px solid var(--border-soft); }
+  .row .lbl { flex: 1; min-width: 0; }
+  .row .lbl b { display: block; font-weight: 500; font-size: 13.5px; }
+  .row .lbl small { display: block; color: var(--t2); font-size: 12.5px; }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; padding: 5px 12px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); white-space: nowrap; }
+  .btn:hover { border-color: var(--t2); }
+  .btn.primary { background: var(--accent-strong); border-color: var(--accent-strong); color: #fff; }
+  .btn.primary:hover { background: #7a48d6; border-color: #7a48d6; }
+  .btn:focus-visible, .ico:focus-visible, .chip:focus-visible, .sw:focus-visible, .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .ico { width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: none; border-radius: 6px; color: var(--t3); }
+  .ico:hover, .ico[aria-expanded="true"] { background: var(--surface-3); color: var(--text); }
+
+  /* Menus (overflow + add account) */
+  .menu-wrap { position: relative; }
+  .menu { position: absolute; right: 0; top: calc(100% + 4px); min-width: 170px; padding: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 10px 24px rgba(0,0,0,.4); z-index: 15; }
+  .menu button { width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 6px 8px; border: 0; background: none; border-radius: 5px; font-size: 13px; }
+  .menu button:hover { background: var(--surface-3); }
+  .menu .danger { color: var(--red); }
+  .menu .note { padding: 4px 8px 6px; color: var(--t2); font-size: 12px; }
+
+  /* Platform marks: SVG glyphs, no tiny text */
+  .pm { width: 16px; height: 16px; border-radius: 4px; display: inline-grid; place-items: center; flex: none; }
+  .pm svg { width: 10px; height: 10px; }
+  .pm.tw { background: var(--twitch); color: #fff; }
+  .pm.kk { background: var(--kick); color: #0d1117; }
+
+  /* Accounts */
+  .acct .av { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none; font-size: 12px; font-weight: 600; background: var(--surface-3); color: var(--text); position: relative; }
+  .acct .av .pm { position: absolute; right: -3px; bottom: -3px; width: 15px; height: 15px; box-shadow: 0 0 0 2px var(--surface); }
+  .acct .who { flex: 1; min-width: 0; }
+  .acct .who b { font-weight: 500; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
+  .acct .who small { display: block; color: var(--t2); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .st { font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 10px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .st::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .st.mining { color: var(--green); background: var(--green-soft); }
+  .st.out { color: #ff7b72; background: var(--red-soft); }
+  .acct.problem { background: linear-gradient(90deg, rgba(248,81,73,.07), transparent 60%); box-shadow: inset 2px 0 0 var(--red); }
+  .acct.problem .who small { color: #ffa198; }
+  #accounts:target .acct.problem, .acct.problem.ping { animation: ping 1.6s ease-out 1; }
+  @keyframes ping { 0% { background-color: rgba(248,81,73,.18); } 100% { background-color: transparent; } }
+
+  /* Inputs */
+  .field { display: grid; gap: 6px; }
+  .field label { font-size: 12.5px; font-weight: 500; color: var(--t2); }
+  .inp { height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); color: var(--text); font: 12.5px var(--mono); min-width: 0; width: 100%; }
+  .inp:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .inp:disabled { color: var(--t3); background: var(--surface); cursor: not-allowed; }
+  .inp::placeholder { color: var(--t3); }
+  .inline { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .card-body { padding: 14px 16px; display: grid; gap: 12px; }
+  .card-body + .card-body { border-top: 1px solid var(--border-soft); }
+  .card-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .card-title b { font-size: 13.5px; font-weight: 500; }
+  .tag { font-size: 12px; padding: 1px 7px; border-radius: 10px; color: var(--t2); background: var(--surface-3); }
+  .tag.ok { color: var(--green); background: var(--green-soft); }
+  .tag.soon { color: #d2a8ff; background: var(--accent-soft); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .feedback { font-size: 12px; color: var(--green); }
+
+  /* Switch */
+  .sw { position: relative; width: 34px; height: 20px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-3); flex: none; padding: 0; transition: background .15s, border-color .15s; }
+  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--t2); transition: transform .15s, background .15s; }
+  .sw[aria-checked="true"] { background: var(--accent-strong); border-color: var(--accent-strong); }
+  .sw[aria-checked="true"]::after { transform: translateX(14px); background: #fff; }
+  .sub-h { margin: 18px 0 8px; font-size: 12.5px; font-weight: 600; color: var(--t2); }
+
+  /* Health */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); margin-bottom: 14px; }
+  .stats > div { padding: 12px 16px; display: grid; gap: 2px; min-width: 0; }
+  .stats > div + div { border-left: 1px solid var(--border-soft); }
+  .stats small { color: var(--t2); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .stats b { font-size: 14px; font-weight: 600; }
+  .stats .ok::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { font-size: 12.5px; font-weight: 500; padding: 3px 10px; border-radius: 12px; border: 1px solid var(--border); background: none; color: var(--t2); }
+  .chip:hover { color: var(--text); }
+  .chip.on { color: var(--text); background: var(--surface-3); border-color: var(--surface-3); }
+  .chip .n { color: var(--t3); margin-left: 4px; font-family: var(--mono); font-size: 12px; }
+  .log { list-style: none; margin: 0; padding: 6px 0; font: 12.5px/1.5 var(--mono); }
+  .log li { display: grid; grid-template-columns: 44px 8px 104px minmax(0, 1fr); gap: 10px; align-items: baseline; padding: 4px 16px; }
+  .log li:hover { background: var(--surface-2); }
+  .log time { color: var(--t3); }
+  .log .lv { width: 7px; height: 7px; border-radius: 50%; align-self: center; }
+  .lv.info { background: var(--t3); }
+  .lv.ok { background: var(--green); }
+  .lv.warn { background: var(--amber); }
+  .lv.err { background: var(--red); }
+  .log .acc { color: var(--t2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log .msg { color: var(--text); overflow-wrap: anywhere; }
+  .log li.err .msg { color: #ffa198; }
+  .log-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 16px; border-top: 1px solid var(--border-soft); color: var(--t3); font-size: 12px; }
+  .log-foot a { color: var(--t2); }
+  .log-foot a:hover { color: var(--text); }
+
+  /* Updates */
+  .vers { display: grid; grid-template-columns: repeat(2, 1fr); }
+  .vers > div { padding: 14px 16px; display: grid; gap: 2px; }
+  .vers > div + div { border-left: 1px solid var(--border-soft); }
+  .vers small { color: var(--t2); font-size: 12px; }
+  .vers b { font: 600 16px var(--mono); }
+  .vers .new b { color: #58a6ff; }
+  .notes { margin: 0; padding: 0 0 0 16px; font-size: 13px; display: grid; gap: 3px; }
+  .notes li::marker { color: var(--t3); }
+
+  /* General */
+  .sel { height: 32px; padding: 0 30px 0 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a3acb7' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 9px center / 14px; color: var(--text); font: 13px var(--font); appearance: none; }
+  .sel:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .seg { display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); flex: none; }
+  .seg button { border: 0; background: none; padding: 4px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--t2); }
+  .seg button[aria-pressed="true"] { background: var(--surface-3); color: var(--text); }
+
+  @media (max-width: 720px) {
+    .top-in { padding: 0 16px; gap: 14px; }
+    .brand span { display: none; }
+    .ver .vfrom, .ver .vtail { display: none; }
+    .tabs a { padding: 6px 8px; }
+    main { padding: 20px 16px 80px; }
+    .layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+    .subnav { top: 52px; z-index: 12; display: flex; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 8px 16px; background: rgba(13,17,23,.95); border-bottom: 1px solid var(--border-soft); }
+    .subnav::-webkit-scrollbar { display: none; }
+    .subnav a { flex: none; padding: 5px 10px; }
+    .subnav a.on { box-shadow: inset 0 -2px 0 var(--accent); }
+    .subnav .badge { margin-left: 0; }
+    section.set { scroll-margin-top: 112px; }
+    .row { flex-wrap: wrap; padding: 12px 14px; }
+    .acct .st { order: 3; }
+    .acct .fix { order: 4; width: 100%; justify-content: center; }
+    .two { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: 1fr; }
+    .stats > div + div { border-left: 0; border-top: 1px solid var(--border-soft); }
+    .log li { grid-template-columns: 40px 8px minmax(0, 1fr); gap: 8px; padding: 6px 14px; }
+    .log .acc { grid-column: 3; }
+    .log .msg { grid-column: 3; margin-top: -4px; }
+    .vers { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 420px) {
+    .top-in { gap: 8px; }
+    .tabs a { padding: 6px 6px; font-size: 13px; }
+    .ver { font-size: 12px; padding: 4px 2px; }
+    .inline.wrap { flex-wrap: wrap; }
+    .inline.wrap .btn { width: 100%; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="g-tw" viewBox="0 0 24 24"><path d="M4 2 2 6v14h5v3h3l3-3h4l5-5V2H4zm16 12-3 3h-5l-3 3v-3H5V4h15v10zM15 7h2v5h-2zm-5 0h2v5h-2z" fill="currentColor"/></symbol>
+  <symbol id="g-kk" viewBox="0 0 24 24"><path d="M3 2h6v6h2V5h3V2h7v7h-3v3h-3v0h3v3h3v7h-7v-3h-3v-3H9v6H3z" fill="currentColor"/></symbol>
+</svg>
+
+<header class="top">
+  <div class="top-in">
+    <a href="index.html" class="brand"><img src="../_assets/logo.png" alt=""><span>GrubDrops</span></a>
+    <nav class="tabs">
+      <a href="index.html">Home</a>
+      <a href="games.html">Games</a>
+      <a href="rewards.html">Rewards</a>
+      <a href="settings.html" class="on">Settings</a>
+    </nav>
+    <div class="ver-wrap">
+      <button type="button" class="ver update" id="ver" aria-haspopup="dialog" aria-expanded="false" aria-controls="pop"><span class="vfrom">v1.4.2 → </span>v1.5.0<span class="vtail"> available</span></button>
+      <div class="pop" id="pop" role="dialog" aria-label="Update available" hidden>
+        <h3>v1.5.0 is available</h3>
+        <p class="sub">You're on v1.4.2</p>
+        <ul>
+          <li>Telegram notifications</li>
+          <li>Faster game scan</li>
+          <li>Fix: Kick claims retry after timeout</li>
+        </ul>
+        <div class="cmd"><code>docker compose pull &amp;&amp; docker compose up -d</code><button type="button" class="copy">Copy</button></div>
+        <a href="#" class="more">Full release notes<svg class="i" viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="head">
+    <div class="head-l">
+      <h1>Settings</h1>
+      <span class="now"><span class="dot"></span>Mining<span class="sep">·</span>2 of 3 accounts</span><a href="#accounts" class="alert" id="chip" title="grub_alt signed out. Open Settings &gt; Accounts."><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>1 account needs login</a>
+    </div>
+    <span class="stamp">Changes save automatically</span>
+  </div>
+
+  <div class="layout">
+    <nav class="subnav" id="subnav" aria-label="Settings sections">
+      <a href="#general" class="on">General</a>
+      <a href="#accounts">Accounts<span class="badge" title="1 account needs login"></span></a>
+      <a href="#notifications">Notifications</a>
+      <a href="#health">Health</a>
+      <a href="#updates">Updates</a>
+    </nav>
+
+    <div>
+      <!-- General -->
+      <section class="set" id="general" aria-labelledby="h-gen">
+        <div class="sec-head"><div><h2 id="h-gen">General</h2></div></div>
+        <div class="panel">
+          <div class="row">
+            <div class="lbl"><b><label for="lang">Language</label></b></div>
+            <select class="sel" id="lang"><option selected>English</option><option>Español</option><option>简体中文</option></select>
+          </div>
+          <div class="row">
+            <div class="lbl"><b>Time format</b><small id="tf-ex">10:24</small></div>
+            <div class="seg" data-ex="tf-ex"><button type="button" aria-pressed="true" data-v="10:24">24h</button><button type="button" aria-pressed="false" data-v="10:24 AM">12h</button></div>
+          </div>
+          <div class="row">
+            <div class="lbl"><b>Theme</b></div>
+            <div class="seg"><button type="button" aria-pressed="true">Dark</button><button type="button" aria-pressed="false">Light</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Accounts -->
+      <section class="set" id="accounts" aria-labelledby="h-acc">
+        <div class="sec-head">
+          <div><h2 id="h-acc">Accounts</h2><p>Every account here mines your chosen games.</p></div>
+          <div class="menu-wrap">
+            <button type="button" class="btn" data-menu="add-menu" aria-expanded="false"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add account</button>
+            <div class="menu" id="add-menu" hidden>
+              <div class="note">Sign in with</div>
+              <button type="button"><span class="pm tw"><svg><use href="#g-tw"/></svg></span>Twitch</button>
+              <button type="button"><span class="pm kk"><svg><use href="#g-kk"/></svg></span>Kick</button>
+            </div>
+          </div>
+        </div>
+        <div class="panel" id="acct-list">
+          <div class="row acct problem">
+            <span class="av">GA<span class="pm tw"><svg><use href="#g-tw"/></svg></span></span>
+            <div class="who"><b>grub_alt</b><small>Session expired at 10:03. Mining stopped.</small></div>
+            <span class="st out">Signed out</span>
+            <button type="button" class="btn primary fix"><svg class="i" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>Log in again</button>
+            <div class="menu-wrap">
+              <button type="button" class="ico" data-menu="m3" aria-label="More for grub_alt" aria-expanded="false"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"/></svg></button>
+              <div class="menu" id="m3" hidden><button type="button" class="danger rm"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>Remove account</button></div>
+            </div>
+          </div>
+          <div class="row acct">
+            <span class="av">GF<span class="pm tw"><svg><use href="#g-tw"/></svg></span></span>
+            <div class="who"><b>grubfan</b><small>Rust · Hazmat Suit Skin on hJune · 42 / 60 min</small></div>
+            <span class="st mining">Mining</span>
+            <div class="menu-wrap">
+              <button type="button" class="ico" data-menu="m1" aria-label="More for grubfan" aria-expanded="false"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"/></svg></button>
+              <div class="menu" id="m1" hidden><button type="button" class="danger rm"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>Remove account</button></div>
+            </div>
+          </div>
+          <div class="row acct">
+            <span class="av">GK<span class="pm kk"><svg><use href="#g-kk"/></svg></span></span>
+            <div class="who"><b>grubfan_kick</b><small>Rust · Kick Garage Door on posty · 95 / 120 min</small></div>
+            <span class="st mining">Mining</span>
+            <div class="menu-wrap">
+              <button type="button" class="ico" data-menu="m2" aria-label="More for grubfan_kick" aria-expanded="false"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"/></svg></button>
+              <div class="menu" id="m2" hidden><button type="button" class="danger rm"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>Remove account</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Notifications -->
+      <section class="set" id="notifications" aria-labelledby="h-not">
+        <div class="sec-head"><div><h2 id="h-not">Notifications</h2><p>Where GrubDrops tells you something happened.</p></div></div>
+        <div class="panel">
+          <div class="card-body">
+            <div class="card-title"><b>Discord</b><span class="tag ok">Connected</span></div>
+            <div class="field">
+              <label for="dw">Webhook URL</label>
+              <div class="inline wrap">
+                <input class="inp" id="dw" type="text" value="https://discord.com/api/webhooks/••••••••••••" readonly>
+                <button type="button" class="btn" id="test">Send test</button>
+              </div>
+              <span class="feedback" id="test-fb" hidden>Test message sent to Discord.</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="card-title"><b>Telegram</b><span class="tag soon">Coming in v1.5.0</span></div>
+            <div class="two">
+              <div class="field"><label for="tt">Bot token</label><input class="inp" id="tt" type="text" placeholder="123456:ABC-DEF…" disabled></div>
+              <div class="field"><label for="tc">Chat ID</label><input class="inp" id="tc" type="text" placeholder="-1001234567890" disabled></div>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="sub-h">Notify me when</h3>
+        <div class="panel">
+          <div class="row"><div class="lbl"><b>Drop claimed</b><small>Each reward the moment it lands.</small></div><button type="button" class="sw" role="switch" aria-checked="true" aria-label="Drop claimed"></button></div>
+          <div class="row"><div class="lbl"><b>Account needs login</b><small>A session expired and mining stopped.</small></div><button type="button" class="sw" role="switch" aria-checked="true" aria-label="Account needs login"></button></div>
+          <div class="row"><div class="lbl"><b>Errors</b><small>Something keeps failing, like a sidecar or a claim.</small></div><button type="button" class="sw" role="switch" aria-checked="true" aria-label="Errors"></button></div>
+          <div class="row"><div class="lbl"><b>Daily summary</b><small>One message a day with minutes and claims.</small></div><button type="button" class="sw" role="switch" aria-checked="false" aria-label="Daily summary"></button></div>
+        </div>
+      </section>
+
+      <!-- Health -->
+      <section class="set" id="health" aria-labelledby="h-hea">
+        <div class="sec-head"><div><h2 id="h-hea">Health</h2><p>What the miner has been doing, newest first.</p></div></div>
+        <div class="panel stats">
+          <div><small class="ok">Miner</small><b>Running 6d 4h</b></div>
+          <div><small class="ok">Kick sidecar</small><b>1 running</b></div>
+          <div><small class="ok">Last scan</small><b>41 s ago</b></div>
+        </div>
+        <div class="panel">
+          <div class="row" style="padding:10px 16px">
+            <div class="chips" id="chips" role="group" aria-label="Filter log">
+              <button type="button" class="chip on" data-f="all">All<span class="n">12</span></button>
+              <button type="button" class="chip" data-f="problem">Problems<span class="n">2</span></button>
+              <button type="button" class="chip" data-f="claim">Claims<span class="n">3</span></button>
+            </div>
+          </div>
+          <ol class="log" id="log" style="border-top:1px solid var(--border-soft)">
+            <li data-k="info"><time>10:24</time><span class="lv info"></span><span class="acc">grubfan</span><span class="msg">progress 42/60 Hazmat Suit Skin</span></li>
+            <li data-k="info"><time>10:23</time><span class="lv info"></span><span class="acc">system</span><span class="msg">scan finished 41 s · 4 games</span></li>
+            <li data-k="info"><time>10:18</time><span class="lv info"></span><span class="acc">grubfan_kick</span><span class="msg">progress 95/120 Kick Garage Door</span></li>
+            <li data-k="problem" class="err"><time>10:03</time><span class="lv err"></span><span class="acc">grub_alt</span><span class="msg">session expired, mining stopped</span></li>
+            <li data-k="info"><time>09:51</time><span class="lv info"></span><span class="acc">grubfan_kick</span><span class="msg">Kick sidecar started for posty</span></li>
+            <li data-k="info"><time>09:50</time><span class="lv info"></span><span class="acc">grubfan_kick</span><span class="msg">Kick sidecar stopped, channel went offline</span></li>
+            <li data-k="problem"><time>09:44</time><span class="lv warn"></span><span class="acc">grubfan_kick</span><span class="msg">claim timed out, retrying in 60 s</span></li>
+            <li data-k="claim"><time>09:12</time><span class="lv ok"></span><span class="acc">grubfan</span><span class="msg">claimed Rust Wood Box Skin</span></li>
+            <li data-k="info"><time>09:12</time><span class="lv info"></span><span class="acc">grubfan</span><span class="msg">switched to hJune, Hazmat Suit Skin</span></li>
+            <li data-k="claim"><time>07:40</time><span class="lv ok"></span><span class="acc">grubfan</span><span class="msg">claimed Marvel Rivals Spray</span></li>
+            <li data-k="info"><time>06:55</time><span class="lv info"></span><span class="acc">system</span><span class="msg">Marvel Rivals campaign found, Season 4 Twitch Drops</span></li>
+            <li data-k="claim"><time>22:05</time><span class="lv ok"></span><span class="acc">grubfan_kick</span><span class="msg">claimed Kick Rust Hoodie · yesterday</span></li>
+          </ol>
+          <div class="log-foot"><span>Showing the last 12 events</span><a href="#">Download full log</a></div>
+        </div>
+      </section>
+
+      <!-- Updates -->
+      <section class="set" id="updates" aria-labelledby="h-upd">
+        <div class="sec-head">
+          <div><h2 id="h-upd">Updates</h2><p>GrubDrops never updates itself. Run the command below on your server.</p></div>
+          <button type="button" class="btn" id="check"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg><span>Check for updates</span></button>
+        </div>
+        <div class="panel">
+          <div class="vers">
+            <div><small>Current</small><b>v1.4.2</b></div>
+            <div class="new"><small>Latest · <span id="checked">checked 2 h ago</span></small><b>v1.5.0</b></div>
+          </div>
+          <div class="card-body">
+            <ul class="notes">
+              <li>Telegram notifications</li>
+              <li>Faster game scan</li>
+              <li>Fix: Kick claims retry after timeout</li>
+            </ul>
+            <div class="cmd"><code>docker compose pull &amp;&amp; docker compose up -d</code><button type="button" class="copy">Copy</button></div>
+          </div>
+          <div class="row"><div class="lbl"><b>Check automatically</b><small>Once a day. Shows the version badge in the top bar.</small></div><button type="button" class="sw" role="switch" aria-checked="true" aria-label="Check automatically"></button></div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</main>
+
+<div class="mock-tag">r4 · Settings · <a href="../">all mockups</a></div>
+
+<script>
+  // Version popover
+  const ver = document.getElementById('ver'), pop = document.getElementById('pop');
+  function setPop(open) { pop.hidden = !open; ver.setAttribute('aria-expanded', open); }
+  ver.addEventListener('click', e => { e.stopPropagation(); setPop(pop.hidden); });
+
+  // Overflow + add-account menus
+  function closeMenus(except) {
+    document.querySelectorAll('[data-menu]').forEach(b => {
+      if (b === except) return;
+      b.setAttribute('aria-expanded', 'false');
+      document.getElementById(b.dataset.menu).hidden = true;
+    });
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-menu]');
+    if (b) {
+      closeMenus(b);
+      const m = document.getElementById(b.dataset.menu), open = m.hidden;
+      m.hidden = !open; b.setAttribute('aria-expanded', open);
+    } else if (!e.target.closest('.menu')) closeMenus();
+    if (!e.target.closest('.pop')) setPop(false);
+    const rm = e.target.closest('.rm');
+    if (rm) rm.closest('.acct').remove();
+    if (e.target.closest('.menu button')) closeMenus();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { setPop(false); closeMenus(); } });
+
+  // Copy command
+  document.querySelectorAll('.copy').forEach(btn => btn.addEventListener('click', async e => {
+    e.stopPropagation();
+    const txt = btn.previousElementSibling.textContent;
+    try { await navigator.clipboard.writeText(txt); } catch (_) {
+      const t = document.createElement('textarea'); t.value = txt; document.body.appendChild(t); t.select();
+      try { document.execCommand('copy'); } catch (_) {} t.remove();
+    }
+    btn.textContent = 'Copied'; btn.classList.add('done');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('done'); }, 1600);
+  }));
+
+  // Switches + segmented controls
+  document.querySelectorAll('.sw').forEach(s => s.addEventListener('click', () => s.setAttribute('aria-checked', s.getAttribute('aria-checked') !== 'true')));
+  document.querySelectorAll('.seg').forEach(g => g.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    g.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    if (g.dataset.ex) document.getElementById(g.dataset.ex).textContent = b.dataset.v;
+  }));
+
+  // Send test
+  document.getElementById('test').addEventListener('click', () => {
+    const fb = document.getElementById('test-fb'); fb.hidden = false; setTimeout(() => fb.hidden = true, 2500);
+  });
+
+  // Check for updates
+  document.getElementById('check').addEventListener('click', e => {
+    const b = e.currentTarget, s = b.querySelector('span');
+    s.textContent = 'Checking…'; b.disabled = true;
+    setTimeout(() => { s.textContent = 'Check for updates'; b.disabled = false; document.getElementById('checked').textContent = 'checked just now'; }, 900);
+  });
+
+  // Log filter
+  document.getElementById('chips').addEventListener('click', e => {
+    const c = e.target.closest('.chip'); if (!c) return;
+    document.querySelectorAll('#chips .chip').forEach(x => x.classList.toggle('on', x === c));
+    document.querySelectorAll('#log li').forEach(li => li.hidden = c.dataset.f !== 'all' && li.dataset.k !== c.dataset.f);
+  });
+
+  // Header chip lands on the problem row
+  document.getElementById('chip').addEventListener('click', () => {
+    const r = document.querySelector('.acct.problem'); if (!r) return;
+    r.classList.remove('ping'); void r.offsetWidth; r.classList.add('ping');
+  });
+
+  // Sub-nav scroll-spy
+  const links = [...document.querySelectorAll('#subnav a')];
+  const secs = links.map(a => document.querySelector(a.getAttribute('href')));
+  function spy() {
+    const y = window.scrollY + 140;
+    let cur = secs[0];
+    secs.forEach(s => { if (s.offsetTop <= y) cur = s; });
+    if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 4) cur = secs[secs.length - 1];
+    links.forEach(a => {
+      const on = a.getAttribute('href') === '#' + cur.id;
+      a.classList.toggle('on', on);
+      if (on && a.parentElement.scrollWidth > a.parentElement.clientWidth) a.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+  }
+  window.addEventListener('scroll', spy, { passive: true });
+  spy();
+</script>
+</body>
+</html>

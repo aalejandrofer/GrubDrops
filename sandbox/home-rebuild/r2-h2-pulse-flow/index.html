@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops · H2 Pulse + flow</title>
+<link rel="stylesheet" href="../_assets/base.css">
+<style>
+  body { min-height: 100vh; }
+  .app { display: grid; grid-template-columns: 216px minmax(0, 1fr); min-height: 100vh; }
+
+  /* Sidebar (09) */
+  .side { border-right: 1px solid var(--border-soft); padding: 16px 12px; display: flex; flex-direction: column; gap: 20px; position: sticky; top: 0; height: 100vh; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand img { width: 24px; height: 24px; border-radius: 6px; }
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav a { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; color: var(--muted); font-weight: 500; }
+  .nav a:hover { background: var(--surface); color: var(--text); }
+  .nav a.on { background: var(--surface-2); color: var(--text); }
+  .nav svg { width: 16px; height: 16px; flex: none; }
+  .nav .count { margin-left: auto; font: 11px var(--mono); color: var(--amber); background: var(--amber-soft); padding: 0 6px; border-radius: 10px; }
+  .side-foot { margin-top: auto; padding: 0 8px; font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 8px; }
+  .side-foot .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+  /* Main */
+  main { padding: 28px 40px 64px; max-width: 1000px; width: 100%; min-width: 0; }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .head-l { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; padding: 4px 12px 4px 10px; border-radius: 999px; background: var(--green-soft); color: var(--green); border: 1px solid rgba(63,185,80,.3); }
+  .pill .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 rgba(63,185,80,.6); animation: pulse 2s infinite; }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 6px rgba(63,185,80,0); } 100% { box-shadow: 0 0 0 0 rgba(63,185,80,0); } }
+  .pill .sep { color: var(--dim); }
+  .pill .warn { color: var(--amber); }
+  .stamp { color: var(--dim); font-size: 12px; font-family: var(--mono); }
+
+  /* KPIs (09) */
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border-soft); border-radius: var(--radius); background: var(--surface); }
+  .kpi { padding: 16px 20px 18px; display: block; position: relative; }
+  .kpi + .kpi { border-left: 1px solid var(--border-soft); }
+  .kpi .label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .kpi .val { font-size: 30px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.15; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .kpi .val small { font-size: 14px; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-left: 2px; }
+  .kpi .sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  a.kpi.bad { background: var(--amber-soft); border-radius: 0 var(--radius) var(--radius) 0; box-shadow: inset 0 0 0 1px rgba(210,153,34,.45); }
+  a.kpi.bad .label, a.kpi.bad .val { color: var(--amber); }
+  a.kpi.bad .val small { color: var(--amber); opacity: .7; }
+  a.kpi.bad .sub { color: var(--text); display: flex; align-items: center; gap: 4px; }
+  a.kpi.bad .sub svg { width: 12px; height: 12px; transition: transform .15s; }
+  a.kpi.bad:hover { box-shadow: inset 0 0 0 1px var(--amber); }
+  a.kpi.bad:hover .sub svg { transform: translateX(2px); }
+
+  .section { margin-top: 28px; min-width: 0; }
+  .section-h { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .section-h h2 { font-size: 13px; font-weight: 600; margin: 0; }
+  .section-h .n { font: 11px var(--mono); color: var(--muted); background: var(--surface-3); border-radius: 10px; padding: 0 6px; }
+  .section-h .meta { margin-left: auto; font-size: 12px; color: var(--dim); }
+  .section-h a.meta:hover { color: var(--accent); }
+
+  .pm { width: 16px; height: 16px; border-radius: 4px; display: inline-grid; place-items: center; font: 700 9px/1 var(--font); flex: none; }
+  .pm.tw { background: var(--twitch); color: #fff; }
+  .pm.kk { background: var(--kick); color: #0d1117; }
+  .pm.sm { width: 8px; height: 8px; border-radius: 2px; font-size: 0; }
+
+  /* Mining: one fixed row per account, never draggable */
+  .list { border: 1px solid var(--border-soft); border-radius: var(--radius); }
+  .mrow { display: grid; grid-template-columns: 168px minmax(0, 1fr) 180px 56px; gap: 16px; align-items: center; padding: 12px 16px; }
+  .mrow + .mrow { border-top: 1px solid var(--border-soft); }
+  .acct { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .acct b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .st { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex: none; margin-left: auto; }
+  .what { min-width: 0; }
+  .what .d { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .what .m { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar { height: 4px; background: var(--surface-3); border-radius: 2px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+  .prog .n { font: 11px var(--mono); color: var(--dim); margin-top: 6px; }
+  .eta { text-align: right; font: 500 13px var(--mono); }
+  .eta small { display: block; font: 11px var(--font); color: var(--dim); }
+  .mrow.bad { background: var(--red-soft); grid-template-columns: 168px minmax(0, 1fr) auto; border-radius: 0 0 var(--radius) var(--radius); }
+  .mrow.bad .st { background: var(--red); }
+  .mrow.bad .what .d { color: #ffb4ae; }
+  .mrow.bad .what .m { color: #f0a8a3; }
+  .fix { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; background: var(--red); color: #fff; border: 0; border-radius: 6px; padding: 5px 10px; white-space: nowrap; }
+  .fix:hover { background: #ff6a62; }
+  .fix svg { width: 12px; height: 12px; }
+
+  /* Up next + Claimed: two different roles side by side */
+  .lower { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+
+  .hint { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--dim); margin: -2px 0 10px; }
+  .hint .changed { display: none; color: var(--accent); }
+  .reset { margin-left: auto; font-size: 12px; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
+  .reset:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
+  .reset:disabled { opacity: .45; cursor: default; }
+  .upnext.is-changed .hint .changed { display: inline; }
+  .upnext.is-changed .hint .def { display: none; }
+
+  .queue { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border-soft); border-radius: var(--radius); }
+  .queue li { display: grid; grid-template-columns: 16px 18px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 10px 10px 8px; background: var(--bg); }
+  .queue li + li { border-top: 1px solid var(--border-soft); }
+  .queue li:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+  .queue li:last-child { border-radius: 0 0 var(--radius) var(--radius); }
+  .queue li.dragging { opacity: .4; }
+  .queue li.over { box-shadow: inset 0 2px 0 var(--accent); }
+  .grip { color: var(--dim); cursor: grab; display: grid; place-items: center; }
+  .grip svg { width: 12px; height: 12px; }
+  .qn { font: 11px var(--mono); color: var(--dim); text-align: right; }
+  .qt { min-width: 0; }
+  .qt .d { font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .qt .m { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .qt .m span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .qt .m .who { display: inline-flex; align-items: center; gap: 5px; color: var(--text); flex: none; }
+  .mv { display: flex; gap: 2px; }
+  .mv button { width: 24px; height: 24px; display: grid; place-items: center; background: none; border: 1px solid transparent; border-radius: 5px; color: var(--muted); }
+  .mv button:hover:not(:disabled) { border-color: var(--border); color: var(--text); background: var(--surface); }
+  .mv button:disabled { opacity: .25; cursor: default; }
+  .mv svg { width: 12px; height: 12px; }
+
+  .claims { list-style: none; margin: 0; padding: 0; }
+  .claims li { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 6px 0; font-size: 13px; }
+  .claims li + li { border-top: 1px dashed var(--border-soft); }
+  .claims .ck { width: 12px; height: 12px; color: var(--green); align-self: center; }
+  .claims li.old .ck { color: var(--dim); }
+  .claims .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .claims li.old .nm { color: var(--muted); }
+  .claims .acc { font-size: 12px; color: var(--dim); margin-left: 6px; }
+  .claims time { font: 11px var(--mono); color: var(--dim); white-space: nowrap; }
+  .claims-foot { display: block; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-soft); font-size: 12px; color: var(--muted); }
+  .claims-foot:hover { color: var(--accent); }
+
+  @media (max-width: 900px) {
+    .lower { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .mrow { grid-template-columns: 150px minmax(0, 1fr) 140px 52px; }
+  }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: minmax(0, 1fr); }
+    .side { position: static; height: auto; flex-direction: row; align-items: center; padding: 10px 16px; gap: 12px; border-right: 0; border-bottom: 1px solid var(--border-soft); overflow: hidden; }
+    .brand span, .side-foot { display: none; }
+    .brand { padding: 0; }
+    .nav { flex-direction: row; gap: 0; }
+    .nav a { padding: 6px 8px; font-size: 13px; }
+    .nav a svg { display: none; }
+    .nav .count { margin-left: 4px; }
+    main { padding: 20px 16px 72px; }
+    .kpis { grid-template-columns: 1fr 1fr; }
+    .kpi { padding: 14px 16px; }
+    .kpi .val { font-size: 24px; }
+    .kpi:nth-child(3) { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--border-soft); }
+    a.kpi.bad { border-radius: 0 0 var(--radius) var(--radius); }
+    .mrow, .mrow.bad { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 12px 14px; }
+    .mrow .acct { grid-column: 1; }
+    .mrow .st { margin-left: 4px; }
+    .mrow .what { grid-column: 1 / -1; grid-row: 2; }
+    .mrow .prog { grid-column: 1 / -1; grid-row: 3; }
+    .mrow .eta { grid-column: 2; grid-row: 1; }
+    .eta small { display: inline; margin-left: 4px; }
+    .mrow.bad .fix { grid-column: 2; grid-row: 1; }
+    .reset { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><img src="../_assets/logo.png" alt=""><span>GrubDrops</span></div>
+    <nav class="nav">
+      <a href="#" class="on"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7 8 2.5 13.5 7v6.5h-3.5V10h-4v3.5H2.5z"/></svg>Home</a>
+      <a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="4.5" width="13" height="8" rx="3"/><path d="M5 7v2.5M3.75 8.25h2.5M10.5 7.5h.01M12 9h.01"/></svg>Games</a>
+      <a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="12" height="8" rx="1"/><path d="M1.5 6h13M8 6v8M8 6S6.5 2.5 4.75 3.25 6 6 8 6zM8 6s1.5-3.5 3.25-2.75S10 6 8 6z"/></svg>Rewards</a>
+      <a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>Settings<span class="count">1</span></a>
+    </nav>
+    <div class="side-foot"><span class="dot"></span>Daemon up 6d 4h</div>
+  </aside>
+
+  <main>
+    <div class="head">
+      <div class="head-l">
+        <h1>Home</h1>
+        <span class="pill"><span class="pulse"></span>Mining Rust<span class="sep">·</span><span class="warn">1 account needs you</span></span>
+      </div>
+      <span class="stamp">Today · 10:11</span>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi">
+        <div class="label">Minutes mined today</div>
+        <div class="val">412<small>min</small></div>
+        <div class="sub">Across 2 accounts</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Drops claimed today</div>
+        <div class="val">2</div>
+        <div class="sub">27 all time</div>
+      </div>
+      <a class="kpi bad" href="#mining" title="Jump to grub_alt">
+        <div class="label">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.75 15 14H1z"/><path d="M8 6.5v3.25M8 11.75h.01"/></svg>
+          Accounts healthy
+        </div>
+        <div class="val">2<small>/ 3</small></div>
+        <div class="sub">grub_alt signed out. Re-login
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
+        </div>
+      </a>
+    </div>
+
+    <!-- Mining: every account, fixed order -->
+    <section class="section" id="mining">
+      <div class="section-h"><h2>Mining</h2><span class="n">2 of 3</span><span class="meta">Every account you added</span></div>
+      <div class="list">
+        <div class="mrow">
+          <div class="acct"><span class="pm tw">T</span><b>grubfan</b><span class="st" title="Mining"></span></div>
+          <div class="what"><div class="d">Hazmat Suit Skin</div><div class="m">Rust · Round 41 · on hJune</div></div>
+          <div class="prog"><div class="bar"><i style="width:70%"></i></div><div class="n">42 / 60 min</div></div>
+          <div class="eta">18m<small>left</small></div>
+        </div>
+        <div class="mrow">
+          <div class="acct"><span class="pm kk">K</span><b>grubfan_kick</b><span class="st" title="Mining"></span></div>
+          <div class="what"><div class="d">Kick Garage Door</div><div class="m">Rust · Kick x Rust · on posty</div></div>
+          <div class="prog"><div class="bar"><i style="width:79%"></i></div><div class="n">95 / 120 min</div></div>
+          <div class="eta">25m<small>left</small></div>
+        </div>
+        <div class="mrow bad">
+          <div class="acct"><span class="pm tw">T</span><b>grub_alt</b><span class="st" title="Signed out"></span></div>
+          <div class="what"><div class="d">Signed out, not mining</div><div class="m">Twitch session expired. Log in again to resume.</div></div>
+          <button class="fix"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 6a4 4 0 1 1-1.2-2.85M10 1.5v2.5H7.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Re-login</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="lower">
+      <!-- Up next: the only reorderable part -->
+      <section class="section upnext">
+        <div class="section-h"><h2>Up next</h2><span class="n">4</span><span class="meta">Drag or use the arrows</span></div>
+        <div class="hint">
+          <span class="def">Order follows your Games priority.</span>
+          <span class="changed">Changed for this session only. Games keeps the permanent order.</span>
+          <button class="reset" type="button" disabled>Reset to Games order</button>
+        </div>
+        <ol class="queue">
+          <li draggable="true" data-id="1">
+            <span class="grip" title="Drag to reorder"><svg viewBox="0 0 12 12" fill="currentColor"><circle cx="4" cy="3" r="1"/><circle cx="8" cy="3" r="1"/><circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/><circle cx="4" cy="9" r="1"/><circle cx="8" cy="9" r="1"/></svg></span>
+            <span class="qn">1</span>
+            <div class="qt"><div class="d">Road Sign Kilt</div><div class="m"><span class="who"><span class="pm tw sm"></span>grubfan</span><span>Rust · 60 min · after Hazmat Suit Skin</span></div></div>
+            <div class="mv"><button data-mv="up" aria-label="Move up"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 6 4.5l3 3"/></svg></button><button data-mv="down" aria-label="Move down"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 7.5l3-3"/></svg></button></div>
+          </li>
+          <li draggable="true" data-id="2">
+            <span class="grip" title="Drag to reorder"><svg viewBox="0 0 12 12" fill="currentColor"><circle cx="4" cy="3" r="1"/><circle cx="8" cy="3" r="1"/><circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/><circle cx="4" cy="9" r="1"/><circle cx="8" cy="9" r="1"/></svg></span>
+            <span class="qn">2</span>
+            <div class="qt"><div class="d">Tempered AK</div><div class="m"><span class="who"><span class="pm tw sm"></span>grubfan</span><span>Rust · 120 min</span></div></div>
+            <div class="mv"><button data-mv="up" aria-label="Move up"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 6 4.5l3 3"/></svg></button><button data-mv="down" aria-label="Move down"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 7.5l3-3"/></svg></button></div>
+          </li>
+          <li draggable="true" data-id="3">
+            <span class="grip" title="Drag to reorder"><svg viewBox="0 0 12 12" fill="currentColor"><circle cx="4" cy="3" r="1"/><circle cx="8" cy="3" r="1"/><circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/><circle cx="4" cy="9" r="1"/><circle cx="8" cy="9" r="1"/></svg></span>
+            <span class="qn">3</span>
+            <div class="qt"><div class="d">Spray: Grub Sighting</div><div class="m"><span>Marvel Rivals · 30 min · first free account</span></div></div>
+            <div class="mv"><button data-mv="up" aria-label="Move up"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 6 4.5l3 3"/></svg></button><button data-mv="down" aria-label="Move down"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 7.5l3-3"/></svg></button></div>
+          </li>
+          <li draggable="true" data-id="4">
+            <span class="grip" title="Drag to reorder"><svg viewBox="0 0 12 12" fill="currentColor"><circle cx="4" cy="3" r="1"/><circle cx="8" cy="3" r="1"/><circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/><circle cx="4" cy="9" r="1"/><circle cx="8" cy="9" r="1"/></svg></span>
+            <span class="qn">4</span>
+            <div class="qt"><div class="d">Nameplate: Hive</div><div class="m"><span>Marvel Rivals · 60 min</span></div></div>
+            <div class="mv"><button data-mv="up" aria-label="Move up"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 6 4.5l3 3"/></svg></button><button data-mv="down" aria-label="Move down"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 7.5l3-3"/></svg></button></div>
+          </li>
+        </ol>
+      </section>
+
+      <!-- Claimed: last 10 only -->
+      <section class="section">
+        <div class="section-h"><h2>Claimed</h2><span class="n">last 10</span><span class="meta">27 all time</span></div>
+        <ul class="claims">
+          <li><svg class="ck" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7.3 2.6 2.6L11 4.5"/></svg><span class="nm">Rust Wood Box Skin<span class="acc">grubfan</span></span><time>09:12</time></li>
+          <li><svg class="ck" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7.3 2.6 2.6L11 4.5"/></svg><span class="nm">Marvel Rivals Spray<span class="acc">grubfan</span></span><time>07:40</time></li>
+          <li class="old"><svg class="ck" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7.3 2.6 2.6L11 4.5"/></svg><span class="nm">Kick Rust Hoodie<span class="acc">grubfan_kick</span></span><time>yest 22:05</time></li>
+          <li class="old"><svg class="ck" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7.3 2.6 2.6L11 4.5"/></svg><span class="nm">Rust Garage Door Skin<span class="acc">grubfan</span></span><time>yest 18:30</time></li>
+          <li class="old"><svg class="ck" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7.3 2.6 2.6L11 4.5"/></svg><span class="nm">Marvel Rivals Banner<span class="acc">grubfan</span></span><time>Oct 23</time></li>
+          <li class="old"><svg class="ck" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7.3 2.6 2.6L11 4.5"/></svg><span class="nm">Kick Rust Bandana<span class="acc">grubfan_kick</span></span><time>Oct 23</time></li>
+          <li class="old"><svg class="ck" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7.3 2.6 2.6L11 4.5"/></svg><span class="nm">Overwatch Spray "Grub"<span class="acc">grubfan</span></span><time>Oct 21</time></li>
+          <li class="old"><svg class="ck" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7.3 2.6 2.6L11 4.5"/></svg><span class="nm">Overwatch Player Icon<span class="acc">grub_alt</span></span><time>Oct 21</time></li>
+          <li class="old"><svg class="ck" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7.3 2.6 2.6L11 4.5"/></svg><span class="nm">Rust Sleeping Bag Skin<span class="acc">grubfan</span></span><time>Oct 20</time></li>
+          <li class="old"><svg class="ck" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 7.3 2.6 2.6L11 4.5"/></svg><span class="nm">Kick Rust Beanie<span class="acc">grubfan_kick</span></span><time>Oct 19</time></li>
+        </ul>
+        <a href="#" class="claims-foot">All 27 in Rewards</a>
+      </section>
+    </div>
+  </main>
+</div>
+<div class="mock-tag">r2 · H2 · Pulse + flow · <a href="../">all mockups</a></div>
+<script>
+(() => {
+  const q = document.querySelector('.queue'), sec = q.closest('.upnext'), reset = sec.querySelector('.reset');
+  const base = [...q.children].map(li => li.dataset.id);
+  const sync = () => {
+    const items = [...q.children];
+    items.forEach((li, i) => {
+      li.querySelector('.qn').textContent = i + 1;
+      li.querySelector('[data-mv=up]').disabled = i === 0;
+      li.querySelector('[data-mv=down]').disabled = i === items.length - 1;
+    });
+    const changed = items.map(li => li.dataset.id).join() !== base.join();
+    sec.classList.toggle('is-changed', changed);
+    reset.disabled = !changed;
+  };
+  q.addEventListener('click', e => {
+    const b = e.target.closest('[data-mv]'); if (!b) return;
+    const li = b.closest('li');
+    if (b.dataset.mv === 'up' && li.previousElementSibling) q.insertBefore(li, li.previousElementSibling);
+    if (b.dataset.mv === 'down' && li.nextElementSibling) q.insertBefore(li.nextElementSibling, li);
+    sync();
+  });
+  let drag = null;
+  q.addEventListener('dragstart', e => { drag = e.target.closest('li'); drag.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', ''); });
+  q.addEventListener('dragover', e => {
+    e.preventDefault();
+    const over = e.target.closest('li'); if (!over || over === drag) return;
+    const r = over.getBoundingClientRect();
+    q.insertBefore(drag, e.clientY > r.top + r.height / 2 ? over.nextElementSibling : over);
+  });
+  q.addEventListener('dragend', () => { drag && drag.classList.remove('dragging'); drag = null; sync(); });
+  reset.addEventListener('click', () => { base.forEach(id => q.appendChild(q.querySelector(`[data-id="${id}"]`))); sync(); });
+  sync();
+})();
+</script>
+</body>
+</html>

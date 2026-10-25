@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops · r2 08 Game cards · Games</title>
+<link rel="stylesheet" href="../_assets/base.css">
+<style>
+  /* Top bar */
+  .top { position: sticky; top: 0; z-index: 10; background: rgba(13,17,23,.92); border-bottom: 1px solid var(--border-soft); backdrop-filter: blur(6px); }
+  .top-in { max-width: 960px; margin: 0 auto; height: 52px; padding: 0 24px; display: flex; align-items: center; gap: 28px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -.01em; }
+  .brand img { width: 24px; height: 24px; border-radius: 6px; }
+  .tabs { display: flex; gap: 2px; }
+  .tabs a { padding: 6px 10px; border-radius: 6px; color: var(--muted); font-weight: 500; font-size: 13.5px; }
+  .tabs a:hover { color: var(--text); background: var(--surface); }
+  .tabs a.on { color: var(--text); background: var(--surface-2); }
+  .health { margin-left: auto; display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); }
+  .health i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+
+  main { max-width: 960px; margin: 0 auto; padding: 32px 24px 96px; }
+  .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+  .head h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -.015em; }
+  .head p { margin: 4px 0 0; color: var(--muted); }
+  .scan { color: var(--dim); font: 12px var(--mono); display: inline-flex; align-items: center; gap: 6px; }
+  svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* Add game */
+  .add { position: relative; margin-bottom: 24px; }
+  .search { display: flex; align-items: center; gap: 10px; height: 42px; padding: 0 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--dim); }
+  .search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .search input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: var(--text); font: inherit; }
+  .search input::placeholder { color: var(--dim); }
+  .sugg { margin: 6px 0 0; padding: 4px; list-style: none; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+  .sugg[hidden] { display: none; }
+  .sugg li { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 6px; }
+  .sugg li:hover { background: var(--surface-3); }
+  .sugg .thumb { width: 28px; height: 28px; border-radius: 5px; flex: none; background: #22262e repeating-linear-gradient(45deg, rgba(255,255,255,.05) 0 2px, transparent 2px 8px); }
+  .sugg .nm { flex: 1; min-width: 0; }
+  .sugg .nm b { font-weight: 500; display: block; }
+  .sugg .nm small { color: var(--dim); font-size: 12px; }
+  .sugg mark { background: none; color: var(--accent); }
+  .add-btn { font-size: 12.5px; font-weight: 500; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); }
+  .add-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .hint { margin: 8px 2px 0; color: var(--dim); font-size: 12px; }
+
+  /* Priority list */
+  .list-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .list-head h2 { margin: 0; font-size: 14px; font-weight: 600; }
+  .list-head p { margin: 0; color: var(--muted); font-size: 12.5px; }
+
+  .game { display: grid; grid-template-columns: 36px 150px 1fr; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); overflow: hidden; transition: border-color .15s; }
+  .game + .game { margin-top: 10px; }
+  .game.moved { border-color: var(--accent); }
+  .grip { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-right: 1px solid var(--border-soft); color: var(--dim); }
+  .grip .h { cursor: grab; padding: 2px 0; }
+  .grip button { width: 26px; height: 22px; display: grid; place-items: center; border: 0; background: none; border-radius: 4px; color: var(--dim); }
+  .grip button:hover:not(:disabled) { background: var(--surface-3); color: var(--text); }
+  .grip button:disabled { opacity: .3; cursor: default; }
+
+  .art { position: relative; padding: 14px; display: flex; flex-direction: column; justify-content: space-between; color: #fff; isolation: isolate; min-height: 120px; }
+  .art::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,.45)); }
+  .art .rank { font: 500 11px var(--mono); color: rgba(255,255,255,.6); }
+  .art .title { font-size: 19px; line-height: 1.05; font-weight: 700; letter-spacing: -.02em; text-transform: uppercase; }
+  .art.rust { background-color: #3a2418; background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.05) 0 2px, transparent 2px 12px), repeating-linear-gradient(45deg, rgba(0,0,0,.18) 0 6px, transparent 6px 18px); }
+  .art.rust .title { color: #f0c7a8; }
+  .art.mr { background-color: #241a36; background-image: radial-gradient(rgba(255,255,255,.09) 1.2px, transparent 1.4px); background-size: 10px 10px; }
+  .art.mr .title { color: #d8c6ff; }
+  .art.ow { background-color: #1c232c; background-image: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px); background-size: 16px 16px; }
+  .art.ow .title { color: #8b949e; }
+  .art.new { background-color: #22262e; background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.05) 0 2px, transparent 2px 8px); }
+  .art.new .title { color: var(--muted); }
+
+  .body { padding: 14px 18px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+  .status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .state { font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 10px; display: inline-flex; align-items: center; gap: 6px; }
+  .state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .state.mining { color: var(--green); background: var(--green-soft); }
+  .state.wait { color: var(--accent); background: var(--accent-soft); }
+  .state.off { color: var(--dim); background: var(--surface-3); }
+  .status .rm { margin-left: auto; color: var(--dim); font-size: 12px; display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; padding: 2px 4px; border-radius: 4px; }
+  .status .rm:hover { color: var(--red); }
+  .camps { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+  .camps li { display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: center; font-size: 13px; }
+  .camps li span:nth-child(2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .camps li small { color: var(--dim); font: 12px var(--mono); white-space: nowrap; }
+  .pm { width: 14px; height: 14px; border-radius: 3px; display: inline-grid; place-items: center; font: 700 9px/1 var(--font); flex: none; }
+  .pm.tw { background: var(--twitch); color: #fff; }
+  .pm.kk { background: var(--kick); color: #0d1117; }
+  .muted { color: var(--muted); font-size: 13px; margin: 0; }
+
+  @media (max-width: 720px) {
+    .top-in { padding: 0 16px; gap: 14px; }
+    .brand span, .health span { display: none; }
+    .tabs a { padding: 6px 8px; }
+    main { padding: 22px 16px 80px; }
+    .game { grid-template-columns: 36px 1fr; }
+    .art { grid-column: 2; min-height: 64px; flex-direction: row; align-items: flex-end; }
+    .art .rank { order: 2; }
+    .grip { grid-row: 1 / span 2; }
+    .body { grid-column: 2; padding: 12px 14px; }
+    .camps li { grid-template-columns: 14px 1fr; }
+    .camps li small { grid-column: 2; margin-top: -4px; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <a href="index.html" class="brand"><img src="../_assets/logo.png" alt=""><span>GrubDrops</span></a>
+    <nav class="tabs">
+      <a href="index.html">Home</a>
+      <a href="games.html" class="on">Games</a>
+      <a href="rewards.html">Rewards</a>
+      <a href="#">Settings</a>
+    </nav>
+    <div class="health"><i></i><span>Running</span></div>
+  </div>
+</header>
+
+<main>
+  <div class="head">
+    <div>
+      <h1>Games</h1>
+      <p>GrubDrops only mines the games on this list.</p>
+    </div>
+    <span class="scan"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg><span id="count">3 games</span> · last scan 41 s</span>
+  </div>
+
+  <section class="add" aria-label="Add a game">
+    <label class="search">
+      <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" value="dead" placeholder="Add a game" autocomplete="off">
+    </label>
+    <ul class="sugg" id="sugg">
+      <li data-name="Deadlock">
+        <span class="thumb"></span>
+        <span class="nm"><b><mark>Dead</mark>lock</b><small>No campaign known. We'll watch for campaigns.</small></span>
+        <button class="add-btn" type="button">Add</button>
+      </li>
+      <li data-name="Dead by Daylight">
+        <span class="thumb"></span>
+        <span class="nm"><b><mark>Dead</mark> by Daylight</b><small>No campaign known. We'll watch for campaigns.</small></span>
+        <button class="add-btn" type="button">Add</button>
+      </li>
+    </ul>
+    <p class="hint">Each extra game adds a little time to every scan.</p>
+  </section>
+
+  <div class="list-head">
+    <h2>Priority</h2>
+    <p>Top game mines first. Changes here are permanent.</p>
+  </div>
+
+  <div id="list">
+    <article class="game">
+      <div class="grip">
+        <button type="button" class="up" aria-label="Move up"><svg class="i" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
+        <svg class="i h" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3"/></svg>
+        <button type="button" class="down" aria-label="Move down"><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+      </div>
+      <div class="art rust"><span class="rank">01</span><span class="title">Rust</span></div>
+      <div class="body">
+        <div class="status">
+          <span class="state mining">Mining</span>
+          <button type="button" class="rm"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>Remove</button>
+        </div>
+        <ul class="camps">
+          <li><span class="pm tw">T</span><span>Round 41</span><small>3 drops · ends Oct 31</small></li>
+          <li><span class="pm kk">K</span><span>Kick x Rust</span><small>2 drops · ends Nov 2</small></li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="game">
+      <div class="grip">
+        <button type="button" class="up" aria-label="Move up"><svg class="i" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
+        <svg class="i h" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3"/></svg>
+        <button type="button" class="down" aria-label="Move down"><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+      </div>
+      <div class="art mr"><span class="rank">02</span><span class="title">Marvel Rivals</span></div>
+      <div class="body">
+        <div class="status">
+          <span class="state wait">Waiting</span>
+          <button type="button" class="rm"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>Remove</button>
+        </div>
+        <ul class="camps">
+          <li><span class="pm tw">T</span><span>Season 4 Twitch Drops</span><small>2 drops · ends Nov 8</small></li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="game">
+      <div class="grip">
+        <button type="button" class="up" aria-label="Move up"><svg class="i" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
+        <svg class="i h" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3"/></svg>
+        <button type="button" class="down" aria-label="Move down"><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+      </div>
+      <div class="art ow"><span class="rank">03</span><span class="title">Overwatch</span></div>
+      <div class="body">
+        <div class="status">
+          <span class="state off">No campaign</span>
+          <button type="button" class="rm"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>Remove</button>
+        </div>
+        <p class="muted">Nothing live. Last seen Oct 21.</p>
+      </div>
+    </article>
+  </div>
+</main>
+
+<div class="mock-tag">r2 · 08 Game cards · Games · <a href="../">all mockups</a></div>
+
+<script>
+  const list = document.getElementById('list');
+  const blank = list.lastElementChild.cloneNode(true);
+  function renumber() {
+    const games = [...list.children];
+    games.forEach((g, i) => {
+      g.querySelector('.rank').textContent = String(i + 1).padStart(2, '0');
+      g.querySelector('.up').disabled = i === 0;
+      g.querySelector('.down').disabled = i === games.length - 1;
+    });
+    document.getElementById('count').textContent = games.length + (games.length === 1 ? ' game' : ' games');
+  }
+  function flash(g) { g.classList.add('moved'); setTimeout(() => g.classList.remove('moved'), 600); }
+  list.addEventListener('click', e => {
+    const g = e.target.closest('.game'); if (!g) return;
+    if (e.target.closest('.up') && g.previousElementSibling) { list.insertBefore(g, g.previousElementSibling); flash(g); }
+    else if (e.target.closest('.down') && g.nextElementSibling) { list.insertBefore(g.nextElementSibling, g); flash(g); }
+    else if (e.target.closest('.rm')) { g.remove(); }
+    renumber();
+  });
+
+  const q = document.getElementById('q'), sugg = document.getElementById('sugg');
+  function filter() {
+    const v = q.value.trim().toLowerCase();
+    let any = false;
+    sugg.querySelectorAll('li').forEach(li => {
+      const show = v.length > 1 && li.dataset.name.toLowerCase().includes(v);
+      li.hidden = !show; any = any || show;
+    });
+    sugg.hidden = !any;
+  }
+  q.addEventListener('input', filter);
+  sugg.addEventListener('click', e => {
+    const b = e.target.closest('.add-btn'); if (!b) return;
+    const li = b.closest('li'), name = li.dataset.name;
+    const tpl = blank.cloneNode(true);
+    tpl.querySelector('.art').className = 'art new';
+    tpl.querySelector('.title').textContent = name;
+    tpl.querySelector('.state').textContent = 'Watching';
+    tpl.querySelector('.state').className = 'state off';
+    tpl.querySelector('.muted').textContent = "No campaign known. We'll watch for campaigns.";
+    list.appendChild(tpl); flash(tpl);
+    li.remove(); q.value = ''; filter(); renumber();
+  });
+  renumber(); filter();
+</script>
+</body>
+</html>

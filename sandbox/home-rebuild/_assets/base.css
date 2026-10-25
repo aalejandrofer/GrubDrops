@@ -1,0 +1,34 @@
+/* Shared tokens for the home-rebuild mockups: GitHub-style greyish dark, purple accent. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-2: #1c2129;
+  --surface-3: #262c36;
+  --border: #30363d;
+  --border-soft: #21262d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --dim: #6e7681;
+  --accent: #a371f7;
+  --accent-strong: #8957e5;
+  --accent-soft: rgba(163, 113, 247, 0.15);
+  --green: #3fb950;
+  --green-soft: rgba(63, 185, 80, 0.15);
+  --amber: #d29922;
+  --amber-soft: rgba(210, 153, 34, 0.15);
+  --red: #f85149;
+  --red-soft: rgba(248, 81, 73, 0.15);
+  --twitch: #9146ff;
+  --kick: #53fc18;
+  --radius: 8px;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.mock-tag { position: fixed; right: 12px; bottom: 12px; z-index: 999; background: var(--surface-3); border: 1px solid var(--border); color: var(--muted); font: 12px var(--mono); padding: 4px 8px; border-radius: 6px; }
+.mock-tag a { color: var(--accent); }

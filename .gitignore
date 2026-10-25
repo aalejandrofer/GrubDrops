@@ -50,3 +50,6 @@ out/
 # Claude Code worktrees (nested git repos used by agents — never commit)
 .claude/worktrees/
 .claire/
+
+# impeccable skill binary (downloaded on first run)
+/.claude/skills/impeccable/scripts/bin/
