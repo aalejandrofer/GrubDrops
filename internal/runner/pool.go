@@ -49,6 +49,8 @@ type poolUnit struct {
 }
 
 // Pool runs one Unit per account and holds the session-only Up next order.
+// A unit that panics or returns nil (needs user action) stays in the roster
+// and is not restarted, as in 1.x supervise; plan 3 decides restart policy.
 type Pool struct {
 	n Notifier
 
@@ -129,17 +131,22 @@ func (p *Pool) Reload(parent context.Context, builders []Builder) error {
 		keep[e.ID] = true
 	}
 
+	// Old entries stay visible in Snapshots until the swap below.
 	p.mu.Lock()
-	old := p.units
-	p.units = nil
+	old := slices.Clone(p.units)
 	p.mu.Unlock()
 	for _, u := range old {
-		stop(u)
+		u.cancel()
 	}
 	for _, u := range old {
-		if !keep[u.entry.ID] {
-			release(u.entry)
-		}
+		<-u.done
+	}
+	next := make(map[string]Unit, len(entries))
+	for _, e := range entries {
+		next[e.ID] = e.Unit
+	}
+	for _, u := range old {
+		releaseUnlessReplaced(u.entry, next[u.entry.ID])
 	}
 
 	units := make([]*poolUnit, 0, len(entries))
@@ -156,6 +163,17 @@ func release(e Entry) {
 	if r, ok := e.Unit.(releaser); ok {
 		r.Release()
 	}
+}
+
+// releaseUnlessReplaced clears the old unit's backend registrations unless the
+// new unit is itself a releaser: a new Runner re-registered its hooks in New,
+// and releasing would wipe them. A non-Runner replacement (Idle) or no
+// replacement (nil) leaves the old closures stale, so they are cleared.
+func releaseUnlessReplaced(old Entry, repl Unit) {
+	if _, ok := repl.(releaser); ok {
+		return
+	}
+	release(old)
 }
 
 // ReloadAccount restarts one account from a fresh Builder; others keep
@@ -189,9 +207,11 @@ func (p *Pool) ReloadAccount(id string, b Builder) {
 		stop(old)
 	}
 
+	if old != nil {
+		releaseUnlessReplaced(old.entry, e.Unit)
+	}
 	if b == nil {
 		if old != nil {
-			release(old.entry)
 			p.mu.Lock()
 			p.units = slices.DeleteFunc(p.units, func(u *poolUnit) bool { return u == old })
 			p.mu.Unlock()
