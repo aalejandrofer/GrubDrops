@@ -37,7 +37,11 @@ func (r *Runner) start(ctx context.Context) error {
 		return errors.New("no current target")
 	}
 	target := *r.current
+	stale := r.handle != nil
 	r.mu.Unlock()
+	if stale {
+		r.stopWatch(ctx)
+	}
 	camp := target.Campaign
 
 	streams, err := r.cfg.Backend.ListEligibleChannels(ctx, r.cfg.Session, camp)
@@ -90,7 +94,7 @@ func (r *Runner) start(ctx context.Context) error {
 			drops, err := checker.AvailableDropIDs(ctx, r.cfg.Session, cand.ChannelID)
 			if err != nil {
 				slog.Debug("runner AvailableDropIDs failed; falling back",
-					"account", r.cfg.AccountID, "channel", cand.Channel, "err", err)
+					"kind", "error", "account", r.cfg.AccountID, "channel", cand.Channel, "err", err)
 				break
 			}
 			if len(drops) == 0 {
@@ -298,6 +302,9 @@ func (r *Runner) stopWatch(ctx context.Context) {
 	if h == nil {
 		return
 	}
+	// Detached: a cancelled run ctx must not leak the handle or sidecar.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	if err := r.cfg.Backend.StopWatch(ctx, *h); err != nil {
 		slog.Warn("runner stop watch failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
 	}

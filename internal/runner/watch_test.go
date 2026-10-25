@@ -203,17 +203,36 @@ func TestWatch_NeverEnrolledSkipsAfterSix(t *testing.T) {
 }
 
 func TestWatch_HeartbeatErrorStopsWatchOnRetry(t *testing.T) {
+	old := stepErrBackoff
+	stepErrBackoff = time.Millisecond
+	t.Cleanup(func() { stepErrBackoff = old })
+
 	f := platformtest.NewFake()
-	r := watching(t, f, nil)
+	f.Campaigns = []platform.Campaign{camp("c1", "Rust", "d1")}
+	f.Campaigns[0].Benefits[0].RequiredMinutes = 100000
+	f.Progress["d1"] = &platform.Progress{BenefitID: "d1"}
+	f.Streams["c1"] = []platform.Stream{{Channel: "a", ViewerCount: 1}}
+	r := newRunner(f, func(c *Config) { c.TickInterval = time.Millisecond })
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- r.Run(ctx) }()
+	deadline := time.Now().Add(2 * time.Second)
+	for r.State() != StateWatching && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
 	f.Mu.Lock()
 	f.HeartbeatErr = context.DeadlineExceeded
+	f.ListErr = context.DeadlineExceeded // keep pick failing so start's stale-handle stop can't mask the Run branch
 	f.Mu.Unlock()
-	if err := r.step(context.Background()); err == nil {
-		t.Fatal("want error")
+	for !hasCall(f, "Stop:a") && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
 	}
-	r.stopWatch(context.Background())
-	if !hasCall(f, "Stop:a") {
-		t.Fatalf("calls=%v", f.Calls)
+	stopped := hasCall(f, "Stop:a")
+	// Cancel after the check: exit() also stops, but only if a handle is left.
+	cancel()
+	<-done
+	if !stopped {
+		t.Fatal("Run error branch did not stop the watch")
 	}
 }
 
