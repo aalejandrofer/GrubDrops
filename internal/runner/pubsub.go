@@ -3,27 +3,107 @@ package runner
 import (
 	"context"
 	"log/slog"
+	"reflect"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
-// registerPubSub installs the push hooks. New calls it before any backend
-// call so a lazy PubSub bootstrap picks them up. Hooks fire from the
-// backend's goroutine, so they take r.mu briefly and never hold it across
-// backend, store or notifier calls.
+// Real backends copy the hooks into their PubSub client once, at the
+// account's first bootstrap, and ignore later SetAccountPubSubHooks calls.
+// So each (backend, account) gets one trampoline, registered once, whose
+// hooks forward to whichever Runner currently owns the account.
+type hookKey struct {
+	backend   platform.PubSubAware
+	accountID string
+}
+
+type trampoline struct {
+	cur atomic.Pointer[Runner] // nil = drop pushes
+}
+
+var (
+	trampMu sync.Mutex
+	tramps  = map[hookKey]*trampoline{}
+)
+
+func (t *trampoline) hooks() platform.PubSubHooks {
+	return platform.PubSubHooks{
+		OnDropProgress: func(dropID string, curMin, reqMin int64) {
+			if r := t.cur.Load(); r != nil {
+				r.onDropProgress(dropID, curMin, reqMin)
+			}
+		},
+		OnDropClaim: func(dropID, instanceID string) {
+			if r := t.cur.Load(); r != nil {
+				r.onDropClaim(dropID, instanceID)
+			}
+		},
+		OnStreamDown: func(channelID string) {
+			if r := t.cur.Load(); r != nil {
+				r.onStreamDown(channelID)
+			}
+		},
+		OnStreamUp: func(string) {},
+		OnRewardCode: func(notificationID, code, title string) {
+			if r := t.cur.Load(); r != nil {
+				r.onRewardCode(notificationID, code, title)
+			}
+		},
+	}
+}
+
+// registerPubSub points the account's trampoline at r, registering it with
+// the backend the first time. New calls it before any backend call so a lazy
+// PubSub bootstrap captures the trampoline. Hooks fire from the backend's
+// goroutine, so they take r.mu briefly and never hold it across backend,
+// store or notifier calls.
 func (r *Runner) registerPubSub() {
 	pa, ok := r.cfg.Backend.(platform.PubSubAware)
 	if !ok {
 		return
 	}
-	pa.SetAccountPubSubHooks(r.cfg.AccountID, platform.PubSubHooks{
+	if !reflect.TypeOf(pa).Comparable() {
+		// Cannot key the registry; register directly (hooks freeze at bootstrap).
+		pa.SetAccountPubSubHooks(r.cfg.AccountID, r.directHooks())
+		return
+	}
+	key := hookKey{backend: pa, accountID: r.cfg.AccountID}
+	trampMu.Lock()
+	defer trampMu.Unlock()
+	t := tramps[key]
+	if t == nil {
+		t = &trampoline{}
+		tramps[key] = t
+		pa.SetAccountPubSubHooks(r.cfg.AccountID, t.hooks())
+	}
+	t.cur.Store(r)
+	r.tramp = t
+}
+
+func (r *Runner) directHooks() platform.PubSubHooks {
+	return platform.PubSubHooks{
 		OnDropProgress: r.onDropProgress,
 		OnDropClaim:    r.onDropClaim,
 		OnStreamDown:   r.onStreamDown,
 		OnStreamUp:     func(string) {},
 		OnRewardCode:   r.onRewardCode,
-	})
+	}
+}
+
+// Release stops PubSub pushes reaching r. It only unhooks the account if r
+// still owns it, so releasing a replaced Runner leaves its successor wired.
+// Pool calls it when a Runner leaves the roster.
+func (r *Runner) Release() {
+	if r.tramp != nil {
+		r.tramp.cur.CompareAndSwap(r, nil)
+		return
+	}
+	if pa, ok := r.cfg.Backend.(platform.PubSubAware); ok {
+		pa.SetAccountPubSubHooks(r.cfg.AccountID, platform.PubSubHooks{})
+	}
 }
 
 // onDropProgress records pushed minutes for the current benefit so the

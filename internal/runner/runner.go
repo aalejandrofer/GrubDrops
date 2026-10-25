@@ -44,6 +44,7 @@ type Runner struct {
 	lastScanAt time.Time
 	lastBeatAt time.Time     // when the current watch last beaconed; zero = not yet
 	wake       chan struct{} // signalled on every state change, cap 1
+	tramp      *trampoline   // PubSub forwarder for this account; nil = none
 	queue      []plan.Target
 	blocked    []plan.Blocked
 	skipped    map[string]bool

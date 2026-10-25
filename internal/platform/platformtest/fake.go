@@ -155,10 +155,15 @@ func (f *Fake) Claim(_ context.Context, _ platform.Session, b platform.DropBenef
 	return nil
 }
 
-// PubSubFake adds platform.PubSubAware; hooks are stored per account ID.
+// PubSubFake adds platform.PubSubAware with the real backends' capture
+// rule: SetAccountPubSubHooks only stages hooks, the account's first
+// ListActiveCampaigns or InventoryProgress bootstraps its PubSub client
+// with whatever is staged, and later SetAccountPubSubHooks calls for a
+// bootstrapped account are ignored. Hooks holds the bootstrapped hooks.
 type PubSubFake struct {
 	*Fake
-	Hooks map[string]platform.PubSubHooks
+	Hooks  map[string]platform.PubSubHooks // account ID -> hooks the client captured
+	staged map[string]platform.PubSubHooks
 }
 
 var _ platform.Backend = (*PubSubFake)(nil)
@@ -167,10 +172,37 @@ var _ platform.PubSubAware = (*PubSubFake)(nil)
 func (p *PubSubFake) SetAccountPubSubHooks(accountID string, hooks platform.PubSubHooks) {
 	p.Mu.Lock()
 	defer p.Mu.Unlock()
+	if _, booted := p.Hooks[accountID]; booted {
+		return
+	}
+	if p.staged == nil {
+		p.staged = map[string]platform.PubSubHooks{}
+	}
+	p.staged[accountID] = hooks
+}
+
+func (p *PubSubFake) bootstrap(accountID string) {
+	p.Mu.Lock()
+	defer p.Mu.Unlock()
+	if _, booted := p.Hooks[accountID]; booted {
+		return
+	}
 	if p.Hooks == nil {
 		p.Hooks = map[string]platform.PubSubHooks{}
 	}
-	p.Hooks[accountID] = hooks
+	p.Hooks[accountID] = p.staged[accountID]
+}
+
+func (p *PubSubFake) ListActiveCampaigns(ctx context.Context, s platform.Session) ([]platform.Campaign, error) {
+	out, err := p.Fake.ListActiveCampaigns(ctx, s)
+	p.bootstrap(s.AccountID)
+	return out, err
+}
+
+func (p *PubSubFake) InventoryProgress(ctx context.Context, s platform.Session) ([]platform.Progress, error) {
+	out, err := p.Fake.InventoryProgress(ctx, s)
+	p.bootstrap(s.AccountID)
+	return out, err
 }
 
 // SweepFake adds platform.CompletedSweeper.

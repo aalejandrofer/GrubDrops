@@ -7,8 +7,6 @@ import (
 	"log/slog"
 	"slices"
 	"sync"
-
-	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
 // Unit is one supervised account worker. *Runner satisfies it.
@@ -116,19 +114,16 @@ func stop(u *poolUnit) {
 }
 
 // Reload replaces the whole roster: it builds the new entries, stops every
-// running unit, then starts the new ones. Accounts absent from the new set
-// release their backend registrations.
+// running unit, then starts the new ones. Each stopped Runner releases its
+// PubSub hooks unless a new Runner already took the account over.
 func (p *Pool) Reload(parent context.Context, builders []Builder) error {
 	p.reloadMu.Lock()
 	defer p.reloadMu.Unlock()
 	base := p.base(parent)
 
 	entries := make([]Entry, 0, len(builders))
-	keep := map[string]bool{}
 	for _, b := range builders {
-		e := b()
-		entries = append(entries, e)
-		keep[e.ID] = true
+		entries = append(entries, b())
 	}
 
 	// Old entries stay visible in Snapshots until the swap below.
@@ -141,12 +136,8 @@ func (p *Pool) Reload(parent context.Context, builders []Builder) error {
 	for _, u := range old {
 		<-u.done
 	}
-	next := make(map[string]Unit, len(entries))
-	for _, e := range entries {
-		next[e.ID] = e.Unit
-	}
 	for _, u := range old {
-		releaseUnlessReplaced(u.entry, next[u.entry.ID])
+		release(u.entry)
 	}
 
 	units := make([]*poolUnit, 0, len(entries))
@@ -159,21 +150,12 @@ func (p *Pool) Reload(parent context.Context, builders []Builder) error {
 	return nil
 }
 
+// release unhooks a stopped unit. A Runner only unhooks itself if it still
+// owns the account, so a replacement Runner built before the stop stays wired.
 func release(e Entry) {
 	if r, ok := e.Unit.(releaser); ok {
 		r.Release()
 	}
-}
-
-// releaseUnlessReplaced clears the old unit's backend registrations unless the
-// new unit is itself a releaser: a new Runner re-registered its hooks in New,
-// and releasing would wipe them. A non-Runner replacement (Idle) or no
-// replacement (nil) leaves the old closures stale, so they are cleared.
-func releaseUnlessReplaced(old Entry, repl Unit) {
-	if _, ok := repl.(releaser); ok {
-		return
-	}
-	release(old)
 }
 
 // ReloadAccount restarts one account from a fresh Builder; others keep
@@ -208,7 +190,7 @@ func (p *Pool) ReloadAccount(id string, b Builder) {
 	}
 
 	if old != nil {
-		releaseUnlessReplaced(old.entry, e.Unit)
+		release(old.entry)
 	}
 	if b == nil {
 		if old != nil {
@@ -281,13 +263,5 @@ func (p *Pool) OrderFunc(accountID string) func() []string {
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		return slices.Clone(p.orders[accountID])
-	}
-}
-
-// Release clears this account's PubSub hooks so a removed runner leaves no
-// stale closure in the backend. Pool calls it when the account is removed.
-func (r *Runner) Release() {
-	if pa, ok := r.cfg.Backend.(platform.PubSubAware); ok {
-		pa.SetAccountPubSubHooks(r.cfg.AccountID, platform.PubSubHooks{})
 	}
 }

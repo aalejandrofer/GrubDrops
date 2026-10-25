@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/plan"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform/platformtest"
 )
 
 // blockUnit blocks until ctx is done and counts starts.
@@ -152,77 +152,96 @@ func TestPool_SnapshotsInEntryOrder(t *testing.T) {
 	}
 }
 
-func TestPool_RemovedAccountUnregistersPubSub(t *testing.T) {
-	p := NewPool(nil)
-	defer p.Stop()
-	f := psFake()
-	b := func() Entry {
-		return Entry{ID: "acc", Unit: New(Config{AccountID: "acc", Platform: "twitch", Backend: f, Games: rustGames})}
-	}
-	_ = p.Reload(context.Background(), []Builder{b})
-	_ = p.Reload(context.Background(), nil)
-	f.Mu.Lock()
-	h := f.Hooks["acc"]
-	f.Mu.Unlock()
-	if h.OnDropProgress != nil || h.OnDropClaim != nil || h.OnStreamDown != nil || h.OnRewardCode != nil {
-		t.Fatal("hooks not cleared")
+// poolRunner builds a Runner on f for "acc"; its first pick bootstraps f's
+// PubSub client.
+func poolRunner(t *testing.T, f *platformtest.PubSubFake, changes *atomic.Int32) (Builder, *Runner) {
+	t.Helper()
+	r := New(Config{AccountID: "acc", Platform: "twitch", Backend: f, Games: rustGames,
+		OnChange: func(Snapshot) { changes.Add(1) }})
+	return func() Entry { return Entry{ID: "acc", Unit: r} }, r
+}
+
+func waitWatching(t *testing.T, r *Runner) {
+	t.Helper()
+	if !waitFor(func() bool { return r.State() == StateWatching }, 2*time.Second) {
+		t.Fatalf("state=%s", r.State())
 	}
 }
 
-func TestPool_RunnerReplacedByIdleClearsHooks(t *testing.T) {
+func poolFake() *platformtest.PubSubFake {
+	f := psFake()
+	f.Campaigns = []platform.Campaign{camp("c1", "Rust", "d1")}
+	f.Campaigns[0].Benefits[0].RequiredMinutes = 100000
+	f.Streams["c1"] = []platform.Stream{{Channel: "a", ChannelID: "42", ViewerCount: 1}}
+	return f
+}
+
+// assertDeaf pushes to the bootstrapped hooks and fails if r reacts.
+func assertDeaf(t *testing.T, f *platformtest.PubSubFake, r *Runner, changes *atomic.Int32) {
+	t.Helper()
+	h := hooksOf(t, f)
+	before := changes.Load()
+	h.OnDropProgress("d1", 500, 0)
+	h.OnDropClaim("d1", "inst")
+	h.OnStreamDown("42")
+	if changes.Load() != before || r.Snapshot().MinutesWatched == 500 {
+		t.Fatalf("dead runner reacted to a push: changes %d->%d", before, changes.Load())
+	}
+}
+
+func TestPool_RemovedAccountGetsNoPushes(t *testing.T) {
 	p := NewPool(nil)
 	defer p.Stop()
-	f := psFake()
-	_ = p.Reload(context.Background(), []Builder{func() Entry {
-		return Entry{ID: "acc", Unit: New(Config{AccountID: "acc", Platform: "twitch", Backend: f, Games: rustGames})}
-	}})
+	f := poolFake()
+	var c atomic.Int32
+	b, r := poolRunner(t, f, &c)
+	_ = p.Reload(context.Background(), []Builder{b})
+	waitWatching(t, r)
+	_ = p.Reload(context.Background(), nil)
+	assertDeaf(t, f, r, &c)
+}
+
+func TestPool_RunnerReplacedByIdleGetsNoPushes(t *testing.T) {
+	p := NewPool(nil)
+	defer p.Stop()
+	f := poolFake()
+	var c atomic.Int32
+	b, r := poolRunner(t, f, &c)
+	_ = p.Reload(context.Background(), []Builder{b})
+	waitWatching(t, r)
 	p.ReloadAccount("acc", func() Entry {
 		return Entry{ID: "acc", Unit: &Idle{AccountID: "acc", State: StateNeedsLogin}}
 	})
-	f.Mu.Lock()
-	h := f.Hooks["acc"]
-	f.Mu.Unlock()
-	if h.OnDropProgress != nil || h.OnDropClaim != nil || h.OnStreamDown != nil || h.OnRewardCode != nil {
-		t.Fatal("hooks not cleared")
-	}
-	// keep path too
-	_ = p.Reload(context.Background(), []Builder{func() Entry {
-		return Entry{ID: "acc", Unit: New(Config{AccountID: "acc", Platform: "twitch", Backend: f, Games: rustGames})}
-	}})
+	assertDeaf(t, f, r, &c)
+
+	// Reload keep path too.
+	var c2 atomic.Int32
+	b2, r2 := poolRunner(t, f, &c2)
+	_ = p.Reload(context.Background(), []Builder{b2})
+	waitWatching(t, r2)
 	_ = p.Reload(context.Background(), []Builder{func() Entry {
 		return Entry{ID: "acc", Unit: &Idle{AccountID: "acc", State: StateNoGames}}
 	}})
-	f.Mu.Lock()
-	h = f.Hooks["acc"]
-	f.Mu.Unlock()
-	if h.OnDropProgress != nil || h.OnDropClaim != nil {
-		t.Fatal("hooks not cleared on Reload keep path")
-	}
+	assertDeaf(t, f, r2, &c2)
 }
 
-func TestPool_RunnerReplacedByRunnerKeepsNewHooks(t *testing.T) {
+func TestPool_RunnerReplacedByRunnerPushReachesNew(t *testing.T) {
 	p := NewPool(nil)
 	defer p.Stop()
-	f := psFake()
-	mk := func() (Builder, *Runner) {
-		r := New(Config{AccountID: "acc", Platform: "twitch", Backend: f, Games: rustGames})
-		return func() Entry { return Entry{ID: "acc", Unit: r} }, r
-	}
-	b1, _ := mk()
+	f := poolFake()
+	var c1, c2 atomic.Int32
+	b1, r1 := poolRunner(t, f, &c1)
 	_ = p.Reload(context.Background(), []Builder{b1})
-	b2, r2 := mk()
+	waitWatching(t, r1) // bootstrapped with r1's registration
+	b2, r2 := poolRunner(t, f, &c2)
 	p.ReloadAccount("acc", b2)
-	f.Mu.Lock()
-	h := f.Hooks["acc"]
-	f.Mu.Unlock()
-	if h.OnDropProgress == nil {
-		t.Fatal("hooks cleared after Runner replace")
+	waitWatching(t, r2)
+	before := c1.Load()
+	hooksOf(t, f).OnDropProgress("d1", 500, 0)
+	if got := r2.Snapshot().MinutesWatched; got != 500 {
+		t.Fatalf("push did not reach the new Runner: minutes=%d", got)
 	}
-	r2.mu.Lock()
-	r2.current = &plan.Target{Benefit: platform.DropBenefit{ID: "d1"}}
-	r2.mu.Unlock()
-	h.OnDropProgress("d1", 7, 0)
-	if r2.Snapshot().MinutesWatched != 7 {
-		t.Fatal("hook does not reach the new Runner")
+	if c1.Load() != before || r1.Snapshot().MinutesWatched == 500 {
+		t.Fatal("push reached the replaced Runner")
 	}
 }

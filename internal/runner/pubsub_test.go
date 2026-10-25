@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
@@ -54,16 +55,26 @@ func psWatching(t *testing.T, mod func(*Config)) (*Runner, *platformtest.PubSubF
 	return r, p
 }
 
+// bootstrapPS makes the account's first backend call, which is when a real
+// backend's PubSub client captures the hooks.
+func bootstrapPS(t *testing.T, p *platformtest.PubSubFake) {
+	t.Helper()
+	if _, err := p.ListActiveCampaigns(context.Background(), platform.Session{AccountID: "acc"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestPubSub_RegisteredBeforeFirstCall(t *testing.T) {
 	p := psFake()
 	New(Config{AccountID: "acc", Platform: "twitch", Backend: p, Games: rustGames})
+	if len(p.Calls) != 0 {
+		t.Fatalf("calls=%v", p.Calls)
+	}
+	bootstrapPS(t, p)
 	h := hooksOf(t, p)
 	if h.OnDropProgress == nil || h.OnDropClaim == nil || h.OnStreamDown == nil ||
 		h.OnStreamUp == nil || h.OnRewardCode == nil {
 		t.Fatalf("hooks incomplete: %+v", h)
-	}
-	if len(p.Calls) != 0 {
-		t.Fatalf("calls=%v", p.Calls)
 	}
 	h.OnStreamUp("42") // no-op, must not panic
 }
@@ -148,6 +159,7 @@ func TestPubSub_RewardCodeWithoutCurrentIgnored(t *testing.T) {
 	cl := &codeClaims{}
 	p := psFake()
 	New(Config{AccountID: "acc", Platform: "twitch", Backend: p, Games: rustGames, Claims: cl})
+	bootstrapPS(t, p)
 	hooksOf(t, p).OnRewardCode("n", "CODE", "b")
 	if len(cl.codes) != 0 {
 		t.Fatalf("codes=%v", cl.codes)
@@ -175,5 +187,61 @@ func TestPubSub_PushThenPollNoFalseFreeze(t *testing.T) {
 	}
 	if hasCall(p.Fake, "Stop:a") {
 		t.Fatalf("rotated: %v", p.Calls)
+	}
+}
+
+// watchingOn builds a runner on p watching d1, counting its OnChange calls.
+func watchingOn(t *testing.T, p *platformtest.PubSubFake, changes *atomic.Int32) *Runner {
+	t.Helper()
+	r := New(Config{AccountID: "acc", Platform: "twitch", Backend: p, Games: rustGames,
+		OnChange: func(Snapshot) { changes.Add(1) }})
+	steps(t, r, 2)
+	if r.State() != StateWatching {
+		t.Fatalf("state=%s", r.State())
+	}
+	return r
+}
+
+func TestPubSub_ReplacedRunnerGetsPushesAfterBootstrap(t *testing.T) {
+	p := psFake()
+	p.Campaigns = []platform.Campaign{camp("c1", "Rust", "d1")}
+	p.Streams["c1"] = []platform.Stream{{Channel: "a", ChannelID: "42", ViewerCount: 10}}
+	var c1, c2 atomic.Int32
+	r1 := watchingOn(t, p, &c1) // bootstraps the client with r1's registration
+	r2 := watchingOn(t, p, &c2)
+	before := c1.Load()
+	hooksOf(t, p).OnDropProgress("d1", 7, 60)
+	if got := r2.Snapshot().MinutesWatched; got != 7 {
+		t.Fatalf("new runner minutes=%d, push did not reach it", got)
+	}
+	if got := r1.Snapshot().MinutesWatched; got == 7 {
+		t.Fatal("push reached the replaced runner")
+	}
+	if c1.Load() != before {
+		t.Fatal("replaced runner fired OnChange")
+	}
+	// Releasing the old runner must not unhook the new one.
+	r1.Release()
+	hooksOf(t, p).OnDropProgress("d1", 8, 60)
+	if got := r2.Snapshot().MinutesWatched; got != 8 {
+		t.Fatalf("after old Release minutes=%d", got)
+	}
+}
+
+func TestPubSub_ReleasedRunnerGetsNoPushes(t *testing.T) {
+	p := psFake()
+	p.Campaigns = []platform.Campaign{camp("c1", "Rust", "d1")}
+	p.Streams["c1"] = []platform.Stream{{Channel: "a", ChannelID: "42", ViewerCount: 10}}
+	var c atomic.Int32
+	r := watchingOn(t, p, &c)
+	r.Release()
+	before := c.Load()
+	h := hooksOf(t, p)
+	h.OnDropProgress("d1", 7, 60)
+	h.OnDropClaim("d1", "inst")
+	h.OnStreamDown("42")
+	h.OnRewardCode("n", "CODE", "b")
+	if c.Load() != before || r.State() != StateWatching || r.Snapshot().MinutesWatched == 7 {
+		t.Fatalf("released runner reacted: changes %d->%d state=%s", before, c.Load(), r.State())
 	}
 }
