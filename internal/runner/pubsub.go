@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/aalejandrofer/grubdrops/internal/plan"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
@@ -154,21 +155,24 @@ func (r *Runner) onStreamDown(channelID string) {
 // benefit. Without a current benefit it is logged only.
 func (r *Runner) onRewardCode(notificationID, code, _ string) {
 	r.mu.Lock()
+	var cur *plan.Target
 	var benefit platform.DropBenefit
 	if r.current != nil {
-		benefit = r.current.Benefit
+		t := *r.current
+		cur = &t
+		benefit = t.Benefit
 	}
 	r.mu.Unlock()
 	slog.Info("runner reward code captured", "kind", "claim", "account", r.cfg.AccountID,
 		"notification_id", notificationID, "code", code,
 		"benefit_id", benefit.ID, "benefit_name", benefit.Name)
-	if r.cfg.Claims == nil || benefit.ID == "" {
+	if r.cfg.Claims == nil || cur == nil || benefit.ID == "" {
 		return
 	}
 	// Detached: the hook has no run ctx.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := r.cfg.Claims.RecordClaimWithCode(ctx, r.cfg.AccountID, benefit, code); err != nil {
+	if err := r.cfg.Claims.RecordClaim(ctx, r.cfg.AccountID, *cur, code); err != nil {
 		slog.Warn("runner record claim with code failed", "kind", "error",
 			"account", r.cfg.AccountID, "benefit", benefit.ID, "err", err)
 	}

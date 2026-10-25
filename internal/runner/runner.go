@@ -17,11 +17,13 @@ var (
 	errStop = errors.New("stopped; needs user action") // Run returns nil on it
 )
 
-// Safeguard values carried over from 1.x. recheckInterval and stepErrBackoff
-// are vars so tests can shrink them.
+// Safeguard values carried over from 1.x. recheckInterval, stepErrBackoff
+// and rescanEvery are vars so tests can shrink them.
 var (
 	recheckInterval = 5 * time.Minute
 	stepErrBackoff  = 5 * time.Second
+	// rescanEvery is how often a watching runner rebuilds the plan.
+	rescanEvery = 15 * time.Minute
 )
 
 const (
@@ -215,7 +217,7 @@ func (r *Runner) pick(ctx context.Context) error {
 		r.setState(ctx, StateNoGames)
 		return nil
 	}
-	camps, err := r.cfg.Backend.ListActiveCampaigns(ctx, r.cfg.Session)
+	res, err := r.scan(ctx, nil, false)
 	if err != nil {
 		if errors.Is(err, platform.ErrIntegrityBlocked) {
 			slog.Warn("runner integrity blocked; login needed",
@@ -225,59 +227,8 @@ func (r *Runner) pick(ctx context.Context) error {
 		}
 		return err
 	}
-	var progress []platform.Progress
-	inventoryOK := false
-	if len(camps) > 0 {
-		p, err := r.cfg.Backend.InventoryProgress(ctx, r.cfg.Session)
-		if err != nil {
-			slog.Warn("runner inventory failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
-		} else {
-			progress = p
-			inventoryOK = true
-		}
-	}
-
-	if inventoryOK {
-		r.selfHeal(progress)
-	}
-	if r.cfg.OnInventory != nil {
-		r.cfg.OnInventory(ctx, r.cfg.AccountID, camps, progress)
-	}
-	r.reapRewards(ctx, camps)
-
-	var claimed map[string]bool
-	if r.cfg.Claims != nil {
-		m, err := r.cfg.Claims.ClaimedBenefitIDs(ctx, r.cfg.AccountID)
-		if err != nil {
-			slog.Warn("runner claim log read failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
-		}
-		claimed = m
-	}
-
-	var order []string
-	if r.cfg.Order != nil {
-		order = r.cfg.Order()
-	}
-	r.mu.Lock()
-	skipped := make(map[string]bool, len(r.skipped))
-	for id := range r.skipped {
-		skipped[id] = true
-	}
-	r.mu.Unlock()
-	res := plan.Build(plan.Input{
-		Games:       r.cfg.Games,
-		Campaigns:   camps,
-		Progress:    progress,
-		Claimed:     claimed,
-		Skipped:     skipped,
-		ForceLinked: r.cfg.ForceLinked,
-		Order:       order,
-	})
 
 	r.mu.Lock()
-	r.queue = res.Queue
-	r.blocked = res.Blocked
-	r.lastScanAt = time.Now()
 	var next *plan.Target
 	for i := range res.Queue {
 		if !r.noStream[res.Queue[i].Campaign.ID] {
@@ -316,6 +267,82 @@ func (r *Runner) pick(ctx context.Context) error {
 		r.setState(ctx, StateSleeping)
 	}
 	return nil
+}
+
+// scan lists campaigns, reads the inventory (unless the caller already has
+// it), builds the plan and stores the queue. It calls OnScan with the result,
+// or with Err set when the campaign list fails. It never touches current, the
+// watch handle or the state.
+func (r *Runner) scan(ctx context.Context, progress []platform.Progress, haveProgress bool) (plan.Result, error) {
+	camps, err := r.cfg.Backend.ListActiveCampaigns(ctx, r.cfg.Session)
+	if err != nil {
+		if r.cfg.OnScan != nil {
+			r.cfg.OnScan(ctx, Scan{AccountID: r.cfg.AccountID, Platform: r.cfg.Platform, At: time.Now(), Err: err})
+		}
+		return plan.Result{}, err
+	}
+	inventoryOK := haveProgress
+	if !haveProgress {
+		progress = nil
+		if len(camps) > 0 {
+			p, err := r.cfg.Backend.InventoryProgress(ctx, r.cfg.Session)
+			if err != nil {
+				slog.Warn("runner inventory failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
+			} else {
+				progress = p
+				inventoryOK = true
+			}
+		}
+	}
+
+	if inventoryOK {
+		r.selfHeal(progress)
+	}
+	r.reapRewards(ctx, camps)
+
+	var claimed map[string]bool
+	if r.cfg.Claims != nil {
+		m, err := r.cfg.Claims.ClaimedBenefitIDs(ctx, r.cfg.AccountID)
+		if err != nil {
+			slog.Warn("runner claim log read failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
+		}
+		claimed = m
+	}
+
+	var order []string
+	if r.cfg.Order != nil {
+		order = r.cfg.Order()
+	}
+	r.mu.Lock()
+	skipped := make(map[string]bool, len(r.skipped))
+	for id := range r.skipped {
+		skipped[id] = true
+	}
+	r.mu.Unlock()
+	res := plan.Build(plan.Input{
+		Games:       r.cfg.Games,
+		Campaigns:   camps,
+		Progress:    progress,
+		Claimed:     claimed,
+		Skipped:     skipped,
+		ForceLinked: r.cfg.ForceLinked,
+		Order:       order,
+	})
+
+	now := time.Now()
+	r.mu.Lock()
+	r.queue = res.Queue
+	r.blocked = res.Blocked
+	r.lastScanAt = now
+	r.mu.Unlock()
+	if r.cfg.OnScan != nil {
+		r.cfg.OnScan(ctx, Scan{
+			AccountID: r.cfg.AccountID, Platform: r.cfg.Platform, At: now,
+			Campaigns: camps, Progress: progress, InventoryOK: inventoryOK,
+			Logged: claimed, Result: res,
+		})
+	}
+	return res, nil
 }
 
 // selfHeal clears skips for benefits that are tracked and unclaimed in a

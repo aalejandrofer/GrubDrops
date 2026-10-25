@@ -29,11 +29,22 @@ type Notifier interface {
 }
 
 // ClaimLog is the per-account record of claimed benefits.
-// *store.ClaimRecorder satisfies it.
 type ClaimLog interface {
-	RecordClaim(ctx context.Context, accountID string, b platform.DropBenefit) error
-	RecordClaimWithCode(ctx context.Context, accountID string, b platform.DropBenefit, code string) error
+	// RecordClaim upserts a claim for t. A non-empty code is stored with it.
+	RecordClaim(ctx context.Context, accountID string, t plan.Target, code string) error
 	ClaimedBenefitIDs(ctx context.Context, accountID string) (map[string]bool, error)
+}
+
+// Scan is one completed scan of an account: campaigns, inventory and the plan.
+type Scan struct {
+	AccountID, Platform string
+	At                  time.Time
+	Err                 error // ListActiveCampaigns failed; the other fields are empty
+	Campaigns           []platform.Campaign
+	Progress            []platform.Progress
+	InventoryOK         bool            // Progress came from a successful read
+	Logged              map[string]bool // claim-log benefit IDs the plan used
+	Result              plan.Result
 }
 
 // SkipStore persists benefits the runner gave up on.
@@ -57,8 +68,11 @@ type Config struct {
 	Claims                            ClaimLog        // nil-safe
 	Skips                             SkipStore       // nil-safe
 	Order                             func() []string // nil = no override
-	// OnInventory is nil-safe; plan 2 reconciles here.
-	OnInventory func(ctx context.Context, accountID string, camps []platform.Campaign, progress []platform.Progress)
+	// Hooks are nil-safe. Each may run on the Run goroutine or a PubSub
+	// goroutine and must not block for long.
+	OnScan     func(ctx context.Context, s Scan)
+	OnProgress func(ctx context.Context, accountID string, progress []platform.Progress)
+	OnBeat     func(ctx context.Context, accountID string) // after each successful Heartbeat
 	// OnChange is nil-safe; called after every state change and progress update.
 	// It may be called concurrently from the backend PubSub goroutine and the
 	// Run goroutine, so implementations must be thread-safe.

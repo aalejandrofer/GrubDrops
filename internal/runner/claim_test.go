@@ -39,19 +39,6 @@ func (n *spyNotifier) of(ev string) []notifyRec {
 	return out
 }
 
-type recClaims struct {
-	fakeClaims
-	mu  sync.Mutex
-	rec []string
-}
-
-func (c *recClaims) RecordClaim(_ context.Context, acc string, b platform.DropBenefit) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.rec = append(c.rec, acc+":"+b.ID)
-	return nil
-}
-
 func tiered(id, game string, mins ...int) platform.Campaign {
 	c := platform.Campaign{ID: id, Platform: "kick", Game: game, Status: "active", AccountLinked: true}
 	for i, m := range mins {
@@ -62,14 +49,14 @@ func tiered(id, game string, mins ...int) platform.Campaign {
 	return c
 }
 
-func claimSetup(f *platformtest.Fake, mins ...int) (*Runner, *spyNotifier, *recClaims, *fakeSkips) {
+func claimSetup(f *platformtest.Fake, mins ...int) (*Runner, *spyNotifier, *fakeClaims, *fakeSkips) {
 	f.Campaigns = []platform.Campaign{tiered("c1", "Rust", mins...)}
 	f.Streams["c1"] = []platform.Stream{{Channel: "a", ChannelID: "ida", ViewerCount: 10}}
 	for _, b := range f.Campaigns[0].Benefits {
 		f.Progress[b.ID] = &platform.Progress{BenefitID: b.ID}
 	}
 	n := &spyNotifier{}
-	cl := &recClaims{}
+	cl := &fakeClaims{}
 	sk := &fakeSkips{}
 	r := newRunner(f, func(c *Config) { c.Notifier = n; c.Claims = cl; c.Skips = sk })
 	return r, n, cl, sk
@@ -85,8 +72,8 @@ func TestRunner_MinesUntilClaim(t *testing.T) {
 	if c := f.CallCount("Claim:d1"); c != 1 {
 		t.Fatalf("claims=%d", c)
 	}
-	if len(cl.rec) != 1 || cl.rec[0] != "acc:d1" {
-		t.Fatalf("rec=%v", cl.rec)
+	if len(cl.recorded()) != 1 || cl.recorded()[0] != "acc:d1:" {
+		t.Fatalf("rec=%v", cl.recorded())
 	}
 	cn := n.of("claim")
 	if len(cn) != 1 || cn[0].fields["drop"] != "Drop1" || cn[0].fields["channel"] != "a" ||
@@ -145,8 +132,8 @@ func TestClaim_TransientFailureNotSkipped(t *testing.T) {
 	if err := r.claim(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(sk.recorded) != 0 || len(cl.rec) != 1 || len(r.claimFailures) != 0 {
-		t.Fatalf("skips=%v rec=%v failures=%v", sk.recorded, cl.rec, r.claimFailures)
+	if len(sk.recorded) != 0 || len(cl.recorded()) != 1 || len(r.claimFailures) != 0 {
+		t.Fatalf("skips=%v rec=%v failures=%v", sk.recorded, cl.recorded(), r.claimFailures)
 	}
 }
 
@@ -257,8 +244,8 @@ func TestClaim_InventoryClaimedRowTreatedAsClaimed(t *testing.T) {
 	if !hasCall(f, "Stop:a") {
 		t.Fatalf("watch not stopped: %v", f.Calls)
 	}
-	if len(cl.rec) != 1 || cl.rec[0] != "acc:d1" {
-		t.Fatalf("rec=%v", cl.rec)
+	if len(cl.recorded()) != 1 || cl.recorded()[0] != "acc:d1:" {
+		t.Fatalf("rec=%v", cl.recorded())
 	}
 	if cn := n.of("claim"); len(cn) != 1 || cn[0].fields["drop"] != "Drop1" || cn[0].fields["channel"] != "a" {
 		t.Fatalf("notify=%+v", cn)

@@ -2,26 +2,12 @@ package runner
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/platform/platformtest"
 )
-
-type codeClaims struct {
-	fakeClaims
-	mu    sync.Mutex
-	codes []string
-}
-
-func (c *codeClaims) RecordClaimWithCode(_ context.Context, acc string, b platform.DropBenefit, code string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.codes = append(c.codes, acc+":"+b.ID+":"+code)
-	return nil
-}
 
 func psFake() *platformtest.PubSubFake {
 	return &platformtest.PubSubFake{Fake: platformtest.NewFake()}
@@ -145,24 +131,22 @@ func TestPubSub_StreamDownRestarts(t *testing.T) {
 }
 
 func TestPubSub_RewardCodeRecorded(t *testing.T) {
-	cl := &codeClaims{}
+	cl := &fakeClaims{}
 	_, p := psWatching(t, func(c *Config) { c.Claims = cl })
 	hooksOf(t, p).OnRewardCode("n", "CODE", "b")
-	cl.mu.Lock()
-	defer cl.mu.Unlock()
-	if len(cl.codes) != 1 || cl.codes[0] != "acc:d1:CODE" {
-		t.Fatalf("codes=%v", cl.codes)
+	if len(cl.recorded()) != 1 || cl.recorded()[0] != "acc:d1:CODE" {
+		t.Fatalf("codes=%v", cl.recorded())
 	}
 }
 
 func TestPubSub_RewardCodeWithoutCurrentIgnored(t *testing.T) {
-	cl := &codeClaims{}
+	cl := &fakeClaims{}
 	p := psFake()
 	New(Config{AccountID: "acc", Platform: "twitch", Backend: p, Games: rustGames, Claims: cl})
 	bootstrapPS(t, p)
 	hooksOf(t, p).OnRewardCode("n", "CODE", "b")
-	if len(cl.codes) != 0 {
-		t.Fatalf("codes=%v", cl.codes)
+	if len(cl.recorded()) != 0 {
+		t.Fatalf("codes=%v", cl.recorded())
 	}
 }
 

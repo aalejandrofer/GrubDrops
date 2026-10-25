@@ -95,10 +95,17 @@ func (r *Runner) finishClaim(ctx context.Context, benefit platform.DropBenefit, 
 	r.stopWatch(ctx)
 
 	// A failed record is logged, never retried: a DB hiccup must not re-claim.
-	if r.cfg.Claims != nil {
+	r.mu.Lock()
+	var target *plan.Target
+	if r.current != nil {
+		t := *r.current
+		target = &t
+	}
+	r.mu.Unlock()
+	if r.cfg.Claims != nil && target != nil {
 		// Detached: a cancelled run ctx must not drop the claim log row.
 		rctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		err := r.cfg.Claims.RecordClaim(rctx, r.cfg.AccountID, benefit)
+		err := r.cfg.Claims.RecordClaim(rctx, r.cfg.AccountID, *target, "")
 		cancel()
 		if err != nil {
 			slog.Warn("runner record claim failed", "kind", "error", "account", r.cfg.AccountID,

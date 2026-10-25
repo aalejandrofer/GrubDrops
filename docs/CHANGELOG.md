@@ -10,6 +10,7 @@ All notable changes to GrubDrops.
 - v2 collection tables (migration 0016) and a one-time `<db>.pre-v2` backup written by `store.Open` before an existing database migrates.
 - v2 store wrappers for the claim log, drop states, watch minutes, account scans, chosen games and skips.
 - v2 planner: inventory progress overrides a stale claim log entry, and `plan.Result` lists claimed drops of chosen active campaigns.
+- v2 runner: `OnScan`, `OnProgress` and `OnBeat` hooks, the scan split out of pick, a plan rescan every 15 minutes while watching, and claim log writes that carry the whole target.
 
 ### Docs
 

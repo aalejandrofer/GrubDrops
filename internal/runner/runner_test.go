@@ -30,14 +30,38 @@ func newRunner(f *platformtest.Fake, mod func(*Config)) *Runner {
 	return New(cfg)
 }
 
-type fakeClaims struct{ ids map[string]bool }
+type claimRec struct {
+	Account string
+	Target  plan.Target
+	Code    string
+}
 
-func (c fakeClaims) RecordClaim(context.Context, string, platform.DropBenefit) error { return nil }
-func (c fakeClaims) RecordClaimWithCode(context.Context, string, platform.DropBenefit, string) error {
+// fakeClaims is a ClaimLog recorder. ids is the claim log's content.
+type fakeClaims struct {
+	mu   sync.Mutex
+	ids  map[string]bool
+	recs []claimRec
+}
+
+func (c *fakeClaims) RecordClaim(_ context.Context, acc string, t plan.Target, code string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.recs = append(c.recs, claimRec{acc, t, code})
 	return nil
 }
-func (c fakeClaims) ClaimedBenefitIDs(context.Context, string) (map[string]bool, error) {
+func (c *fakeClaims) ClaimedBenefitIDs(context.Context, string) (map[string]bool, error) {
 	return c.ids, nil
+}
+
+// recorded returns "acc:benefit:code" per RecordClaim call.
+func (c *fakeClaims) recorded() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out []string
+	for _, r := range c.recs {
+		out = append(out, r.Account+":"+r.Target.Benefit.ID+":"+r.Code)
+	}
+	return out
 }
 
 type fakeSkips struct {
@@ -137,7 +161,7 @@ func TestRunner_OnlyUnlinkedAwaitsConnect(t *testing.T) {
 func TestRunner_ClaimLogExcludesBenefit(t *testing.T) {
 	f := platformtest.NewFake()
 	f.Campaigns = []platform.Campaign{camp("c1", "Rust", "d1", "d2")}
-	r := newRunner(f, func(c *Config) { c.Claims = fakeClaims{ids: map[string]bool{"d1": true}} })
+	r := newRunner(f, func(c *Config) { c.Claims = &fakeClaims{ids: map[string]bool{"d1": true}} })
 	if err := r.step(context.Background()); err != nil {
 		t.Fatal(err)
 	}

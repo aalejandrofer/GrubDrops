@@ -163,6 +163,9 @@ func (r *Runner) tick(ctx context.Context) error {
 		return fmt.Errorf("heartbeat: %w", err)
 	}
 	slog.Info("runner heartbeat sent", "kind", "heartbeat", "account", r.cfg.AccountID, "channel", handle.Channel)
+	if r.cfg.OnBeat != nil {
+		r.cfg.OnBeat(ctx, r.cfg.AccountID)
+	}
 
 	every := max(1, int(liveCheckEvery/r.cfg.TickInterval))
 	if tickN%every == 0 {
@@ -192,7 +195,20 @@ func (r *Runner) tick(ctx context.Context) error {
 	}
 	r.mu.Lock()
 	r.lastPollAt = time.Now()
+	lastScan := r.lastScanAt
 	r.mu.Unlock()
+	if r.cfg.OnProgress != nil {
+		r.cfg.OnProgress(ctx, r.cfg.AccountID, progress)
+	}
+	// Rebuild the plan from this poll. It never touches current, the handle or
+	// the state, so a failure leaves the watch running.
+	if time.Since(lastScan) >= rescanEvery {
+		if _, err := r.scan(ctx, progress, true); err != nil {
+			slog.Warn("runner rescan failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
+		} else {
+			r.changed()
+		}
+	}
 
 	// Multi-reward sweep (Kick): one watch advances many rewards at once, so
 	// claim every sibling that hit 100% and notify it once.
