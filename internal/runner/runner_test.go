@@ -41,13 +41,19 @@ func (c fakeClaims) ClaimedBenefitIDs(context.Context, string) (map[string]bool,
 }
 
 type fakeSkips struct {
-	mu      sync.Mutex
-	skips   map[string]bool
-	cleared []string
+	mu       sync.Mutex
+	skips    map[string]bool
+	cleared  []string
+	recorded []string
 }
 
 func (s *fakeSkips) Skips(string) (map[string]bool, error) { return s.skips, nil }
-func (s *fakeSkips) RecordSkip(_, id string) error         { return nil }
+func (s *fakeSkips) RecordSkip(_, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.recorded = append(s.recorded, id)
+	return nil
+}
 func (s *fakeSkips) ClearSkip(_, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -216,6 +222,7 @@ func TestRunner_RunBacksOffAndRecovers(t *testing.T) {
 
 	f := platformtest.NewFake()
 	f.Campaigns = []platform.Campaign{camp("c1", "Rust", "d1")}
+	f.Streams["c1"] = []platform.Stream{{Channel: "a", ViewerCount: 1}}
 	f.ListErr = fmt.Errorf("boom")
 	r := newRunner(f, func(c *Config) { c.TickInterval = time.Millisecond })
 	ctx, cancel := context.WithCancel(context.Background())
@@ -229,10 +236,10 @@ func TestRunner_RunBacksOffAndRecovers(t *testing.T) {
 	f.Mu.Lock()
 	f.ListErr = nil
 	f.Mu.Unlock()
-	for r.State() != StateStarting && time.Now().Before(deadline) {
+	for r.State() != StateWatching && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
-	if r.State() != StateStarting {
+	if r.State() != StateWatching {
 		t.Fatal(r.State())
 	}
 	cancel()

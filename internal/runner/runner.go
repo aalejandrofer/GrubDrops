@@ -35,6 +35,7 @@ type Runner struct {
 	state      State
 	current    *plan.Target
 	handle     *platform.WatchHandle
+	stream     *platform.Stream
 	channel    string
 	viewers    int
 	minutes    int
@@ -51,6 +52,15 @@ type Runner struct {
 	// claimFailSkipped holds benefits skipped for repeated claim failures,
 	// value = required minutes (Task 5).
 	claimFailSkipped map[string]int
+
+	// Per-watch safeguards (watch.go).
+	stalled          map[string]time.Time // channel -> cooldown end
+	tickN            int
+	noProgress       int // consecutive polls without a row for the benefit
+	noAdvance        int // consecutive polls with flat minutes
+	lastMin          int
+	lastMilestone    int // last progress milestone notified; -1 = none
+	milestoneBenefit string
 }
 
 // New builds a Runner and plumbs the game whitelist into the session.
@@ -78,6 +88,9 @@ func New(cfg Config) *Runner {
 		state:    StateIdle,
 		skipped:  map[string]bool{},
 		noStream: map[string]bool{},
+		stalled:  map[string]time.Time{},
+
+		lastMilestone: -1,
 	}
 	if cfg.Skips != nil {
 		m, err := cfg.Skips.Skips(cfg.AccountID)
@@ -155,19 +168,6 @@ func (r *Runner) setState(ctx context.Context, s State) {
 	r.changed()
 }
 
-// stopWatch ends the live watch, if any. Task 4 completes it.
-func (r *Runner) stopWatch(ctx context.Context) {
-	r.mu.Lock()
-	h := r.handle
-	r.handle = nil
-	r.mu.Unlock()
-	if h != nil {
-		if err := r.cfg.Backend.StopWatch(ctx, *h); err != nil {
-			slog.Warn("runner stop watch failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
-		}
-	}
-}
-
 func (r *Runner) step(ctx context.Context) error {
 	switch r.State() {
 	case StateIdle, StatePicking:
@@ -186,9 +186,7 @@ func (r *Runner) step(ctx context.Context) error {
 	return errIdle
 }
 
-// Stubs until Tasks 4 and 5.
-func (r *Runner) start(ctx context.Context) error { return errors.New("not implemented") }
-func (r *Runner) tick(ctx context.Context) error  { return errors.New("not implemented") }
+// Stub until Task 5.
 func (r *Runner) claim(ctx context.Context) error { return errors.New("not implemented") }
 
 // reapRewards claims one-click reward campaigns. Task 5 fills it in.
