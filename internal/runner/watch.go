@@ -125,6 +125,7 @@ func (r *Runner) start(ctx context.Context) error {
 	r.noProgress = 0
 	r.noAdvance = 0
 	r.lastMin = 0
+	r.lastPollMin = 0
 	if target.Benefit.ID != r.milestoneBenefit {
 		r.lastMilestone = -1
 		r.milestoneBenefit = target.Benefit.ID
@@ -212,13 +213,14 @@ func (r *Runner) tick(ctx context.Context) error {
 			"benefit", benefit.ID, "min_watched", p.MinutesWatched,
 			"required", benefit.RequiredMinutes, "claimed", p.Claimed)
 		r.mu.Lock()
-		if p.MinutesWatched > r.lastMin {
+		if p.MinutesWatched > r.lastPollMin {
 			r.noAdvance = 0
 		} else {
 			r.noAdvance++
 		}
 		noAdvance := r.noAdvance
 		r.lastMin = p.MinutesWatched
+		r.lastPollMin = p.MinutesWatched
 		r.minutes = p.MinutesWatched
 		r.noProgress = 0
 		if p.InstanceID != "" && r.current != nil {

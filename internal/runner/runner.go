@@ -60,7 +60,8 @@ type Runner struct {
 	tickN            int
 	noProgress       int // consecutive polls without a row for the benefit
 	noAdvance        int // consecutive polls with flat minutes
-	lastMin          int
+	lastMin          int // latest minutes, polled or pushed; display and vanish checks
+	lastPollMin      int // minutes at the last inventory poll; freeze detection only
 	lastMilestone    int // last progress milestone notified; -1 = none
 	milestoneBenefit string
 }

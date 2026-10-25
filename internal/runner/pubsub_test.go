@@ -153,3 +153,24 @@ func TestPubSub_RewardCodeWithoutCurrentIgnored(t *testing.T) {
 		t.Fatalf("codes=%v", cl.codes)
 	}
 }
+
+func TestPubSub_PushThenPollNoFalseFreeze(t *testing.T) {
+	r, p := psWatching(t, nil)
+	h := hooksOf(t, p)
+	for i := 1; i <= freezeThreshold+3; i++ {
+		p.Mu.Lock()
+		p.Progress["d1"] = &platform.Progress{BenefitID: "d1", MinutesWatched: i}
+		p.Mu.Unlock()
+		h.OnDropProgress("d1", int64(i), 60)
+		steps(t, r, 1)
+		r.mu.Lock()
+		na := r.noAdvance
+		r.mu.Unlock()
+		if na != 0 || r.State() != StateWatching {
+			t.Fatalf("round %d: noAdvance=%d state=%s", i, na, r.State())
+		}
+	}
+	if hasCall(p.Fake, "Stop:a") {
+		t.Fatalf("rotated: %v", p.Calls)
+	}
+}

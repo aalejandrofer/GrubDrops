@@ -60,6 +60,8 @@ type Config struct {
 	// OnInventory is nil-safe; plan 2 reconciles here.
 	OnInventory func(ctx context.Context, accountID string, camps []platform.Campaign, progress []platform.Progress)
 	// OnChange is nil-safe; called after every state change and progress update.
+	// It may be called concurrently from the backend PubSub goroutine and the
+	// Run goroutine, so implementations must be thread-safe.
 	OnChange              func(Snapshot)
 	TickInterval          time.Duration // <=0 -> DefaultTick
 	ProgressNotifyStepPct int           // 0 disables progress notifications
