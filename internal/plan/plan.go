@@ -1,0 +1,170 @@
+// Package plan decides, per account, which drops to mine and in what order.
+// It is pure: no I/O, no clocks.
+package plan
+
+import (
+	"sort"
+	"strings"
+
+	"github.com/aalejandrofer/grubdrops/internal/platform"
+)
+
+type Game struct{ Name, Slug string }
+
+type Input struct {
+	Games       []Game // chosen games, priority order (index 0 = top)
+	Campaigns   []platform.Campaign
+	Progress    []platform.Progress
+	Claimed     map[string]bool // benefit IDs in GrubDrops' claim log for this account
+	Skipped     map[string]bool // benefit IDs the runner gave up on
+	ForceLinked map[string]bool // campaign IDs the user asserted are linked
+	Order       []string        // session Up next override, benefit IDs
+}
+
+type Target struct {
+	Campaign platform.Campaign
+	Benefit  platform.DropBenefit
+	Minutes  int // minutes watched per inventory, 0 if absent
+}
+
+type Reason string
+
+const (
+	ReasonNotLinked    Reason = "not_linked"
+	ReasonPrecondition Reason = "precondition"
+	ReasonSkipped      Reason = "skipped"
+)
+
+type Blocked struct {
+	Target
+	Reason Reason
+}
+
+type Result struct {
+	Queue   []Target
+	Blocked []Blocked
+}
+
+// Match returns the index of the game whose name or slug equals game,
+// case-insensitively.
+func Match(games []Game, game string) (rank int, ok bool) {
+	g := strings.ToLower(game)
+	for i, c := range games {
+		if g == strings.ToLower(c.Name) || g == strings.ToLower(c.Slug) {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// ApplyOrder moves targets named in order to the front, in order's sequence.
+// The rest keep their incoming order. IDs not in q are ignored.
+func ApplyOrder(q []Target, order []string) []Target {
+	out := make([]Target, 0, len(q))
+	used := make(map[int]bool, len(q))
+	for _, id := range order {
+		for i, t := range q {
+			if !used[i] && t.Benefit.ID == id {
+				used[i] = true
+				out = append(out, t)
+				break
+			}
+		}
+	}
+	for i, t := range q {
+		if !used[i] {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+type entry struct {
+	rank       int
+	restricted bool
+	remaining  int
+	targets    []Target
+	blocked    []Blocked
+}
+
+func Build(in Input) Result {
+	minutes := map[string]int{}
+	claimed := map[string]bool{}
+	for id, v := range in.Claimed {
+		if v {
+			claimed[id] = true
+		}
+	}
+	for _, p := range in.Progress {
+		if p.MinutesWatched > minutes[p.BenefitID] {
+			minutes[p.BenefitID] = p.MinutesWatched
+		}
+		if p.Claimed {
+			claimed[p.BenefitID] = true
+		}
+	}
+
+	seen := map[string]bool{}
+	var entries []entry
+	for _, c := range in.Campaigns {
+		rank, ok := Match(in.Games, c.Game)
+		if !ok || (c.Status != "" && c.Status != "active") || c.Kind == "reward" {
+			continue
+		}
+		unlinked := (c.Platform == "twitch" || c.AccountLinkChecked) && !c.AccountLinked && !in.ForceLinked[c.ID]
+
+		benefits := append([]platform.DropBenefit(nil), c.Benefits...)
+		sort.SliceStable(benefits, func(i, j int) bool { return benefits[i].RequiredMinutes < benefits[j].RequiredMinutes })
+
+		e := entry{rank: rank, restricted: len(c.AllowedChannels) > 0, remaining: -1}
+		for _, b := range benefits {
+			if b.RequiredMinutes <= 0 || claimed[b.ID] || seen[b.ID] {
+				continue
+			}
+			seen[b.ID] = true
+			t := Target{Campaign: c, Benefit: b, Minutes: minutes[b.ID]}
+			if rem := max(0, b.RequiredMinutes-t.Minutes); e.remaining < 0 || rem < e.remaining {
+				e.remaining = rem
+			}
+			switch {
+			case unlinked:
+				e.blocked = append(e.blocked, Blocked{t, ReasonNotLinked})
+			case in.Skipped[b.ID]:
+				e.blocked = append(e.blocked, Blocked{t, ReasonSkipped})
+			case unmetPrecondition(b, claimed):
+				e.blocked = append(e.blocked, Blocked{t, ReasonPrecondition})
+			default:
+				e.targets = append(e.targets, t)
+			}
+		}
+		entries = append(entries, e)
+	}
+
+	sort.SliceStable(entries, func(i, j int) bool {
+		a, b := entries[i], entries[j]
+		if a.rank != b.rank {
+			return a.rank < b.rank
+		}
+		if a.restricted != b.restricted {
+			return a.restricted
+		}
+		return a.remaining < b.remaining
+	})
+
+	var res Result
+	for _, e := range entries {
+		res.Queue = append(res.Queue, e.targets...)
+		res.Blocked = append(res.Blocked, e.blocked...)
+	}
+	res.Queue = ApplyOrder(res.Queue, in.Order)
+	return res
+}
+
+func unmetPrecondition(b platform.DropBenefit, claimed map[string]bool) bool {
+	for _, p := range b.Preconditions {
+		if !claimed[p] {
+			return true
+		}
+	}
+	return false
+}
