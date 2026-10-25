@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/plan"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
@@ -71,7 +72,11 @@ func (r *Runner) claim(ctx context.Context) error {
 
 	// A failed record is logged, never retried: a DB hiccup must not re-claim.
 	if r.cfg.Claims != nil {
-		if err := r.cfg.Claims.RecordClaim(ctx, r.cfg.AccountID, benefit); err != nil {
+		// Detached: a cancelled run ctx must not drop the claim log row.
+		rctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err := r.cfg.Claims.RecordClaim(rctx, r.cfg.AccountID, benefit)
+		cancel()
+		if err != nil {
 			slog.Warn("runner record claim failed", "kind", "error", "account", r.cfg.AccountID,
 				"benefit", benefit.ID, "err", err)
 		}
@@ -137,7 +142,11 @@ func (r *Runner) notifySwept(ctx context.Context, cr platform.ClaimedReward) {
 		extra["game"] = cr.Game
 	}
 	if r.cfg.Notifier != nil {
-		_ = r.cfg.Notifier.Notify(ctx, "claim", r.notifyFields(extra))
+		f := r.notifyFields(extra)
+		// The sibling is not the mined drop: drop its campaign and image.
+		delete(f, "campaign")
+		delete(f, "image")
+		_ = r.cfg.Notifier.Notify(ctx, "claim", f)
 	}
 }
 

@@ -93,6 +93,9 @@ func TestRunner_MinesUntilClaim(t *testing.T) {
 		cn[0].fields["cur_min"] != 2 || cn[0].fields["req_min"] != 2 {
 		t.Fatalf("notify=%+v", cn)
 	}
+	if f.CallCount("Stop:") != 1 {
+		t.Fatalf("calls=%v", f.Calls)
+	}
 	if r.Snapshot().Current != nil {
 		t.Fatal("current not cleared")
 	}
@@ -164,6 +167,9 @@ func TestClaim_FailSkipKeptWhileStillComplete(t *testing.T) {
 	if len(sk.cleared) != 0 {
 		t.Fatalf("cleared=%v", sk.cleared)
 	}
+	if cur := r.Snapshot().Current; cur != nil && cur.Benefit.ID == "d1" {
+		t.Fatalf("d1 re-picked: %+v", cur)
+	}
 }
 
 func TestClaim_MultiTierContinuesAfterFirstClaim(t *testing.T) {
@@ -184,6 +190,8 @@ func TestSweep_NotifiesSiblingsOnceExcludingCurrent(t *testing.T) {
 	f.Campaigns = []platform.Campaign{tiered("c1", "Rust", 60)}
 	f.Streams["c1"] = []platform.Stream{{Channel: "a", ChannelID: "ida", ViewerCount: 10}}
 	f.Progress["d1"] = &platform.Progress{BenefitID: "d1"}
+	f.Campaigns[0].Name = "Camp"
+	f.Campaigns[0].Benefits[0].ImageURL = "http://img"
 	sf := &platformtest.SweepFake{Fake: f}
 	sf.Sweep = func() []platform.ClaimedReward {
 		return []platform.ClaimedReward{{Title: "Sib", Game: "Rust"}, {Title: "Drop1"}, {Title: ""}}
@@ -193,6 +201,12 @@ func TestSweep_NotifiesSiblingsOnceExcludingCurrent(t *testing.T) {
 	steps(t, r, 4) // pick, start, tick, tick
 	cn := n.of("claim")
 	if len(cn) != 1 || cn[0].fields["drop"] != "Sib" || cn[0].fields["game"] != "Rust" {
+		t.Fatalf("notify=%+v", cn)
+	}
+	if _, ok := cn[0].fields["campaign"]; ok {
+		t.Fatalf("campaign leaked: %+v", cn[0].fields)
+	}
+	if _, ok := cn[0].fields["image"]; ok {
 		t.Fatalf("notify=%+v", cn)
 	}
 }
