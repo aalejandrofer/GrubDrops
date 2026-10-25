@@ -153,18 +153,20 @@ func (r *Runner) onStreamDown(channelID string) {
 
 // onRewardCode logs a redemption code and stores it against the target the
 // runner last claimed, if that claim is under rewardCodeWindow old. It never
-// uses current: after a claim, current is already the next drop.
-func (r *Runner) onRewardCode(notificationID, code, title string) {
+// uses current: after a claim, current is already the next drop. Each claim
+// takes at most one code, so a second code in the window is not recorded.
+func (r *Runner) onRewardCode(notificationID, code, body string) {
 	r.mu.Lock()
 	var claimed *plan.Target
 	if r.lastClaimed != nil && time.Since(r.lastClaimedAt) <= rewardCodeWindow {
 		t := *r.lastClaimed
 		claimed = &t
+		r.lastClaimed = nil
 	}
 	r.mu.Unlock()
 	if claimed == nil {
 		slog.Info("runner reward code with no recent claim; not recorded", "kind", "claim",
-			"account", r.cfg.AccountID, "notification_id", notificationID, "code", code, "title", title)
+			"account", r.cfg.AccountID, "notification_id", notificationID, "code", code, "body", body)
 		return
 	}
 	benefit := claimed.Benefit
