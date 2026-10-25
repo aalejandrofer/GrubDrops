@@ -156,6 +156,9 @@ func TestPubSub_RewardCodeWithoutCurrentIgnored(t *testing.T) {
 
 func TestPubSub_PushThenPollNoFalseFreeze(t *testing.T) {
 	r, p := psWatching(t, nil)
+	p.Mu.Lock()
+	p.OnHeartbeat = func(*platformtest.Fake) {} // minutes move only via the test
+	p.Mu.Unlock()
 	h := hooksOf(t, p)
 	for i := 1; i <= freezeThreshold+3; i++ {
 		p.Mu.Lock()
