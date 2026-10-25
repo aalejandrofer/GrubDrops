@@ -116,7 +116,7 @@ func Build(in Input) Result {
 		benefits := append([]platform.DropBenefit(nil), c.Benefits...)
 		sort.SliceStable(benefits, func(i, j int) bool { return benefits[i].RequiredMinutes < benefits[j].RequiredMinutes })
 
-		e := entry{rank: rank, restricted: len(c.AllowedChannels) > 0, }
+		e := entry{rank: rank, restricted: len(c.AllowedChannels) > 0}
 		for _, b := range benefits {
 			if b.RequiredMinutes <= 0 || claimed[b.ID] || seen[b.ID] {
 				continue
