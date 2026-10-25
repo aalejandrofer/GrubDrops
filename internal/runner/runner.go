@@ -52,6 +52,8 @@ type Runner struct {
 	// claimFailSkipped holds benefits skipped for repeated claim failures,
 	// value = required minutes (Task 5).
 	claimFailSkipped map[string]int
+	// notifiedSwept dedupes sweep notifications by reward title, per run.
+	notifiedSwept map[string]struct{}
 
 	// Per-watch safeguards (watch.go).
 	stalled          map[string]time.Time // channel -> cooldown end
@@ -186,12 +188,6 @@ func (r *Runner) step(ctx context.Context) error {
 	return errIdle
 }
 
-// Stub until Task 5.
-func (r *Runner) claim(ctx context.Context) error { return errors.New("not implemented") }
-
-// reapRewards claims one-click reward campaigns. Task 5 fills it in.
-func (r *Runner) reapRewards(ctx context.Context) {}
-
 func (r *Runner) clearSkip(id string) {
 	r.mu.Lock()
 	delete(r.skipped, id)
@@ -236,7 +232,7 @@ func (r *Runner) pick(ctx context.Context) error {
 	if r.cfg.OnInventory != nil {
 		r.cfg.OnInventory(ctx, r.cfg.AccountID, camps, progress)
 	}
-	r.reapRewards(ctx)
+	r.reapRewards(ctx, camps)
 
 	var claimed map[string]bool
 	if r.cfg.Claims != nil {

@@ -189,7 +189,18 @@ func (r *Runner) tick(ctx context.Context) error {
 	r.lastPollAt = time.Now()
 	r.mu.Unlock()
 
-	// Task 5: CompletedSweeper + notifySwept
+	// Multi-reward sweep (Kick): one watch advances many rewards at once, so
+	// claim every sibling that hit 100% and notify it once.
+	if sweeper, ok := r.cfg.Backend.(platform.CompletedSweeper); ok {
+		if swept, serr := sweeper.SweepCompletedClaims(ctx, r.cfg.Session); serr != nil {
+			slog.Debug("runner completed-claim sweep failed", "kind", "error", "account", r.cfg.AccountID, "err", serr)
+		} else {
+			for _, cr := range swept {
+				slog.Info("runner swept completed reward", "kind", "claim", "account", r.cfg.AccountID, "title", cr.Title)
+				r.notifySwept(ctx, cr)
+			}
+		}
+	}
 
 	matched := false
 	for _, p := range progress {
