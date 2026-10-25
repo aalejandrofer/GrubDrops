@@ -105,6 +105,7 @@ func New(cfg Config) *Runner {
 			}
 		}
 	}
+	r.registerPubSub()
 	return r
 }
 
