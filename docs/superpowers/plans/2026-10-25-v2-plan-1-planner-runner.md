@@ -474,3 +474,30 @@ Behaviour (ported from 1.x `handlePubSub*`). Each handler acts only when the ID 
 - [ ] **Step 4: Run** `go test ./... && gofmt -l .`. Expected: all PASS, and `gofmt -l` prints nothing.
 - [ ] **Step 5: Add the changelog line** under `## [Unreleased]` → `### Added`: `- v2 planner (\`internal/plan\`) and per-account runner + pool (\`internal/runner\`), replacing the watcher and scheduler. Not wired in yet (rebuild/v2).`
 - [ ] **Step 6: Commit** `git add internal/runner docs/CHANGELOG.md && git commit -m "feat(runner): pool supervisor with session-only Up next order"`
+
+---
+
+## Outcome and carry-overs (2026-10-25)
+
+Plan 1 is complete on `rebuild/v2` (db7c05d..a33600d). All seven tasks passed their reviews, and the whole-branch review is clean after one fix round.
+
+### Calls changed during execution
+
+- **Tick:** "Tick fixed at 60 s" was wrong. In 1.x the loop pulse defaulted to 5 s (`internal/store/settings.go`), and the 60 s value is the beacon cadence. The v2 runner moves from step to step without waiting, beacons right after `StartWatch`, then beacons every `TickInterval` (60 s). This changes when watch time accrues, so it needs a live-drop check before any tag.
+- **PubSub hooks:** the real Twitch backends capture an account's hooks once, when that account's PubSub client is first created. The runner registers one trampoline per (backend, account), and the trampoline routes to the current `*Runner`. `platformtest.PubSubFake` now captures hooks at bootstrap the same way.
+- **Fixes over 1.x:** freeze detection compares polled minutes, which stops the push-then-poll false freeze. The Kick swept notify drops the mined drop's campaign and image. An inventory row that is already claimed is settled without calling `Claim`.
+
+### Carry-overs
+
+- **Plan 2:**
+  - A campaign with no live stream triggers a full rescan right away. Several such campaigns rescan back to back, which risks Twitch GQL rate limits. Add a short floor between rounds, or reuse the last scan's queue.
+  - `OnInventory` fires only in `pick`. Reconcile needs its own schedule during a long watch, or an `OnProgress` hook fed by the tick's poll.
+  - A claim-failure test should cover the full re-pick → start → tick cycle.
+  - The reaper's `len(Benefits)==0` branch has no test.
+- **Plan 3:**
+  - Reuse one backend per account. Never wrap a backend per Runner: the hook registry is keyed by backend identity, so a wrapper silences PubSub after the first reload. Old backends stay pinned by the registry.
+  - Prefer `ReloadAccount` over `Reload` when the game list changes, because `Reload` restarts every watch.
+  - Set the restart policy for panicked units and units that exited with `errStop`. A panicked runner still holds `current`, so a late push can flip its snapshot to `claiming`. Clear `current` and call `Release()` in panic cleanup.
+  - `Config.OnChange` may be called from two goroutines at once.
+- **Tests:** `TestRunner_BeaconCadence` measures beat gaps when the fake receives each call, not at the `lastBeatAt` stamp. It can flake under load.
+- **Kept platform code:** the Kick sweep hardcodes `Game: "Rust"` (`kick/backend.go`), so swept notifies can name the wrong game.
