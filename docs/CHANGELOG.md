@@ -13,6 +13,7 @@ All notable changes to GrubDrops.
 - v2 `collect` package: per-drop states and inventory-found claims derived from runner scans, and a per-game board that merges every account's latest scan.
 - v2 runner: `OnScan`, `OnProgress` and `OnBeat` hooks, the scan split out of pick, a plan rescan every 15 minutes while watching, and claim log writes that carry the whole target.
 - v2 runner: a campaign with no live stream moves on to the next queued campaign without rescanning, and swept rewards are recorded in the claim log under their planned game.
+- v2 `collect.Collector`: persists drop states, found claims, scan times and watch minutes from the runner hooks, and serves as the runner claim log.
 
 ### Docs
 

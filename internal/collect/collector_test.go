@@ -1,0 +1,257 @@
+package collect
+
+import (
+	"context"
+	"errors"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+	_ "time/tzdata"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/aalejandrofer/grubdrops/internal/plan"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/runner"
+	"github.com/aalejandrofer/grubdrops/internal/store"
+	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+)
+
+var cscanAt = time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+
+func newCollector(t *testing.T) *Collector {
+	t.Helper()
+	ctx := context.Background()
+	db, err := store.Open(ctx, filepath.Join(t.TempDir(), "c.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	q := gen.New(db)
+	now := time.Now().Unix()
+	_, err = q.CreateAccount(ctx, gen.CreateAccountParams{
+		ID: "a1", Platform: "twitch", DisplayName: "a1", Status: "idle",
+		FingerprintJson: "{}", Enabled: 1, CreatedAt: now, UpdatedAt: now,
+	})
+	require.NoError(t, err)
+	return New(db, q)
+}
+
+func ctarget(id string, required, minutes int) plan.Target {
+	return plan.Target{
+		Campaign: platform.Campaign{ID: "c1", Platform: "twitch", Game: "Rust", Name: "Camp", Status: "active"},
+		Benefit:  platform.DropBenefit{ID: id, CampaignID: "c1", Name: "Drop " + id, RequiredMinutes: required},
+		Minutes:  minutes,
+	}
+}
+
+func ccampaignOf(ts ...plan.Target) platform.Campaign {
+	c := ts[0].Campaign
+	for _, t := range ts {
+		c.Benefits = append(c.Benefits, t.Benefit)
+	}
+	return c
+}
+
+// baseScan queues b1 at 30/60 and lists b2 as claimed.
+func cbaseScan() runner.Scan {
+	q, cl := ctarget("b1", 60, 30), ctarget("b2", 60, 60)
+	return runner.Scan{
+		AccountID: "a1", Platform: "twitch", At: cscanAt, InventoryOK: true,
+		Campaigns: []platform.Campaign{ccampaignOf(q, cl)},
+		Result:    plan.Result{Queue: []plan.Target{q}, Claimed: []plan.Target{cl}},
+	}
+}
+
+func statesByBenefit(t *testing.T, c *Collector) map[string]store.DropState {
+	t.Helper()
+	rows, err := c.States.List(context.Background(), "a1")
+	require.NoError(t, err)
+	out := map[string]store.DropState{}
+	for _, r := range rows {
+		out[r.BenefitID] = r
+	}
+	return out
+}
+
+func TestCollector_ScanPersistsStates(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	c.OnScan(ctx, cbaseScan())
+	st := statesByBenefit(t, c)
+	require.Len(t, st, 2)
+	require.Equal(t, StateAccruing, st["b1"].State)
+	require.Equal(t, 30, st["b1"].Minutes)
+	require.Equal(t, StateClaimed, st["b2"].State)
+	scans, err := c.Scans.List(ctx)
+	require.NoError(t, err)
+	require.Len(t, scans, 1)
+	require.True(t, scans[0].ScannedAt.Equal(cscanAt))
+	require.True(t, scans[0].ReconciledAt.Equal(cscanAt))
+	require.Empty(t, scans[0].Error)
+}
+
+func TestCollector_InventoryFailureKeepsStates(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	c.OnScan(ctx, cbaseScan())
+	later := cscanAt.Add(time.Hour)
+	s := cbaseScan()
+	s.At, s.InventoryOK = later, false
+	s.Result = plan.Result{Queue: []plan.Target{ctarget("b1", 60, 0), ctarget("b2", 60, 0)}}
+	c.OnScan(ctx, s)
+	st := statesByBenefit(t, c)
+	require.Equal(t, StateAccruing, st["b1"].State)
+	require.Equal(t, StateClaimed, st["b2"].State)
+	scans, err := c.Scans.List(ctx)
+	require.NoError(t, err)
+	require.True(t, scans[0].ScannedAt.Equal(later))
+	require.True(t, scans[0].ReconciledAt.Equal(cscanAt))
+}
+
+func TestCollector_NoCampaignsClearsStates(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	c.OnScan(ctx, cbaseScan())
+	c.OnScan(ctx, runner.Scan{AccountID: "a1", Platform: "twitch", At: cscanAt.Add(time.Hour)})
+	require.Empty(t, statesByBenefit(t, c))
+	// the cache is cleared too, so progress writes nothing
+	c.OnProgress(ctx, "a1", []platform.Progress{{BenefitID: "b1", MinutesWatched: 40}})
+	require.Empty(t, statesByBenefit(t, c))
+}
+
+func TestCollector_FoundClaimLogged(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	s := cbaseScan()
+	s.Progress = []platform.Progress{{BenefitID: "b2", Claimed: true}}
+	c.OnScan(ctx, s)
+	got, err := c.Claims.Recent(ctx, 10)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, "b2", got[0].BenefitID)
+	require.Equal(t, store.ClaimSourceInventory, got[0].Source)
+
+	s.Logged = map[string]bool{"b2": true}
+	c.OnScan(ctx, s)
+	got, err = c.Claims.Recent(ctx, 10)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, store.ClaimSourceInventory, got[0].Source)
+}
+
+func TestCollector_ScanErrorRecorded(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	c.OnScan(ctx, cbaseScan())
+	later := cscanAt.Add(time.Hour)
+	c.OnScan(ctx, runner.Scan{AccountID: "a1", Platform: "twitch", At: later, Err: errors.New("boom")})
+	scans, err := c.Scans.List(ctx)
+	require.NoError(t, err)
+	require.Equal(t, "boom", scans[0].Error)
+	require.True(t, scans[0].ScannedAt.Equal(later))
+	require.True(t, scans[0].ReconciledAt.Equal(cscanAt))
+	require.Len(t, statesByBenefit(t, c), 2)
+	g := c.Board.Games([]plan.Game{{Name: "Rust", Slug: "rust"}})
+	require.Len(t, g[0].Campaigns, 1)
+	require.True(t, g[0].LastScanAt.Equal(cscanAt))
+}
+
+func TestCollector_ProgressAdvancesState(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	s := cbaseScan()
+	s.Result.Queue = []plan.Target{ctarget("b1", 60, 0)}
+	c.OnScan(ctx, s)
+	require.Equal(t, StateEligible, statesByBenefit(t, c)["b1"].State)
+
+	c.OnProgress(ctx, "a1", []platform.Progress{{BenefitID: "b1", MinutesWatched: 30}, {BenefitID: "zzz", MinutesWatched: 5}})
+	st := statesByBenefit(t, c)
+	require.Equal(t, StateAccruing, st["b1"].State)
+	require.Equal(t, 30, st["b1"].Minutes)
+	require.Len(t, st, 2)
+
+	c.OnProgress(ctx, "a1", []platform.Progress{{BenefitID: "b1", MinutesWatched: 60}})
+	require.Equal(t, StateClaimable, statesByBenefit(t, c)["b1"].State)
+
+	c.OnProgress(ctx, "a1", []platform.Progress{{BenefitID: "b1", MinutesWatched: 60, Claimed: true}})
+	st = statesByBenefit(t, c)
+	require.Equal(t, StateClaimed, st["b1"].State)
+	require.Equal(t, 60, st["b1"].Minutes)
+
+	// claimed rows stay claimed
+	c.OnProgress(ctx, "a1", []platform.Progress{{BenefitID: "b1", MinutesWatched: 10}})
+	require.Equal(t, StateClaimed, statesByBenefit(t, c)["b1"].State)
+}
+
+func TestCollector_ProgressLeavesBlocked(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	s := cbaseScan()
+	s.Result = plan.Result{Blocked: []plan.Blocked{{Target: ctarget("b1", 60, 0), Reason: plan.ReasonNotLinked}}}
+	c.OnScan(ctx, s)
+	c.OnProgress(ctx, "a1", []platform.Progress{{BenefitID: "b1", MinutesWatched: 40}})
+	st := statesByBenefit(t, c)["b1"]
+	require.Equal(t, StateBlocked, st.State)
+	require.Equal(t, 0, st.Minutes)
+}
+
+func TestCollector_BeatUsesLocationDay(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	sh, err := time.LoadLocation("Asia/Shanghai")
+	require.NoError(t, err)
+	c.Now = func() time.Time { return time.Date(2026, 10, 25, 23, 30, 0, 0, time.UTC) }
+	c.Loc = func() *time.Location { return sh }
+	c.OnBeat(ctx, "a1")
+	n, err := c.Minutes.Day(ctx, "2026-10-26")
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	c.OnBeat(ctx, "a1")
+	c.OnBeat(ctx, "a1")
+	n, err = c.Minutes.Day(ctx, "2026-10-26")
+	require.NoError(t, err)
+	require.Equal(t, 3, n)
+}
+
+func TestCollector_RecordClaimFlipsState(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	s := cbaseScan()
+	s.Result.Queue = []plan.Target{ctarget("b1", 60, 60)}
+	c.OnScan(ctx, s)
+	require.Equal(t, StateClaimable, statesByBenefit(t, c)["b1"].State)
+	require.NoError(t, c.RecordClaim(ctx, "a1", ctarget("b1", 60, 60), "CODE"))
+	got, err := c.Claims.Recent(ctx, 10)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, store.ClaimSourceGrubDrops, got[0].Source)
+	require.Equal(t, "Rust", got[0].Game)
+	require.Equal(t, "CODE", got[0].Code)
+	require.Equal(t, StateClaimed, statesByBenefit(t, c)["b1"].State)
+	ids, err := c.ClaimedBenefitIDs(ctx, "a1")
+	require.NoError(t, err)
+	require.True(t, ids["b1"])
+}
+
+func TestCollector_ConcurrentHooks(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	c.OnScan(ctx, cbaseScan())
+	const workers, n = 4, 50
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < n; i++ {
+				c.OnProgress(ctx, "a1", []platform.Progress{{BenefitID: "b1", MinutesWatched: i}})
+				c.OnBeat(ctx, "a1")
+				_ = c.RecordClaim(ctx, "a1", ctarget("b1", 60, 60), "")
+			}
+		}()
+	}
+	wg.Wait()
+	total, err := c.Minutes.Total(ctx)
+	require.NoError(t, err)
+	require.Equal(t, workers*n, total)
+}
