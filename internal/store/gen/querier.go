@@ -12,13 +12,17 @@ import (
 type Querier interface {
 	AddAccountChannel(ctx context.Context, arg AddAccountChannelParams) error
 	AddAccountGame(ctx context.Context, arg AddAccountGameParams) error
+	AddChosenGame(ctx context.Context, arg AddChosenGameParams) error
 	AddForceChannel(ctx context.Context, arg AddForceChannelParams) error
 	AddGlobalGame(ctx context.Context, arg AddGlobalGameParams) error
+	AddWatchMinutes(ctx context.Context, arg AddWatchMinutesParams) error
 	AdminExists(ctx context.Context) (bool, error)
 	ClearAccountChannels(ctx context.Context, accountID string) error
 	ClearAccountGames(ctx context.Context, accountID string) error
+	ClearChosenGames(ctx context.Context) error
 	ClearForceChannels(ctx context.Context, accountID string) error
 	ClearGlobalGames(ctx context.Context) error
+	CountClaimLogSince(ctx context.Context, claimedAt int64) (int64, error)
 	// Distinct benefits already claimed by any account in this campaign.
 	// The dashboard divides this by len(Benefits) to render the
 	// "Claimed X / Y" badge on each Active Campaigns row.
@@ -46,6 +50,7 @@ type Querier interface {
 	// Used by the reconcile prune to undo false positives from shared-reward
 	// tiers that were wrongly marked collected.
 	DeleteClaimFor(ctx context.Context, arg DeleteClaimForParams) error
+	DeleteDropStatesForAccount(ctx context.Context, accountID string) error
 	DeleteKV(ctx context.Context, key string) error
 	GetAccount(ctx context.Context, id string) (Account, error)
 	GetAdmin(ctx context.Context) (Admin, error)
@@ -59,11 +64,15 @@ type Querier interface {
 	// Per-account link state for a campaign, joined with the account handle.
 	// Drives the per-account connect chips on the not-linked table.
 	ListAccountLinksForCampaign(ctx context.Context, campaignID string) ([]ListAccountLinksForCampaignRow, error)
+	ListAccountScans(ctx context.Context) ([]AccountScan, error)
 	ListActiveCampaignsForPlatform(ctx context.Context, arg ListActiveCampaignsForPlatformParams) ([]Campaign, error)
 	ListAllAccountChannels(ctx context.Context) ([]ListAllAccountChannelsRow, error)
 	ListAllAccounts(ctx context.Context) ([]Account, error)
+	ListAllDropStates(ctx context.Context) ([]DropState, error)
 	ListAllGames(ctx context.Context) ([]Game, error)
 	ListBenefitsForCampaign(ctx context.Context, campaignID string) ([]Benefit, error)
+	ListChosenGames(ctx context.Context) ([]ListChosenGamesRow, error)
+	ListClaimLogBenefitIDs(ctx context.Context, accountID string) ([]string, error)
 	// All benefit ids this account already has a claim row for. The watcher
 	// skips re-mining these: a claim is keyed by benefit id which is unique per
 	// drop instance, so owning a claim means THIS exact drop is done.
@@ -74,24 +83,30 @@ type Querier interface {
 	// Campaigns currently in flight (starts_at <= now < ends_at).
 	// Whitelist filtering is applied in Go.
 	ListCurrentCampaigns(ctx context.Context, arg ListCurrentCampaignsParams) ([]Campaign, error)
+	ListDropStatesForAccount(ctx context.Context, accountID string) ([]DropState, error)
 	ListEnabledAccounts(ctx context.Context) ([]Account, error)
 	ListForceChannels(ctx context.Context, accountID string) ([]ListForceChannelsRow, error)
 	ListGlobalGames(ctx context.Context) ([]ListGlobalGamesRow, error)
 	ListKVByPrefix(ctx context.Context, dollar_1 sql.NullString) ([]Kv, error)
 	// Campaigns that have ended. Whitelist filtering is applied in Go.
 	ListPastCampaigns(ctx context.Context, arg ListPastCampaignsParams) ([]Campaign, error)
+	ListRecentClaimLog(ctx context.Context, limit int64) ([]ClaimLog, error)
 	ListRecentClaims(ctx context.Context, limit int64) ([]ListRecentClaimsRow, error)
 	ListUnclaimedProgressForAccount(ctx context.Context, arg ListUnclaimedProgressForAccountParams) ([]Progress, error)
 	// Campaigns announced but not yet started. Whitelist filtering is
 	// applied in Go.
 	ListUpcomingCampaigns(ctx context.Context, arg ListUpcomingCampaignsParams) ([]Campaign, error)
+	// A zero timestamp keeps the stored value. The error is always written.
+	PutAccountScan(ctx context.Context, arg PutAccountScanParams) error
 	RemoveAccountChannel(ctx context.Context, arg RemoveAccountChannelParams) error
 	RemoveAccountGame(ctx context.Context, arg RemoveAccountGameParams) error
 	RemoveForceChannel(ctx context.Context, arg RemoveForceChannelParams) error
 	SetAccountEnabled(ctx context.Context, arg SetAccountEnabledParams) error
+	SumAllWatchMinutes(ctx context.Context) (int64, error)
 	// Lifetime watch minutes: sum of per-benefit progress. Persistent, so it
 	// survives restarts (unlike the heartbeat log ring used for today's count).
 	SumWatchMinutes(ctx context.Context) (int64, error)
+	SumWatchMinutesDay(ctx context.Context, day string) (int64, error)
 	UpdateAccountAvatar(ctx context.Context, arg UpdateAccountAvatarParams) error
 	UpdateAccountDisplayName(ctx context.Context, arg UpdateAccountDisplayNameParams) error
 	UpdateAccountStatus(ctx context.Context, arg UpdateAccountStatusParams) error
@@ -100,6 +115,10 @@ type Querier interface {
 	UpsertAdmin(ctx context.Context, arg UpsertAdminParams) error
 	UpsertBenefit(ctx context.Context, arg UpsertBenefitParams) error
 	UpsertCampaign(ctx context.Context, arg UpsertCampaignParams) error
+	// Keeps the first claimed_at and source. A non-empty code replaces the stored
+	// one, an empty code keeps it. Other text fields refresh when non-empty.
+	UpsertClaimLog(ctx context.Context, arg UpsertClaimLogParams) error
+	UpsertDropState(ctx context.Context, arg UpsertDropStateParams) error
 	UpsertGame(ctx context.Context, arg UpsertGameParams) error
 	UpsertProgress(ctx context.Context, arg UpsertProgressParams) error
 	UpsertSession(ctx context.Context, arg UpsertSessionParams) error
