@@ -181,3 +181,15 @@ func TestBuild_SkippedBenefitDoesNotAffectCampaignRemaining(t *testing.T) {
 	})
 	eq(t, ids(res.Queue), []string{"n1", "f1"})
 }
+
+func TestBuild_SharedClaimedBenefitKeepsSiblingQueued(t *testing.T) {
+	res := Build(Input{
+		Games: rust,
+		Campaigns: []platform.Campaign{
+			camp("a", "kick", "Rust", ben("d1", 30)),
+			camp("b", "kick", "Rust", ben("d1", 30), ben("d2", 60)),
+		},
+		Claimed: map[string]bool{"d1": true},
+	})
+	eq(t, ids(res.Queue), []string{"d2"})
+}

@@ -68,19 +68,8 @@ func (r *Runner) claim(ctx context.Context) error {
 	r.mu.Lock()
 	delete(r.claimFailures, benefit.ID)
 	r.mu.Unlock()
-	r.stopWatch(ctx)
 
-	// A failed record is logged, never retried: a DB hiccup must not re-claim.
-	if r.cfg.Claims != nil {
-		// Detached: a cancelled run ctx must not drop the claim log row.
-		rctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		err := r.cfg.Claims.RecordClaim(rctx, r.cfg.AccountID, benefit)
-		cancel()
-		if err != nil {
-			slog.Warn("runner record claim failed", "kind", "error", "account", r.cfg.AccountID,
-				"benefit", benefit.ID, "err", err)
-		}
-	}
+	r.finishClaim(ctx, benefit, channel)
 
 	// Post-claim consistency probe: log only, never rolls back the claim.
 	if checker, ok := r.cfg.Backend.(platform.CurrentSessionChecker); ok {
@@ -95,6 +84,25 @@ func (r *Runner) claim(ctx context.Context) error {
 					"current_session_drop", cs.DropID,
 					"current_min", cs.CurrentMinute, "required_min", cs.RequiredMinute)
 			}
+		}
+	}
+	return nil
+}
+
+// finishClaim settles a claimed benefit: stops the watch, records the claim,
+// notifies it, clears the current target and returns to picking.
+func (r *Runner) finishClaim(ctx context.Context, benefit platform.DropBenefit, channel string) {
+	r.stopWatch(ctx)
+
+	// A failed record is logged, never retried: a DB hiccup must not re-claim.
+	if r.cfg.Claims != nil {
+		// Detached: a cancelled run ctx must not drop the claim log row.
+		rctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err := r.cfg.Claims.RecordClaim(rctx, r.cfg.AccountID, benefit)
+		cancel()
+		if err != nil {
+			slog.Warn("runner record claim failed", "kind", "error", "account", r.cfg.AccountID,
+				"benefit", benefit.ID, "err", err)
 		}
 	}
 
@@ -112,7 +120,6 @@ func (r *Runner) claim(ctx context.Context) error {
 	r.current = nil
 	r.mu.Unlock()
 	r.setState(ctx, StatePicking)
-	return nil
 }
 
 // notifySwept fires the "claim" notification for a reward the multi-reward

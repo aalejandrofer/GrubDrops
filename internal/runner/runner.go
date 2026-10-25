@@ -76,13 +76,12 @@ func New(cfg Config) *Runner {
 	}
 	games := cfg.Games
 	cfg.Session.AccountID = cfg.AccountID
-	if cfg.Session.Games == nil {
-		names := make([]string, 0, len(games))
-		for _, g := range games {
-			names = append(names, g.Name)
-		}
-		cfg.Session.Games = names
+	// Always from cfg.Games: a stale Session.Games must not widen or narrow the scan.
+	names := make([]string, 0, len(games))
+	for _, g := range games {
+		names = append(names, g.Name)
 	}
+	cfg.Session.Games = names
 	if cfg.Session.GameFilter == nil {
 		cfg.Session.GameFilter = func(game string) bool {
 			_, ok := plan.Match(games, game)
@@ -299,6 +298,7 @@ func (r *Runner) pick(ctx context.Context) error {
 		return nil
 	}
 	r.current = nil
+	r.clearWatchViewLocked()
 	r.noStream = map[string]bool{}
 	awaiting := false
 	if len(res.Queue) == 0 {

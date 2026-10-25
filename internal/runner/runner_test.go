@@ -454,3 +454,15 @@ func TestRunner_BeaconCadence(t *testing.T) {
 		}
 	}
 }
+
+func TestRunner_SessionGamesAlwaysFromConfig(t *testing.T) {
+	spy := &sessionSpy{Fake: platformtest.NewFake()}
+	r := New(Config{AccountID: "acc", Platform: "kick", Backend: spy, Games: rustGames,
+		Session: platform.Session{Games: []string{"Stale"}}})
+	if err := r.step(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if g := spy.got.Games; len(g) != 1 || g[0] != "Rust" {
+		t.Fatalf("session games=%v", g)
+	}
+}

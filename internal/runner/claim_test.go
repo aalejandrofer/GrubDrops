@@ -239,3 +239,53 @@ func TestReaper_SkippedWithoutRewardCampaigns(t *testing.T) {
 		t.Fatalf("calls=%v", rf.RewardCalls)
 	}
 }
+
+func TestClaim_InventoryClaimedRowTreatedAsClaimed(t *testing.T) {
+	f := platformtest.NewFake()
+	r, n, cl, _ := claimSetup(f, 100)
+	steps(t, r, 2) // pick, start
+	f.Mu.Lock()
+	f.Progress["d1"].Claimed = true // claimed outside GrubDrops, under the requirement
+	f.Mu.Unlock()
+	steps(t, r, 1)
+	if r.State() != StatePicking {
+		t.Fatalf("state=%s", r.State())
+	}
+	if f.CallCount("Claim:") != 0 {
+		t.Fatalf("backend Claim called: %v", f.Calls)
+	}
+	if !hasCall(f, "Stop:a") {
+		t.Fatalf("watch not stopped: %v", f.Calls)
+	}
+	if len(cl.rec) != 1 || cl.rec[0] != "acc:d1" {
+		t.Fatalf("rec=%v", cl.rec)
+	}
+	if cn := n.of("claim"); len(cn) != 1 || cn[0].fields["drop"] != "Drop1" || cn[0].fields["channel"] != "a" {
+		t.Fatalf("notify=%+v", cn)
+	}
+	if r.Snapshot().Current != nil {
+		t.Fatal("current not cleared")
+	}
+}
+
+func TestSnapshot_ClearedWhenNotWatching(t *testing.T) {
+	f := platformtest.NewFake()
+	r, _, _, _ := claimSetup(f, 100)
+	f.Progress["d1"].MinutesWatched = 5
+	steps(t, r, 3) // pick, start, tick
+	if s := r.Snapshot(); s.Channel != "a" || s.ViewerCount != 10 || s.MinutesWatched != 6 {
+		t.Fatalf("watching snapshot %+v", s)
+	}
+	r.stopWatch(context.Background())
+	if s := r.Snapshot(); s.Channel != "" || s.ViewerCount != 0 || s.MinutesWatched != 0 {
+		t.Fatalf("after stopWatch %+v", s)
+	}
+
+	// current=nil path: claim clears it.
+	f2 := platformtest.NewFake()
+	r2, _, _, _ := claimSetup(f2, 2)
+	steps(t, r2, 5) // pick, start, tick, tick->claiming, claim
+	if s := r2.Snapshot(); s.Current != nil || s.Channel != "" || s.ViewerCount != 0 || s.MinutesWatched != 0 {
+		t.Fatalf("after claim %+v", s)
+	}
+}

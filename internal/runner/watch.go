@@ -216,6 +216,15 @@ func (r *Runner) tick(ctx context.Context) error {
 		slog.Info("runner progress", "kind", "progress", "account", r.cfg.AccountID,
 			"benefit", benefit.ID, "min_watched", p.MinutesWatched,
 			"required", benefit.RequiredMinutes, "claimed", p.Claimed)
+		if p.Claimed {
+			// Claimed outside this watch (another client, or a lagged earlier
+			// claim): record it, never call Claim again.
+			slog.Info("runner benefit already claimed in inventory", "kind", "claim",
+				"account", r.cfg.AccountID, "benefit", benefit.ID, "benefit_name", benefit.Name,
+				"channel", handle.Channel)
+			r.finishClaim(ctx, benefit, handle.Channel)
+			return nil
+		}
 		r.mu.Lock()
 		if p.MinutesWatched > r.lastPollMin {
 			r.noAdvance = 0
@@ -309,14 +318,23 @@ func (r *Runner) skipCurrent(ctx context.Context, benefitID string) {
 	r.setState(ctx, StatePicking)
 }
 
+// clearWatchViewLocked blanks the per-watch snapshot fields. Caller holds r.mu.
+func (r *Runner) clearWatchViewLocked() {
+	r.channel = ""
+	r.viewers = 0
+	r.minutes = 0
+}
+
 // stopWatch ends the live watch, if any, and drops the channel subscription.
-// The current target stays so a restart can resume the same drop.
+// The current target stays so a restart can resume the same drop; the
+// snapshot's channel, viewers and minutes clear until the next watch polls.
 func (r *Runner) stopWatch(ctx context.Context) {
 	r.mu.Lock()
 	h := r.handle
 	s := r.stream
 	r.handle = nil
 	r.stream = nil
+	r.clearWatchViewLocked()
 	r.mu.Unlock()
 	if h == nil {
 		return
