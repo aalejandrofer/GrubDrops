@@ -33,24 +33,25 @@ const (
 type Runner struct {
 	cfg Config
 
-	mu         sync.Mutex
-	state      State
-	current    *plan.Target
-	handle     *platform.WatchHandle
-	stream     *platform.Stream
-	channel    string
-	viewers    int
-	minutes    int
-	startedAt  time.Time
-	lastPollAt time.Time
-	lastScanAt time.Time
-	lastBeatAt time.Time     // when the current watch last beaconed; zero = not yet
-	wake       chan struct{} // signalled on every state change, cap 1
-	tramp      *trampoline   // PubSub forwarder for this account; nil = none
-	queue      []plan.Target
-	blocked    []plan.Blocked
-	skipped    map[string]bool
-	noStream   map[string]bool // campaign IDs with no live channel this cycle
+	mu          sync.Mutex
+	state       State
+	current     *plan.Target
+	handle      *platform.WatchHandle
+	stream      *platform.Stream
+	channel     string
+	viewers     int
+	minutes     int
+	startedAt   time.Time
+	lastPollAt  time.Time
+	lastScanAt  time.Time
+	lastScanTry time.Time     // last scan attempt, failed or not; paces rescans
+	lastBeatAt  time.Time     // when the current watch last beaconed; zero = not yet
+	wake        chan struct{} // signalled on every state change, cap 1
+	tramp       *trampoline   // PubSub forwarder for this account; nil = none
+	queue       []plan.Target
+	blocked     []plan.Blocked
+	skipped     map[string]bool
+	noStream    map[string]bool // campaign IDs with no live channel this cycle
 
 	// claimFailures counts consecutive Claim failures per benefit (Task 5).
 	claimFailures map[string]int
@@ -274,6 +275,10 @@ func (r *Runner) pick(ctx context.Context) error {
 // or with Err set when the campaign list fails. It never touches current, the
 // watch handle or the state.
 func (r *Runner) scan(ctx context.Context, progress []platform.Progress, haveProgress bool) (plan.Result, error) {
+	// Stamped before the call so a failed scan also waits rescanEvery.
+	r.mu.Lock()
+	r.lastScanTry = time.Now()
+	r.mu.Unlock()
 	camps, err := r.cfg.Backend.ListActiveCampaigns(ctx, r.cfg.Session)
 	if err != nil {
 		if r.cfg.OnScan != nil {

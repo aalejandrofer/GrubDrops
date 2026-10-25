@@ -69,7 +69,9 @@ type Config struct {
 	Skips                             SkipStore       // nil-safe
 	Order                             func() []string // nil = no override
 	// Hooks are nil-safe. Each may run on the Run goroutine or a PubSub
-	// goroutine and must not block for long.
+	// goroutine and must not block for long. Payloads (Scan slices and maps,
+	// progress) are read-only and shared with the runner: copy before keeping
+	// or changing them.
 	OnScan     func(ctx context.Context, s Scan)
 	OnProgress func(ctx context.Context, accountID string, progress []platform.Progress)
 	OnBeat     func(ctx context.Context, accountID string) // after each successful Heartbeat

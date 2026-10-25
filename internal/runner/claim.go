@@ -149,17 +149,50 @@ func (r *Runner) notifySwept(ctx context.Context, cr platform.ClaimedReward) {
 		r.notifiedSwept = map[string]struct{}{}
 	}
 	r.notifiedSwept[cr.Title] = struct{}{}
+	// The backend's game is not trusted: resolve the title to a known target.
+	var target *plan.Target
+	for i := range r.queue {
+		if r.queue[i].Benefit.Name == cr.Title {
+			t := r.queue[i]
+			target = &t
+			break
+		}
+	}
+	if target == nil {
+		for i := range r.blocked {
+			if r.blocked[i].Benefit.Name == cr.Title {
+				t := r.blocked[i].Target
+				target = &t
+				break
+			}
+		}
+	}
 	r.mu.Unlock()
 
 	extra := map[string]any{"drop": cr.Title}
-	if cr.Game != "" {
-		extra["game"] = cr.Game
+	if target != nil {
+		if g := target.Campaign.Game; g != "" {
+			extra["game"] = g
+		}
+		if r.cfg.Claims != nil {
+			// Detached: a cancelled run ctx must not drop the claim log row.
+			rctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			err := r.cfg.Claims.RecordClaim(rctx, r.cfg.AccountID, *target, "")
+			cancel()
+			if err != nil {
+				slog.Warn("runner record swept claim failed", "kind", "error", "account", r.cfg.AccountID,
+					"benefit", target.Benefit.ID, "err", err)
+			}
+		}
 	}
 	if r.cfg.Notifier != nil {
 		f := r.notifyFields(extra)
 		// The sibling is not the mined drop: drop its campaign and image.
 		delete(f, "campaign")
 		delete(f, "image")
+		if _, ok := extra["game"]; !ok {
+			delete(f, "game") // unresolved title: the current game does not apply
+		}
 		_ = r.cfg.Notifier.Notify(ctx, "claim", f)
 	}
 }

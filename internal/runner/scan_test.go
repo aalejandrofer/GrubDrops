@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/platform/platformtest"
@@ -165,12 +166,13 @@ func TestRunner_OnBeatPerHeartbeat(t *testing.T) {
 func TestRunner_ClaimRecordsTarget(t *testing.T) {
 	f := platformtest.NewFake()
 	r, _, cl, _ := claimSetup(f, 2)
+	f.Campaigns[0].Name = "Camp"
 	steps(t, r, 5)
 	if len(cl.recs) != 1 {
 		t.Fatalf("recs=%v", cl.recs)
 	}
 	g := cl.recs[0]
-	if g.Target.Campaign.Game != "Rust" || g.Target.Campaign.Name != f.Campaigns[0].Name ||
+	if g.Target.Campaign.Game != "Rust" || g.Target.Campaign.Name != "Camp" ||
 		g.Target.Benefit.ID != "d1" || g.Code != "" {
 		t.Fatalf("%+v", g)
 	}
@@ -183,5 +185,38 @@ func TestRunner_RewardCodeRecordsTarget(t *testing.T) {
 	if len(cl.recs) != 1 || cl.recs[0].Code != "XYZ" || cl.recs[0].Target.Benefit.ID != "d1" ||
 		cl.recs[0].Target.Campaign.Game != "Rust" {
 		t.Fatalf("%+v", cl.recs)
+	}
+}
+
+func TestRunner_FailedRescanWaitsFullInterval(t *testing.T) {
+	old := rescanEvery
+	t.Cleanup(func() { rescanEvery = old })
+	f := platformtest.NewFake()
+	r := watching(t, f, nil)
+	rescanEvery = time.Hour
+	f.Mu.Lock()
+	f.ListErr = errors.New("boom")
+	f.Mu.Unlock()
+	// Force the first rescan due, let it fail, then expect no retry on later ticks.
+	r.mu.Lock()
+	r.lastScanTry = time.Now().Add(-2 * time.Hour)
+	r.mu.Unlock()
+	before := f.CallCount("List")
+	steps(t, r, 3)
+	if n := f.CallCount("List") - before; n != 1 {
+		t.Fatalf("list calls after a failed rescan=%d, want 1", n)
+	}
+	if r.State() != StateWatching {
+		t.Fatal(r.State())
+	}
+}
+
+func TestRunner_IntegrityBlockedListNeedsLogin(t *testing.T) {
+	f := platformtest.NewFake()
+	f.ListErr = platform.ErrIntegrityBlocked
+	r := newRunner(f, nil)
+	steps(t, r, 1)
+	if r.State() != StateNeedsLogin {
+		t.Fatalf("state=%s", r.State())
 	}
 }

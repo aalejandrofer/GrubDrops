@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/aalejandrofer/grubdrops/internal/plan"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
@@ -68,10 +69,34 @@ func (r *Runner) start(ctx context.Context) error {
 	}
 	if len(streams) == 0 {
 		r.noStream[camp.ID] = true
+		var next *plan.Target
+		for i := range r.queue {
+			if !r.noStream[r.queue[i].Campaign.ID] {
+				t := r.queue[i]
+				next = &t
+				break
+			}
+		}
+		if next != nil {
+			r.current = next
+			r.minutes = next.Minutes
+			r.channel = ""
+			r.viewers = 0
+			r.mu.Unlock()
+			slog.Info("runner no eligible streams live, trying next queued campaign",
+				"kind", "discovery", "account", r.cfg.AccountID, "campaign", camp.Name,
+				"next_campaign", next.Campaign.ID, "drop", next.Benefit.ID)
+			r.changed()
+			// Same state, so Run would wait a tick: start the next target now.
+			return r.start(ctx)
+		}
+		r.current = nil
+		r.clearWatchViewLocked()
+		r.noStream = map[string]bool{}
 		r.mu.Unlock()
-		slog.Info("runner no eligible streams live, trying next campaign",
+		slog.Info("runner no eligible streams live in any queued campaign; sleeping",
 			"kind", "discovery", "account", r.cfg.AccountID, "campaign", camp.Name)
-		r.setState(ctx, StatePicking)
+		r.setState(ctx, StateSleeping)
 		return nil
 	}
 	r.mu.Unlock()
@@ -195,7 +220,7 @@ func (r *Runner) tick(ctx context.Context) error {
 	}
 	r.mu.Lock()
 	r.lastPollAt = time.Now()
-	lastScan := r.lastScanAt
+	lastScan := r.lastScanTry
 	r.mu.Unlock()
 	if r.cfg.OnProgress != nil {
 		r.cfg.OnProgress(ctx, r.cfg.AccountID, progress)

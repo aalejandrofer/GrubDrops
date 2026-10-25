@@ -64,11 +64,7 @@ func TestWatch_NoLiveStreamTriesNextCampaign(t *testing.T) {
 	if first != "c1" {
 		t.Fatalf("first=%s", first)
 	}
-	steps(t, r, 1) // start: no stream for c1
-	if r.State() != StatePicking {
-		t.Fatalf("state=%s", r.State())
-	}
-	steps(t, r, 2) // pick c2, start
+	steps(t, r, 1) // start: no stream for c1, reuses the queue and starts c2
 	s := r.Snapshot()
 	if s.Current.Campaign.ID != "c2" || s.State != StateWatching {
 		t.Fatalf("%+v", s)
@@ -148,7 +144,7 @@ func TestWatch_FreezeRotatesAndCoolsDownChannel(t *testing.T) {
 		t.Fatal("target must be kept")
 	}
 	steps(t, r, 1) // start: only channel a is on cooldown
-	if r.State() != StatePicking || f.CallCount("Start:") != 1 {
+	if r.State() != StateSleeping || f.CallCount("Start:") != 1 {
 		t.Fatalf("state=%s starts=%d", r.State(), f.CallCount("Start:"))
 	}
 }
