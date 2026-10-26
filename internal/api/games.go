@@ -11,6 +11,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/collect"
 	"github.com/aalejandrofer/grubdrops/internal/gameslug"
 	"github.com/aalejandrofer/grubdrops/internal/plan"
+	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
@@ -105,7 +106,7 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 	}
 	names := make(map[string]string, len(accts))
 	for _, a := range accts {
-		names[a.ID] = a.DisplayName
+		names[a.ID] = store.AccountName(a)
 	}
 	if s.d.Pool != nil {
 		snaps := s.d.Pool.Snapshots()
