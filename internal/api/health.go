@@ -38,6 +38,34 @@ type healthEvent struct {
 	AccountID   string  `json:"account_id"`
 	AccountName string  `json:"account_name"`
 	Msg         string  `json:"msg"`
+	// Fields holds only the healthFieldAllow keys of the ring line.
+	Fields map[string]string `json:"fields,omitempty"`
+}
+
+// healthFieldAllow lists the ring line fields that reach the browser. Fields
+// are untrusted and may hold secrets, so nothing else is copied.
+var healthFieldAllow = []string{"game", "campaign", "benefit_name", "channel", "state", "prev", "err"}
+
+// maxHealthFieldRunes cuts each allowlisted value.
+const maxHealthFieldRunes = 200
+
+func healthFields(l mlog.LogLine) map[string]string {
+	var out map[string]string
+	for _, k := range healthFieldAllow {
+		v, ok := l.Fields[k]
+		if !ok || v == nil {
+			continue
+		}
+		str := fmt.Sprint(v)
+		if r := []rune(str); len(r) > maxHealthFieldRunes {
+			str = string(r[:maxHealthFieldRunes])
+		}
+		if out == nil {
+			out = map[string]string{}
+		}
+		out[k] = str
+	}
+	return out
 }
 
 // LogAccountID returns the account a ring line is about, or "".
@@ -50,6 +78,7 @@ func logEvent(l mlog.LogLine, accountName string) healthEvent {
 	return healthEvent{
 		At: rfc3339(l.TS), Level: l.Level, Kind: l.Kind,
 		AccountID: LogAccountID(l), AccountName: accountName, Msg: l.Msg,
+		Fields: healthFields(l),
 	}
 }
 

@@ -244,3 +244,29 @@ func TestHealth_CanaryRunEndsWithRootCtx(t *testing.T) {
 		t.Fatal("canary run outlived the root context")
 	}
 }
+
+func TestHealth_EventFieldsAllowlisted(t *testing.T) {
+	ring := mlog.NewRing(10)
+	ring.PushEvent(mlog.KindClaim, "INFO", "runner claim recorded", map[string]any{
+		"game": "Rust", "benefit_name": "Hazmat", "err": strings.Repeat("x", 300),
+		"cookie": "secret", "account": "a1",
+	})
+	e := newHealthEnv(t, func(d *Deps) { d.Ring = ring })
+	var body struct {
+		Events []struct {
+			Fields map[string]string `json:"fields"`
+		} `json:"events"`
+	}
+	_, tok := e.session()
+	resp, b := e.do("GET", "/api/health", tok, nil)
+	require.Equal(t, 200, resp.StatusCode, string(b))
+	require.NoError(t, json.Unmarshal(b, &body))
+	require.Len(t, body.Events, 1)
+	f := body.Events[0].Fields
+	assert.Len(t, f, 3)
+	assert.Equal(t, "Rust", f["game"])
+	assert.Equal(t, "Hazmat", f["benefit_name"])
+	assert.Len(t, []rune(f["err"]), 200)
+	assert.NotContains(t, f, "cookie")
+	assert.NotContains(t, f, "account")
+}
