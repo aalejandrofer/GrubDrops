@@ -60,6 +60,10 @@ type Pool struct {
 	n Notifier
 
 	reloadMu sync.Mutex // serializes Reload, ReloadAccount and Stop
+	// buildMu serializes a restart's check-and-build against Reload and
+	// ReloadAccount, which hold it from their builds through cancelling the
+	// old units, never while waiting for them to exit.
+	buildMu sync.Mutex
 
 	mu    sync.Mutex
 	units []*poolUnit // entry order
@@ -97,8 +101,9 @@ func (p *Pool) spawn(base context.Context, b Builder, e Entry) *poolUnit {
 	u := &poolUnit{pool: p, build: b, entry: e, cancel: cancel, done: make(chan struct{})}
 	go func() {
 		defer close(u.done)
+		rebuild := false
 		for {
-			if !p.supervise(ctx, u.current()) || u.build == nil {
+			if !rebuild && (!p.supervise(ctx, u.current()) || u.build == nil) {
 				return
 			}
 			// Panicked: wait, then rebuild in the same slot. The unit's own
@@ -111,15 +116,51 @@ func (p *Pool) spawn(base context.Context, b Builder, e Entry) *poolUnit {
 				return
 			case <-t.C:
 			}
-			release(u.current())
-			ne := u.build()
-			ne.ID = u.current().ID
-			p.mu.Lock()
-			u.entry = ne
-			p.mu.Unlock()
+			switch p.restart(ctx, u) {
+			case restartCancelled:
+				return
+			case restartPanicked:
+				rebuild = true
+			default:
+				rebuild = false
+			}
 		}
 	}()
 	return u
+}
+
+type restartResult int
+
+const (
+	restartOK restartResult = iota
+	restartCancelled
+	restartPanicked
+)
+
+// restart rebuilds u's entry. It holds buildMu and re-checks ctx, so a
+// Reload or ReloadAccount that already built a replacement and cancelled u
+// cannot have its PubSub ownership taken by this build.
+func (p *Pool) restart(ctx context.Context, u *poolUnit) (res restartResult) {
+	p.buildMu.Lock()
+	defer p.buildMu.Unlock()
+	if ctx.Err() != nil {
+		return restartCancelled
+	}
+	old := u.current()
+	defer func() {
+		if r := recover(); r != nil {
+			res = restartPanicked
+			slog.Error("runner build panic", "kind", "error", "account", old.ID, "panic", fmt.Sprint(r))
+			p.notifyErr(map[string]any{"account": old.ID, "panic": fmt.Sprint(r)})
+		}
+	}()
+	release(old)
+	ne := u.build()
+	ne.ID = old.ID
+	p.mu.Lock()
+	u.entry = ne
+	p.mu.Unlock()
+	return restartOK
 }
 
 // supervise runs e once and reports whether it panicked.
@@ -144,11 +185,6 @@ func (p *Pool) notifyErr(f map[string]any) {
 	}
 }
 
-func stop(u *poolUnit) {
-	u.cancel()
-	<-u.done
-}
-
 // Reload replaces the whole roster: it builds the new entries, stops every
 // running unit, then starts the new ones. Each stopped Runner releases its
 // PubSub hooks unless a new Runner already took the account over.
@@ -157,6 +193,7 @@ func (p *Pool) Reload(parent context.Context, builders []Builder) error {
 	defer p.reloadMu.Unlock()
 	base := p.base(parent)
 
+	p.buildMu.Lock()
 	entries := make([]Entry, 0, len(builders))
 	for _, b := range builders {
 		entries = append(entries, b())
@@ -169,6 +206,7 @@ func (p *Pool) Reload(parent context.Context, builders []Builder) error {
 	for _, u := range old {
 		u.cancel()
 	}
+	p.buildMu.Unlock()
 	for _, u := range old {
 		<-u.done
 	}
@@ -208,6 +246,7 @@ func (p *Pool) ReloadAccount(id string, b Builder) {
 		return // not running; the next Reload builds the roster
 	}
 
+	p.buildMu.Lock()
 	var e Entry
 	if b != nil {
 		e = b()
@@ -222,10 +261,11 @@ func (p *Pool) ReloadAccount(id string, b Builder) {
 	}
 	p.mu.Unlock()
 	if old != nil {
-		stop(old)
+		old.cancel()
 	}
-
+	p.buildMu.Unlock()
 	if old != nil {
+		<-old.done
 		release(old.current())
 	}
 	if b == nil {

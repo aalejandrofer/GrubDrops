@@ -330,7 +330,7 @@ func TestPool_PanicRestartsFromBuilder(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	if atomic.LoadInt32(&builds) != 2 {
-		t.Fatalf("builds %d", builds)
+		t.Fatalf("builds %d", atomic.LoadInt32(&builds))
 	}
 	second := secondP.Load()
 	select {
@@ -368,7 +368,7 @@ func TestPool_StopDuringPanicDelay(t *testing.T) {
 		t.Fatal("Stop blocked on restart delay")
 	}
 	if atomic.LoadInt32(&builds) != 1 {
-		t.Fatalf("builds %d", builds)
+		t.Fatalf("builds %d", atomic.LoadInt32(&builds))
 	}
 }
 
@@ -401,7 +401,7 @@ func TestPool_ErrStopNotRestarted(t *testing.T) {
 	}})
 	time.Sleep(100 * time.Millisecond)
 	if atomic.LoadInt32(&builds) != 1 {
-		t.Fatalf("builds %d", builds)
+		t.Fatalf("builds %d", atomic.LoadInt32(&builds))
 	}
 }
 
@@ -409,3 +409,72 @@ type nilUnit struct{}
 
 func (nilUnit) Run(context.Context) error { return nil }
 func (nilUnit) Snapshot() Snapshot        { return Snapshot{} }
+
+// ownUnit models a Runner: building it takes ownership of the account, and
+// Release gives it up only if it still owns it (registerPubSub semantics).
+type ownUnit struct {
+	owner  *atomic.Pointer[ownUnit]
+	panics bool
+}
+
+func newOwnUnit(owner *atomic.Pointer[ownUnit], panics bool) *ownUnit {
+	u := &ownUnit{owner: owner, panics: panics}
+	owner.Store(u)
+	return u
+}
+
+func (u *ownUnit) Run(ctx context.Context) error {
+	if u.panics {
+		panic("boom")
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
+func (u *ownUnit) Snapshot() Snapshot { return Snapshot{} }
+func (u *ownUnit) Release()           { u.owner.CompareAndSwap(u, nil) }
+
+func TestPool_RestartDoesNotStealOwnershipFromReplacement(t *testing.T) {
+	shortRestart(t, time.Millisecond)
+	for i := 0; i < 100; i++ {
+		var owner atomic.Pointer[ownUnit]
+		p := NewPool(nil)
+		_ = p.Reload(context.Background(), []Builder{func() Entry {
+			return Entry{ID: "a", Unit: newOwnUnit(&owner, true)}
+		}})
+		time.Sleep(time.Duration(i%5) * 300 * time.Microsecond)
+		var repl *ownUnit
+		p.ReloadAccount("a", func() Entry {
+			repl = newOwnUnit(&owner, false)
+			return Entry{ID: "a", Unit: repl}
+		})
+		time.Sleep(3 * time.Millisecond)
+		if owner.Load() != repl {
+			p.Stop()
+			t.Fatalf("iteration %d: replacement lost ownership", i)
+		}
+		p.Stop()
+	}
+}
+
+func TestPool_BuildPanicDuringRestartRetries(t *testing.T) {
+	shortRestart(t, 5*time.Millisecond)
+	var builds int32
+	n := &spyN{}
+	p := NewPool(n)
+	defer p.Stop()
+	ran := make(chan struct{})
+	_ = p.Reload(context.Background(), []Builder{func() Entry {
+		switch atomic.AddInt32(&builds, 1) {
+		case 1:
+			return Entry{ID: "a", Unit: &onceUnit{id: "a", panics: true, ran: make(chan struct{})}}
+		case 2:
+			panic("build boom")
+		}
+		return Entry{ID: "a", Unit: &onceUnit{id: "a", ran: ran}}
+	}})
+	select {
+	case <-ran:
+	case <-time.After(2 * time.Second):
+		t.Fatal("unit never rebuilt after build panic")
+	}
+}
