@@ -64,6 +64,7 @@ All notable changes to GrubDrops.
 - The README and site screenshots show the current Home, Games, Rewards and Settings pages.
 
 ### Fixed
+- Kick sidecar cleanup only removes sidecars named by this miner's own template, so two miners on one docker host (prod and staging) no longer delete each other's sidecars.
 - **Drag to reorder works.** Games, Settings > Accounts and Up next now pick a row up from anywhere on it (not only the dotted handle) after a 4 px move, so clicks still work. The drag no longer ends after one slot, no text gets selected while dragging, and Escape cancels. The dragged row is lifted with a shadow and accent border. One shared helper, `web/src/lib/drag.ts`, serves all three lists.
 
 - **Discord webhook URL in logs.** A failed Discord send no longer puts the webhook URL, whose path is the secret, in its error or the log.

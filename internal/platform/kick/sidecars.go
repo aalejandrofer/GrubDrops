@@ -40,6 +40,16 @@ func sidecarName(template, username string) string {
 	return strings.ReplaceAll(template, "{slug}", slug)
 }
 
+// ownsSidecarName reports whether name fits template, so a miner only sweeps
+// its own sidecars when several miners share one docker host.
+func ownsSidecarName(template, name string) bool {
+	pre, suf, ok := strings.Cut(template, "{slug}")
+	if !ok {
+		return name == template
+	}
+	return len(name) > len(pre)+len(suf) && strings.HasPrefix(name, pre) && strings.HasSuffix(name, suf)
+}
+
 type sidecar struct {
 	containerName string // "" = no controllable container (empty slug)
 	slug          string // username slug (for the create label)
@@ -349,6 +359,11 @@ func (r *sidecarRegistry) sweepOrphans(ctx context.Context) {
 		// Defensive re-check: never act on a container that does not carry
 		// the managed label (the filter should already guarantee this).
 		if c.Labels[dockerctl.LabelManaged] != "true" {
+			continue
+		}
+		// Another miner on this host (e.g. staging) owns sidecars outside
+		// our template; never touch those.
+		if !ownsSidecarName(r.template, c.Name) {
 			continue
 		}
 		acc := c.Labels[dockerctl.LabelAccount]
