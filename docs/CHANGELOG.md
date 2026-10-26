@@ -39,6 +39,7 @@ All notable changes to GrubDrops.
 - Up next on Home shows 5 drops per account, with Show more / Show less for the rest.
 - The Health event log shows 10 events, with Show all for the rest of the last 50. DEBUG lines are left out of the list and its counts; Download full log still has them.
 - With no campaign to mine, a runner scans again after 12 hours instead of 5 minutes. Changing the chosen games or an account still rescans at once. Queued campaigns with no live stream, and awaiting a channel connect, still recheck every 5 minutes. The empty Up next line counts down to the server's next scan time, in hours and minutes.
+- The README and site screenshots show the current Home, Games, Rewards and Settings pages.
 
 ### Fixed
 
