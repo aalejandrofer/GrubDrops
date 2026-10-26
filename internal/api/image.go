@@ -20,7 +20,7 @@ type imageFetcher interface {
 const (
 	// kickCDNHost serves reward images (ext.cdn.kick.com, not files.kick.com).
 	kickCDNHost = "ext.cdn.kick.com"
-	// kickFilesHost serves profile pictures, full size only.
+	// kickFilesHost serves profile pictures and category covers, full size only.
 	kickFilesHost = "files.kick.com"
 	// kickImageTransform mirrors Kick's resize params: a small webp.
 	kickImageTransform = "width=384,format=webp,quality=75"
@@ -28,7 +28,7 @@ const (
 
 // getKickImage proxies a Kick image. ?u= is the stored image value (absolute
 // URL or host-relative path). Only the path is trusted; the host is always
-// chosen here, and the path must be a reward or avatar path, so this is not an
+// chosen here, and the path must be a reward, avatar or category path, so this is not an
 // open relay.
 func (s *server) getKickImage(w http.ResponseWriter, r *http.Request) {
 	raw := strings.TrimSpace(r.URL.Query().Get("u"))
@@ -48,7 +48,8 @@ func (s *server) getKickImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var target string
-	if strings.HasPrefix(path, "images/user/") || strings.HasPrefix(path, "images/avatars/") {
+	if strings.HasPrefix(path, "images/user/") || strings.HasPrefix(path, "images/avatars/") ||
+		strings.HasPrefix(path, "images/subcategories/") {
 		target = "https://" + kickFilesHost + "/" + path
 	} else {
 		target = "https://" + kickCDNHost + "/" + path + "?" + kickImageTransform

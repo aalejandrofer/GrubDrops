@@ -36,6 +36,7 @@ func TestCatalog_ActiveOnlyWithRewards(t *testing.T) {
 	require.Len(t, camps, 1)
 	assert.Equal(t, "camp1", camps[0].ID)
 	assert.Equal(t, "Rust", camps[0].Game)
+	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/263490-144x192.jpg", camps[0].BoxArtURL, "gql game.boxArtURL, size filled")
 	require.Len(t, camps[0].Benefits, 1)
 	assert.Equal(t, "Wolf Helmet", camps[0].Benefits[0].Name)
 	assert.Equal(t, 60, camps[0].Benefits[0].RequiredMinutes)

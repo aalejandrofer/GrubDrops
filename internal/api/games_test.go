@@ -140,7 +140,7 @@ func TestGames_ListStatesAndOrder(t *testing.T) {
 }
 
 func TestBoxArtURL_PrefersTwitchID(t *testing.T) {
-	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/1264310518-144x192.jpg", boxArtURL("Marvel Rivals", "1264310518"))
+	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/1264310518_IGDB-144x192.jpg", boxArtURL("Marvel Rivals", "1264310518"))
 	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/Rust-144x192.jpg", boxArtURL("Rust", ""))
 }
 
@@ -154,7 +154,7 @@ func TestGames_ListUsesTwitchGameIDBoxArt(t *testing.T) {
 	var got gamesJSON
 	require.NoError(t, json.Unmarshal(b, &got))
 	require.Len(t, got.Games, 1)
-	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/1264310518-144x192.jpg", got.Games[0].BoxArtURL)
+	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/1264310518_IGDB-144x192.jpg", got.Games[0].BoxArtURL)
 }
 
 func TestGames_AddAppendsAndNotifies(t *testing.T) {

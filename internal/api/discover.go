@@ -10,7 +10,9 @@ import (
 
 	"github.com/aalejandrofer/grubdrops/internal/collect"
 	"github.com/aalejandrofer/grubdrops/internal/discover"
+	"github.com/aalejandrofer/grubdrops/internal/gameslug"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform/twitch"
 )
 
 type discoverRewardJSON struct {
@@ -70,8 +72,11 @@ func discoverView(snap discover.Snapshot, svc *discover.Service) discoverJSON {
 	}
 	for name, res := range snap.Results {
 		out.Platforms[name] = discoverPlatformJSON{OK: res.Err == nil, Error: discover.ErrCode(res.Err), Count: len(res.Campaigns)}
+	}
+	art := twitchArtBySlug(snap)
+	for _, res := range snap.Results {
 		for _, c := range res.Campaigns {
-			out.Campaigns = append(out.Campaigns, discoverCampaign(c))
+			out.Campaigns = append(out.Campaigns, discoverCampaign(c, art))
 		}
 	}
 	sort.SliceStable(out.Campaigns, func(i, j int) bool {
@@ -87,14 +92,66 @@ func discoverView(snap discover.Snapshot, svc *discover.Service) discoverJSON {
 	return out
 }
 
-func discoverCampaign(c platform.Campaign) discoverCampaignJSON {
+// twitchArtBySlug maps each Twitch game in snap, by gameslug.Slug of its
+// name, to its box art, so a Kick campaign without a category image can
+// borrow the art of the same game.
+func twitchArtBySlug(snap discover.Snapshot) map[string]string {
+	out := map[string]string{}
+	for _, c := range snap.Results["twitch"].Campaigns {
+		k := gameslug.Slug(c.Game)
+		if k == "" || out[k] != "" {
+			continue
+		}
+		if u := twitch.BoxArtURL(c.BoxArtURL, c.GameID); u != "" {
+			out[k] = u
+		}
+	}
+	return out
+}
+
+// campaignBoxArt is the image the SPA loads for a campaign's game. Twitch:
+// the GQL game.boxArtURL, then the IGDB id form. Kick: the category image
+// through the /api/img/kick proxy, then the same game's Twitch art in this
+// snapshot. Both end with the name-keyed Twitch URL, which only older games
+// answer.
+func campaignBoxArt(c platform.Campaign, twitchArt map[string]string) string {
+	switch c.Platform {
+	case "twitch":
+		if u := twitch.BoxArtURL(c.BoxArtURL, c.GameID); u != "" {
+			return u
+		}
+	case "kick":
+		if u := rewardImage("kick", c.BoxArtURL); u != "" {
+			return u
+		}
+		if u := twitchArt[gameslug.Slug(c.Game)]; u != "" {
+			return u
+		}
+	}
+	return twitch.BoxArtByName(c.Game)
+}
+
+// campaignNeedsLink reports whether the account must link an external
+// account before claiming. Kick sends a connect URL only for campaigns that
+// need one. Twitch leaves self.isAccountConnected false on many campaigns
+// that need no link, with an empty or twitch.tv accountLinkURL; only a
+// publisher link page means a link is required.
+func campaignNeedsLink(c platform.Campaign, link string) bool {
+	if link == "" {
+		return false
+	}
+	if c.Platform == "twitch" {
+		return platform.TwitchNeedsLink(c)
+	}
+	return true
+}
+
+func discoverCampaign(c platform.Campaign, twitchArt map[string]string) discoverCampaignJSON {
 	link := collect.SafeLinkURL(c.AccountLinkURL)
-	// Twitch reports whether the account is linked; Kick sends a connect URL
-	// only for campaigns that need a link.
-	needs := link != "" && (c.Platform == "kick" || !c.AccountLinked)
+	needs := campaignNeedsLink(c, link)
 	cj := discoverCampaignJSON{
 		ID: c.ID, Platform: c.Platform, Game: c.Game, Name: c.Name,
-		BoxArtURL: boxArtURL(c.Game, c.GameID),
+		BoxArtURL: campaignBoxArt(c, twitchArt),
 		StartsAt:  rfc3339(c.StartsAt), EndsAt: rfc3339(c.EndsAt),
 		LinkURL: link, NeedsLink: needs, Rewards: []discoverRewardJSON{},
 	}

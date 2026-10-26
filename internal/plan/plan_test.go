@@ -86,9 +86,24 @@ func TestBuild_DropsClaimedZeroMinuteRewardAndInactive(t *testing.T) {
 	}
 }
 
+// Twitch leaves isAccountConnected false on campaigns that need no link, with
+// an empty or twitch.tv accountLinkURL: those are mined, not blocked.
+func TestBuild_TwitchUnconnectedWithoutPublisherLinkMines(t *testing.T) {
+	for _, link := range []string{"", "https://www.twitch.tv/drops/campaigns?dropID=0f3c2a71-5b1e-4f0e-9d0a-6a2f1c9b8e47"} {
+		tw := camp("tw", "twitch", "Rust", ben("t1", 10))
+		tw.AccountLinked, tw.AccountLinkURL = false, link
+		res := Build(Input{Games: rust, Campaigns: []platform.Campaign{tw}})
+		eq(t, ids(res.Queue), []string{"t1"})
+		if len(res.Blocked) != 0 {
+			t.Fatalf("link %q: blocked %+v", link, res.Blocked)
+		}
+	}
+}
+
 func TestBuild_BlockedReasons(t *testing.T) {
 	tw := camp("tw", "twitch", "Rust", ben("t1", 10))
 	tw.AccountLinked = false
+	tw.AccountLinkURL = "https://account.riotgames.com/#connected-accounts"
 	res := Build(Input{Games: rust, Campaigns: []platform.Campaign{tw}})
 	if len(res.Queue) != 0 || len(res.Blocked) != 1 || res.Blocked[0].Reason != ReasonNotLinked {
 		t.Fatalf("unlinked: %+v", res)

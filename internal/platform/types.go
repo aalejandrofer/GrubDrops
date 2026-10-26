@@ -45,11 +45,15 @@ type Campaign struct {
 	Platform string
 	Game     string
 	GameID   string // Twitch game id; empty on other platforms
-	Name     string
-	StartsAt time.Time
-	EndsAt   time.Time
-	Status   string
-	Benefits []DropBenefit
+	// BoxArtURL is the game's cover image as the platform sends it: the
+	// Twitch game.boxArtURL with its size filled in, or the Kick category
+	// image. Empty when the payload carries none.
+	BoxArtURL string
+	Name      string
+	StartsAt  time.Time
+	EndsAt    time.Time
+	Status    string
+	Benefits  []DropBenefit
 
 	// AccountLinked indicates whether the user has connected the
 	// external account this campaign requires for claims (e.g. Mojang

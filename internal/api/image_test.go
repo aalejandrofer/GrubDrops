@@ -54,6 +54,11 @@ func TestImage_ProxiesRewardAndAvatar(t *testing.T) {
 
 	e.do("GET", "/api/img/kick?u=/images/user/1/p.png", "", nil)
 	assert.Equal(t, "https://files.kick.com/images/user/1/p.png", fk.gotURL)
+
+	cover := "https://files.kick.com/images/subcategories/14138/banner/b049272d-6811-4c3d-b19c-8f6cc170c5ac"
+	resp, _ = e.do("GET", "/api/img/kick?u="+url.QueryEscape(cover), "", nil)
+	require.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, cover, fk.gotURL, "category covers come from files.kick.com")
 }
 
 func TestImage_EmptyContentTypeIsWebp(t *testing.T) {

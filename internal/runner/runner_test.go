@@ -153,6 +153,7 @@ func TestRunner_OnlyUnlinkedAwaitsConnect(t *testing.T) {
 	f := platformtest.NewFake()
 	c := camp("c1", "Rust", "d1")
 	c.Platform, c.AccountLinked = "twitch", false
+	c.AccountLinkURL = "https://account.riotgames.com/#connected-accounts"
 	f.Campaigns = []platform.Campaign{c}
 	r := newRunner(f, nil)
 	if err := r.step(context.Background()); err != nil {
