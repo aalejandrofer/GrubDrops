@@ -107,15 +107,22 @@ const listAllGames = `-- name: ListAllGames :many
 SELECT id, name, slug, priority FROM games ORDER BY name
 `
 
-func (q *Queries) ListAllGames(ctx context.Context) ([]Game, error) {
+type ListAllGamesRow struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Slug     string `json:"slug"`
+	Priority int64  `json:"priority"`
+}
+
+func (q *Queries) ListAllGames(ctx context.Context) ([]ListAllGamesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listAllGames)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Game
+	var items []ListAllGamesRow
 	for rows.Next() {
-		var i Game
+		var i ListAllGamesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -188,6 +195,20 @@ type RemoveAccountGameParams struct {
 
 func (q *Queries) RemoveAccountGame(ctx context.Context, arg RemoveAccountGameParams) error {
 	_, err := q.db.ExecContext(ctx, removeAccountGame, arg.AccountID, arg.GameID)
+	return err
+}
+
+const setGameTwitchID = `-- name: SetGameTwitchID :exec
+UPDATE games SET twitch_game_id = ?1 WHERE id = ?2 AND twitch_game_id <> ?1
+`
+
+type SetGameTwitchIDParams struct {
+	TwitchGameID string `json:"twitch_game_id"`
+	ID           string `json:"id"`
+}
+
+func (q *Queries) SetGameTwitchID(ctx context.Context, arg SetGameTwitchIDParams) error {
+	_, err := q.db.ExecContext(ctx, setGameTwitchID, arg.TwitchGameID, arg.ID)
 	return err
 }
 

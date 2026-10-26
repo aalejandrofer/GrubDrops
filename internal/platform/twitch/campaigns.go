@@ -259,6 +259,7 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 			ID:                 c.ID,
 			Platform:           "twitch",
 			Game:               c.Game.DisplayName,
+			GameID:             c.Game.ID,
 			Name:               c.Name,
 			StartsAt:           parseISO(c.StartAtRaw),
 			EndsAt:             parseISO(c.EndAtRaw),

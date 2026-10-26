@@ -46,8 +46,12 @@ type gameHitJSON struct {
 	Priority *int   `json:"priority"`
 }
 
-// boxArtURL is the Twitch directory box art for a game name.
-func boxArtURL(name string) string {
+// boxArtURL is the Twitch directory box art for a game. The ID form works for
+// newer games where the name form redirects to a placeholder.
+func boxArtURL(name, twitchID string) string {
+	if twitchID != "" {
+		return "https://static-cdn.jtvnw.net/ttv-boxart/" + url.PathEscape(twitchID) + "-144x192.jpg"
+	}
 	return "https://static-cdn.jtvnw.net/ttv-boxart/" + url.PathEscape(name) + "-144x192.jpg"
 }
 
@@ -94,7 +98,7 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 	for i, c := range chosen {
 		g := gameJSON{
 			ID: c.ID, Name: c.Name, Slug: c.Slug, Priority: i + 1,
-			BoxArtURL: boxArtURL(c.Name), State: "no_campaign",
+			BoxArtURL: boxArtURL(c.Name, c.TwitchGameID), State: "no_campaign",
 			Campaigns: []gameCampaignJSON{},
 		}
 		if i < len(statuses) {

@@ -327,3 +327,29 @@ func TestCollector_ConcurrentHooks(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, workers*n, total)
 }
+
+func TestCollector_ScanStoresTwitchGameID(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	q := gen.New(c.States.DB)
+	_, err := c.States.DB.Exec(`DELETE FROM games`) // migrations seed a Rust row
+	require.NoError(t, err)
+	require.NoError(t, q.UpsertGame(ctx, gen.UpsertGameParams{ID: "rust", Name: "Rust", Slug: "rust"}))
+	require.NoError(t, c.Chosen.Set(ctx, []string{"rust"}))
+	twitchID := func() string {
+		var id string
+		require.NoError(t, c.States.DB.QueryRow(`SELECT twitch_game_id FROM games WHERE id='rust'`).Scan(&id))
+		return id
+	}
+
+	k := cbaseScan()
+	k.Platform = "kick"
+	k.Campaigns[0].Platform, k.Campaigns[0].GameID = "kick", "999"
+	c.OnScan(ctx, k)
+	require.Equal(t, "", twitchID())
+
+	s := cbaseScan()
+	s.Campaigns[0].GameID = "263490"
+	c.OnScan(ctx, s)
+	require.Equal(t, "263490", twitchID())
+}

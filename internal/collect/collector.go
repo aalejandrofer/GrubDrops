@@ -21,6 +21,7 @@ type Collector struct {
 	States  *store.DropStates
 	Minutes *store.WatchMinutes
 	Scans   *store.AccountScans
+	Chosen  *store.ChosenGames
 	Board   *Board
 	Now     func() time.Time      // nil = time.Now
 	Loc     func() *time.Location // nil = time.Local; picks the minutes day
@@ -40,6 +41,7 @@ func New(db *sql.DB, q *gen.Queries) *Collector {
 		States:  store.NewDropStates(db, q),
 		Minutes: store.NewWatchMinutes(q),
 		Scans:   store.NewAccountScans(q),
+		Chosen:  store.NewChosenGames(db, q),
 		Board:   NewBoard(),
 		last:    map[string]map[string]store.DropState{},
 	}
@@ -66,6 +68,7 @@ func (c *Collector) OnScan(ctx context.Context, s runner.Scan) {
 		return
 	}
 	now := c.now()
+	c.storeTwitchGameIDs(ctx, s)
 	for _, e := range Found(s, now) {
 		if err := c.Claims.Record(ctx, e); err != nil {
 			c.logErr("collect: record found claim failed", s.AccountID, err)
@@ -102,6 +105,35 @@ func (c *Collector) OnScan(ctx context.Context, s runner.Scan) {
 	}
 	if err := c.Scans.Put(ctx, scan); err != nil {
 		c.logErr("collect: record scan failed", s.AccountID, err)
+	}
+}
+
+// storeTwitchGameIDs saves each Twitch campaign's game ID onto the matching
+// chosen game, so box art can use the ID form. Unchanged IDs are no-op writes.
+func (c *Collector) storeTwitchGameIDs(ctx context.Context, s runner.Scan) {
+	if s.Platform != "twitch" || c.Chosen == nil {
+		return
+	}
+	chosen, err := c.Chosen.List(ctx)
+	if err != nil {
+		c.logErr("collect: list chosen games failed", s.AccountID, err)
+		return
+	}
+	games := make([]plan.Game, len(chosen))
+	for i, g := range chosen {
+		games[i] = plan.Game{Name: g.Name, Slug: g.Slug}
+	}
+	for _, camp := range s.Campaigns {
+		if camp.Platform != "twitch" || camp.GameID == "" {
+			continue
+		}
+		i, ok := plan.Match(games, camp.Game)
+		if !ok {
+			continue
+		}
+		if err := c.Chosen.Q.SetGameTwitchID(ctx, gen.SetGameTwitchIDParams{TwitchGameID: camp.GameID, ID: chosen[i].ID}); err != nil {
+			c.logErr("collect: store twitch game id failed", s.AccountID, err)
+		}
 	}
 }
 

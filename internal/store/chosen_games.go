@@ -7,7 +7,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
-type ChosenGame struct{ ID, Name, Slug string }
+type ChosenGame struct{ ID, Name, Slug, TwitchGameID string }
 
 // ChosenGames is the ranked list of games the user wants to farm.
 type ChosenGames struct {
@@ -25,7 +25,7 @@ func (c *ChosenGames) List(ctx context.Context) ([]ChosenGame, error) {
 	}
 	out := make([]ChosenGame, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, ChosenGame{ID: r.ID, Name: r.Name, Slug: r.Slug})
+		out = append(out, ChosenGame{ID: r.ID, Name: r.Name, Slug: r.Slug, TwitchGameID: r.TwitchGameID})
 	}
 	return out, nil
 }

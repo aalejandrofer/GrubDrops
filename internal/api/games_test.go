@@ -122,7 +122,26 @@ func TestGames_ListStatesAndOrder(t *testing.T) {
 	assert.Equal(t, "2026-11-01T12:00:00Z", *rust.Campaigns[0].EndsAt)
 	require.NotNil(t, got.LastScanAt)
 	assert.Equal(t, "2026-10-25T10:00:00Z", *got.LastScanAt)
-	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/Dead%20by%20Daylight-144x192.jpg", boxArtURL("Dead by Daylight"))
+	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/Dead%20by%20Daylight-144x192.jpg", boxArtURL("Dead by Daylight", ""))
+	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/Rust-144x192.jpg", rust.BoxArtURL)
+}
+
+func TestBoxArtURL_PrefersTwitchID(t *testing.T) {
+	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/1264310518-144x192.jpg", boxArtURL("Marvel Rivals", "1264310518"))
+	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/Rust-144x192.jpg", boxArtURL("Rust", ""))
+}
+
+func TestGames_ListUsesTwitchGameIDBoxArt(t *testing.T) {
+	g := newGamesEnv(t)
+	ids := g.seed("Marvel Rivals")
+	require.NoError(t, g.q.SetGameTwitchID(context.Background(), gen.SetGameTwitchIDParams{TwitchGameID: "1264310518", ID: ids[0]}))
+	require.NoError(t, g.chosen.Set(context.Background(), ids))
+	resp, b := g.do("GET", "/api/games", "", nil)
+	require.Equal(t, 200, resp.StatusCode)
+	var got gamesJSON
+	require.NoError(t, json.Unmarshal(b, &got))
+	require.Len(t, got.Games, 1)
+	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/1264310518-144x192.jpg", got.Games[0].BoxArtURL)
 }
 
 func TestGames_AddAppendsAndNotifies(t *testing.T) {

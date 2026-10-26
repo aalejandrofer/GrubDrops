@@ -40,6 +40,7 @@ type Campaign struct {
 	ID       string
 	Platform string
 	Game     string
+	GameID   string // Twitch game id; empty on other platforms
 	Name     string
 	StartsAt time.Time
 	EndsAt   time.Time

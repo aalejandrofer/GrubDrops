@@ -136,10 +136,11 @@ type DropState struct {
 }
 
 type Game struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Slug     string `json:"slug"`
-	Priority int64  `json:"priority"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Slug         string `json:"slug"`
+	Priority     int64  `json:"priority"`
+	TwitchGameID string `json:"twitch_game_id"`
 }
 
 type GlobalGame struct {

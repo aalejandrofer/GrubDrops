@@ -49,6 +49,7 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- Box art shows for newer games such as Marvel Rivals and Delta Force.
 - v2 Home lists a runner on its game card when the game matched by slug, not only by name.
 - v2 header no longer shows a needs-login chip for the account whose login is open in Settings.
 - v2 dates and clocks render in UTC when the saved timezone is one the browser rejects, such as "Local", instead of failing.
