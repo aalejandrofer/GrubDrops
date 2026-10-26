@@ -30,6 +30,7 @@ All notable changes to GrubDrops.
 - **Scan cadence.** A watching account now rescans campaigns every 12 hours instead of every 15 minutes. Use Scan now on Games for a sooner one.
 - **Health log colors.** Each log line is tinted by its type: red for errors, amber for warnings, green for claims. Normal lines use the main text color instead of grey.
 
+- **Quieter logs.** Repeated lines log once per change: `runner progress` only when minutes change, the same step error once (with a recovery line carrying the suppressed count), and unchanged state, picked-drop and starting-watch lines are skipped. `notify` lines moved to DEBUG, and the Twitch campaigns diagnostic no longer logs the raw response body.
 - **Home card size.** Cards no longer show a rank number, and card size follows the order on the page, so an idle top-priority game listed below active ones is small. A waiting game now lists above games with no campaign even when nothing is queued for it yet.
 - **Up next account names.** Each name is tinted by platform: purple for Twitch, green for Kick.
 

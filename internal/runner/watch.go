@@ -134,8 +134,10 @@ func (r *Runner) start(ctx context.Context) error {
 		}
 	}
 
-	slog.Info("runner starting watch", "kind", "state", "account", r.cfg.AccountID,
-		"channel", s.Channel, "campaign", camp.Name, "eligible_count", len(streams))
+	if r.logStart.Changed(s.Channel + "/" + camp.Name) {
+		slog.Info("runner starting watch", "kind", "state", "account", r.cfg.AccountID,
+			"channel", s.Channel, "campaign", camp.Name, "eligible_count", len(streams))
+	}
 	h, err := r.cfg.Backend.StartWatch(ctx, r.cfg.Session, s)
 	if err != nil {
 		return fmt.Errorf("start watch: %w", err)
@@ -259,9 +261,15 @@ func (r *Runner) tick(ctx context.Context) error {
 			continue
 		}
 		matched = true
-		slog.Info("runner progress", "kind", "progress", "account", r.cfg.AccountID,
-			"benefit", benefit.ID, "min_watched", p.MinutesWatched,
-			"required", benefit.RequiredMinutes, "claimed", p.Claimed)
+		if r.logProgress.Changed(fmt.Sprintf("%s/%d/%t", benefit.ID, p.MinutesWatched, p.Claimed)) {
+			slog.Info("runner progress", "kind", "progress", "account", r.cfg.AccountID,
+				"benefit", benefit.ID, "min_watched", p.MinutesWatched,
+				"required", benefit.RequiredMinutes, "claimed", p.Claimed)
+		}
+		if n := r.logStepErr.Reset(); n > 0 {
+			slog.Info("runner step recovered", "kind", "state", "account", r.cfg.AccountID,
+				"suppressed_repeats", n)
+		}
 		if p.Claimed {
 			// Claimed outside this watch (another client, or a lagged earlier
 			// claim): record it, never call Claim again.

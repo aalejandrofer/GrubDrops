@@ -75,6 +75,9 @@ type Runner struct {
 	// claimFailSkipped holds benefits skipped for repeated claim failures,
 	// value = required minutes (Task 5).
 	claimFailSkipped map[string]int
+	// Repeat-line suppression: each logs once per change.
+	logStepErr, logPicked, logStart, logProgress onceLog
+
 	// notifiedSwept dedupes sweep notifications by reward title, per run.
 	notifiedSwept map[string]struct{}
 	// lastClaimed is the target the runner last claimed, at lastClaimedAt.
@@ -220,8 +223,10 @@ func (r *Runner) setState(ctx context.Context, s State) {
 		default:
 		}
 	}
-	slog.Info("runner state change",
-		"kind", "state", "account", r.cfg.AccountID, "state", string(s), "prev", string(prev))
+	if s != prev {
+		slog.Info("runner state change",
+			"kind", "state", "account", r.cfg.AccountID, "state", string(s), "prev", string(prev))
+	}
 	if r.cfg.Notifier != nil {
 		_ = r.cfg.Notifier.Notify(ctx, "state", map[string]any{
 			"account": r.cfg.AccountID, "state": string(s),
@@ -301,8 +306,10 @@ func (r *Runner) pick(ctx context.Context) error {
 		r.channel = ""
 		r.viewers = 0
 		r.mu.Unlock()
-		slog.Info("runner picked drop", "kind", "discovery", "account", r.cfg.AccountID,
-			"game", next.Campaign.Game, "campaign", next.Campaign.ID, "drop", next.Benefit.ID)
+		if r.logPicked.Changed(next.Campaign.ID + "/" + next.Benefit.ID) {
+			slog.Info("runner picked drop", "kind", "discovery", "account", r.cfg.AccountID,
+				"game", next.Campaign.Game, "campaign", next.Campaign.ID, "drop", next.Benefit.ID)
+		}
 		r.setState(ctx, StateStarting)
 		return nil
 	}
@@ -523,9 +530,11 @@ func (r *Runner) Run(ctx context.Context) error {
 				return exit()
 			}
 			backoff = nextBackoff(backoff)
-			slog.Warn("runner step error; retrying after backoff",
-				"kind", "error", "account", r.cfg.AccountID, "state", string(r.State()),
-				"backoff", backoff, "err", err)
+			if r.logStepErr.Changed(err.Error()) {
+				slog.Warn("runner step error; retrying after backoff",
+					"kind", "error", "account", r.cfg.AccountID, "state", string(r.State()),
+					"backoff", backoff, "err", err)
+			}
 			sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			r.stopWatch(sctx)
 			cancel()
