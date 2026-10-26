@@ -46,6 +46,7 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- Twitch watch time was not crediting even though the Spade beacon was accepted. Each heartbeat now fetches the stream's lowest-quality HLS playlist and sends a HEAD request to every chunk in it, the method TwitchDropsMiner moved to. The Spade beacon is still sent, and a heartbeat fails only when both fail. Playlist and chunk requests go only to ttvnw.net and live-video.net over https and carry no Twitch credentials.
 - Home cards are large by display position, so a mining game shown first is large. The rank on the card is unchanged.
 - Rewards search skips the reload when the text is unchanged, uses 16px text on phones so iOS does not zoom, and trims spaces after the 100 character cut.
 - Twitch integrity tokens and raw responses no longer appear in logs. The integrity line records only the expiry and bad-bot flag, and gql and PubSub lines drop the response body (GRUB-20).

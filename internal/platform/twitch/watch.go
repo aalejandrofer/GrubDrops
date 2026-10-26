@@ -3,7 +3,9 @@ package twitch
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"sync"
 	"time"
@@ -25,6 +27,18 @@ type watch struct {
 	// heartbeat re-resolves from a fresh page fetch.
 	spadeMu   sync.Mutex
 	spadeURLs map[string]string
+
+	// playlistMu guards playlistURLs, a per-channel cache of the HLS media
+	// playlist URL used by the playlist heartbeat. Resolving it costs a GQL
+	// call plus an usher fetch, so it's kept until a send fails or the
+	// broadcast changes.
+	playlistMu   sync.Mutex
+	playlistURLs map[string]playlistEntry
+}
+
+type playlistEntry struct {
+	broadcastID string
+	url         string
 }
 
 // newWatch builds the watch leg with its OWN client, constructed exactly
@@ -102,18 +116,100 @@ func (w *watch) resolveUserID(ctx context.Context, sess platform.Session) (int64
 	return id, nil
 }
 
-// heartbeat sends one minute-watched event to Twitch's Spade analytics
-// beacon. As of the 2026-07-11 Twitch change, the GQL SendEvents mutation
-// is no longer credited for drop progress — only this Spade POST path
-// accrues watch time. The beacon URL is resolved per channel (cached),
-// and on a failed send the cache entry is evicted and re-resolved once
-// before giving up, mirroring twitch-gql-rs' send_watch retry.
+// heartbeat simulates one tick of watching. Two paths run every tick:
+//
+//  1. Playlist (primary): GET the channel's current HLS media playlist and
+//     HEAD every chunk in it, the method DevilXD/TwitchDropsMiner switched
+//     to in f693b0c after the Spade beacon stopped crediting reliably.
+//  2. Spade (secondary): POST the minute-watched beacon, kept so nothing is
+//     lost if Spade still credits some campaigns.
+//
+// Each path evicts its cached URL on failure and re-resolves once. The
+// heartbeat fails only when both paths fail; a single failing path is
+// logged and ignored.
 func (w *watch) heartbeat(ctx context.Context, h platform.WatchHandle) error {
 	internal, ok := h.Internal.(watchInternal)
 	if !ok {
 		return fmt.Errorf("invalid watch handle")
 	}
 
+	playErr := w.playlistHeartbeat(ctx, internal)
+	spadeErr := w.spadeHeartbeat(ctx, internal)
+
+	switch {
+	case playErr == nil && spadeErr == nil:
+		return nil
+	case playErr == nil:
+		slog.Warn("twitch spade beacon failed (playlist watch ok)", "channel", internal.Channel, "err", spadeErr)
+		return nil
+	case spadeErr == nil:
+		slog.Warn("twitch playlist watch failed (spade beacon ok)", "channel", internal.Channel, "err", playErr)
+		return nil
+	default:
+		return errors.Join(fmt.Errorf("playlist: %w", playErr), fmt.Errorf("spade: %w", spadeErr))
+	}
+}
+
+// playlistHeartbeat HEADs every chunk of the channel's media playlist. On
+// failure the cached playlist URL is evicted and re-resolved once: the
+// variant URL is signed and expires, and an ended broadcast 404s.
+func (w *watch) playlistHeartbeat(ctx context.Context, internal watchInternal) error {
+	playlistURL, err := w.cachedPlaylistURL(ctx, internal)
+	if err != nil {
+		return fmt.Errorf("resolve playlist url: %w", err)
+	}
+	if err := w.c.sendPlaylistWatch(ctx, internal.Token, playlistURL); err == nil {
+		return nil
+	}
+	w.evictPlaylistURL(internal.Channel)
+	playlistURL, err = w.c.resolvePlaylistURL(ctx, internal.Token, internal.Channel)
+	if err != nil {
+		return fmt.Errorf("resolve playlist url (retry): %w", err)
+	}
+	w.setPlaylistURL(internal.Channel, internal.BroadcastID, playlistURL)
+	return w.c.sendPlaylistWatch(ctx, internal.Token, playlistURL)
+}
+
+// cachedPlaylistURL returns the channel's media playlist URL from the
+// cache, resolving + caching it on first use or when the broadcast changed
+// (a new broadcast has a new playlist).
+func (w *watch) cachedPlaylistURL(ctx context.Context, internal watchInternal) (string, error) {
+	w.playlistMu.Lock()
+	if e, ok := w.playlistURLs[internal.Channel]; ok && e.broadcastID == internal.BroadcastID {
+		w.playlistMu.Unlock()
+		return e.url, nil
+	}
+	w.playlistMu.Unlock()
+
+	u, err := w.c.resolvePlaylistURL(ctx, internal.Token, internal.Channel)
+	if err != nil {
+		return "", err
+	}
+	w.setPlaylistURL(internal.Channel, internal.BroadcastID, u)
+	return u, nil
+}
+
+func (w *watch) setPlaylistURL(channel, broadcastID, playlistURL string) {
+	w.playlistMu.Lock()
+	// Lazy-init for the same reason as setSpadeURL.
+	if w.playlistURLs == nil {
+		w.playlistURLs = map[string]playlistEntry{}
+	}
+	w.playlistURLs[channel] = playlistEntry{broadcastID: broadcastID, url: playlistURL}
+	w.playlistMu.Unlock()
+}
+
+func (w *watch) evictPlaylistURL(channel string) {
+	w.playlistMu.Lock()
+	delete(w.playlistURLs, channel)
+	w.playlistMu.Unlock()
+}
+
+// spadeHeartbeat sends one minute-watched event to Twitch's Spade
+// analytics beacon. The beacon URL is resolved per channel (cached), and
+// on a failed send the cache entry is evicted and re-resolved once before
+// giving up, mirroring twitch-gql-rs' send_watch retry.
+func (w *watch) spadeHeartbeat(ctx context.Context, internal watchInternal) error {
 	events, err := minuteWatchedEvents(internal)
 	if err != nil {
 		return err
