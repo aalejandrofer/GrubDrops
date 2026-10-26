@@ -10,11 +10,13 @@
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
+	import { loginFlow } from '$lib/login-flow.svelte';
 
 	const STATUS_KEYS = {
 		mining: 'accounts.status.mining',
 		signed_out: 'accounts.status.signed_out',
-		idle: 'accounts.status.idle'
+		idle: 'accounts.status.idle',
+		paused: 'accounts.status.paused'
 	} as const;
 
 	const live = getLive();
@@ -62,6 +64,7 @@
 		cancelTimer = null;
 		flow = null;
 		panel = null;
+		loginFlow.id = null;
 		ds = 'idle';
 		dcode = null;
 		cookies = '';
@@ -83,6 +86,7 @@
 				id = created.id;
 			}
 			panel = { kind, id, isNew: existing === undefined };
+			loginFlow.id = id;
 			if (kind === 'twitch') {
 				const f = createDeviceFlow({ api, accountId: id, schedule, isNew: existing === undefined });
 				f.onChange(() => {
@@ -181,6 +185,17 @@
 		}
 	}
 
+	async function setEnabled(a: Account, enabled: boolean): Promise<void> {
+		menu = null;
+		rowError[a.id] = '';
+		try {
+			await api.setAccountEnabled(a.id, enabled);
+			await live.refetchAll().catch(() => {});
+		} catch (e) {
+			rowError[a.id] = errMsg(e, t('accounts.pause_failed', { name: a.name }));
+		}
+	}
+
 	function openMenu(id: string): void {
 		menu = menu === id ? null : id;
 		confirming = null;
@@ -206,6 +221,7 @@
 	onDestroy(() => {
 		flow?.dispose();
 		cancelTimer?.();
+		loginFlow.id = null;
 		// Leaving mid-flow drops the half-made account.
 		const p = panel;
 		if (p?.isNew && !kickSaved && ds !== 'done') api.removeAccount(p.id).catch(() => {});
@@ -340,6 +356,8 @@
 					<button type="button" class="btn primary fix" disabled={busy} onclick={() => openFlow(a.platform, a.id)}>
 						<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" /></svg>{t('accounts.log_in_again')}
 					</button>
+				{:else if st === 'paused'}
+					<button type="button" class="btn fix" onclick={() => setEnabled(a, true)}>{t('accounts.resume')}</button>
 				{/if}
 				<div class="menu-wrap">
 					<button
@@ -361,6 +379,9 @@
 									<button type="button" onclick={() => (confirming = null)}>{t('accounts.cancel')}</button>
 								</div>
 							{:else}
+								<button type="button" role="menuitem" onclick={() => setEnabled(a, !a.enabled)}>
+									{t(a.enabled ? 'accounts.pause' : 'accounts.resume')}
+								</button>
 								<button type="button" role="menuitem" class="danger" onclick={() => (confirming = a.id)}>
 									<Icon name="x" />{t('accounts.remove')}
 								</button>
@@ -582,6 +603,10 @@
 	.st.signed_out {
 		color: var(--red);
 		background: var(--red-soft);
+	}
+	.st.paused {
+		color: var(--amber);
+		background: var(--amber-soft);
 	}
 	.acct.problem {
 		background: linear-gradient(90deg, color-mix(in srgb, var(--red) 7%, transparent), transparent 60%);

@@ -23,6 +23,7 @@ func (s *server) routesAccounts(r chi.Router) {
 	r.Post("/accounts", s.createAccount)
 	r.Patch("/accounts/{id}", s.renameAccount)
 	r.Delete("/accounts/{id}", s.deleteAccount)
+	r.Put("/accounts/{id}/enabled", s.setAccountEnabled)
 	r.Post("/accounts/{id}/twitch/device", s.twitchDeviceStart)
 	r.Get("/accounts/{id}/twitch/device", s.twitchDeviceStatus)
 	r.Post("/accounts/{id}/kick/session", s.kickSession)
@@ -41,7 +42,8 @@ type accountJSON struct {
 	AvatarURL  string           `json:"avatar_url"`
 	State      string           `json:"state"`
 	NeedsLogin bool             `json:"needs_login"`
-	Auth       *accountAuthJSON `json:"auth"` // null until a check has run
+	Enabled    bool             `json:"enabled"` // false: paused, the runner idles
+	Auth       *accountAuthJSON `json:"auth"`    // null until a check has run
 }
 
 // checkedAt is nil when no check has run.
@@ -86,6 +88,7 @@ func (s *server) listAccounts(w http.ResponseWriter, r *http.Request) {
 			AvatarURL:  avatarSrc(a.Platform, a.AvatarUrl),
 			State:      state,
 			NeedsLogin: state == string(runner.StateNeedsLogin) || !hasSession,
+			Enabled:    a.Enabled != 0,
 		}
 		if res, ok := authcheck.Load(ctx, s.d.Q, a.ID); ok {
 			item.Auth = &accountAuthJSON{OK: res.OK, Detail: res.Msg, CheckedAt: checkedAt(res.CheckedAt)}
@@ -160,6 +163,37 @@ func (s *server) renameAccount(w http.ResponseWriter, r *http.Request) {
 	if s.d.Hub != nil {
 		s.d.Hub.Publish(Event{Name: EventAccounts, Data: struct{}{}})
 	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setAccountEnabled pauses or resumes mining for one account. The runner is
+// rebuilt from the row, so a paused account idles and a resumed one mines.
+func (s *server) setAccountEnabled(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var body struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if !readJSON(w, r, &body) {
+		return
+	}
+	if body.Enabled == nil {
+		writeErr(w, http.StatusBadRequest, "bad_request")
+		return
+	}
+	if _, ok := s.account(w, r, id); !ok {
+		return
+	}
+	var v int64
+	if *body.Enabled {
+		v = 1
+	}
+	if err := s.d.Q.SetAccountEnabled(r.Context(), gen.SetAccountEnabledParams{
+		Enabled: v, UpdatedAt: time.Now().Unix(), ID: id,
+	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	s.accountChanged(id)
 	w.WriteHeader(http.StatusNoContent)
 }
 

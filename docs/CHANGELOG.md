@@ -37,6 +37,7 @@ All notable changes to GrubDrops.
 - v2 Settings health: miner, sidecar, scan and canary status, filtered live event log in your language, full log download.
 - v2 docs: README, translations, DESIGN.md, site and AGENTS.md describe the SvelteKit UI, chosen games and the new login flows.
 - v2 UI verified end to end in a browser; README screenshots show the new pages.
+- v2 pause and resume mining per account: `PUT /api/accounts/{id}/enabled`, a Paused status on Settings → Accounts, and a Home notice when every account is paused. Accounts paused in 1.x stay paused and can now be resumed.
 
 ### Changed
 
@@ -47,6 +48,8 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- v2 Home lists a runner on its game card when the game matched by slug, not only by name.
+- v2 header no longer shows a needs-login chip for the account whose login is open in Settings.
 - v2 `POST /api/games` returned 500 for games a migration seeded under another id (Apex Legends, Marvel Rivals); it now reuses the existing row by slug (rebuild/v2).
 - v2 store: the pre-v2 backup is written to a `.tmp` file and renamed, so a failed or interrupted backup is retried on the next boot instead of leaving a partial `.pre-v2`.
 - v2 runner: a swept reward is recorded only when its title resolves to one drop, looking in the current campaign, then the current game, then the rest of the plan. An ambiguous title records nothing, so it cannot hide another drop.

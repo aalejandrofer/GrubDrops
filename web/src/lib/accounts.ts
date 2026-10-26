@@ -110,9 +110,11 @@ export function createDeviceFlow(deps: DeviceFlowDeps): DeviceFlow {
 	return flow;
 }
 
-export type AccountStatus = 'mining' | 'signed_out' | 'idle';
+export type AccountStatus = 'paused' | 'mining' | 'signed_out' | 'idle';
 
+/** Paused wins over every other status: the runner idles, sign-in state aside. */
 export function accountStatus(a: Account, r: Runner | undefined): AccountStatus {
+	if (!a.enabled) return 'paused';
 	if (a.needs_login || r?.state === 'needs_login') return 'signed_out';
 	if (r?.current && (r.state === 'watching' || r.state === 'claiming')) return 'mining';
 	return 'idle';
@@ -136,6 +138,7 @@ export function accountLine(
 	time: (iso: string) => string = (iso) => clock(iso, prefs.zone, prefs.fmt)
 ): string {
 	const status = accountStatus(a, r);
+	if (status === 'paused') return t('accounts.paused_line');
 	if (status === 'mining' && r?.current) {
 		const c = r.current;
 		return t('accounts.mining_line', {

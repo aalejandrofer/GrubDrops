@@ -82,7 +82,7 @@
 					<div class="acct" class:out={r.muted} class:idle={!r.muted && !c}>
 						<div class="who"><PlatformMark platform={r.runner.platform} /><b>{r.runner.account_name}</b></div>
 						{#if r.muted}
-							<div class="drop">{t('home.signed_out_row')}</div>
+							<div class="drop">{t(r.paused ? 'accounts.paused_line' : 'home.signed_out_row')}</div>
 							<div class="eta"></div>
 						{:else if c}
 							<div class="drop">

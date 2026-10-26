@@ -203,6 +203,11 @@ describe('accountLine', () => {
 		a.auth = null;
 		expect(accountLine(a, undefined)).toBe('Not signed in.');
 	});
+	it('paused', () => {
+		const a = ACC('acc-hjune');
+		a.enabled = false;
+		expect(accountLine(a, RUN('acc-hjune'))).toBe('Paused. Not mining.');
+	});
 	it('other states use the runner label', () => {
 		const r = RUN('acc-hjune');
 		r.state = 'sleeping';
@@ -220,5 +225,14 @@ describe('accountStatus', () => {
 		r.current = null;
 		expect(accountStatus(ACC('acc-hjune'), r)).toBe('idle');
 		expect(accountStatus(ACC('acc-hjune'), undefined)).toBe('idle');
+	});
+	it('paused wins over idle, mining and signed out', () => {
+		const a = ACC('acc-hjune');
+		a.enabled = false;
+		expect(accountStatus(a, RUN('acc-hjune'))).toBe('paused');
+		expect(accountStatus(a, undefined)).toBe('paused');
+		const k = ACC('acc-kick');
+		k.enabled = false;
+		expect(accountStatus(k, undefined)).toBe('paused');
 	});
 });

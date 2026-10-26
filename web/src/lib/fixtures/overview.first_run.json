@@ -3,6 +3,7 @@
 		"state": "no_accounts",
 		"accounts_total": 0,
 		"accounts_mining": 0,
+		"accounts_paused": 0,
 		"last_scan_at": null
 	},
 	"problems": [],

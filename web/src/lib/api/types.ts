@@ -23,6 +23,7 @@ export interface Overview {
 		state: OverviewState;
 		accounts_total: number;
 		accounts_mining: number;
+		accounts_paused: number;
 		last_scan_at: string | null;
 	};
 	problems: Problem[];
@@ -149,6 +150,8 @@ export interface Account {
 	avatar_url: string;
 	state: string;
 	needs_login: boolean;
+	/** false: paused, the runner idles. */
+	enabled: boolean;
 	auth: { ok: boolean; detail: string; checked_at: string | null } | null;
 }
 

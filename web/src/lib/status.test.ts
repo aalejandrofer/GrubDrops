@@ -53,6 +53,11 @@ describe('problemChip', () => {
 		two.problems.push({ kind: 'needs_login', account_id: 'b', account_name: 'b' });
 		expect(problemChip(two)).toEqual({ text: '2 accounts need login', href: '/settings#accounts' });
 	});
+	it('skips the account mid-login', () => {
+		const x = o(mining);
+		expect(problemChip(x, x.problems[0].account_id)).toBeNull();
+		expect(problemChip(x, 'other')).not.toBeNull();
+	});
 	it('none gives null', () => {
 		expect(problemChip(clean())).toBeNull();
 		expect(problemChip(null)).toBeNull();

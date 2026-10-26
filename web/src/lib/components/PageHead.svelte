@@ -4,6 +4,7 @@
 	import { t } from '$lib/i18n/index.svelte';
 	import { getLive, getNet } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
+	import { loginFlow } from '$lib/login-flow.svelte';
 	import { headerTone, problemChip, statusText } from '$lib/status';
 	import CopyCommand from './CopyCommand.svelte';
 	import Icon from './Icon.svelte';
@@ -16,7 +17,7 @@
 
 	const tone = $derived(headerTone(live.overview, down));
 	const text = $derived(status && !down ? status : statusText(live.overview, down));
-	const chip = $derived(problemChip(live.overview));
+	const chip = $derived(problemChip(live.overview, loginFlow.id));
 	const last = $derived(
 		live.updatedAt === null
 			? ''

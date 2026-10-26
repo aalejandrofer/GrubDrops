@@ -25,8 +25,9 @@ export function statusText(o: Overview | null, unreachable: boolean): string {
 	}
 }
 
-export function problemChip(o: Overview | null): { text: string; href: string } | null {
-	const n = o?.problems.filter((p) => p.kind === 'needs_login').length ?? 0;
+/** skip is an account mid-login: its needs-login problem is expected, not news. */
+export function problemChip(o: Overview | null, skip: string | null = null): { text: string; href: string } | null {
+	const n = o?.problems.filter((p) => p.kind === 'needs_login' && p.account_id !== skip).length ?? 0;
 	if (n === 0) return null;
 	return { text: tn('status.needs_login', n), href: '/settings#accounts' };
 }

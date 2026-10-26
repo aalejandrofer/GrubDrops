@@ -64,6 +64,7 @@ export interface Api {
 	addAccount(platform: Platform, name?: string): Promise<{ id: string }>;
 	renameAccount(id: string, name: string): Promise<void>;
 	removeAccount(id: string): Promise<void>;
+	setAccountEnabled(id: string, enabled: boolean): Promise<void>;
 	twitchStart(id: string): Promise<DeviceStart>;
 	twitchStatus(id: string): Promise<DeviceStatus>;
 	kickSession(id: string, cookiesTxt: string): Promise<{ verified: boolean }>;
@@ -186,6 +187,8 @@ export function createClient(opts: ClientOpts): Api {
 		addAccount: (platform, name) => post('/api/accounts', name ? { platform, name } : { platform }),
 		renameAccount: (id, name) => send('PATCH', `/api/accounts/${enc(id)}`, { name }) as Promise<void>,
 		removeAccount: (id) => send('DELETE', `/api/accounts/${enc(id)}`) as Promise<void>,
+		setAccountEnabled: (id, enabled) =>
+			send('PUT', `/api/accounts/${enc(id)}/enabled`, { enabled }) as Promise<void>,
 		twitchStart: (id) => post(`/api/accounts/${enc(id)}/twitch/device`),
 		twitchStatus: (id) => get(`/api/accounts/${enc(id)}/twitch/device`),
 		kickSession: (id, cookiesTxt) =>

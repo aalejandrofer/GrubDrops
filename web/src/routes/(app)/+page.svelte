@@ -31,9 +31,12 @@
 			unreachable: live.unreachable || net.down
 		})
 	);
-	const dashboard = $derived(mode === 'healthy' || mode === 'nothing_live' || mode === 'signed_out');
+	const dashboard = $derived(
+		mode === 'healthy' || mode === 'nothing_live' || mode === 'signed_out' || mode === 'paused'
+	);
 	const lastScan = $derived(live.games?.last_scan_at ?? o?.status.last_scan_at ?? null);
-	const cards = $derived(gameCards(live.games?.games ?? [], live.runners));
+	const pausedIds = $derived(new Set(live.accounts.filter((a) => !a.enabled).map((a) => a.id)));
+	const cards = $derived(gameCards(live.games?.games ?? [], live.runners, pausedIds));
 	const groups = $derived(groupClaims(live.recent, now, prefs.zone));
 	const stamp = $derived(
 		live.updatedAt === null
@@ -80,7 +83,12 @@
 			<a href="/games" class="btn"><Icon name="list" />{t('home.no_games_add')}</a>
 		</div>
 	{:else if o && kpi}
-		{#if mode === 'signed_out'}
+		{#if mode === 'paused'}
+			<div class="empty warn" role="status">
+				<span>{tn('home.paused_all', o.status.accounts_total)}</span>
+				<a href="/settings#accounts" class="btn">{t('settings.accounts')}</a>
+			</div>
+		{:else if mode === 'signed_out'}
 			<div class="empty warn" role="status">
 				<span>{tn('home.signed_out_all', o.status.accounts_total)}</span>
 				<a href="/settings#accounts" class="btn">{t('accounts.log_in_again')}</a>
@@ -130,7 +138,7 @@
 						{card}
 						{lastScan}
 						{now}
-						readyAccounts={mode === 'nothing_live' ? o.status.accounts_total : null}
+						readyAccounts={mode === 'nothing_live' ? o.status.accounts_total - (o.status.accounts_paused ?? 0) : null}
 					/>
 				{/each}
 			</div>

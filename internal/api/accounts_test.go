@@ -186,6 +186,47 @@ func TestAccounts_RenamePublishesEvent(t *testing.T) {
 	}
 }
 
+func TestAccounts_SetEnabled(t *testing.T) {
+	e, c := accountsEnv(t)
+	id := e.createAccount("twitch", "Alpha")
+	ctx := context.Background()
+	_, tok := e.session()
+
+	enabled := func() bool {
+		t.Helper()
+		_, body := e.do("GET", "/api/accounts", "", nil)
+		var list []struct {
+			ID      string `json:"id"`
+			Enabled bool   `json:"enabled"`
+		}
+		unmarshal(t, body, &list)
+		require.Len(t, list, 1)
+		return list[0].Enabled
+	}
+	assert.True(t, enabled())
+
+	resp, b := e.do("PUT", "/api/accounts/"+id+"/enabled", tok, map[string]bool{"enabled": false})
+	require.Equal(t, 204, resp.StatusCode, string(b))
+	a, err := e.s.d.Q.GetAccount(ctx, id)
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, a.Enabled)
+	assert.False(t, enabled())
+	assert.Equal(t, []string{id, id}, c.changedList(), "pause reloads the runner")
+
+	resp, _ = e.do("PUT", "/api/accounts/"+id+"/enabled", tok, map[string]bool{"enabled": true})
+	require.Equal(t, 204, resp.StatusCode)
+	assert.True(t, enabled())
+	assert.Equal(t, []string{id, id, id}, c.changedList(), "resume reloads the runner")
+
+	resp, _ = e.do("PUT", "/api/accounts/"+id+"/enabled", tok, map[string]any{})
+	assert.Equal(t, 400, resp.StatusCode)
+	resp, _ = e.do("PUT", "/api/accounts/nope/enabled", tok, map[string]bool{"enabled": true})
+	assert.Equal(t, 404, resp.StatusCode)
+	resp, _ = e.do("PUT", "/api/accounts/"+id+"/enabled", "", map[string]bool{"enabled": false})
+	assert.Equal(t, 403, resp.StatusCode, "CSRF token required")
+	assert.True(t, enabled())
+}
+
 func jsonField(t *testing.T, b []byte, key string) string {
 	t.Helper()
 	var m map[string]any

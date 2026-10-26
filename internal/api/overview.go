@@ -46,12 +46,17 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	names := make(map[string]string, len(accts))
+	paused := map[string]bool{}
 	for _, a := range accts {
 		names[a.ID] = a.DisplayName
+		if a.Enabled == 0 {
+			paused[a.ID] = true
+		}
 	}
 
 	snaps := s.d.Pool.Snapshots()
-	mining, healthy, anyWork := 0, 0, false
+	// ready counts healthy accounts that are not paused.
+	mining, healthy, ready, anyWork := 0, 0, 0, false
 	var lastScan time.Time
 	problems := []overviewProblem{}
 	for _, sn := range snaps {
@@ -66,6 +71,9 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 			problems = append(problems, overviewProblem{Kind: "needs_login", AccountID: sn.AccountID, AccountName: names[sn.AccountID]})
 		} else {
 			healthy++
+			if !paused[sn.AccountID] {
+				ready++
+			}
 		}
 		if sn.Current != nil || len(sn.UpNext) > 0 {
 			anyWork = true
@@ -93,7 +101,7 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 		state = "no_games"
 	case mining > 0:
 		state = "mining"
-	case !anyWork && healthy > 0:
+	case !anyWork && ready > 0:
 		state = "nothing_live"
 	}
 
@@ -132,7 +140,8 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status": map[string]any{
 			"state": state, "accounts_total": len(accts), "accounts_mining": mining,
-			"last_scan_at": rfc3339(lastScan),
+			"accounts_paused": len(paused),
+			"last_scan_at":    rfc3339(lastScan),
 		},
 		"problems": problems,
 		"kpis": map[string]any{

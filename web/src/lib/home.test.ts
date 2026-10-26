@@ -66,6 +66,20 @@ describe('gameCards', () => {
 		expect(c[1].rows.map((x) => x.runner.account_name)).not.toContain('kick_main');
 		expect(c[0].rows.filter((x) => x.muted)).toHaveLength(1);
 	});
+	it('rows matched by slug', () => {
+		const r = R();
+		r[1].current!.game = 'marvel-rivals';
+		const c = gameCards(G(), r);
+		expect(c[1].rows.map((x) => x.runner.account_name)).toContain('grub_alt');
+	});
+	it('a paused account is muted on card 1 and queues nothing', () => {
+		const c = gameCards(G(), R(), new Set(['acc-hjune']));
+		const row = c[0].rows.find((x) => x.runner.account_id === 'acc-hjune')!;
+		expect(row.muted).toBe(true);
+		expect(row.paused).toBe(true);
+		expect(c[1].rows.map((x) => x.runner.account_id)).not.toContain('acc-hjune');
+		expect(c[1].queued).toHaveLength(0);
+	});
 	it('card 1 lists idle accounts', () => {
 		const c = gameCards(G(), structuredClone(many) as Runner[]);
 		expect(c[0].rows).toHaveLength(10);
@@ -132,6 +146,21 @@ describe('homeView', () => {
 		expect(homeView({ ...base, overview: o })).toBe('signed_out');
 		o.problems.pop();
 		expect(homeView({ ...base, overview: o })).toBe('healthy');
+	});
+	it('every account paused', () => {
+		const o = fourAccounts('idle');
+		o.status.accounts_paused = 4;
+		expect(homeView({ ...base, overview: o })).toBe('paused');
+		o.problems = [{ kind: 'needs_login', account_id: 'a1', account_name: 'a1' }];
+		expect(homeView({ ...base, overview: o })).toBe('paused');
+		o.status.accounts_paused = 3;
+		o.problems = [];
+		expect(homeView({ ...base, overview: o })).toBe('healthy');
+	});
+	it('no games beats every account paused', () => {
+		const o = fourAccounts('no_games');
+		o.status.accounts_paused = 4;
+		expect(homeView({ ...base, overview: o, games: [] })).toBe('no_games');
 	});
 	it('games chosen but no campaigns is nothing live', () => {
 		expect(homeView({ ...base, overview: O(nothing) })).toBe('nothing_live');

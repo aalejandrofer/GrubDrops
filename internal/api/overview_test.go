@@ -169,6 +169,22 @@ func TestOverview_NothingLive(t *testing.T) {
 	assert.Nil(t, st["last_scan_at"])
 }
 
+func TestOverview_PausedIsNotReady(t *testing.T) {
+	e := newResEnv(t, nil)
+	_, err := e.db.Exec("UPDATE accounts SET enabled = 0")
+	require.NoError(t, err)
+	e.pool.snaps = []runner.Snapshot{{AccountID: "a1", State: runner.StateIdle}, {AccountID: "b2", State: runner.StateIdle}}
+	st := e.overview()["status"].(map[string]any)
+	assert.Equal(t, "idle", st["state"], "paused accounts are not ready, so not nothing_live")
+	assert.EqualValues(t, 2, st["accounts_paused"])
+
+	_, err = e.db.Exec("UPDATE accounts SET enabled = 1 WHERE id = 'a1'")
+	require.NoError(t, err)
+	st = e.overview()["status"].(map[string]any)
+	assert.Equal(t, "nothing_live", st["state"])
+	assert.EqualValues(t, 1, st["accounts_paused"])
+}
+
 func TestOverview_Idle(t *testing.T) {
 	e := newResEnv(t, nil)
 	e.pool.snaps = []runner.Snapshot{{AccountID: "a1", State: runner.StateNeedsLogin}, {AccountID: "b2", State: runner.StateNeedsLogin}}

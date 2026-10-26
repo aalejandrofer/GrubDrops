@@ -5,7 +5,8 @@ export function normName(s: string): string {
 	return s.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-export type AccountRow = { runner: Runner; progress: number; muted: boolean };
+/** muted: signed out or paused, so not mining. */
+export type AccountRow = { runner: Runner; progress: number; muted: boolean; paused: boolean };
 
 export type GameCard = {
 	game: Game;
@@ -18,27 +19,33 @@ export type GameCard = {
 	moreInUpNext: number;
 };
 
-function row(r: Runner): AccountRow {
+function row(r: Runner, paused: boolean): AccountRow {
 	const c = r.current;
 	const progress = c && c.required_minutes > 0 ? c.minutes / c.required_minutes : 0;
-	return { runner: r, progress, muted: r.state === 'needs_login' };
+	return { runner: r, progress, muted: paused || r.state === 'needs_login', paused };
 }
 
 /**
- * Cards in priority order. Rank 1 also lists signed-out and idle accounts,
- * since they have no current game to match.
+ * Cards in priority order. Rank 1 also lists signed-out, paused and idle
+ * accounts, since they have no current game to match. A runner game matches
+ * the card by name or slug, like the Go planner.
  */
-export function gameCards(g: Game[], r: Runner[]): GameCard[] {
+export function gameCards(g: Game[], r: Runner[], paused: ReadonlySet<string> = new Set()): GameCard[] {
 	const sorted = g.slice().sort((a, b) => a.priority - b.priority);
 	return sorted.map((game, i) => {
 		const rank = i + 1;
-		const key = normName(game.name);
+		const keys = new Set([normName(game.name), normName(game.slug ?? '')].filter(Boolean));
+		const isThis = (name: string) => keys.has(normName(name));
+		const off = (x: Runner) => paused.has(x.account_id) || x.state === 'needs_login' || !x.current;
 		const rows = r
-			.filter((x) => (x.state === 'needs_login' || !x.current ? rank === 1 : normName(x.current.game) === key))
-			.map(row)
+			.filter((x) => (off(x) ? rank === 1 : isThis(x.current!.game)))
+			.map((x) => row(x, paused.has(x.account_id)))
 			.sort((a, b) => b.progress - a.progress);
 		const targets: { t: Target; by: string }[] = [];
-		for (const x of r) for (const t of x.up_next) if (normName(t.game) === key) targets.push({ t, by: x.account_name });
+		for (const x of r) {
+			if (paused.has(x.account_id)) continue;
+			for (const t of x.up_next) if (isThis(t.game)) targets.push({ t, by: x.account_name });
+		}
 		const seen = new Set<string>();
 		const queued = targets.filter((x) => !seen.has(x.t.benefit_id) && seen.add(x.t.benefit_id)).map((x) => x.t);
 		return {
@@ -72,6 +79,7 @@ export type HomeView =
 	| 'offline'
 	| 'first_run'
 	| 'no_games'
+	| 'paused'
 	| 'signed_out'
 	| 'nothing_live'
 	| 'healthy';
@@ -90,6 +98,8 @@ export function homeView(i: HomeInput): HomeView {
 	if (!o) return i.unreachable ? 'offline' : i.overviewFailed ? 'error' : 'loading';
 	if (o.status.state === 'no_accounts') return 'first_run';
 	if (o.status.state === 'no_games' || i.games?.length === 0) return 'no_games';
+	// Paused wins over signed out, as on the Accounts list.
+	if ((o.status.accounts_paused ?? 0) >= o.status.accounts_total) return 'paused';
 	if (!i.games) return i.gamesFailed && !i.unreachable ? 'error' : 'loading';
 	if (o.problems.length >= o.status.accounts_total) return 'signed_out';
 	if (o.status.state === 'nothing_live' || i.games.every((g) => g.state === 'no_campaign')) return 'nothing_live';
