@@ -178,6 +178,7 @@ export function createClient(opts: ClientOpts): Api {
 			const p = new URLSearchParams();
 			if (q.game) p.set('game', q.game);
 			if (q.account) p.set('account', q.account);
+			if (q.q) p.set('q', q.q);
 			if (q.limit !== undefined) p.set('limit', String(q.limit));
 			if (q.offset !== undefined) p.set('offset', String(q.offset));
 			const qs = p.toString();

@@ -120,6 +120,7 @@ export interface SearchHit {
 export interface ClaimsQuery {
 	game?: string;
 	account?: string;
+	q?: string;
 	limit?: number;
 	offset?: number;
 }

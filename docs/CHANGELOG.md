@@ -6,13 +6,15 @@ All notable changes to GrubDrops.
 
 ### Added
 
+- **Rewards search.** A search box filters claim history by reward, campaign or game on the server, so it covers every claim, not just the loaded ones.
+- **Rewards pagination.** Previous / Next with page and range counts replace Load more; page size is 20, 50 or 100 and is kept per browser.
 - **Home shows at most 7 games.** Games that are mining or queued stay visible; a link to Games shows how many more are tracked.
 - **Compact list view on Games.** A Cards/List toggle shows one dense row per game with the same reordering; the choice is kept per browser.
 - **New web app.** A SvelteKit single-page app in `web/` is built by npm, the Docker image and CI, and embedded in the binary. A "UI not built" page shows when the build is missing; `index.html` is never cached and hashed assets are immutable.
 - **Home** with KPIs, ranked game cards with per-account progress, Up next, recent claims, and first-run, nothing-live, offline and many-account states.
 - **Up next** has one queue per account. Reorder by button or drag for this session, or Reset to Games order.
 - **Games** page: search or type a game to add it, reorder priority by button or drag, remove with confirm. Search runs locally and shows box art.
-- **Rewards** page: drops in progress with time left, and claim history filtered by game or account, 10 at a time.
+- **Rewards** page: drops in progress with time left, and claim history filtered by game or account.
 - **Settings:** language, time format, theme and timezone, Discord and notification toggles, update check and command, sign out. Accounts: add Twitch with a device code or Kick with cookies.txt, log in again, rename and remove. Health: miner, sidecar, scan and canary status, a filtered live event log in your language, and a full log download.
 - **Pause and resume mining per account** (`PUT /api/accounts/{id}/enabled`), with a Paused status in Settings and a Home notice when every account is paused. Accounts paused in 1.x stay paused and can now be resumed.
 - **Planner and runner.** `internal/plan` and `internal/runner` replace the watcher and scheduler: one runner per account, a global chosen-games list, inventory progress that overrides a stale claim log entry, a plan rescan every 15 minutes while watching, and claimed drops of chosen active campaigns in the plan result.

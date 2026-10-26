@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import { api } from '$lib/app';
 	import type { Claim, ClaimsQuery, ClaimsResp } from '$lib/api/types';
 	import BoxArt from '$lib/components/BoxArt.svelte';
@@ -10,7 +10,7 @@
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
-	import { inProgress, nextQuery, PAGE, queuedCount } from '$lib/rewards';
+	import { inProgress, pageCount, pageQuery, pageRange, PAGE_SIZES, queuedCount, readPageSize, validPageSize, writePageSize } from '$lib/rewards';
 
 	const live = getLive();
 
@@ -22,6 +22,11 @@
 
 	let game = $state('');
 	let account = $state('');
+	let search = $state('');
+	let q = $state('');
+	let page = $state(1);
+	let size = $state(readPageSize());
+	let timer: ReturnType<typeof setTimeout> | undefined;
 	let items = $state<Claim[]>([]);
 	let total = $state(0);
 	let games = $state<string[]>([]);
@@ -31,7 +36,9 @@
 	let failed = $state(false);
 	let seq = 0;
 
-	const filter = $derived<ClaimsQuery>({ game: game || undefined, account: account || undefined });
+	const filter = $derived<ClaimsQuery>({ game: game || undefined, account: account || undefined, q: q || undefined });
+	const pages = $derived(pageCount(total, size));
+	const range = $derived(pageRange(page, size, total));
 	const progress = $derived(inProgress(live.runners));
 	const queued = $derived(queuedCount(live.runners));
 	const kpi = $derived(live.overview?.kpis);
@@ -46,50 +53,72 @@
 
 	const key = (c: Claim) => `${c.account_id}:${c.benefit_id}`;
 
-	function apply(r: ClaimsResp, append: boolean): void {
-		if (append) {
-			const have = new Set(items.map(key));
-			items = [...items, ...r.items.filter((c) => !have.has(key(c)))];
-		} else {
-			const seen = new Set<string>();
-			items = r.items.filter((c) => !seen.has(key(c)) && seen.add(key(c)));
-		}
+	function apply(r: ClaimsResp): void {
+		const seen = new Set<string>();
+		items = r.items.filter((c) => !seen.has(key(c)) && seen.add(key(c)));
 		total = r.total;
 		games = r.games;
 		accts = r.accounts;
 	}
 
 	/** Out-of-order responses are dropped: only the latest request lands. */
-	async function load(append: boolean): Promise<void> {
+	async function load(): Promise<void> {
 		const mine = ++seq;
 		busy = true;
 		failed = false;
 		try {
-			const r = await api.claims(append ? nextQuery(filter, items.length) : nextQuery(filter, 0));
+			const r = await api.claims(pageQuery(filter, page, size));
 			if (mine !== seq) return;
-			apply(r, append);
+			if (r.items.length === 0 && r.total > 0 && page > 1) {
+				page = pageCount(r.total, size);
+				void load();
+				return;
+			}
+			apply(r);
 			loaded = true;
 		} catch {
 			if (mine !== seq) return;
-			if (!append) {
-				items = [];
-				total = 0;
-			}
+			items = [];
+			total = 0;
 			failed = true;
 		} finally {
 			if (mine === seq) busy = false;
 		}
 	}
 
+	function goto(p: number): void {
+		page = Math.min(Math.max(1, p), pages);
+		void load();
+	}
+
+	function onSearch(): void {
+		clearTimeout(timer);
+		timer = setTimeout(() => {
+			q = search.trim();
+			page = 1;
+			void load();
+		}, 250);
+	}
+
+	function pickSize(e: Event): void {
+		size = validPageSize(Number((e.currentTarget as HTMLSelectElement).value));
+		writePageSize(size);
+		page = 1;
+		void load();
+	}
+
+	onDestroy(() => clearTimeout(timer));
+
 	function pick(kind: 'game' | 'account', v: string): void {
 		if (kind === 'game') game = v;
 		else account = v;
-		void load(false);
+		page = 1;
+		void load();
 	}
 
 	$effect(() => {
 		untrack(() => {
-			void load(false);
+			void load();
 		});
 	});
 
@@ -97,14 +126,14 @@
 	$effect(() => {
 		const recent = live.recent;
 		untrack(() => {
-			if (!loaded) return;
+			if (!loaded || page !== 1 || search.trim() !== '' || q !== '') return;
 			const have = new Set(items.map(key));
 			const fresh = recent
 				.filter((c) => !have.has(key(c)))
 				.filter((c) => (!game || c.game === game) && (!account || c.account_id === account))
 				.filter((c) => items.length === 0 || Date.parse(c.claimed_at) >= Date.parse(items[0].claimed_at));
 			if (fresh.length === 0) return;
-			items = [...fresh, ...items];
+			items = [...fresh, ...items].slice(0, size);
 			total += fresh.length;
 		});
 	});
@@ -115,6 +144,7 @@
 	const known = (id: string) => live.accounts.some((a) => a.id === id);
 	const removed = (c: Claim) => c.account_name === '' || (live.accounts.length > 0 && !known(c.account_id));
 	const anyFilter = $derived(game !== '' || account !== '');
+	const searching = $derived(q !== '');
 </script>
 
 <PageHead title={t('nav.rewards')} status={head} {stamp}>
@@ -168,8 +198,16 @@
 				>{t('rewards.claimed')} <span class="n">{formatInt(total)}</span>
 			</h2>
 		</div>
-		{#if games.length > 0 || accts.length > 0 || anyFilter}
+		{#if games.length > 0 || accts.length > 0 || anyFilter || searching || total > 0}
 			<div class="filters">
+				<input
+					class="search"
+					type="search"
+					placeholder={t('rewards.search_placeholder')}
+					aria-label={t('rewards.search_placeholder')}
+					bind:value={search}
+					oninput={onSearch}
+				/>
 				<div class="fgroup" role="group" aria-label={t('rewards.filter_game')}>
 					<span>{t('rewards.filter_game')}</span>
 					<button type="button" class="chip" class:on={game === ''} aria-pressed={game === ''} onclick={() => pick('game', '')}
@@ -222,19 +260,29 @@
 					</div>
 				{/each}
 			{:else if loaded && !busy && !failed}
-				<div class="empty">{anyFilter ? t('rewards.empty_filtered') : t('rewards.empty')}</div>
+				<div class="empty">{searching ? t('rewards.no_match') : anyFilter ? t('rewards.empty_filtered') : t('rewards.empty')}</div>
 			{/if}
 			{#if failed}
 				<div class="empty err" role="status">
 					{t('rewards.failed')}
-					<button type="button" class="btn" disabled={busy} onclick={() => load(items.length > 0)}>{t('rewards.retry')}</button>
+					<button type="button" class="btn" disabled={busy} onclick={() => load()}>{t('rewards.retry')}</button>
 				</div>
 			{/if}
-			{#if items.length > 0}
+			{#if total > PAGE_SIZES[0]}
 				<div class="hist-foot">
-					<span>{t('rewards.showing', { n: formatInt(items.length), total: formatInt(total) })}</span>
-					{#if items.length < total}
-						<button type="button" class="btn" disabled={busy} onclick={() => load(true)}>{t('rewards.load_more')}</button>
+					<span class="rng">{t('rewards.range', { from: formatInt(range.from), to: formatInt(range.to), total: formatInt(total) })}</span>
+					<label class="per">
+						<span>{t('rewards.per_page')}</span>
+						<select value={size} onchange={pickSize} disabled={busy}>
+							{#each PAGE_SIZES as n}<option value={n}>{n}</option>{/each}
+						</select>
+					</label>
+					{#if pages > 1}
+						<div class="nav">
+							<button type="button" class="btn" disabled={busy || page <= 1} onclick={() => goto(page - 1)}>{t('rewards.prev')}</button>
+							<span>{t('rewards.page_of', { page: formatInt(page), pages: formatInt(pages) })}</span>
+							<button type="button" class="btn" disabled={busy || page >= pages} onclick={() => goto(page + 1)}>{t('rewards.next')}</button>
+						</div>
 					{/if}
 				</div>
 			{/if}
@@ -524,11 +572,46 @@
 	.empty.err {
 		color: var(--red);
 	}
+	.search {
+		flex: 1 1 100%;
+		min-width: 0;
+		max-width: 320px;
+		font-size: 13px;
+		color: var(--text);
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		padding: 4px 10px;
+	}
+	.search:focus-visible,
+	.per select:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
+	.per {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.per select {
+		font-size: 12px;
+		color: var(--text);
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		padding: 2px 6px;
+	}
+	.nav {
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		margin-left: auto;
+	}
 	.hist-foot {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
+		flex-wrap: wrap;
+		gap: 8px 16px;
 		padding: 10px 14px;
 		font-size: 12px;
 		color: var(--t3);

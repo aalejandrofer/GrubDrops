@@ -122,6 +122,8 @@ describe('client', () => {
 		expect(calls[1].url).toBe('/api/claims?limit=10');
 		expect(calls[2].url).toBe('/api/claims');
 		expect(calls[3].url).toBe('/api/claims?game=Rust&limit=10&offset=0');
+		await api.claims({ q: 'a b%', limit: 20 });
+		expect(calls[4].url).toBe('/api/claims?q=a+b%25&limit=20');
 	});
 
 	it('session authed true re-arms the 401 callback', async () => {
