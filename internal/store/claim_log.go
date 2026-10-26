@@ -73,6 +73,10 @@ func (l *ClaimLog) Recent(ctx context.Context, limit int) ([]ClaimEntry, error) 
 	if err != nil {
 		return nil, err
 	}
+	return claimEntries(rows), nil
+}
+
+func claimEntries(rows []gen.ClaimLog) []ClaimEntry {
 	out := make([]ClaimEntry, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, ClaimEntry{
@@ -82,7 +86,39 @@ func (l *ClaimLog) Recent(ctx context.Context, limit int) ([]ClaimEntry, error) 
 			Code: r.Code, Source: r.Source, ClaimedAt: time.Unix(r.ClaimedAt, 0),
 		})
 	}
-	return out, nil
+	return out
+}
+
+// ClaimFilter selects a page of claim history. An empty Game or AccountID
+// matches any.
+type ClaimFilter struct {
+	Game, AccountID string
+	Limit, Offset   int
+}
+
+// Page returns one page of claims, newest first, and the total row count
+// that matches the filter.
+func (l *ClaimLog) Page(ctx context.Context, f ClaimFilter) ([]ClaimEntry, int, error) {
+	total, err := l.Q.CountClaimLogFiltered(ctx, gen.CountClaimLogFilteredParams{Game: f.Game, AccountID: f.AccountID})
+	if err != nil {
+		return nil, 0, err
+	}
+	rows, err := l.Q.ListClaimLogPage(ctx, gen.ListClaimLogPageParams{
+		Game: f.Game, AccountID: f.AccountID, Limit: int64(f.Limit), Offset: int64(f.Offset),
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	return claimEntries(rows), int(total), nil
+}
+
+// Games lists the distinct non-empty games with a claim, sorted.
+func (l *ClaimLog) Games(ctx context.Context) ([]string, error) {
+	g, err := l.Q.ListClaimLogGames(ctx)
+	if g == nil {
+		g = []string{}
+	}
+	return g, err
 }
 
 func (l *ClaimLog) CountSince(ctx context.Context, since time.Time) (int, error) {

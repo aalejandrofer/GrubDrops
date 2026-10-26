@@ -82,3 +82,22 @@ DELETE FROM chosen_games;
 
 -- name: AddChosenGame :exec
 INSERT INTO chosen_games (game_id, rank) VALUES (?, ?);
+
+-- name: ListClaimLogPage :many
+-- An empty game or account_id matches any.
+SELECT * FROM claim_log
+WHERE (sqlc.arg(game) = '' OR game = sqlc.arg(game))
+  AND (sqlc.arg(account_id) = '' OR account_id = sqlc.arg(account_id))
+ORDER BY claimed_at DESC, benefit_id ASC
+LIMIT sqlc.arg(limit) OFFSET sqlc.arg(offset);
+
+-- name: CountClaimLogFiltered :one
+SELECT COUNT(*) FROM claim_log
+WHERE (sqlc.arg(game) = '' OR game = sqlc.arg(game))
+  AND (sqlc.arg(account_id) = '' OR account_id = sqlc.arg(account_id));
+
+-- name: ListClaimLogGames :many
+SELECT DISTINCT game FROM claim_log WHERE game <> '' ORDER BY game ASC;
+
+-- name: ListAccountNames :many
+SELECT id, display_name FROM accounts ORDER BY created_at ASC, id ASC;

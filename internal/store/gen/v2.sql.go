@@ -48,6 +48,24 @@ func (q *Queries) ClearChosenGames(ctx context.Context) error {
 	return err
 }
 
+const countClaimLogFiltered = `-- name: CountClaimLogFiltered :one
+SELECT COUNT(*) FROM claim_log
+WHERE (?1 = '' OR game = ?1)
+  AND (?2 = '' OR account_id = ?2)
+`
+
+type CountClaimLogFilteredParams struct {
+	Game      interface{} `json:"game"`
+	AccountID interface{} `json:"account_id"`
+}
+
+func (q *Queries) CountClaimLogFiltered(ctx context.Context, arg CountClaimLogFilteredParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countClaimLogFiltered, arg.Game, arg.AccountID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countClaimLogSince = `-- name: CountClaimLogSince :one
 SELECT COUNT(*) FROM claim_log WHERE claimed_at >= ?
 `
@@ -66,6 +84,38 @@ DELETE FROM drop_states WHERE account_id = ?
 func (q *Queries) DeleteDropStatesForAccount(ctx context.Context, accountID string) error {
 	_, err := q.db.ExecContext(ctx, deleteDropStatesForAccount, accountID)
 	return err
+}
+
+const listAccountNames = `-- name: ListAccountNames :many
+SELECT id, display_name FROM accounts ORDER BY created_at ASC, id ASC
+`
+
+type ListAccountNamesRow struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+}
+
+func (q *Queries) ListAccountNames(ctx context.Context) ([]ListAccountNamesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAccountNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAccountNamesRow
+	for rows.Next() {
+		var i ListAccountNamesRow
+		if err := rows.Scan(&i.ID, &i.DisplayName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listAccountScans = `-- name: ListAccountScans :many
@@ -196,6 +246,89 @@ func (q *Queries) ListClaimLogBenefitIDs(ctx context.Context, accountID string) 
 			return nil, err
 		}
 		items = append(items, benefit_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listClaimLogGames = `-- name: ListClaimLogGames :many
+SELECT DISTINCT game FROM claim_log WHERE game <> '' ORDER BY game ASC
+`
+
+func (q *Queries) ListClaimLogGames(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listClaimLogGames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var game string
+		if err := rows.Scan(&game); err != nil {
+			return nil, err
+		}
+		items = append(items, game)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listClaimLogPage = `-- name: ListClaimLogPage :many
+SELECT account_id, benefit_id, platform, game, campaign_id, campaign_name, benefit_name, image_url, code, source, claimed_at FROM claim_log
+WHERE (?1 = '' OR game = ?1)
+  AND (?2 = '' OR account_id = ?2)
+ORDER BY claimed_at DESC, benefit_id ASC
+LIMIT ?4 OFFSET ?3
+`
+
+type ListClaimLogPageParams struct {
+	Game      interface{} `json:"game"`
+	AccountID interface{} `json:"account_id"`
+	Offset    int64       `json:"offset"`
+	Limit     int64       `json:"limit"`
+}
+
+// An empty game or account_id matches any.
+func (q *Queries) ListClaimLogPage(ctx context.Context, arg ListClaimLogPageParams) ([]ClaimLog, error) {
+	rows, err := q.db.QueryContext(ctx, listClaimLogPage,
+		arg.Game,
+		arg.AccountID,
+		arg.Offset,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClaimLog
+	for rows.Next() {
+		var i ClaimLog
+		if err := rows.Scan(
+			&i.AccountID,
+			&i.BenefitID,
+			&i.Platform,
+			&i.Game,
+			&i.CampaignID,
+			&i.CampaignName,
+			&i.BenefitName,
+			&i.ImageUrl,
+			&i.Code,
+			&i.Source,
+			&i.ClaimedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

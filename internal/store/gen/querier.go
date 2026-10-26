@@ -22,6 +22,7 @@ type Querier interface {
 	ClearChosenGames(ctx context.Context) error
 	ClearForceChannels(ctx context.Context, accountID string) error
 	ClearGlobalGames(ctx context.Context) error
+	CountClaimLogFiltered(ctx context.Context, arg CountClaimLogFilteredParams) (int64, error)
 	CountClaimLogSince(ctx context.Context, claimedAt int64) (int64, error)
 	// Distinct benefits already claimed by any account in this campaign.
 	// The dashboard divides this by len(Benefits) to render the
@@ -64,6 +65,7 @@ type Querier interface {
 	// Per-account link state for a campaign, joined with the account handle.
 	// Drives the per-account connect chips on the not-linked table.
 	ListAccountLinksForCampaign(ctx context.Context, campaignID string) ([]ListAccountLinksForCampaignRow, error)
+	ListAccountNames(ctx context.Context) ([]ListAccountNamesRow, error)
 	ListAccountScans(ctx context.Context) ([]AccountScan, error)
 	ListActiveCampaignsForPlatform(ctx context.Context, arg ListActiveCampaignsForPlatformParams) ([]Campaign, error)
 	ListAllAccountChannels(ctx context.Context) ([]ListAllAccountChannelsRow, error)
@@ -73,6 +75,9 @@ type Querier interface {
 	ListBenefitsForCampaign(ctx context.Context, campaignID string) ([]Benefit, error)
 	ListChosenGames(ctx context.Context) ([]ListChosenGamesRow, error)
 	ListClaimLogBenefitIDs(ctx context.Context, accountID string) ([]string, error)
+	ListClaimLogGames(ctx context.Context) ([]string, error)
+	// An empty game or account_id matches any.
+	ListClaimLogPage(ctx context.Context, arg ListClaimLogPageParams) ([]ClaimLog, error)
 	// All benefit ids this account already has a claim row for. The watcher
 	// skips re-mining these: a claim is keyed by benefit id which is unique per
 	// drop instance, so owning a claim means THIS exact drop is done.

@@ -235,3 +235,49 @@ func TestChosenGames_SetDedupesKeepsFirst(t *testing.T) {
 	require.Equal(t, "g2", got[0].ID)
 	require.Equal(t, "g1", got[1].ID)
 }
+
+func TestClaimLog_PageFilters(t *testing.T) {
+	_, q := openV2(t)
+	l := NewClaimLog(q)
+	ctx := context.Background()
+	base := time.Unix(1_700_000_000, 0)
+	rows := []ClaimEntry{
+		{AccountID: "a1", BenefitID: "b1", Game: "Rust", ClaimedAt: base.Add(1 * time.Second)},
+		{AccountID: "a2", BenefitID: "b2", Game: "Rust", ClaimedAt: base.Add(2 * time.Second)},
+		{AccountID: "a1", BenefitID: "b3", Game: "Apex", ClaimedAt: base.Add(3 * time.Second)},
+		{AccountID: "a2", BenefitID: "b4", Game: "Apex", ClaimedAt: base.Add(4 * time.Second)},
+		{AccountID: "a1", BenefitID: "b5", Game: "Rust", ClaimedAt: base.Add(5 * time.Second)},
+	}
+	for _, e := range rows {
+		e.Platform, e.Source = "twitch", ClaimSourceGrubDrops
+		require.NoError(t, l.Record(ctx, e))
+	}
+	ids := func(es []ClaimEntry) []string {
+		out := []string{}
+		for _, e := range es {
+			out = append(out, e.BenefitID)
+		}
+		return out
+	}
+	cases := []struct {
+		name  string
+		f     ClaimFilter
+		want  []string
+		total int
+	}{
+		{"none", ClaimFilter{Limit: 10}, []string{"b5", "b4", "b3", "b2", "b1"}, 5},
+		{"game", ClaimFilter{Game: "Rust", Limit: 10}, []string{"b5", "b2", "b1"}, 3},
+		{"account", ClaimFilter{AccountID: "a2", Limit: 10}, []string{"b4", "b2"}, 2},
+		{"both", ClaimFilter{Game: "Apex", AccountID: "a1", Limit: 10}, []string{"b3"}, 1},
+		{"page", ClaimFilter{Limit: 2, Offset: 2}, []string{"b3", "b2"}, 5},
+	}
+	for _, c := range cases {
+		got, total, err := l.Page(ctx, c.f)
+		require.NoError(t, err, c.name)
+		require.Equal(t, c.want, ids(got), c.name)
+		require.Equal(t, c.total, total, c.name)
+	}
+	games, err := l.Games(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []string{"Apex", "Rust"}, games)
+}
