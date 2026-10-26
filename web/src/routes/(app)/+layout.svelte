@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { onDestroy, setContext, untrack } from 'svelte';
+	import { onDestroy, setContext } from 'svelte';
 	import { api, session } from '$lib/app';
-	import { Unreachable } from '$lib/api/client';
-	import type { UpdateInfo } from '$lib/api/types';
+		import type { UpdateInfo } from '$lib/api/types';
 	import TopBar from '$lib/components/TopBar.svelte';
-	import { LIVE_KEY } from '$lib/live-context';
+	import { LIVE_KEY, NET_KEY } from '$lib/live-context';
+	import { retryUnreachable } from '$lib/retry';
 	import { createLive, type EventSourceLike } from '$lib/stores/live.svelte';
 
 	let { children } = $props();
@@ -17,9 +17,13 @@
 	});
 	setContext(LIVE_KEY, live);
 
+	const net = $state({ down: false, retryIn: 0 });
+	setContext(NET_KEY, net);
+
 	let phase = $state<'boot' | 'offline' | 'ready'>('boot');
 	let update = $state<UpdateInfo | null>(null);
 	let started = false;
+	let stopRetry: (() => void) | undefined;
 
 	function startLive(): void {
 		if (started) return;
@@ -28,15 +32,19 @@
 	}
 
 	async function boot(): Promise<void> {
-		try {
-			await session.load();
-		} catch (e) {
-			if (!(e instanceof Unreachable)) throw e;
-			// Offline: the live store retries and reports it; boot again once it reconnects.
-			phase = 'offline';
-			startLive();
-			return;
-		}
+		// While /api/session is Unreachable, show the offline header and retry every 5 s.
+		const r = retryUnreachable(() => session.load(), {
+			onState: (down, retryIn) => {
+				net.down = down;
+				net.retryIn = retryIn;
+				if (down) {
+					phase = 'offline';
+					startLive();
+				}
+			}
+		});
+		stopRetry = r.stop;
+		if (!(await r.done)) return;
 		if (session.setupNeeded) return void goto('/setup');
 		if (!session.authed) return void goto('/login');
 		phase = 'ready';
@@ -49,11 +57,10 @@
 
 	void boot();
 
-	$effect(() => {
-		if (phase === 'offline' && live.updatedAt !== null && !live.unreachable) untrack(() => void boot());
+	onDestroy(() => {
+		stopRetry?.();
+		live.stop();
 	});
-
-	onDestroy(() => live.stop());
 </script>
 
 {#if phase !== 'boot'}

@@ -1,16 +1,13 @@
 <script lang="ts">
 	let { src, name, size }: { src: string | null; name: string; size: 'lg' | 'sm' } = $props();
-	let failed = $state(false);
+	let failedSrc = $state<string | null>(null);
+	const failed = $derived(failedSrc === src);
 	const initial = $derived(Array.from(name.trim())[0]?.toUpperCase() ?? '?');
-	$effect(() => {
-		src;
-		failed = false;
-	});
 </script>
 
 <div class="art {size}">
 	{#if src && !failed}
-		<img {src} alt="" loading="lazy" onerror={() => (failed = true)} />
+		<img {src} alt="" loading="lazy" onerror={() => (failedSrc = src)} />
 	{:else}
 		<span class="fallback" aria-hidden="true">{initial}</span>
 	{/if}
@@ -22,7 +19,7 @@
 		overflow: hidden;
 		width: 100%;
 		height: 100%;
-		background: #22262e;
+		background: var(--art-bg);
 	}
 	.lg {
 		min-height: 150px;

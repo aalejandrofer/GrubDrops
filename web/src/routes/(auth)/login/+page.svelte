@@ -4,23 +4,26 @@
 	import { onMount } from 'svelte';
 	import { api, session } from '$lib/app';
 	import { ApiError, Unreachable } from '$lib/api/client';
+	import { retryUnreachable } from '$lib/retry';
 	import { t } from '$lib/i18n/index.svelte';
 	import '../auth.css';
 
 	let password = $state('');
 	let error = $state('');
 	let busy = $state(false);
+	let down = $state(false);
+	const shown = $derived(error || (down ? t('auth.unreachable') : ''));
 	const ssoFailed = $derived(page.url.searchParams.get('login_error') === 'oidc');
 
-	onMount(async () => {
-		try {
-			await session.load();
-		} catch {
-			error = t('auth.unreachable');
-			return;
-		}
-		if (session.setupNeeded) void goto('/setup');
-		else if (session.authed) void goto('/');
+	onMount(() => {
+		const r = retryUnreachable(() => session.load(), { onState: (d) => (down = d) });
+		void r.done.then((ok) => {
+			if (!ok) return;
+			if (session.setupNeeded) void goto('/setup');
+			else if (session.authed) void goto('/');
+		})
+			.catch(() => {});
+		return r.stop;
 	});
 
 	async function submit(e: SubmitEvent): Promise<void> {
@@ -47,8 +50,8 @@
 <form onsubmit={submit}>
 	<label for="pw">{t('auth.password')}</label>
 	<!-- svelte-ignore a11y_autofocus -->
-	<input id="pw" type="password" autocomplete="current-password" autofocus required bind:value={password} aria-invalid={error ? true : undefined} />
-	{#if error}<p class="err" role="alert">{error}</p>{/if}
+	<input id="pw" type="password" autocomplete="current-password" autofocus required bind:value={password} aria-invalid={shown ? true : undefined} />
+	{#if shown}<p class="err" role="alert">{shown}</p>{/if}
 	<button type="submit" class="primary" disabled={busy}>{t('auth.login_submit')}</button>
 </form>
 {#if session.oidc.enabled}

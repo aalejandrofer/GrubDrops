@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import { api, session } from '$lib/app';
 	import { ApiError, Unreachable } from '$lib/api/client';
+	import { retryUnreachable } from '$lib/retry';
 	import { t } from '$lib/i18n/index.svelte';
 	import '../auth.css';
 
@@ -10,15 +11,17 @@
 	let confirm = $state('');
 	let error = $state('');
 	let busy = $state(false);
+	let down = $state(false);
+	const shown = $derived(error || (down ? t('auth.unreachable') : ''));
 
-	onMount(async () => {
-		try {
-			await session.load();
-		} catch {
-			error = t('auth.unreachable');
-			return;
-		}
-		if (!session.setupNeeded) void goto(session.authed ? '/' : '/login');
+	onMount(() => {
+		const r = retryUnreachable(() => session.load(), { onState: (d) => (down = d) });
+		void r.done.then((ok) => {
+			if (!ok) return;
+			if (!session.setupNeeded) void goto(session.authed ? '/' : '/login');
+		})
+			.catch(() => {});
+		return r.stop;
 	});
 
 	async function submit(e: SubmitEvent): Promise<void> {
@@ -55,6 +58,6 @@
 	<input id="pw" type="password" autocomplete="new-password" autofocus bind:value={password} />
 	<label for="pw2">{t('auth.confirm')}</label>
 	<input id="pw2" type="password" autocomplete="new-password" bind:value={confirm} />
-	{#if error}<p class="err" role="alert">{error}</p>{/if}
+	{#if shown}<p class="err" role="alert">{shown}</p>{/if}
 	<button type="submit" class="primary" disabled={busy}>{t('auth.setup_submit')}</button>
 </form>

@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import { clock } from '$lib/format';
 	import { t } from '$lib/i18n/index.svelte';
-	import { getLive } from '$lib/live-context';
+	import { getLive, getNet } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
 	import { headerTone, problemChip, statusText } from '$lib/status';
 	import CopyCommand from './CopyCommand.svelte';
@@ -10,9 +10,12 @@
 
 	let { title, stamp, children }: { title: string; stamp?: string; children?: Snippet } = $props();
 	const live = getLive();
+	const net = getNet();
+	const down = $derived(live.unreachable || net.down);
+	const retryIn = $derived(live.unreachable ? live.retryIn : net.retryIn);
 
-	const tone = $derived(headerTone(live.overview, live.unreachable));
-	const text = $derived(statusText(live.overview, live.unreachable));
+	const tone = $derived(headerTone(live.overview, down));
+	const text = $derived(statusText(live.overview, down));
 	const chip = $derived(problemChip(live.overview));
 	const last = $derived(
 		live.updatedAt === null
@@ -25,22 +28,22 @@
 	<div class="head-l">
 		<h1>{title}</h1>
 		{#if text}<span class="now {tone}"><span class="dot"></span>{text}</span>{/if}
-		{#if live.unreachable}
+		{#if down}
 			<span class="alert red" role="status"
-				><Icon name="alert" />{t('status.unreachable', { s: live.retryIn })}</span
+				><Icon name="alert" />{t('status.unreachable', { s: retryIn })}</span
 			>
 		{:else if chip}
 			<a href={chip.href} class="alert"><Icon name="alert" />{chip.text}</a>
 		{/if}
 	</div>
-	{#if live.unreachable}
+	{#if down}
 		{#if last}<span class="stamp last">{last}</span>{/if}
 	{:else if stamp}
 		<span class="stamp">{stamp}</span>
 	{/if}
 </div>
 
-{#if live.unreachable}
+{#if down}
 	<p class="help">
 		<Icon name="terminal" />
 		{t('status.check_container')}
@@ -48,7 +51,7 @@
 	</p>
 {/if}
 
-<div class="body" class:stale={live.unreachable} inert={live.unreachable}>
+<div class="body" class:stale={down} inert={down}>
 	{@render children?.()}
 </div>
 
