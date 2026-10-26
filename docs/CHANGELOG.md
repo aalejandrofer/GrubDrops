@@ -6,7 +6,7 @@ All notable changes to GrubDrops.
 
 ### Added
 
-- v2 planner (`internal/plan`) and per-account runner + pool (`internal/runner`), replacing the watcher and scheduler. Not wired in yet (rebuild/v2).
+- v2 planner (`internal/plan`) and per-account runner + pool (`internal/runner`), replacing the watcher and scheduler.
 - v2 collection tables (migration 0016) and a one-time `<db>.pre-v2` backup written by `store.Open` before an existing database migrates.
 - v2 store wrappers for the claim log, drop states, watch minutes, account scans, chosen games and skips.
 - v2 planner: inventory progress overrides a stale claim log entry, and `plan.Result` lists claimed drops of chosen active campaigns.
@@ -22,7 +22,7 @@ All notable changes to GrubDrops.
 - v2 JSON API: accounts with rename and delete, Twitch TV device-code login, and Kick login from a cookies.txt export (`/api/accounts`).
 - v2 JSON API: settings with notification toggles, and an optional daily Discord summary at midnight in the configured timezone (`/api/settings`).
 - v2 JSON API: health events and log download, canary run-now, update check with release notes, and the Kick image proxy.
-- v2 roster builder (`cmd/miner`): builds the per-account runners wired to the collector and the SSE hub, with claim events and per-account reload. Not wired into main yet (rebuild/v2).
+- v2 roster builder (`cmd/miner`): builds the per-account runners wired to the collector and the SSE hub, with claim events and per-account reload.
 
 ### Changed
 
@@ -53,6 +53,7 @@ All notable changes to GrubDrops.
 ### Docs
 
 - Added a warning that GrubDrops is currently not working as expected.
+- README describes the v2 global chosen-games list, the planner and the runner.
 
 ## [1.4.2] — 2026-09-28
 

@@ -161,47 +161,41 @@ errors), re-export and paste again.
 
 ## Pick what to mine
 
-GrubDrops is whitelist-driven: it only discovers and mines games you opt into,
-so **a fresh install mines nothing until you whitelist at least one game**. Until
-then `/drops` shows a prompt pointing you here, and accounts sit in a *"no games
-yet"* state (not an error).
+GrubDrops mines only the games you choose. A fresh install mines nothing until
+you add at least one game, and until then every account shows a *no games*
+state, which is not an error.
 
-Add games either way — by name, no need to wait for a campaign to appear first:
-
-- **Global** (applies to every account): **Priority → add by name**.
-- **Per account** (overrides the global list): **Accounts → pick an account → add by name**.
-
-Discovery starts crawling that game on the next tick and live campaigns show up
-on `/drops`.
+The chosen games form one global priority list that every account shares. Add
+a game by name; it does not need a live campaign first. Reorder the list to
+change what mines first. Each change reloads the runners in the background.
 
 ## How it works
 
-- **Twitch:** device-code login, then GraphQL + PubSub to track progress and claim.
-- **Kick:** detection/claims ride a Chrome-TLS-fingerprinted HTTP client (`utls`) —
-  no Cloudflare dance, no browser. Watch-time needs a real player, so it runs in an
-  on-demand per-account Chrome sidecar (IVS playback) the miner creates/stops over
-  the docker socket; a sweep removes deleted accounts' containers.
-- **Discovery** scrapes both catalogs into SQLite every few minutes.
+- **Twitch:** device-code login, then GraphQL and PubSub to track progress and claim.
+- **Kick:** detection and claims use a Chrome-TLS-fingerprinted HTTP client
+  (`utls`) with no browser. Watch time needs a real player, so it runs in an
+  on-demand Chrome sidecar per account (IVS playback). The miner starts and
+  stops these over the docker socket, and a sweep removes the containers of
+  deleted accounts.
+- **Runner:** each account has one runner. It scans the account's campaigns and
+  inventory, asks the planner for a queue, watches the top drop and claims it
+  when done. It rebuilds the plan every 15 minutes while it watches.
 
 ## Priority logic
 
-Each account mines one campaign at a time. When several whitelisted campaigns
-are eligible, GrubDrops picks in this order:
+The planner orders each account's drops like this:
 
 ```
-1. Campaign, by your priority mode (Settings):
-   ├─ ordered (default)  → your whitelist rank, top of the list first
-   ├─ ending_soonest     → soonest deadline first
-   └─ low_avbl_first     → fewest available channels first
-2. Tiebreak: closest to a claim (fewest watch-minutes remaining)
-3. Restricted (team) campaigns ahead of open ones (both platforms)
-4. Channel: a live stream confirmed on the campaign's game,
-   highest viewer count first (Twitch also probes for one
-   actually serving the target drop)
+1. Game rank in your chosen-games list, top first
+2. Restricted (team) campaigns ahead of open ones
+3. Closest to a claim (fewest watch minutes remaining)
+4. Within a campaign, the shortest drop first
 ```
 
-Whitelist and priority are per-account, falling back to the global list. A
-campaign with no live stream is skipped, not slept on.
+Drops that cannot progress go to a blocked list with a reason: the account is
+not linked, an earlier drop must be claimed first, or the runner gave up on it.
+A campaign with no live stream is passed over for the next one in the queue.
+You can reorder an account's up-next list for the current session.
 
 ## Configuration
 
