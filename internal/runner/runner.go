@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/plan"
@@ -28,8 +29,9 @@ var (
 	// campaigns with no live stream, or awaiting a channel connect.
 	recheckInterval = 5 * time.Minute
 	stepErrBackoff  = 5 * time.Second
-	// rescanEvery is how often a watching runner rebuilds the plan.
-	rescanEvery = 15 * time.Minute
+	// rescanEvery is how often a watching runner rebuilds the plan. Rescan
+	// forces one sooner.
+	rescanEvery = 12 * time.Hour
 )
 
 const (
@@ -60,6 +62,8 @@ type Runner struct {
 	sleepNoStream bool
 	lastBeatAt    time.Time     // when the current watch last beaconed; zero = not yet
 	wake          chan struct{} // signalled on every state change, cap 1
+	rescan        chan struct{} // signalled by Rescan, cap 1
+	forceScan     atomic.Bool   // set by Rescan; the next watch poll rescans
 	tramp         *trampoline   // PubSub forwarder for this account; nil = none
 	queue         []plan.Target
 	blocked       []plan.Blocked
@@ -115,6 +119,7 @@ func New(cfg Config) *Runner {
 		noStream: map[string]bool{},
 		stalled:  map[string]time.Time{},
 		wake:     make(chan struct{}, 1),
+		rescan:   make(chan struct{}, 1),
 
 		lastMilestone: -1,
 	}
@@ -141,6 +146,16 @@ func (r *Runner) State() State {
 }
 
 // Snapshot returns a copy of the observable state.
+// Rescan asks the runner to rebuild its plan now: an idle wait ends at once,
+// and a watch rescans on its next poll.
+func (r *Runner) Rescan() {
+	r.forceScan.Store(true)
+	select {
+	case r.rescan <- struct{}{}:
+	default:
+	}
+}
+
 func (r *Runner) Snapshot() Snapshot {
 	r.mu.Lock()
 	s := Snapshot{
@@ -494,6 +509,9 @@ func (r *Runner) Run(ctx context.Context) error {
 				timer.Stop()
 				return exit()
 			case <-timer.C:
+			case <-r.rescan:
+				timer.Stop()
+				r.forceScan.Store(false)
 			}
 			r.mu.Lock()
 			r.nextRecheck = time.Time{}

@@ -333,6 +333,18 @@ func (p *Pool) Snapshots() []Snapshot {
 	return out
 }
 
+// RescanAll asks every unit that can scan to rebuild its plan now.
+func (p *Pool) RescanAll() {
+	p.mu.Lock()
+	units := slices.Clone(p.units)
+	p.mu.Unlock()
+	for _, u := range units {
+		if r, ok := u.current().Unit.(interface{ Rescan() }); ok {
+			r.Rescan()
+		}
+	}
+}
+
 // SetOrder sets the session-only Up next order for an account.
 func (p *Pool) SetOrder(accountID string, benefitIDs []string) {
 	p.mu.Lock()

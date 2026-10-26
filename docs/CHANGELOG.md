@@ -5,7 +5,7 @@ All notable changes to GrubDrops.
 ## [Unreleased]
 
 ### Added
-
+- **Scan now.** A button at the top right of Games asks every account to rescan campaigns at once. It replaces the "GrubDrops only mines these" line.
 - **Up next on Rewards.** A read-only Up next section lists each account's queued drops (5 per account, with Show more), replacing the "more drops queued" line.
 - **Home game card queue.** A waiting game's card lists at most 3 queued drops and counts the rest.
 - **Rewards search.** A search box filters claim history by reward, campaign or game on the server, so it covers every claim, not just the loaded ones.
@@ -27,6 +27,8 @@ All notable changes to GrubDrops.
 - **Shared locales.** The web app reads `internal/i18n/locales`, and `npm run check` fails on missing, unused or mismatched keys.
 
 ### Changed
+- **Scan cadence.** A watching account now rescans campaigns every 12 hours instead of every 15 minutes. Use Scan now on Games for a sooner one.
+- **Health log colors.** Each log line is tinted by its type: red for errors, amber for warnings, green for claims. Normal lines use the main text color instead of grey.
 
 - **Home card size.** Cards no longer show a rank number, and card size follows the order on the page, so an idle top-priority game listed below active ones is small. A waiting game now lists above games with no campaign even when nothing is queued for it yet.
 - **Up next account names.** Each name is tinted by platform: purple for Twitch, green for Kick.

@@ -12,6 +12,7 @@ type RunnerPool interface {
 	SetOrder(accountID string, benefitIDs []string)
 	ResetOrder(accountID string)
 	OrderFunc(accountID string) func() []string
+	RescanAll()
 }
 
 var _ RunnerPool = (*runner.Pool)(nil)

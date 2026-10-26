@@ -59,6 +59,7 @@ func (f *fakePool) ResetOrder(id string) {
 	f.resets = append(f.resets, id)
 }
 
+func (*fakePool) RescanAll() {}
 func (f *fakePool) OrderFunc(id string) func() []string {
 	return func() []string {
 		f.mu.Lock()

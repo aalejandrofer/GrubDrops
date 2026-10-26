@@ -61,6 +61,7 @@ func (s *server) routesGames(r chi.Router) {
 	r.Post("/games", s.handleGamesAdd)
 	r.Put("/games", s.handleGamesReorder)
 	r.Get("/games/search", s.handleGamesSearch)
+	r.Post("/games/scan", s.handleGamesScan)
 }
 
 func (s *server) gamesChanged() {
@@ -218,6 +219,12 @@ func (s *server) handleGamesReorder(w http.ResponseWriter, r *http.Request) {
 	}
 	s.gamesChanged()
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleGamesScan asks every runner to rescan campaigns now.
+func (s *server) handleGamesScan(w http.ResponseWriter, r *http.Request) {
+	s.d.Pool.RescanAll()
+	w.WriteHeader(http.StatusAccepted)
 }
 
 // validGameIDs writes 400 and returns false when ids is missing or names a

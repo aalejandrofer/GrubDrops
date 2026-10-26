@@ -57,6 +57,7 @@ export interface Api {
 	resetOrder(accountId: string): Promise<void>;
 	games(): Promise<GamesResp>;
 	addGame(name: string): Promise<Game>;
+	scanGames(): Promise<void>;
 	setGames(ids: string[]): Promise<void>;
 	searchGames(q: string): Promise<SearchHit[]>;
 	claims(q: ClaimsQuery): Promise<ClaimsResp>;
@@ -172,6 +173,7 @@ export function createClient(opts: ClientOpts): Api {
 		resetOrder: (id) => send('DELETE', `/api/runners/${enc(id)}/order`) as Promise<void>,
 		games: () => get('/api/games'),
 		addGame: (name) => post('/api/games', { name }),
+		scanGames: () => post('/api/games/scan'),
 		setGames: (ids) => send('PUT', '/api/games', { ids }) as Promise<void>,
 		searchGames: (q) => get(`/api/games/search?q=${enc(q)}`),
 		claims(q) {

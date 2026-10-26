@@ -9,7 +9,13 @@
 	import CopyCommand from './CopyCommand.svelte';
 	import Icon from './Icon.svelte';
 
-	let { title, stamp, status, children }: { title: string; stamp?: string; status?: string; children?: Snippet } = $props();
+	let {
+		title,
+		stamp,
+		status,
+		action,
+		children
+	}: { title: string; stamp?: string; status?: string; action?: Snippet; children?: Snippet } = $props();
 	const live = getLive();
 	const net = getNet();
 	const down = $derived(live.unreachable || net.down);
@@ -39,6 +45,8 @@
 	</div>
 	{#if down}
 		{#if last}<span class="stamp last">{last}</span>{/if}
+	{:else if action}
+		{@render action()}
 	{:else if stamp}
 		<span class="stamp">{stamp}</span>
 	{/if}

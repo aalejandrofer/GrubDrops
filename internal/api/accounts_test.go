@@ -23,6 +23,7 @@ type snapPool struct{ snaps []runner.Snapshot }
 func (p snapPool) Snapshots() []runner.Snapshot   { return p.snaps }
 func (snapPool) SetOrder(string, []string)        {}
 func (snapPool) ResetOrder(string)                {}
+func (snapPool) RescanAll()                       {}
 func (snapPool) OrderFunc(string) func() []string { return nil }
 
 // calls records AccountChanged / AccountRemoved invocations.

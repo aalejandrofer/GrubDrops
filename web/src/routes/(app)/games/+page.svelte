@@ -66,6 +66,26 @@
 		live.games ? tn('games.head', games.length, { rel: relTime(lastScan, now) }) : undefined
 	);
 
+	// Busy until a scan lands or SCAN_WAIT_MS runs out.
+	const SCAN_WAIT_MS = 90_000;
+	let scanFrom = $state<string | null | undefined>(undefined);
+	let scanFailed = $state(false);
+	let scanTimer: ReturnType<typeof setTimeout> | undefined;
+	const scanning = $derived(scanFrom !== undefined && lastScan === scanFrom);
+	async function scanNow(): Promise<void> {
+		scanFailed = false;
+		scanFrom = lastScan;
+		clearTimeout(scanTimer);
+		try {
+			await api.scanGames();
+		} catch {
+			scanFailed = true;
+			scanFrom = undefined;
+			return;
+		}
+		scanTimer = setTimeout(() => (scanFrom = undefined), SCAN_WAIT_MS);
+	}
+
 	function onInput(): void {
 		clearTimeout(timer);
 		searchFailed = false;
@@ -187,12 +207,21 @@
 	}
 
 	onDestroy(() => {
+		clearTimeout(scanTimer);
 		clearTimeout(timer);
 		clearTimeout(flash);
 	});
 </script>
 
-<PageHead title={t('nav.games')} stamp={t('games.stamp')} status={head}>
+<PageHead title={t('nav.games')} status={head}>
+	{#snippet action()}
+		<span class="scan-now">
+			{#if scanFailed}<small class="bad" role="alert">{t('games.scan_failed')}</small>{/if}
+			<button type="button" class="btn" disabled={scanning} onclick={scanNow}>
+				<Icon name="refresh" />{scanning ? t('games.scanning') : t('games.scan_now')}
+			</button>
+		</span>
+	{/snippet}
 	<section class="add" aria-label={t('games.add_label')}>
 		<label class="search">
 			<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
@@ -326,6 +355,41 @@
 	{/snippet}
 
 <style>
+	.scan-now {
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.scan-now small {
+		font-size: 12px;
+		color: var(--red);
+	}
+	.btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 12px;
+		font-weight: 500;
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		padding: 3px 9px;
+		color: var(--text);
+		white-space: nowrap;
+		cursor: pointer;
+	}
+	.btn:hover:not([disabled]) {
+		border-color: var(--t3);
+		background: var(--surface-3);
+	}
+	.btn[disabled] {
+		opacity: 0.45;
+		cursor: default;
+	}
+	.btn:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
 	.i {
 		width: 14px;
 		height: 14px;

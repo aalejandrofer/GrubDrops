@@ -387,3 +387,17 @@ func TestSnapshot_NextScanAt_StoppedIsZero(t *testing.T) {
 		t.Fatalf("needs_login NextScanAt=%v want zero", got)
 	}
 }
+
+func TestRunner_RescanForcesWatchScan(t *testing.T) {
+	f := platformtest.NewFake()
+	r := watching(t, f, nil)
+	r.Rescan()
+	steps(t, r, 1)
+	if n := f.CallCount("List"); n != 2 {
+		t.Fatalf("forced: list=%d", n)
+	}
+	steps(t, r, 1)
+	if n := f.CallCount("List"); n != 2 {
+		t.Fatalf("force cleared: list=%d", n)
+	}
+}

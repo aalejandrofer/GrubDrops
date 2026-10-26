@@ -228,7 +228,11 @@ func (r *Runner) tick(ctx context.Context) error {
 	}
 	// Rebuild the plan from this poll. It never touches current, the handle or
 	// the state, so a failure leaves the watch running.
-	if time.Since(lastScan) >= rescanEvery {
+	if r.forceScan.Swap(false) || time.Since(lastScan) >= rescanEvery {
+		select {
+		case <-r.rescan:
+		default:
+		}
 		if _, err := r.scan(ctx, progress, true); err != nil {
 			slog.Warn("runner rescan failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
 		} else {

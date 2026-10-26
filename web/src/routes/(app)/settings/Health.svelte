@@ -331,7 +331,7 @@
 		background: var(--red);
 	}
 	.acc {
-		color: var(--t2);
+		color: var(--text);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -341,10 +341,16 @@
 		overflow-wrap: anywhere;
 	}
 	.kind {
-		color: var(--t3);
 		margin-right: 6px;
+		font-weight: 600;
 	}
-	.log li.err .msg {
+	.log li.ok :is(.acc, .msg) {
+		color: var(--green);
+	}
+	.log li.warn :is(.acc, .msg) {
+		color: var(--amber);
+	}
+	.log li.err :is(.acc, .msg) {
 		color: var(--red);
 	}
 	.empty {

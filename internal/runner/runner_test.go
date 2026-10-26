@@ -541,3 +541,47 @@ func TestRunner_SessionGamesAlwaysFromConfig(t *testing.T) {
 		t.Fatalf("session games=%v", g)
 	}
 }
+
+func TestRunner_RescanEndsIdleWait(t *testing.T) {
+	f := platformtest.NewFake() // no campaigns -> sleeping for idleRecheck
+	var mu sync.Mutex
+	var states []State
+	r := newRunner(f, func(c *Config) {
+		c.TickInterval = time.Millisecond
+		c.OnChange = func(s Snapshot) {
+			mu.Lock()
+			states = append(states, s.State)
+			mu.Unlock()
+		}
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- r.Run(ctx) }()
+
+	wait := func(n int) {
+		t.Helper()
+		deadline := time.Now().Add(3 * time.Second)
+		for {
+			mu.Lock()
+			got := len(states)
+			mu.Unlock()
+			if got >= n {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("states=%v, want %d", states, n)
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}
+	wait(1)
+	lists := f.CallCount("List")
+	r.Rescan()
+	wait(3) // picking, then sleeping again
+	if f.CallCount("List") <= lists {
+		t.Fatalf("no scan after Rescan: list=%d", f.CallCount("List"))
+	}
+	cancel()
+	<-done
+}

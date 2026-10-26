@@ -24,11 +24,19 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
-type gamesFakePool struct{ snaps []runner.Snapshot }
+type gamesFakePool struct {
+	snaps   []runner.Snapshot
+	rescans *int
+}
 
-func (p gamesFakePool) Snapshots() []runner.Snapshot   { return p.snaps }
-func (gamesFakePool) SetOrder(string, []string)        {}
-func (gamesFakePool) ResetOrder(string)                {}
+func (p gamesFakePool) Snapshots() []runner.Snapshot { return p.snaps }
+func (gamesFakePool) SetOrder(string, []string)      {}
+func (gamesFakePool) ResetOrder(string)              {}
+func (p gamesFakePool) RescanAll() {
+	if p.rescans != nil {
+		*p.rescans++
+	}
+}
 func (gamesFakePool) OrderFunc(string) func() []string { return nil }
 
 type gamesEnv struct {
@@ -37,6 +45,7 @@ type gamesEnv struct {
 	board   *collect.Board
 	q       *gen.Queries
 	changed int
+	rescans int
 	csrf    string
 }
 
@@ -57,7 +66,7 @@ func newGamesEnv(t *testing.T, snaps ...runner.Snapshot) *gamesEnv {
 	s := newServer(Deps{
 		DB: db, Q: q, Session: sm, Version: "test", Hub: NewHub(),
 		SPA:    fstest.MapFS{"index.html": {Data: []byte("x")}},
-		Chosen: ge.chosen, Board: ge.board, Pool: gamesFakePool{snaps},
+		Chosen: ge.chosen, Board: ge.board, Pool: gamesFakePool{snaps, &ge.rescans},
 		GamesChanged: func() { ge.changed++ },
 	})
 	s.routesGames(s.protected)
@@ -225,6 +234,17 @@ func TestGames_PutReorderAndRemove(t *testing.T) {
 	resp, _ = g.do("PUT", "/api/games", g.csrf, map[string]any{"ids": []string{}})
 	assert.Equal(t, 204, resp.StatusCode)
 	assert.Empty(t, g.chosenIDs())
+}
+
+func TestGames_Scan(t *testing.T) {
+	g := newGamesEnv(t)
+	resp, _ := g.do("POST", "/api/games/scan", g.csrf, nil)
+	assert.Equal(t, 202, resp.StatusCode)
+	assert.Equal(t, 1, g.rescans)
+
+	resp, _ = g.do("POST", "/api/games/scan", "", nil)
+	assert.Equal(t, 403, resp.StatusCode)
+	assert.Equal(t, 1, g.rescans)
 }
 
 func TestGames_Search(t *testing.T) {
