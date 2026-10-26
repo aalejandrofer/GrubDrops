@@ -17,6 +17,7 @@ func (s *server) routesOverview(r chi.Router) {
 	r.Get("/runners", s.listRunners)
 	r.Put("/runners/{id}/order", s.putRunnerOrder)
 	r.Delete("/runners/{id}/order", s.deleteRunnerOrder)
+	r.Post("/runners/{id}/mine-now", s.postRunnerMineNow)
 }
 
 func (s *server) overviewNow() time.Time {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,6 +18,11 @@ import (
 var (
 	errIdle = errors.New("idle; recheck later")
 	errStop = errors.New("stopped; needs user action") // Run returns nil on it
+
+	// ErrNotQueued means the benefit is not in the account's Up next queue.
+	ErrNotQueued = errors.New("benefit not queued")
+	// ErrNotRunning means the account has no running runner to switch.
+	ErrNotRunning = errors.New("runner not running")
 )
 
 // Safeguard values carried over from 1.x. idleRecheck, recheckInterval,
@@ -64,6 +70,8 @@ type Runner struct {
 	wake          chan struct{} // signalled on every state change, cap 1
 	rescan        chan struct{} // signalled by Rescan, cap 1
 	forceScan     atomic.Bool   // set by Rescan; the next watch poll rescans
+	switchCh      chan struct{} // signalled by MineNow, cap 1
+	switchNow     atomic.Bool   // set by MineNow; Run drops the watch and re-picks
 	tramp         *trampoline   // PubSub forwarder for this account; nil = none
 	queue         []plan.Target
 	blocked       []plan.Blocked
@@ -123,6 +131,7 @@ func New(cfg Config) *Runner {
 		stalled:  map[string]time.Time{},
 		wake:     make(chan struct{}, 1),
 		rescan:   make(chan struct{}, 1),
+		switchCh: make(chan struct{}, 1),
 
 		lastMilestone: -1,
 	}
@@ -148,7 +157,6 @@ func (r *Runner) State() State {
 	return r.state
 }
 
-// Snapshot returns a copy of the observable state.
 // Rescan asks the runner to rebuild its plan now: an idle wait ends at once,
 // and a watch rescans on its next poll.
 func (r *Runner) Rescan() {
@@ -159,6 +167,38 @@ func (r *Runner) Rescan() {
 	}
 }
 
+// MineNow asks the Run goroutine to drop the current watch and pick again,
+// so the caller's order, with benefitID first, takes effect at once. The
+// benefit must be queued. A claim in flight finishes first.
+func (r *Runner) MineNow(benefitID string) error {
+	r.mu.Lock()
+	st := r.state
+	queued := slices.ContainsFunc(r.queue, func(t plan.Target) bool { return t.Benefit.ID == benefitID })
+	r.mu.Unlock()
+	if st == StateNeedsLogin || st == StateNoGames {
+		return ErrNotRunning
+	}
+	if !queued {
+		return ErrNotQueued
+	}
+	r.switchNow.Store(true)
+	select {
+	case r.switchCh <- struct{}{}:
+	default:
+	}
+	return nil
+}
+
+// takeSwitch consumes a MineNow request unless a claim is in flight; the
+// claim returns to picking, which reads the new order anyway.
+func (r *Runner) takeSwitch() bool {
+	if r.State() == StateClaiming {
+		return false
+	}
+	return r.switchNow.Swap(false)
+}
+
+// Snapshot returns a copy of the observable state.
 func (r *Runner) Snapshot() Snapshot {
 	r.mu.Lock()
 	s := Snapshot{
@@ -496,6 +536,11 @@ func (r *Runner) Run(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return exit()
 		}
+		if r.takeSwitch() {
+			slog.Info("runner switching drop on request", "kind", "state", "account", r.cfg.AccountID)
+			r.stopWatch(ctx)
+			r.setState(ctx, StatePicking)
+		}
 		before := r.State()
 		err := r.step(ctx)
 		after := r.State()
@@ -519,6 +564,8 @@ func (r *Runner) Run(ctx context.Context) error {
 			case <-r.rescan:
 				timer.Stop()
 				r.forceScan.Store(false)
+			case <-r.switchCh:
+				timer.Stop()
 			}
 			r.mu.Lock()
 			r.nextRecheck = time.Time{}
@@ -610,6 +657,10 @@ func (r *Runner) wait(ctx context.Context, d time.Duration, st State) bool {
 			return false
 		case <-timer.C:
 			return true
+		case <-r.switchCh:
+			if r.switchNow.Load() {
+				return true
+			}
 		case <-r.wake:
 			if r.State() != st {
 				return true

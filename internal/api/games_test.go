@@ -38,6 +38,7 @@ func (p gamesFakePool) RescanAll() {
 	}
 }
 func (gamesFakePool) OrderFunc(string) func() []string { return nil }
+func (gamesFakePool) MineNow(string, string) error     { return nil }
 
 type gamesEnv struct {
 	*env

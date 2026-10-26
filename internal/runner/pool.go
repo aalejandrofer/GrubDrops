@@ -8,6 +8,8 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"github.com/aalejandrofer/grubdrops/internal/plan"
 )
 
 // panicRestart is how long a panicked unit waits before it is rebuilt.
@@ -343,6 +345,59 @@ func (p *Pool) RescanAll() {
 			r.Rescan()
 		}
 	}
+}
+
+// switcher is a Unit that can drop its watch for another queued target.
+type switcher interface {
+	Unit
+	MineNow(benefitID string) error
+}
+
+// MineNow puts benefitID first in the account's session order, the target
+// it was mining second and the rest of Up next after, then tells the runner
+// to switch now. The old order comes back if the runner refuses.
+func (p *Pool) MineNow(accountID, benefitID string) error {
+	p.mu.Lock()
+	var unit Unit
+	for _, u := range p.units {
+		if u.entry.ID == accountID {
+			unit = u.entry.Unit
+			break
+		}
+	}
+	p.mu.Unlock()
+	sw, ok := unit.(switcher)
+	if !ok {
+		return ErrNotRunning
+	}
+	snap := sw.Snapshot()
+	if !slices.ContainsFunc(snap.UpNext, func(t plan.Target) bool { return t.Benefit.ID == benefitID }) {
+		return ErrNotQueued
+	}
+	order := []string{benefitID}
+	if snap.Current != nil {
+		order = append(order, snap.Current.Benefit.ID)
+	}
+	for _, t := range snap.UpNext {
+		if t.Benefit.ID != benefitID {
+			order = append(order, t.Benefit.ID)
+		}
+	}
+	p.mu.Lock()
+	prev, had := p.orders[accountID]
+	p.orders[accountID] = order
+	p.mu.Unlock()
+	if err := sw.MineNow(benefitID); err != nil {
+		p.mu.Lock()
+		if had {
+			p.orders[accountID] = prev
+		} else {
+			delete(p.orders, accountID)
+		}
+		p.mu.Unlock()
+		return err
+	}
+	return nil
 }
 
 // SetOrder sets the session-only Up next order for an account.

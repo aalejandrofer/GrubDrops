@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Runner } from '$lib/api/types';
 import mining from '$lib/fixtures/runners.mining.json';
-import { afterLabel, anyCustom, commitMove, foldQueue, moveItem, queues } from './upnext';
+import { afterLabel, anyCustom, canMineNow, commitMove, foldQueue, moveItem, queues } from './upnext';
 
 const fx = () => structuredClone(mining) as Runner[];
 
@@ -23,6 +23,18 @@ describe('queues', () => {
 		const q = queues(fx());
 		expect(q).toHaveLength(2);
 		expect(q.map((x) => x.accountName)).toEqual(['hJune', 'grub_alt']);
+	});
+	it('marks signed-out runners as unable to mine now', () => {
+		const rs = fx();
+		rs[1].state = 'needs_login';
+		expect(queues(rs).map((x) => x.canMine)).toEqual([true, false]);
+	});
+});
+
+describe('canMineNow', () => {
+	it('allows running states only', () => {
+		for (const s of ['watching', 'sleeping', 'starting', 'awaiting_connect'] as const) expect(canMineNow({ state: s })).toBe(true);
+		for (const s of ['needs_login', 'no_games', 'idle'] as const) expect(canMineNow({ state: s })).toBe(false);
 	});
 });
 

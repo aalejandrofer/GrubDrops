@@ -5,10 +5,12 @@
 	import { getLive } from '$lib/live-context';
 	import { afterLabel, anyCustom, commitMove, foldQueue, moveItem, queues } from '$lib/upnext';
 	import type { Runner } from '$lib/api/types';
+	import MineNow from './MineNow.svelte';
 	import PlatformMark from './PlatformMark.svelte';
 
 	const live = getLive();
 	let failed = $state(false);
+	let mineFailed = $state(false);
 	let drag = $state<{ id: string; from: number; to: number } | null>(null);
 	// Accounts whose queue shows every row; not persisted.
 	let open = $state<Record<string, boolean>>({});
@@ -160,6 +162,9 @@
 								: t('upnext.meta', { min: item.required_minutes })}
 						</div>
 					</div>
+					<div class="mn">
+						{#if q.canMine}<MineNow accountId={q.accountId} benefitId={item.benefit_id} onresult={(ok) => (mineFailed = !ok)} />{/if}
+					</div>
 					<div class="mv">
 						{#if i > 0}
 							<button type="button" aria-label={t('upnext.move_up')} title={t('upnext.move_up')} onclick={() => commit(q.accountId, i, i - 1)}>
@@ -182,6 +187,7 @@
 		{/if}
 	{/each}
 	{#if failed}<p class="err" role="alert">{t('upnext.save_failed')}</p>{/if}
+	{#if mineFailed}<p class="err" role="alert">{t('upnext.mine_now_failed')}</p>{/if}
 	<div class="panel-f">
 		<span>{perm[0]}<a href="/games" class="link">{t('nav.games')}</a>{perm[1] ?? ''}</span>
 		{#if custom}<button class="reset" type="button" onclick={reset}>{t('upnext.reset')}</button>{/if}
@@ -249,7 +255,7 @@
 	}
 	.queue li {
 		display: grid;
-		grid-template-columns: 14px 14px minmax(0, 1fr) 22px;
+		grid-template-columns: 14px 14px minmax(0, 1fr) auto 22px;
 		gap: 8px;
 		align-items: center;
 		padding: 10px 8px 10px 10px;

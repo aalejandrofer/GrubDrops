@@ -4,6 +4,7 @@
 	import type { Claim, ClaimsQuery, ClaimsResp } from '$lib/api/types';
 	import BoxArt from '$lib/components/BoxArt.svelte';
 	import CopyCommand from '$lib/components/CopyCommand.svelte';
+	import MineNow from '$lib/components/MineNow.svelte';
 	import PageHead from '$lib/components/PageHead.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { claimStamp, etaShort, formatInt, relTime } from '$lib/format';
@@ -45,6 +46,7 @@
 	const queuedTotal = $derived(qs.reduce((n, x) => n + x.items.length, 0));
 	// Accounts whose queue shows every row; not persisted.
 	let openQ = $state<Record<string, boolean>>({});
+	let mineFailed = $state(false);
 	const kpi = $derived(live.overview?.kpis);
 	const head = $derived(
 		kpi ? t('rewards.head', { today: formatInt(kpi.claimed_today), total: formatInt(kpi.claimed_all_time) }) : undefined
@@ -213,6 +215,7 @@
 								</div>
 							</div>
 							<span class="req">{t('home.queued_min', { n: formatInt(item.required_minutes) })}</span>
+							{#if q.canMine}<MineNow accountId={q.accountId} benefitId={item.benefit_id} onresult={(ok) => (mineFailed = !ok)} />{/if}
 						</div>
 					{/each}
 					{#if fold.more > 0}
@@ -226,6 +229,7 @@
 						</button>
 					{/if}
 				{/each}
+				{#if mineFailed}<p class="q-err" role="alert">{t('upnext.mine_now_failed')}</p>{/if}
 			</div>
 		</section>
 	{/if}
@@ -474,10 +478,16 @@
 	}
 	.qrow {
 		display: grid;
-		grid-template-columns: 32px minmax(0, 1fr) auto;
+		grid-template-columns: 32px minmax(0, 1fr) auto auto;
 		gap: 12px;
 		align-items: center;
 		padding: 10px 14px;
+	}
+	.q-err {
+		margin: 0;
+		padding: 10px 14px;
+		font-size: 12px;
+		color: var(--red);
 	}
 	.qrow .t {
 		font-size: 13px;

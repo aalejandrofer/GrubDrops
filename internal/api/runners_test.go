@@ -122,3 +122,33 @@ func TestRunners_ResetOrder(t *testing.T) {
 	resp, _ = e.do("DELETE", "/api/runners/nope/order", tok, nil)
 	assert.Equal(t, 404, resp.StatusCode)
 }
+
+func TestRunners_MineNow(t *testing.T) {
+	e := newResEnv(t, nil)
+	cur := tgt("G", "cur", 10)
+	e.pool.snaps = []runner.Snapshot{{
+		AccountID: "a1", Platform: "twitch", State: runner.StateWatching, Current: &cur,
+		UpNext: []plan.Target{tgt("G", "n1", 0), tgt("G", "n2", 0)},
+	}}
+	_, tok := e.session()
+	resp, _ := e.do("POST", "/api/runners/a1/mine-now", tok, map[string]any{"benefit_id": "n2"})
+	assert.Equal(t, 202, resp.StatusCode)
+	assert.Equal(t, []string{"a1/n2"}, e.pool.mineNow)
+
+	resp, _ = e.do("POST", "/api/runners/a1/mine-now", "", map[string]any{"benefit_id": "n1"})
+	assert.Equal(t, 403, resp.StatusCode)
+
+	resp, b := e.do("POST", "/api/runners/a1/mine-now", tok, map[string]any{"benefit_id": "ghost"})
+	assert.Equal(t, 404, resp.StatusCode)
+	assert.JSONEq(t, `{"error":"not_queued"}`, string(b))
+
+	resp, b = e.do("POST", "/api/runners/b2/mine-now", tok, map[string]any{"benefit_id": "n1"})
+	assert.Equal(t, 409, resp.StatusCode)
+	assert.JSONEq(t, `{"error":"not_running"}`, string(b))
+
+	resp, _ = e.do("POST", "/api/runners/nope/mine-now", tok, map[string]any{"benefit_id": "n1"})
+	assert.Equal(t, 404, resp.StatusCode)
+	resp, _ = e.do("POST", "/api/runners/a1/mine-now", tok, map[string]any{})
+	assert.Equal(t, 400, resp.StatusCode)
+	assert.Equal(t, []string{"a1/n2"}, e.pool.mineNow)
+}

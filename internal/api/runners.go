@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -138,6 +139,34 @@ func (s *server) putRunnerOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	s.d.Pool.SetOrder(id, body.BenefitIDs)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// postRunnerMineNow switches the account to a queued Up next target now.
+func (s *server) postRunnerMineNow(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var body struct {
+		BenefitID string `json:"benefit_id"`
+	}
+	if !readJSON(w, r, &body) {
+		return
+	}
+	if body.BenefitID == "" {
+		writeErr(w, http.StatusBadRequest, "bad_request")
+		return
+	}
+	if _, ok := s.account(w, r, id); !ok {
+		return
+	}
+	switch err := s.d.Pool.MineNow(id, body.BenefitID); {
+	case err == nil:
+		w.WriteHeader(http.StatusAccepted)
+	case errors.Is(err, runner.ErrNotQueued):
+		writeErr(w, http.StatusNotFound, "not_queued")
+	case errors.Is(err, runner.ErrNotRunning):
+		writeErr(w, http.StatusConflict, "not_running")
+	default:
+		writeErr(w, http.StatusInternalServerError, "internal")
+	}
 }
 
 func (s *server) deleteRunnerOrder(w http.ResponseWriter, r *http.Request) {
