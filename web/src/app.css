@@ -69,3 +69,8 @@ body {
 	color: var(--text);
 	font: 14px/1.5 var(--font);
 }
+
+a {
+	color: inherit;
+	text-decoration: none;
+}
