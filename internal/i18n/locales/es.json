@@ -296,7 +296,7 @@
   "health.canary_ok": "OK {rel}",
   "health.canary_fail": "Falla: {detail}",
   "health.canary_none": "Sin resultado aún",
-  "health.canary_skipped": "Omitido: no hay cuenta de {platform} con sesión iniciada",
+  "health.canary_skipped": "Omitido: no hay ninguna cuenta de {platform} activa. Inicia sesión o reanuda una.",
   "health.canary_running": "Ejecutando…",
   "health.canary_no_result": "Sin resultado. Comprueba que haya un canal configurado y una cuenta con sesión iniciada.",
   "health.run_now": "Ejecutar ahora",

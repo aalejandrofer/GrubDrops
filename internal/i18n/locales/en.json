@@ -296,7 +296,7 @@
   "health.canary_ok": "OK {rel}",
   "health.canary_fail": "Failing: {detail}",
   "health.canary_none": "No result yet",
-  "health.canary_skipped": "Skipped: no signed-in {platform} account",
+  "health.canary_skipped": "Skipped: no active {platform} account. Sign in or resume one.",
   "health.canary_running": "Running…",
   "health.canary_no_result": "No result. Check that a channel is set and an account is signed in.",
   "health.run_now": "Run now",

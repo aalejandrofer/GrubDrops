@@ -296,7 +296,7 @@
   "health.canary_ok": "正常 {rel}",
   "health.canary_fail": "失败：{detail}",
   "health.canary_none": "暂无结果",
-  "health.canary_skipped": "已跳过：没有已登录的 {platform} 账号",
+  "health.canary_skipped": "已跳过：没有活跃的 {platform} 账号。请登录或恢复一个账号。",
   "health.canary_running": "运行中…",
   "health.canary_no_result": "没有结果。请确认已设置频道且有账号已登录。",
   "health.run_now": "立即运行",
