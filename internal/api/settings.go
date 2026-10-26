@@ -38,13 +38,15 @@ type settingsNotify struct {
 }
 
 type settingsBody struct {
-	Language   string          `json:"language"`
-	TimeFormat string          `json:"time_format"`
-	Theme      string          `json:"theme"`
-	Timezone   string          `json:"timezone"`
-	Discord    settingsDiscord `json:"discord"`
-	Notify     settingsNotify  `json:"notify"`
-	UpdateAuto bool            `json:"update_auto"`
+	Language   string `json:"language"`
+	TimeFormat string `json:"time_format"`
+	Theme      string `json:"theme"`
+	Timezone   string `json:"timezone"`
+	// ZoneEffective is the zone the server resolves; Local is reported as UTC.
+	ZoneEffective string          `json:"zone_effective"`
+	Discord       settingsDiscord `json:"discord"`
+	Notify        settingsNotify  `json:"notify"`
+	UpdateAuto    bool            `json:"update_auto"`
 }
 
 // webhookHint keeps the URL up to /webhooks/ and hides the id and token.
@@ -71,6 +73,10 @@ func (s *server) loadSettings(ctx context.Context) (settingsBody, error) {
 	}
 	if b.Timezone, err = st.Timezone(ctx); err != nil {
 		return b, err
+	}
+	b.ZoneEffective = s.overviewZone().String()
+	if b.ZoneEffective == "Local" {
+		b.ZoneEffective = "UTC"
 	}
 	hook, err := st.GlobalDiscordWebhook(ctx)
 	if err != nil {
@@ -102,6 +108,8 @@ type settingsPut struct {
 	TimeFormat *string `json:"time_format"`
 	Theme      *string `json:"theme"`
 	Timezone   *string `json:"timezone"`
+	// ZoneEffective is accepted so a client can send the GET body back. Ignored.
+	ZoneEffective json.RawMessage `json:"zone_effective"`
 	// Discord is accepted so a client can send the GET body back. Ignored.
 	Discord        json.RawMessage `json:"discord"`
 	DiscordWebhook *string         `json:"discord_webhook"`

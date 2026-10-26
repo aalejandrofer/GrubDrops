@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -184,4 +185,28 @@ func TestSettings_WebhookFallback(t *testing.T) {
 	assert.NotContains(t, string(b), "secret")
 	code, _ = e.do("POST", "/settings/notify-test", nil)
 	assert.Equal(t, 204, code)
+}
+
+func TestSettings_ZoneEffective(t *testing.T) {
+	e := newSettingsEnv(t)
+	zone := func(h http.Handler) string {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", "/settings", nil))
+		var got map[string]any
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+		return got["zone_effective"].(string)
+	}
+	build := func(z func() *time.Location) http.Handler {
+		s := &server{d: Deps{Settings: e.st, Zone: z}}
+		r := chi.NewRouter()
+		s.routesSettings(r)
+		return r
+	}
+	sh, err := time.LoadLocation("Asia/Shanghai")
+	require.NoError(t, err)
+	assert.Equal(t, "Asia/Shanghai", zone(build(func() *time.Location { return sh })))
+	local := time.Local
+	t.Cleanup(func() { time.Local = local })
+	time.Local = time.FixedZone("Local", 0)
+	assert.Equal(t, "UTC", zone(build(nil)))
 }
