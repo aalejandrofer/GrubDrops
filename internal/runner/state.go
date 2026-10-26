@@ -93,7 +93,7 @@ type Snapshot struct {
 	ViewerCount                       int
 	MinutesWatched                    int
 	StartedAt, LastPollAt, LastScanAt time.Time
-	NextScanAt                        time.Time     // lastScanTry + rescanEvery; zero before any scan
+	NextScanAt                        time.Time     // next scan by state: rescan pace, recheck deadline, zero when stopped or unscanned
 	UpNext                            []plan.Target // queue minus Current, with Config.Order applied at read time
 	Blocked                           []plan.Blocked
 }

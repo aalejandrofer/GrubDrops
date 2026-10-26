@@ -98,11 +98,11 @@ export function homeView(i: HomeInput): HomeView {
 	if (!o) return i.unreachable ? 'offline' : i.overviewFailed ? 'error' : 'loading';
 	if (o.status.state === 'no_accounts') return 'first_run';
 	if (o.status.state === 'no_games' || i.games?.length === 0) return 'no_games';
-	// Paused wins over signed out, as on the Accounts list.
-	if ((o.status.accounts_paused ?? 0) >= o.status.accounts_total) return 'paused';
-	if (!i.games) return i.gamesFailed && !i.unreachable ? 'error' : 'loading';
+	// Signed out wins over paused, as on the Accounts list.
 	const signedOut = new Set(o.problems.filter((p) => p.kind === 'needs_login').map((p) => p.account_id));
 	if (signedOut.size >= o.status.accounts_total) return 'signed_out';
+	if ((o.status.accounts_paused ?? 0) >= o.status.accounts_total) return 'paused';
+	if (!i.games) return i.gamesFailed && !i.unreachable ? 'error' : 'loading';
 	if (o.status.state === 'nothing_live' || i.games.every((g) => g.state === 'no_campaign')) return 'nothing_live';
 	return 'healthy';
 }

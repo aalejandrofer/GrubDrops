@@ -49,6 +49,7 @@ type Runner struct {
 	lastPollAt  time.Time
 	lastScanAt  time.Time
 	lastScanTry time.Time     // last scan attempt, failed or not; paces rescans
+	nextRecheck time.Time     // deadline of the armed recheckInterval timer; zero = none
 	lastBeatAt  time.Time     // when the current watch last beaconed; zero = not yet
 	wake        chan struct{} // signalled on every state change, cap 1
 	tramp       *trampoline   // PubSub forwarder for this account; nil = none
@@ -146,8 +147,19 @@ func (r *Runner) Snapshot() Snapshot {
 		LastScanAt:     r.lastScanAt,
 		Blocked:        append([]plan.Blocked(nil), r.blocked...),
 	}
-	if !r.lastScanTry.IsZero() {
-		s.NextScanAt = r.lastScanTry.Add(rescanEvery)
+	switch r.state {
+	case StateNeedsLogin, StateNoGames:
+		// Stopped: nothing is scheduled.
+	case StateSleeping, StateAwaitingConnect:
+		if !r.nextRecheck.IsZero() {
+			s.NextScanAt = r.nextRecheck
+		} else if !r.lastScanTry.IsZero() {
+			s.NextScanAt = r.lastScanTry.Add(recheckInterval)
+		}
+	default:
+		if !r.lastScanTry.IsZero() {
+			s.NextScanAt = r.lastScanTry.Add(rescanEvery)
+		}
 	}
 	var rest []plan.Target
 	if r.current != nil {
@@ -454,12 +466,18 @@ func (r *Runner) Run(ctx context.Context) error {
 		case errors.Is(err, errIdle):
 			backoff = 0
 			timer := time.NewTimer(recheckInterval)
+			r.mu.Lock()
+			r.nextRecheck = time.Now().Add(recheckInterval)
+			r.mu.Unlock()
 			select {
 			case <-ctx.Done():
 				timer.Stop()
 				return exit()
 			case <-timer.C:
 			}
+			r.mu.Lock()
+			r.nextRecheck = time.Time{}
+			r.mu.Unlock()
 			r.setState(ctx, StatePicking)
 			continue
 		default:

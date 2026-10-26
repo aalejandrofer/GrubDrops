@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -311,5 +312,40 @@ func TestSnapshot_NextScanAt(t *testing.T) {
 	}
 	if got := r.Snapshot().NextScanAt; !got.Equal(last.Add(rescanEvery)) {
 		t.Fatalf("NextScanAt=%v want %v", got, last.Add(rescanEvery))
+	}
+}
+
+func TestSnapshot_NextScanAt_Sleeping(t *testing.T) {
+	f := platformtest.NewFake() // no campaigns -> sleeping
+	r := newRunner(f, nil)
+	steps(t, r, 1)
+	if r.State() != StateSleeping {
+		t.Fatal(r.State())
+	}
+	r.mu.Lock()
+	last := r.lastScanTry
+	r.mu.Unlock()
+	if got := r.Snapshot().NextScanAt; !got.Equal(last.Add(recheckInterval)) {
+		t.Fatalf("fallback NextScanAt=%v want %v", got, last.Add(recheckInterval))
+	}
+	dl := time.Now().Add(recheckInterval)
+	r.mu.Lock()
+	r.nextRecheck = dl
+	r.mu.Unlock()
+	if got := r.Snapshot().NextScanAt; !got.Equal(dl) {
+		t.Fatalf("NextScanAt=%v want armed deadline %v", got, dl)
+	}
+}
+
+func TestSnapshot_NextScanAt_StoppedIsZero(t *testing.T) {
+	f := platformtest.NewFake()
+	f.ListErr = fmt.Errorf("x: %w", platform.ErrIntegrityBlocked)
+	r := newRunner(f, nil)
+	steps(t, r, 1)
+	if r.State() != StateNeedsLogin {
+		t.Fatal(r.State())
+	}
+	if got := r.Snapshot().NextScanAt; !got.IsZero() {
+		t.Fatalf("needs_login NextScanAt=%v want zero", got)
 	}
 }

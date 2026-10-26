@@ -45,6 +45,8 @@ All notable changes to GrubDrops.
 - First-run setup says a game is already added, with its priority, instead of a generic failure.
 - `POST /api/games` returned 500 for games a migration seeded under another id (Apex Legends, Marvel Rivals); it now reuses the existing row by slug.
 - The pre-v2 backup is written to a `.tmp` file and renamed, so an interrupted backup is retried on the next boot.
+- Next scan time follows the runner's real recheck cadence and is blank for stopped accounts.
+- Home shows signed out before the all-paused notice, as the Accounts list does.
 - The collection migration is 0017 and safe to re-run. Databases at version 16 from the 1.x pipeline-v2 build skipped it, so Games search and Home failed on missing tables.
 - A swept reward is recorded only when its title resolves to one drop, looking in the current campaign, then the current game, then the rest of the plan. An ambiguous title records nothing.
 - A reward code is stored against the drop just claimed, within 10 minutes, never against the next drop. Each claim takes one code.

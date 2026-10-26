@@ -153,6 +153,8 @@ describe('homeView', () => {
 		expect(homeView({ ...base, overview: o })).toBe('paused');
 		o.problems = [{ kind: 'needs_login', account_id: 'a1', account_name: 'a1' }];
 		expect(homeView({ ...base, overview: o })).toBe('paused');
+		o.problems = [1, 2, 3, 4].map((i) => ({ kind: 'needs_login' as const, account_id: `a${i}`, account_name: `a${i}` }));
+		expect(homeView({ ...base, overview: o })).toBe('signed_out');
 		o.status.accounts_paused = 3;
 		o.problems = [];
 		expect(homeView({ ...base, overview: o })).toBe('healthy');
