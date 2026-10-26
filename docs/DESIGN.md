@@ -48,8 +48,8 @@ Routes under `web/src/routes/`:
 - `(app)`: Home, Games (`games/`), Discover (`discover/`), Rewards
   (`rewards/`), Settings
   (`settings/`) with sections General, Accounts, Notifications, Updates and
-  Health, each its own component. `welcome/` is the first-run wizard (add an
-  account, pick games, mining started), full screen without the top bar.
+  Health, each its own component. `welcome/` is the first-run wizard (add one or
+  more accounts, pick games; Start mining goes Home), full screen without the top bar.
   Home sends a first run with no accounts there.
 - `(auth)`: Login (`login/`) and first-run Setup (`setup/`): a centered card
   with the host below it, styled by `auth.css`. Password first, then SSO

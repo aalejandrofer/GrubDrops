@@ -58,6 +58,8 @@
 	let cancelTimer: (() => void) | null = null;
 
 	let method = $state<TwitchMethod | null>(null);
+	// Shape of the redirect URL, token hidden.
+	const ANDROID_EXAMPLE = 'https://www.twitch.tv/#access_token=XXX&scope=&token_type=bearer';
 	let androidUrl = $state('');
 	let paste = $state('');
 	let androidMsg = $state('');
@@ -279,6 +281,7 @@
 						if (e.key === 'Enter') void submitAndroid();
 					}}
 				/>
+				<small class="eg">{t('accounts.android_example')} <code>{ANDROID_EXAMPLE}</code></small>
 			</div>
 			<div class="inline wrap">
 				<button type="button" class="btn primary" disabled={saving || paste.trim() === ''} onclick={submitAndroid}>
@@ -337,6 +340,17 @@
 </div>
 
 <style>
+	.eg {
+		display: block;
+		margin-top: 6px;
+		font-size: 12px;
+		color: var(--t2);
+		overflow-wrap: anywhere;
+	}
+	.eg code {
+		font-family: var(--mono, ui-monospace, monospace);
+		font-size: 12px;
+	}
 	/* Same values as the Settings primitives, so the flow looks alike in Settings and onboarding. */
 	.card-body {
 		padding: 14px 16px;

@@ -1,10 +1,10 @@
 import type { Account } from '$lib/api/types';
 import type { HomeView } from '$lib/home';
 
-/** First-run wizard: 1 add an account, 2 pick games, 3 mining started. */
-export type Step = 1 | 2 | 3;
+/** First-run wizard: 1 add accounts, 2 pick games. Start mining then goes Home. */
+export type Step = 1 | 2;
 
-export const STEPS: Step[] = [1, 2, 3];
+export const STEPS: Step[] = [1, 2];
 
 /** Home sends a first run, no accounts yet, to the wizard. */
 export function wantsWizard(view: HomeView): boolean {
@@ -30,11 +30,10 @@ export function signedIn(accounts: Account[]): Account[] {
 /** Continue is open: step 1 needs a signed-in account, step 2 a game. */
 export function canContinue(step: Step, c: { signedIn: number; games: number }): boolean {
 	if (step === 1) return c.signedIn > 0;
-	if (step === 2) return c.games > 0;
-	return true;
+	return c.games > 0;
 }
 
-/** Segment states for the progress bar. Step 3 is the end, so every segment reads done. */
+/** Segment states for the progress bar. */
 export function segments(step: Step): ('done' | 'cur' | 'todo')[] {
-	return STEPS.map((s) => (step === 3 || s < step ? 'done' : s === step ? 'cur' : 'todo'));
+	return STEPS.map((s) => (s < step ? 'done' : s === step ? 'cur' : 'todo'));
 }

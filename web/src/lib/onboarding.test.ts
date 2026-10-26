@@ -34,6 +34,9 @@ describe('startStep', () => {
 		const n = signedIn([acct('half', true)]).length;
 		expect(startStep(n, 0)).toBe(1);
 	});
+	it('several accounts and no games opens on games', () => {
+		expect(startStep(3, 0)).toBe(2);
+	});
 	it('sends a set-up user home', () => {
 		expect(startStep(2, 1)).toBeNull();
 	});
@@ -54,17 +57,11 @@ describe('canContinue', () => {
 		expect(canContinue(2, { signedIn: 1, games: 0 })).toBe(false);
 		expect(canContinue(2, { signedIn: 1, games: 1 })).toBe(true);
 	});
-	it('step 3 is open', () => {
-		expect(canContinue(3, { signedIn: 0, games: 0 })).toBe(true);
-	});
 });
 
 describe('segments', () => {
 	it('marks the current step', () => {
-		expect(segments(1)).toEqual(['cur', 'todo', 'todo']);
-		expect(segments(2)).toEqual(['done', 'cur', 'todo']);
-	});
-	it('step 3 reads all done', () => {
-		expect(segments(3)).toEqual(['done', 'done', 'done']);
+		expect(segments(1)).toEqual(['cur', 'todo']);
+		expect(segments(2)).toEqual(['done', 'cur']);
 	});
 });

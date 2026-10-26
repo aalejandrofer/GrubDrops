@@ -33,7 +33,7 @@
 			slug: 'onboarding',
 			created: '2026-10-26',
 			title: 'First-run onboarding, three flows',
-			desc: 'Checklist on Home, guided wizard, inline empty states. Each walks add account, pick games, mining started.',
+			desc: 'Checklist on Home, guided wizard, inline empty states. Each walks add account, pick games, mining started. The live wizard has two steps: accounts (several allowed) and games.',
 			tags: ['onboarding', 'first run'],
 			done: true,
 			chosen: 'Variant B, now live as the first-run wizard'

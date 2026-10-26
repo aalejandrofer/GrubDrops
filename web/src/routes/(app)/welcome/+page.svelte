@@ -4,7 +4,7 @@
 	import logo from '../../../../../assets/img/logo.png';
 	import { api } from '$lib/app';
 	import type { Game, Platform, SearchHit } from '$lib/api/types';
-	import { accountLine, accountStatus, type TwitchMethod } from '$lib/accounts';
+	import type { TwitchMethod } from '$lib/accounts';
 	import AccountFlow from '$lib/components/AccountFlow.svelte';
 	import BoxArt from '$lib/components/BoxArt.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
@@ -14,13 +14,6 @@
 	import { canContinue, segments, signedIn, startStep, type Step } from '$lib/onboarding';
 
 	const live = getLive();
-
-	const STATUS_KEYS = {
-		mining: 'accounts.status.mining',
-		signed_out: 'accounts.status.signed_out',
-		idle: 'accounts.status.idle',
-		paused: 'accounts.status.paused'
-	} as const;
 
 	let step = $state<Step | null>(null);
 	let added = $state(false);
@@ -40,7 +33,7 @@
 	const open = $derived(
 		step !== null && canContinue(step, { signedIn: added ? Math.max(1, ready.length) : ready.length, games: games.length })
 	);
-	const titles = $derived([t('welcome.account_title'), t('welcome.games_title'), t('welcome.started_title')]);
+	const titles = $derived([t('welcome.account_title'), t('welcome.games_title')]);
 
 	// Step 1
 	let kind = $state<Platform>('twitch');
@@ -49,9 +42,24 @@
 	// Fixed when the step opens, so an account that signs in mid-flow does not unmount the flow.
 	let showFlow = $state(true);
 
+	let removing = $state<string | null>(null);
+	let removeFailed = $state(false);
+
 	async function onAdded(): Promise<void> {
 		added = true;
 		showFlow = false;
+		await live.refetchAll().catch(() => {});
+	}
+
+	async function removeAccount(id: string): Promise<void> {
+		removing = id;
+		removeFailed = false;
+		try {
+			await api.removeAccount(id);
+		} catch {
+			removeFailed = true;
+		}
+		removing = null;
 		await live.refetchAll().catch(() => {});
 	}
 
@@ -140,17 +148,16 @@
 		return commit(keep.map((k) => games.find((g) => g.id === k)!));
 	}
 
-	// Step 3
-	const runnerOf = (id: string) => live.runners.find((r) => r.account_id === id);
-
 	function next(): void {
 		if (!step || !open) return;
 		if (step === 2) {
 			// Scan now so mining does not wait for the next scheduled scan.
 			api.scanGames().catch(() => {});
 			void live.refetchAll().catch(() => {});
+			void goto('/');
+			return;
 		}
-		step = step === 1 ? 2 : 3;
+		step = 2;
 	}
 
 	onDestroy(() => clearTimeout(timer));
@@ -174,7 +181,7 @@
 			{/if}
 		{:else}
 			<div class="prog">
-				<span class="mono faint">{t('welcome.step', { n: step, total: 3 })}</span>
+				<span class="mono faint">{t('welcome.step', { n: step, total: 2 })}</span>
 				<ol class="segs" aria-label={t('welcome.progress')}>
 					{#each segments(step) as s, i (i)}
 						<li class={s} aria-current={s === 'cur' ? 'step' : undefined}><span class="sr">{titles[i]}</span></li>
@@ -186,63 +193,70 @@
 
 			{#if step === 1}
 				<p class="lead">{t('welcome.account_lead')}</p>
-				{#if addError}<p class="bad" role="alert">{addError}</p>{/if}
-				{#if showFlow}
-					<div class="tiles" role="radiogroup" aria-label={t('welcome.platform')}>
-						{#each ['twitch', 'kick'] as const as p (p)}
-							<button
-								type="button"
-								class="tile"
-								class:on={kind === p}
-								role="radio"
-								aria-checked={kind === p}
-								onclick={() => {
-									kind = p;
-									addError = '';
-								}}
-							>
-								<PlatformMark platform={p} /><b>{t(p === 'twitch' ? 'accounts.twitch' : 'accounts.kick')}</b>
-								<span class="faint">{t(p === 'twitch' ? 'welcome.twitch_hint' : 'welcome.kick_hint')}</span>
-							</button>
-						{/each}
-					</div>
-
-					{#if kind === 'twitch'}
-						<div class="tabs2" role="tablist" aria-label={t('welcome.method')}>
-							<button type="button" role="tab" aria-selected={method === 'android'} class:on={method === 'android'} onclick={() => (method = 'android')}>
-								{t('welcome.android')}<span class="rec">{t('welcome.recommended')}</span>
-							</button>
-							<button type="button" role="tab" aria-selected={method === 'tv'} class:on={method === 'tv'} onclick={() => (method = 'tv')}>
-								{t('accounts.method_tv')}
-							</button>
-						</div>
-					{/if}
-
-					<div class="panel flowp">
-						{#key `${kind}:${method}`}
-							<AccountFlow
-								{kind}
-								start={kind === 'twitch' ? method : null}
-								framed={false}
-								onadded={onAdded}
-								onfail={(msg) => (addError = msg)}
-							/>
-						{/key}
-					</div>
-				{:else}
-					<ul class="panel accts">
+				{#if ready.length > 0}
+					<ul class="panel accts" aria-label={t('welcome.accounts_added')}>
 						{#each ready as a (a.id)}
 							<li>
 								<PlatformMark platform={a.platform} />
 								<b>{a.name}</b>
 								<span class="chip green">{t('accounts.device_done')}</span>
+								<button type="button" class="ico" aria-label={t('welcome.remove_account', { name: a.name })} disabled={removing !== null} onclick={() => removeAccount(a.id)}
+									><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button
+								>
 							</li>
-						{:else}
-							<li><span class="faint">{t('home.loading')}</span></li>
 						{/each}
 					</ul>
+					{#if removeFailed}<p class="bad" role="alert">{t('accounts.remove_failed')}</p>{/if}
 				{/if}
-				<p class="note">{t('welcome.more_accounts')}</p>
+				{#if addError}<p class="bad" role="alert">{addError}</p>{/if}
+				{#if showFlow}
+					<div class="tiles" role="radiogroup" aria-label={t('welcome.platform')}>
+					{#each ['twitch', 'kick'] as const as p (p)}
+						<button
+							type="button"
+							class="tile"
+							class:on={kind === p}
+							role="radio"
+							aria-checked={kind === p}
+							onclick={() => {
+								kind = p;
+								addError = '';
+							}}
+						>
+							<PlatformMark platform={p} /><b>{t(p === 'twitch' ? 'accounts.twitch' : 'accounts.kick')}</b>
+							<span class="faint">{t(p === 'twitch' ? 'welcome.twitch_hint' : 'welcome.kick_hint')}</span>
+						</button>
+					{/each}
+				</div>
+
+				{#if kind === 'twitch'}
+					<div class="tabs2" role="tablist" aria-label={t('welcome.method')}>
+						<button type="button" role="tab" aria-selected={method === 'android'} class:on={method === 'android'} onclick={() => (method = 'android')}>
+							{t('welcome.android')}<span class="rec">{t('welcome.recommended')}</span>
+						</button>
+						<button type="button" role="tab" aria-selected={method === 'tv'} class:on={method === 'tv'} onclick={() => (method = 'tv')}>
+							{t('accounts.method_tv')}
+						</button>
+					</div>
+				{/if}
+
+				<div class="panel flowp">
+					{#key `${kind}:${method}`}
+						<AccountFlow
+							{kind}
+							start={kind === 'twitch' ? method : null}
+							framed={false}
+							onadded={onAdded}
+							onfail={(msg) => (addError = msg)}
+						/>
+					{/key}
+				</div>
+					{#if ready.length > 0}
+						<button type="button" class="btn quiet more" onclick={() => ((showFlow = false), (addError = ''))}>{t('welcome.cancel_add')}</button>
+					{/if}
+				{:else}
+					<button type="button" class="btn more" onclick={() => (showFlow = true)}>{t('welcome.add_another')}</button>
+				{/if}
 			{:else if step === 2}
 				<p class="lead">{t('welcome.games_lead')}</p>
 				<div class="pick">
@@ -324,54 +338,15 @@
 						{/each}
 					</ol>
 				{/if}
-			{:else}
-				<p class="lead">
-					{t('welcome.started_lead', {
-						accounts: tn('welcome.n_accounts', ready.length),
-						games: tn('welcome.n_games', games.length)
-					})}
-				</p>
-				<div class="panel runs">
-					{#each ready as a (a.id)}
-						{@const r = runnerOf(a.id)}
-						{@const st = accountStatus(a, r)}
-						<div class="run">
-							<div class="run-h">
-								<PlatformMark platform={a.platform} />
-								<b>{a.name}</b>
-								<span class="st {st}">{t(STATUS_KEYS[st])}</span>
-							</div>
-							<p class="line">{accountLine(a, r)}</p>
-							{#if st === 'mining' && r?.current && r.current.required_minutes > 0}
-								<div
-									class="bar"
-									role="progressbar"
-									aria-label={r.current.benefit_name}
-									aria-valuemin={0}
-									aria-valuemax={r.current.required_minutes}
-									aria-valuenow={r.current.minutes}
-								>
-									<i style:width="{Math.min(100, (r.current.minutes / r.current.required_minutes) * 100)}%"></i>
-								</div>
-							{/if}
-						</div>
-					{/each}
-				</div>
 			{/if}
 
 			<div class="foot">
 				{#if step === 2}<button type="button" class="btn quiet" onclick={() => {
-							showFlow = !added && ready.length === 0;
+							showFlow = ready.length === 0;
 							step = 1;
 						}}>{t('welcome.back')}</button>{/if}
 				<span class="grow"></span>
-				{#if step === 1}
-					<button type="button" class="btn primary" disabled={!open} onclick={next}>{t('welcome.continue')}</button>
-				{:else if step === 2}
-					<button type="button" class="btn primary" disabled={!open} onclick={next}>{t('welcome.start')}</button>
-				{:else}
-					<a class="btn primary" href="/">{t('welcome.open_home')}</a>
-				{/if}
+				<button type="button" class="btn primary" disabled={!open} onclick={next}>{t(step === 1 ? 'welcome.continue' : 'welcome.start')}</button>
 			</div>
 		{/if}
 	</main>
@@ -635,6 +610,9 @@
 	.flowp {
 		margin-top: 14px;
 	}
+	.more {
+		margin-top: 14px;
+	}
 	.accts {
 		list-style: none;
 		margin: 0;
@@ -822,77 +800,6 @@
 		stroke-linejoin: round;
 	}
 
-	/* Step 3 */
-	.run {
-		padding: 14px 16px 16px;
-	}
-	.run + .run {
-		border-top: 1px solid var(--border-soft);
-	}
-	.run-h {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-	}
-	.run-h b {
-		font-weight: 500;
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.st {
-		font-size: 12px;
-		font-weight: 500;
-		padding: 2px 8px;
-		border-radius: 10px;
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		white-space: nowrap;
-		color: var(--t2);
-		background: var(--surface-3);
-	}
-	.st::before {
-		content: '';
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background: currentColor;
-	}
-	.st.mining {
-		color: var(--green);
-		background: var(--green-soft);
-	}
-	.st.signed_out {
-		color: var(--red);
-		background: var(--red-soft);
-	}
-	.st.paused {
-		color: var(--amber);
-		background: var(--amber-soft);
-	}
-	.line {
-		margin: 6px 0 0;
-		font-size: 13px;
-		color: var(--t2);
-	}
-	.bar {
-		margin-top: 10px;
-		height: 4px;
-		border-radius: 2px;
-		background: var(--surface-3);
-		overflow: hidden;
-	}
-	.bar > i {
-		display: block;
-		height: 100%;
-		background: var(--accent);
-		border-radius: 2px;
-		transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-	}
-
 	.foot {
 		display: flex;
 		align-items: center;
@@ -917,8 +824,7 @@
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.segs li,
-		.bar > i {
+		.segs li {
 			transition: none;
 		}
 	}
