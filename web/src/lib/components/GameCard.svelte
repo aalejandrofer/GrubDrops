@@ -112,6 +112,10 @@
 					<li><span>{q.benefit_name}</span><span>{t('home.queued_min', { n: formatInt(q.required_minutes) })}</span></li>
 				{/each}
 			</ul>
+		{:else if game.state === 'waiting'}
+			<p class="idle-l">
+				{card.queuedBy ? t('home.waiting_line', { account: card.queuedBy }) : t('home.waiting_line_any')}
+			</p>
 		{/if}
 	</div>
 </article>

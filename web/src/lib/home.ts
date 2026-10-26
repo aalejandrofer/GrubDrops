@@ -34,7 +34,7 @@ export function gameCards(g: Game[], r: Runner[]): GameCard[] {
 		const rank = i + 1;
 		const key = normName(game.name);
 		const rows = r
-			.filter((x) => (x.current ? normName(x.current.game) === key : rank === 1))
+			.filter((x) => (x.state === 'needs_login' || !x.current ? rank === 1 : normName(x.current.game) === key))
 			.map(row)
 			.sort((a, b) => b.progress - a.progress);
 		const targets: { t: Target; by: string }[] = [];
@@ -48,7 +48,7 @@ export function gameCards(g: Game[], r: Runner[]): GameCard[] {
 			rows,
 			queued,
 			queuedBy: targets[0]?.by ?? null,
-			moreInUpNext: targets.length
+			moreInUpNext: queued.length
 		};
 	});
 }

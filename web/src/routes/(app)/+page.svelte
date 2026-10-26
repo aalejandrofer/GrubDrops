@@ -31,7 +31,6 @@
 	);
 	const kpi = $derived(o?.kpis);
 	const unhealthy = $derived(o && kpi ? kpi.accounts_healthy < o.status.accounts_total : false);
-	const claimedToday = $derived(kpi?.claimed_today ?? groups.today.length);
 	const sections = $derived([
 		{ key: 'today', label: t('home.today'), items: groups.today },
 		{ key: 'yesterday', label: t('home.yesterday'), items: groups.yesterday },
@@ -107,7 +106,7 @@
 								><circle cx="8" cy="8" r="6" /><path d="m5.3 8.2 1.8 1.8 3.6-3.8" stroke-linecap="round" stroke-linejoin="round" /></svg
 							>{t('home.claimed')}
 						</h2>
-						<span class="meta">{t('home.claimed_meta', { n: formatInt(claimedToday) })}</span>
+						<span class="meta">{t('home.claimed_meta', { n: formatInt(kpi.claimed_today) })}</span>
 					</div>
 					{#if live.recent.length === 0}
 						<p class="none">{t('home.claimed_none')}</p>

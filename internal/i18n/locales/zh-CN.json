@@ -120,5 +120,8 @@
   "home.how2_h": "替你领取。",
   "home.how2_b": "掉落时间一到，立即领取。",
   "home.how3_h": "持续查找。",
-  "home.how3_b": "每 5 分钟检查一次新活动。"
+  "home.how3_b": "每 5 分钟检查一次新活动。",
+  "home.waiting_line": "{account} 空闲后开始。",
+  "home.waiting_line_any": "有账号空闲后开始。",
+  "home.search_failed": "无法搜索游戏。"
 }

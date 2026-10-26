@@ -120,5 +120,8 @@
   "home.how2_h": "Reclama por ti.",
   "home.how2_b": "Cuando se cumple el tiempo de un drop, se reclama enseguida.",
   "home.how3_h": "Sigue buscando.",
-  "home.how3_b": "Las campañas nuevas se revisan cada 5 min."
+  "home.how3_b": "Las campañas nuevas se revisan cada 5 min.",
+  "home.waiting_line": "Empieza cuando {account} esté libre.",
+  "home.waiting_line_any": "Empieza cuando una cuenta esté libre.",
+  "home.search_failed": "No se pudo buscar juegos."
 }

@@ -48,11 +48,23 @@ describe('gameCards', () => {
 	});
 	it("moreInUpNext counts that game's queued drops", () => {
 		const c = gameCards(G(), R());
-		expect(c[0].moreInUpNext).toBe(2);
+		expect(c[0].moreInUpNext).toBe(1);
 		expect(c[1].moreInUpNext).toBe(1);
 		expect(c[1].queued.map((t) => t.game)).toEqual(['Marvel Rivals']);
 		expect(c[1].queuedBy).toBe('hJune');
 		expect(c[3].moreInUpNext).toBe(0);
+	});
+	it('same drop queued on several accounts counts once', () => {
+		const c = gameCards(G(), structuredClone(many) as Runner[]);
+		expect(c[0].moreInUpNext).toBe(1);
+	});
+	it('needs_login with a stale current lands on card 1 only', () => {
+		const r = R();
+		r[2].current = structuredClone(r[1].current);
+		r[2].current!.game = 'Marvel Rivals';
+		const c = gameCards(G(), r);
+		expect(c[1].rows.map((x) => x.runner.account_name)).not.toContain('kick_main');
+		expect(c[0].rows.filter((x) => x.muted)).toHaveLength(1);
 	});
 	it('card 1 lists idle accounts', () => {
 		const c = gameCards(G(), structuredClone(many) as Runner[]);

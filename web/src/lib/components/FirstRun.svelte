@@ -11,6 +11,7 @@
 	let q = $state('');
 	let hits = $state<SearchHit[]>([]);
 	let failed = $state(false);
+	let searchFailed = $state(false);
 	let busy = $state<string | null>(null);
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let seq = 0;
@@ -25,6 +26,7 @@
 	function onInput(): void {
 		clearTimeout(timer);
 		failed = false;
+		searchFailed = false;
 		const text = q.trim();
 		const mine = ++seq;
 		if (!text) {
@@ -36,7 +38,10 @@
 				const r = await api.searchGames(text);
 				if (mine === seq) hits = r;
 			} catch {
-				if (mine === seq) hits = [];
+				if (mine === seq) {
+					hits = [];
+					searchFailed = true;
+				}
 			}
 		}, 150);
 	}
@@ -125,6 +130,7 @@
 							</ul>
 						{/if}
 						{#if failed}<p class="err" role="alert">{t('home.add_failed')}</p>{/if}
+						{#if searchFailed}<p class="err" role="alert">{t('home.search_failed')}</p>{/if}
 					</div>
 				</div>
 			</li>

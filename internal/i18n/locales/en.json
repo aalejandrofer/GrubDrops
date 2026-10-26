@@ -120,5 +120,8 @@
   "home.how2_h": "Claims for you.",
   "home.how2_b": "When a drop's time is reached, it's claimed right away.",
   "home.how3_h": "Keeps looking.",
-  "home.how3_b": "New campaigns are checked every 5 min."
+  "home.how3_b": "New campaigns are checked every 5 min.",
+  "home.waiting_line": "Starts when {account} is free.",
+  "home.waiting_line_any": "Starts when an account is free.",
+  "home.search_failed": "Couldn't search games."
 }
