@@ -137,10 +137,16 @@
 	}
 
 	async function onFile(e: Event & { currentTarget: HTMLInputElement }): Promise<void> {
-		const file = e.currentTarget.files?.[0];
+		const input = e.currentTarget;
+		const file = input.files?.[0];
 		if (!file) return;
-		cookies = await file.text();
-		e.currentTarget.value = '';
+		kickMsg = '';
+		try {
+			cookies = await file.text();
+		} catch {
+			kickMsg = t('accounts.file_failed');
+		}
+		input.value = '';
 	}
 
 	function startRename(a: Account): void {
@@ -155,8 +161,6 @@
 		if (name === '' || name === a.name) return;
 		try {
 			await api.renameAccount(a.id, name);
-			// The rename endpoint publishes no accounts event, so pull the list.
-			await live.refetchAll().catch(() => {});
 		} catch (e) {
 			rowError[a.id] = errMsg(e, t('accounts.rename_failed'));
 		}
@@ -200,6 +204,7 @@
 	});
 
 	onDestroy(() => {
+		flow?.dispose();
 		cancelTimer?.();
 		// Leaving mid-flow drops the half-made account.
 		const p = panel;
@@ -320,7 +325,9 @@
 								if (e.key === 'Enter') void commitRename(a);
 								else if (e.key === 'Escape') renaming = null;
 							}}
-							onblur={() => (renaming = null)}
+							onblur={() => {
+								if (renaming === a.id) void commitRename(a);
+							}}
 						/>
 					{:else}
 						<b><button type="button" class="nm" title={t('accounts.rename_label', { name: a.name })} onclick={() => startRename(a)}>{a.name}</button></b>

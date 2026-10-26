@@ -4,7 +4,7 @@ import type { Account, DeviceStatus, Runner } from '$lib/api/types';
 import accountsFx from '$lib/fixtures/accounts.json';
 import runnersMining from '$lib/fixtures/runners.mining.json';
 import { prefs } from '$lib/prefs.svelte';
-import { POLL_MS, accountLine, accountStatus, createDeviceFlow } from './accounts';
+import { MAX_POLL_FAILS, POLL_MS, accountLine, accountStatus, createDeviceFlow } from './accounts';
 
 const ACC = (id: string) => structuredClone(accountsFx.find((a) => a.id === id)) as Account;
 const RUN = (id: string) => structuredClone(runnersMining.find((r) => r.account_id === id)) as Runner;
@@ -82,6 +82,98 @@ describe('device flow', () => {
 		await flow.start();
 		await flow.cancel();
 		expect(f.calls.removed).toEqual([]);
+		expect(f.hasPending()).toBe(false);
+	});
+});
+
+describe('device flow races', () => {
+	const mk = (f: ReturnType<typeof fake>) =>
+		createDeviceFlow({ api: f.api, accountId: 'a9', schedule: f.schedule, isNew: false });
+
+	it('start twice gives one polling chain', async () => {
+		const f = fake(['pending']);
+		const flow = mk(f);
+		await Promise.all([flow.start(), flow.start()]);
+		expect(f.delays).toEqual([POLL_MS]);
+		await f.fire();
+		expect(f.delays).toEqual([POLL_MS, POLL_MS]);
+		expect(f.calls.status).toBe(1);
+	});
+
+	it('cancel during an in-flight status schedules nothing', async () => {
+		const f = fake(['pending']);
+		let release!: () => void;
+		const gate = new Promise<void>((r) => (release = r));
+		const real = f.api.twitchStatus;
+		f.api.twitchStatus = async (id: string) => {
+			await gate;
+			return real(id);
+		};
+		const flow = mk(f);
+		await flow.start();
+		const fired = f.fire();
+		await flow.cancel();
+		release();
+		await fired;
+		expect(f.delays).toEqual([POLL_MS]);
+		expect(f.hasPending()).toBe(false);
+	});
+
+	it('dispose during an in-flight start schedules nothing and keeps state', async () => {
+		const f = fake(['pending']);
+		let release!: () => void;
+		const gate = new Promise<void>((r) => (release = r));
+		const real = f.api.twitchStart;
+		f.api.twitchStart = async (id: string) => {
+			await gate;
+			return real(id);
+		};
+		const flow = mk(f);
+		const started = flow.start();
+		flow.dispose();
+		release();
+		await started;
+		expect(f.delays).toEqual([]);
+		expect(flow.state).toBe('idle');
+	});
+
+	it('dispose clears a scheduled poll', async () => {
+		const f = fake(['pending']);
+		const flow = mk(f);
+		await flow.start();
+		flow.dispose();
+		expect(f.hasPending()).toBe(false);
+	});
+
+	it('start during polling restarts with one chain', async () => {
+		const f = fake(['pending']);
+		const flow = mk(f);
+		await flow.start();
+		await flow.start();
+		expect(f.calls.start).toBe(2);
+		await f.fire();
+		expect(f.calls.status).toBe(1);
+		expect(f.delays).toEqual([POLL_MS, POLL_MS, POLL_MS]);
+	});
+
+	it('tolerates failed polls until MAX_POLL_FAILS in a row', async () => {
+		const f = fake(['pending']);
+		let n = 0;
+		f.api.twitchStatus = async () => {
+			n++;
+			if (n === 3) return { status: 'pending' as const };
+			throw new Error('net');
+		};
+		const flow = mk(f);
+		await flow.start();
+		await f.fire();
+		await f.fire();
+		expect(flow.state).toBe('code');
+		await f.fire();
+		expect(flow.state).toBe('code');
+		n = 100;
+		for (let i = 0; i < MAX_POLL_FAILS; i++) await f.fire();
+		expect(flow.state).toBe('error');
 		expect(f.hasPending()).toBe(false);
 	});
 });

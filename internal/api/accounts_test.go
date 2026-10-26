@@ -169,6 +169,23 @@ func TestAccounts_Rename(t *testing.T) {
 	assert.Equal(t, 404, resp.StatusCode)
 }
 
+func TestAccounts_RenamePublishesEvent(t *testing.T) {
+	e, _ := accountsEnv(t)
+	e.s.d.Hub = NewHub()
+	ch, cancel := e.s.d.Hub.Subscribe()
+	defer cancel()
+	id := e.createAccount("kick", "Old")
+	_, tok := e.session()
+	resp, _ := e.do("PATCH", "/api/accounts/"+id, tok, map[string]string{"name": "New"})
+	require.Equal(t, 204, resp.StatusCode)
+	select {
+	case ev := <-ch:
+		assert.Equal(t, EventAccounts, ev.Name)
+	case <-time.After(time.Second):
+		t.Fatal("no accounts event after rename")
+	}
+}
+
 func jsonField(t *testing.T, b []byte, key string) string {
 	t.Helper()
 	var m map[string]any

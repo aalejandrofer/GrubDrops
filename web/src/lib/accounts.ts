@@ -5,6 +5,8 @@ import { t } from '$lib/i18n/index.svelte';
 import { prefs } from '$lib/prefs.svelte';
 
 export const POLL_MS = 3000;
+/** Consecutive failed status polls before the flow gives up. */
+export const MAX_POLL_FAILS = 3;
 
 export type DeviceState = 'idle' | 'code' | 'done' | 'expired' | 'error';
 
@@ -21,6 +23,8 @@ export interface DeviceFlow {
 	code: DeviceStart | null;
 	start(): Promise<void>;
 	cancel(): Promise<void>;
+	/** Stops polling and ignores any request still in flight. Never touches the account. */
+	dispose(): void;
 	onChange(fn: () => void): void;
 }
 
@@ -30,12 +34,14 @@ export function createDeviceFlow(deps: DeviceFlowDeps): DeviceFlow {
 	let stopTimer: (() => void) | null = null;
 	let listener: () => void = () => {};
 	let gen = 0;
+	let fails = 0;
 
 	const flow: DeviceFlow = {
 		state: 'idle',
 		code: null,
 		async start() {
 			stopPolling();
+			fails = 0;
 			const mine = ++gen;
 			try {
 				const code = await api.twitchStart(accountId);
@@ -55,6 +61,10 @@ export function createDeviceFlow(deps: DeviceFlowDeps): DeviceFlow {
 			stopPolling();
 			if (isNew) await api.removeAccount(accountId);
 		},
+		dispose() {
+			gen++;
+			stopPolling();
+		},
 		onChange(fn) {
 			listener = fn;
 		}
@@ -71,13 +81,24 @@ export function createDeviceFlow(deps: DeviceFlowDeps): DeviceFlow {
 
 	async function poll(mine: number): Promise<void> {
 		stopTimer = null;
-		let status: Awaited<ReturnType<Api['twitchStatus']>>['status'];
+		let status: Awaited<ReturnType<Api['twitchStatus']>>['status'] = 'pending';
+		let failed = false;
 		try {
 			status = (await api.twitchStatus(accountId)).status;
 		} catch {
-			status = 'error';
+			failed = true;
 		}
 		if (mine !== gen) return;
+		if (failed) {
+			fails++;
+			if (fails < MAX_POLL_FAILS) {
+				arm(mine);
+				return;
+			}
+			status = 'error';
+		} else {
+			fails = 0;
+		}
 		if (status === 'pending') {
 			arm(mine);
 			return;

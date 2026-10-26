@@ -266,5 +266,6 @@
   "accounts.kick_unverified": "Guardado, pero Kick no aceptó la sesión.",
   "accounts.kick_failed": "No se pudo guardar la sesión.",
   "accounts.close": "Cerrar",
-  "accounts.avatar": "Avatar de {name}"
+  "accounts.avatar": "Avatar de {name}",
+  "accounts.file_failed": "No se pudo leer el archivo."
 }

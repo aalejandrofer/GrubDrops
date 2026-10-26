@@ -266,5 +266,6 @@
   "accounts.kick_unverified": "已保存，但 Kick 不接受该会话。",
   "accounts.kick_failed": "无法保存会话。",
   "accounts.close": "关闭",
-  "accounts.avatar": "{name} 的头像"
+  "accounts.avatar": "{name} 的头像",
+  "accounts.file_failed": "无法读取该文件。"
 }

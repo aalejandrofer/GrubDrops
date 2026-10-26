@@ -266,5 +266,6 @@
   "accounts.kick_unverified": "Saved, but Kick didn't accept the session.",
   "accounts.kick_failed": "Couldn't save the session.",
   "accounts.close": "Close",
-  "accounts.avatar": "Avatar of {name}"
+  "accounts.avatar": "Avatar of {name}",
+  "accounts.file_failed": "Couldn't read the file."
 }

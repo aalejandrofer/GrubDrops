@@ -156,6 +156,10 @@ func (s *server) renameAccount(w http.ResponseWriter, r *http.Request) {
 	if s.d.AccountRenamed != nil {
 		s.d.AccountRenamed(id, name)
 	}
+	// Not accountChanged: a rename must not reload the runner, only tell clients.
+	if s.d.Hub != nil {
+		s.d.Hub.Publish(Event{Name: EventAccounts, Data: struct{}{}})
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
