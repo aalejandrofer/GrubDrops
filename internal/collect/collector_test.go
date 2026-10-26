@@ -171,6 +171,27 @@ func TestCollector_FoundClaimLogged(t *testing.T) {
 	require.Equal(t, store.ClaimSourceInventory, got[0].Source)
 }
 
+func TestCollector_OnFound(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	var got []store.ClaimEntry
+	c.OnFound = func(_ context.Context, e store.ClaimEntry) { got = append(got, e) }
+	s := cbaseScan()
+	s.Progress = []platform.Progress{{BenefitID: "b2", Claimed: true}}
+	c.OnScan(ctx, s)
+	require.Len(t, got, 1)
+	require.Equal(t, "b2", got[0].BenefitID)
+	require.Equal(t, "a1", got[0].AccountID)
+
+	s.Logged = map[string]bool{"b2": true}
+	c.OnScan(ctx, s)
+	require.Len(t, got, 1)
+
+	c.OnFound = nil
+	s.Logged = nil
+	c.OnScan(ctx, s) // nil hook is a no-op
+}
+
 func TestCollector_ScanErrorRecorded(t *testing.T) {
 	c := newCollector(t)
 	ctx := context.Background()

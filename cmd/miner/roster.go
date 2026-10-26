@@ -12,6 +12,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/collect"
 	"github.com/aalejandrofer/grubdrops/internal/plan"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform/kick"
 	"github.com/aalejandrofer/grubdrops/internal/runner"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
@@ -36,11 +37,41 @@ type roster struct {
 	collector *collect.Collector
 	hub       *api.Hub
 	pool      *runner.Pool
-	kick      kickRegistry // nil when Kick is not configured
+	kick      kickRegistry // nil interface when Kick is not configured; see newRoster
 	logger    *slog.Logger
 
 	backendFor func(gen.Account) (platform.Backend, error)
 	notifier   runner.Notifier
+}
+
+// newRoster returns r wired for claim events. k may be nil. A nil
+// *kick.Backend stored straight in the kickRegistry interface would be a
+// non-nil interface and panic on use, so the field is set only when k is
+// non-nil.
+func newRoster(r roster, k *kick.Backend) *roster {
+	ro := &r
+	if k != nil {
+		ro.kick = k
+	}
+	// Claims found during reconcile reach the hub the same way runner claims do.
+	ro.collector.OnFound = func(ctx context.Context, e store.ClaimEntry) {
+		ro.publishClaim(ctx, e.AccountID, e.BenefitID)
+	}
+	return ro
+}
+
+// publishClaim reads the claim log row back and publishes it as a claim event.
+func (ro *roster) publishClaim(ctx context.Context, accountID, benefitID string) {
+	e, err := ro.collector.Claims.Get(ctx, accountID, benefitID)
+	if err != nil {
+		ro.log().Error("read back claim failed", "kind", "error", "account", accountID, "benefit", benefitID, "err", err)
+		return
+	}
+	var name string
+	if a, err := ro.q.GetAccount(ctx, accountID); err == nil {
+		name = a.DisplayName
+	}
+	ro.hub.Publish(api.Event{Name: api.EventClaim, Data: api.ClaimJSON(e, name)})
 }
 
 func (ro *roster) log() *slog.Logger {
@@ -113,7 +144,7 @@ func (ro *roster) builder(a gen.Account) runner.Builder {
 			Games:       games,
 			ForceLinked: linkOverrideSet(ctx, ro.q),
 			Notifier:    ro.notifier,
-			Claims:      &claimLog{c: ro.collector, hub: ro.hub, q: ro.q},
+			Claims:      &claimLog{ro: ro},
 			Skips:       ro.skips,
 			Order:       order,
 			OnScan: func(ctx context.Context, s runner.Scan) {
@@ -123,9 +154,15 @@ func (ro *roster) builder(a gen.Account) runner.Builder {
 			OnProgress: ro.collector.OnProgress,
 			OnBeat:     ro.collector.OnBeat,
 			OnChange: func(s runner.Snapshot) {
+				// Read the row fresh so a rename shows; the captured row is
+				// the fallback.
+				row := a
+				if fresh, err := ro.q.GetAccount(ro.ctx, a.ID); err == nil {
+					row = fresh
+				}
 				ro.hub.Publish(api.Event{
 					Name: api.EventRunner, Key: a.ID,
-					Data: api.RunnerJSON(s, a, len(order()) > 0),
+					Data: api.RunnerJSON(s, row, len(order()) > 0),
 				})
 			},
 			ProgressNotifyStepPct: 0,
@@ -136,38 +173,25 @@ func (ro *roster) builder(a gen.Account) runner.Builder {
 }
 
 // claimLog adapts the Collector to runner.ClaimLog and announces each claim.
-type claimLog struct {
-	c   *collect.Collector
-	hub *api.Hub
-	q   *gen.Queries
-}
+type claimLog struct{ ro *roster }
 
 var _ runner.ClaimLog = (*claimLog)(nil)
 
 func (l *claimLog) RecordClaim(ctx context.Context, accountID string, t plan.Target, code string) error {
-	if err := l.c.RecordClaim(ctx, accountID, t, code); err != nil {
+	if err := l.ro.collector.RecordClaim(ctx, accountID, t, code); err != nil {
 		return err
 	}
-	e, err := l.c.Claims.Get(ctx, accountID, t.Benefit.ID)
-	if err != nil {
-		slog.Warn("read back claim failed", "kind", "claim", "account", accountID, "err", err)
-		return nil
-	}
-	var name string
-	if a, err := l.q.GetAccount(ctx, accountID); err == nil {
-		name = a.DisplayName
-	}
-	l.hub.Publish(api.Event{Name: api.EventClaim, Data: api.ClaimJSON(e, name)})
+	l.ro.publishClaim(ctx, accountID, t.Benefit.ID)
 	return nil
 }
 
 func (l *claimLog) ClaimedBenefitIDs(ctx context.Context, accountID string) (map[string]bool, error) {
-	return l.c.ClaimedBenefitIDs(ctx, accountID)
+	return l.ro.collector.ClaimedBenefitIDs(ctx, accountID)
 }
 
 // builders returns one Builder per account row, in ListAllAccounts order.
-func (ro *roster) builders(ctx context.Context) ([]runner.Builder, error) {
-	accts, err := ro.q.ListAllAccounts(ctx)
+func (ro *roster) builders(_ context.Context) ([]runner.Builder, error) {
+	accts, err := ro.q.ListAllAccounts(ro.ctx)
 	if err != nil {
 		return nil, err
 	}

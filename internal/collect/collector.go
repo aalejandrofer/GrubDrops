@@ -24,6 +24,9 @@ type Collector struct {
 	Board   *Board
 	Now     func() time.Time      // nil = time.Now
 	Loc     func() *time.Location // nil = time.Local; picks the minutes day
+	// OnFound is called after each inventory-found claim OnScan records. nil
+	// = no-op. Set it before the first scan.
+	OnFound func(ctx context.Context, e store.ClaimEntry)
 
 	mu   sync.Mutex
 	last map[string]map[string]store.DropState // account -> benefit -> state
@@ -66,6 +69,10 @@ func (c *Collector) OnScan(ctx context.Context, s runner.Scan) {
 	for _, e := range Found(s, now) {
 		if err := c.Claims.Record(ctx, e); err != nil {
 			c.logErr("collect: record found claim failed", s.AccountID, err)
+			continue
+		}
+		if c.OnFound != nil {
+			c.OnFound(ctx, e)
 		}
 	}
 	scan := store.AccountScan{AccountID: s.AccountID, ScannedAt: s.At}
