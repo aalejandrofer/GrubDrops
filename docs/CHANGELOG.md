@@ -28,7 +28,7 @@ All notable changes to GrubDrops.
 
 ### Changed
 
-- **Home card size.** Cards no longer show a rank number, and card size follows the order on the page, so an idle top-priority game listed below active ones is small.
+- **Home card size.** Cards no longer show a rank number, and card size follows the order on the page, so an idle top-priority game listed below active ones is small. A waiting game now lists above games with no campaign even when nothing is queued for it yet.
 - **Up next account names.** Each name is tinted by platform: purple for Twitch, green for Kick.
 
 - The miner runs the v2 planner, runner and collector and serves the JSON API and the embedded SPA.

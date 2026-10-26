@@ -240,6 +240,11 @@ describe('visibleCards', () => {
 		expect(r.shown.map((c) => c.rank)).toEqual([1, 2, 3, 4, 5, 6, 7]);
 		expect(r.hidden).toBe(3);
 	});
+	it('lists a waiting game with no queue before idle games', () => {
+		const c = mk(3);
+		c[2].game = { id: '3', state: 'waiting' } as unknown as Game;
+		expect(visibleCards(c).shown.map((x) => x.rank)).toEqual([3, 1, 2]);
+	});
 	it('sizes by display position', () => {
 		const r = visibleCards(mk(4, [4]));
 		expect(r.shown.map((c) => c.rank)).toEqual([4, 1, 2, 3]);
