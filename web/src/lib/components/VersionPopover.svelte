@@ -49,7 +49,7 @@
 			<h3>{t('version.available', { v: update.latest })}</h3>
 			{#if update.notes.length > 0}
 				<ul>
-					{#each update.notes as n (n)}<li>{n}</li>{/each}
+					{#each update.notes as n, i (i)}<li>{n}</li>{/each}
 				</ul>
 			{/if}
 			<div class="cmdrow"><CopyCommand {command} /></div>

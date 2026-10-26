@@ -78,7 +78,7 @@
 			<div class="card-body">
 				{#if hasNew && u.notes.length > 0}
 					<ul class="notes">
-						{#each u.notes as n (n)}<li>{n}</li>{/each}
+						{#each u.notes as n, i (i)}<li>{n}</li>{/each}
 					</ul>
 				{/if}
 				{#if notesUrl}

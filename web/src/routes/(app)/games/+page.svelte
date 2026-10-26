@@ -274,7 +274,7 @@
 					</div>
 					{#if g.campaigns.length > 0}
 						<ul class="camps">
-							{#each g.campaigns as c (c.id)}
+							{#each g.campaigns as c (`${c.platform}/${c.id}`)}
 								<li>
 									<PlatformMark platform={c.platform} /><span>{c.name}</span><small>{campaignLine(c, prefs.zone)}</small>
 								</li>
