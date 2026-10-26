@@ -65,6 +65,12 @@ type client struct {
 	// beaconHostAllow overrides hostAllowedForBeacon in tests only (the
 	// httptest server isn't a twitch.tv host). nil in production.
 	beaconHostAllow func(rawURL string) bool
+
+	// usherURL overrides usherBaseURL and hlsHostAllow overrides
+	// hostAllowedForHLS, in tests only (httptest isn't a ttvnw.net host).
+	// Empty/nil in production.
+	usherURL     string
+	hlsHostAllow func(rawURL string) bool
 }
 
 func newClient() *client {
