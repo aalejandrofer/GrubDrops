@@ -54,6 +54,13 @@ type clock struct {
 func (c *clock) now() time.Time  { c.mu.Lock(); defer c.mu.Unlock(); return c.t }
 func (c *clock) set(t time.Time) { c.mu.Lock(); c.t = t; c.mu.Unlock() }
 
+// waitFor polls cond until it holds or 2s pass.
+func waitFor(cond func() bool) {
+	for end := time.Now().Add(2 * time.Second); time.Now().Before(end) && !cond(); {
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 func runSummary(t *testing.T, enabled bool) []sent {
 	t.Helper()
 	old := maxWait
@@ -92,10 +99,15 @@ func runSummary(t *testing.T, enabled bool) []sent {
 		Run(rctx, Config{Settings: settings, Minutes: minutes, Claims: claims, Notifier: n,
 			Zone: func() *time.Location { return loc }, Now: clk.now})
 	}()
-	time.Sleep(50 * time.Millisecond)
+	// Let the loop spin a few cycles before midnight, then cross it.
+	time.Sleep(20 * time.Millisecond)
 	assert.Empty(t, n.all(), "nothing before midnight")
 	clk.set(time.Date(2026, 5, 11, 0, 0, 1, 0, loc))
-	time.Sleep(100 * time.Millisecond)
+	waitFor(func() bool { return len(n.all()) > 0 })
+	if !enabled {
+		// Off case: give a wrongly-sent event time to show up.
+		time.Sleep(50 * time.Millisecond)
+	}
 	cancel()
 	<-done
 	return n.all()

@@ -61,6 +61,7 @@ type Deps struct {
 	// Settings and notifications.
 	Settings         *store.Settings
 	Notifier         Notifier
+	WebhookFallback  string            // env webhook used when none is stored
 	OnSettingsUpdate func()            // nil-safe
 	SetZone          func(name string) // nil-safe
 

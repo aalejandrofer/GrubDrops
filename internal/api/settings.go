@@ -76,8 +76,9 @@ func (s *server) loadSettings(ctx context.Context) (settingsBody, error) {
 	if err != nil {
 		return b, err
 	}
+	b.Discord.Configured = hook != "" || s.d.WebhookFallback != ""
 	if hook != "" {
-		b.Discord = settingsDiscord{Configured: true, WebhookHint: webhookHint(hook)}
+		b.Discord.WebhookHint = webhookHint(hook)
 	}
 	b.Notify.Claim, _, b.Notify.Auth, b.Notify.Errors, _ = st.NotifyKinds(ctx)
 	if b.Notify.DailySummary, err = st.NotifyDailySummary(ctx); err != nil {
@@ -113,7 +114,7 @@ type settingsPut struct {
 	UpdateAuto *bool `json:"update_auto"`
 }
 
-func in(v string, ok ...string) bool {
+func oneOf(v string, ok ...string) bool {
 	for _, o := range ok {
 		if v == o {
 			return true
@@ -139,9 +140,9 @@ func (s *server) putSettings(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
-	valid := (req.Language == nil || in(*req.Language, "en", "es", "zh-CN")) &&
-		(req.TimeFormat == nil || in(*req.TimeFormat, "24h", "12h")) &&
-		(req.Theme == nil || in(*req.Theme, "dark", "light")) &&
+	valid := (req.Language == nil || oneOf(*req.Language, "en", "es", "zh-CN")) &&
+		(req.TimeFormat == nil || oneOf(*req.TimeFormat, "24h", "12h")) &&
+		(req.Theme == nil || oneOf(*req.Theme, "dark", "light")) &&
 		(req.Timezone == nil || *req.Timezone == "" || validZone(*req.Timezone)) &&
 		(req.DiscordWebhook == nil || validWebhook(*req.DiscordWebhook))
 	if !valid {
@@ -202,7 +203,7 @@ func (s *server) applySettings(ctx context.Context, req settingsPut) error {
 			return err
 		}
 	}
-	if n := req.Notify; n != nil {
+	if n := req.Notify; n != nil && (n.Claim != nil || n.Auth != nil || n.Errors != nil) {
 		claim, progress, auth, errs, canary := st.NotifyKinds(ctx)
 		if n.Claim != nil {
 			claim = *n.Claim
@@ -216,10 +217,10 @@ func (s *server) applySettings(ctx context.Context, req settingsPut) error {
 		if err := st.SetNotifyKinds(ctx, claim, progress, auth, errs, canary); err != nil {
 			return err
 		}
-		if n.DailySummary != nil {
-			if err := st.SetNotifyDailySummary(ctx, *n.DailySummary); err != nil {
-				return err
-			}
+	}
+	if n := req.Notify; n != nil && n.DailySummary != nil {
+		if err := st.SetNotifyDailySummary(ctx, *n.DailySummary); err != nil {
+			return err
 		}
 	}
 	if req.UpdateAuto != nil {
@@ -235,7 +236,7 @@ func (s *server) notifyTest(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
 	}
-	if hook == "" {
+	if hook == "" && s.d.WebhookFallback == "" {
 		writeErr(w, http.StatusBadRequest, "bad_request")
 		return
 	}

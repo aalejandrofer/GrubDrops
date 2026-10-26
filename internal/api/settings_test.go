@@ -166,3 +166,22 @@ func TestNotifyTest_SendFails502(t *testing.T) {
 	assert.Equal(t, 204, code)
 	assert.Equal(t, []string{"test", "test"}, e.n.events)
 }
+
+func TestSettings_WebhookFallback(t *testing.T) {
+	e := newSettingsEnv(t)
+	e.h = func() http.Handler {
+		s := &server{d: Deps{Settings: e.st, Notifier: e.n, WebhookFallback: "https://discord.com/api/webhooks/9/secret"}}
+		r := chi.NewRouter()
+		s.routesSettings(r)
+		return r
+	}()
+	code, b := e.do("GET", "/settings", nil)
+	require.Equal(t, 200, code)
+	var got settingsBody
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.True(t, got.Discord.Configured)
+	assert.Equal(t, "", got.Discord.WebhookHint)
+	assert.NotContains(t, string(b), "secret")
+	code, _ = e.do("POST", "/settings/notify-test", nil)
+	assert.Equal(t, 204, code)
+}

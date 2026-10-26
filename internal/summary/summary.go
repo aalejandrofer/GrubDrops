@@ -34,10 +34,14 @@ func NextMidnight(now time.Time, loc *time.Location) time.Time {
 // Run blocks until ctx ends. At each midnight, when the daily summary is on,
 // it sends one EventSummary for the day that ended.
 func Run(ctx context.Context, c Config) {
+	loc := c.location()
+	next := NextMidnight(c.now(), loc)
 	for {
-		loc, now := c.location(), c.now()
-		next := NextMidnight(now, loc)
 		for {
+			if l := c.location(); l.String() != loc.String() {
+				loc = l
+				next = NextMidnight(c.now(), loc)
+			}
 			wait := next.Sub(c.now())
 			if wait <= 0 {
 				break
@@ -52,6 +56,7 @@ func Run(ctx context.Context, c Config) {
 			}
 		}
 		c.send(ctx, next)
+		next = NextMidnight(c.now(), loc)
 	}
 }
 
