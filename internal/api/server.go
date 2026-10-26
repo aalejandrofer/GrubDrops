@@ -3,17 +3,24 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"io/fs"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
+	"github.com/aalejandrofer/grubdrops/internal/collect"
+	mlog "github.com/aalejandrofer/grubdrops/internal/log"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/update"
 )
 
 // Deps holds everything the API needs. Session, DB and Q are required for the
@@ -27,6 +34,43 @@ type Deps struct {
 	Version       string
 	SPA           fs.FS
 	Hub           *Hub
+
+	// Overview and runners.
+	Pool         RunnerPool
+	Minutes      *store.WatchMinutes
+	Claims       *store.ClaimLog
+	Scans        *store.AccountScans
+	Zone         func() *time.Location               // nil = time.Local
+	Now          func() time.Time                    // nil = time.Now
+	UpdateStatus func(current string) (bool, string) // nil = no update known
+
+	// Games.
+	Chosen       *store.ChosenGames
+	Board        *collect.Board
+	GamesChanged func() // nil-safe
+
+	// Accounts and logins.
+	Sessions       *store.SessionStore
+	Registry       *platform.Registry
+	RootCtx        context.Context
+	Registrar      KickChannelRegistrar
+	KickBrowser    KickBrowserClient
+	AccountChanged func(id string) // nil-safe
+	AccountRemoved func(id string) // nil-safe
+
+	// Settings and notifications.
+	Settings         *store.Settings
+	Notifier         Notifier
+	OnSettingsUpdate func()            // nil-safe
+	SetZone          func(name string) // nil-safe
+
+	// Health and updates.
+	Ring         *mlog.Ring
+	StartTime    time.Time
+	Commit       string
+	KickSidecars func() []string
+	RunCanary    func(context.Context) error
+	Update       *update.Checker
 }
 
 type server struct {
@@ -81,6 +125,12 @@ func NewRouter(d Deps) http.Handler {
 // resource: s.routesX(r).
 func (s *server) routesProtected(r chi.Router) {
 	s.routesEvents(r)
+	s.routesOverview(r)
+	s.routesGames(r)
+	s.routesClaims(r)
+	s.routesAccounts(r)
+	s.routesSettings(r)
+	s.routesHealth(r)
 }
 
 // spa serves the embedded SPA, falling back to index.html for unknown paths.
