@@ -86,6 +86,34 @@ func (q *Queries) DeleteDropStatesForAccount(ctx context.Context, accountID stri
 	return err
 }
 
+const getClaimLog = `-- name: GetClaimLog :one
+SELECT account_id, benefit_id, platform, game, campaign_id, campaign_name, benefit_name, image_url, code, source, claimed_at FROM claim_log WHERE account_id = ? AND benefit_id = ?
+`
+
+type GetClaimLogParams struct {
+	AccountID string `json:"account_id"`
+	BenefitID string `json:"benefit_id"`
+}
+
+func (q *Queries) GetClaimLog(ctx context.Context, arg GetClaimLogParams) (ClaimLog, error) {
+	row := q.db.QueryRowContext(ctx, getClaimLog, arg.AccountID, arg.BenefitID)
+	var i ClaimLog
+	err := row.Scan(
+		&i.AccountID,
+		&i.BenefitID,
+		&i.Platform,
+		&i.Game,
+		&i.CampaignID,
+		&i.CampaignName,
+		&i.BenefitName,
+		&i.ImageUrl,
+		&i.Code,
+		&i.Source,
+		&i.ClaimedAt,
+	)
+	return i, err
+}
+
 const listAccountScans = `-- name: ListAccountScans :many
 SELECT account_id, scanned_at, reconciled_at, error FROM account_scans ORDER BY account_id ASC
 `

@@ -34,6 +34,16 @@ type claimAccount struct {
 	Name string `json:"name"`
 }
 
+// ClaimJSON converts a claim log entry to its API shape.
+func ClaimJSON(e store.ClaimEntry, accountName string) claimItem {
+	return claimItem{
+		AccountID: e.AccountID, AccountName: accountName, Platform: e.Platform,
+		Game: e.Game, CampaignName: e.CampaignName, BenefitID: e.BenefitID,
+		BenefitName: e.BenefitName, ImageURL: e.ImageURL, Code: e.Code, Source: e.Source,
+		ClaimedAt: e.ClaimedAt.UTC().Format(time.RFC3339),
+	}
+}
+
 func (s *server) routesClaims(r chi.Router) {
 	r.Get("/claims", s.getClaims)
 }
@@ -93,12 +103,7 @@ func (s *server) getClaims(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]claimItem, 0, len(entries))
 	for _, e := range entries {
-		items = append(items, claimItem{
-			AccountID: e.AccountID, AccountName: names[e.AccountID], Platform: e.Platform,
-			Game: e.Game, CampaignName: e.CampaignName, BenefitID: e.BenefitID,
-			BenefitName: e.BenefitName, ImageURL: e.ImageURL, Code: e.Code, Source: e.Source,
-			ClaimedAt: e.ClaimedAt.UTC().Format(time.RFC3339),
-		})
+		items = append(items, ClaimJSON(e, names[e.AccountID]))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"total": total, "items": items, "games": games, "accounts": accounts})
 }

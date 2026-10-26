@@ -98,3 +98,6 @@ WHERE (sqlc.arg(game) = '' OR game = sqlc.arg(game))
 
 -- name: ListClaimLogGames :many
 SELECT DISTINCT game FROM claim_log WHERE game <> '' ORDER BY game ASC;
+
+-- name: GetClaimLog :one
+SELECT * FROM claim_log WHERE account_id = ? AND benefit_id = ?;

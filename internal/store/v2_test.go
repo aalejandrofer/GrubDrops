@@ -281,3 +281,15 @@ func TestClaimLog_PageFilters(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"Apex", "Rust"}, games)
 }
+
+func TestClaimLog_GetOne(t *testing.T) {
+	_, q := openV2(t)
+	l := NewClaimLog(q)
+	ctx := context.Background()
+	require.NoError(t, l.Record(ctx, ClaimEntry{AccountID: "a1", Platform: "twitch", Game: "G", BenefitID: "b1", Source: ClaimSourceGrubDrops}))
+	got, err := l.Get(ctx, "a1", "b1")
+	require.NoError(t, err)
+	require.Equal(t, "G", got.Game)
+	_, err = l.Get(ctx, "a1", "nope")
+	require.Error(t, err)
+}

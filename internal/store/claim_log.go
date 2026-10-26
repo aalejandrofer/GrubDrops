@@ -67,6 +67,15 @@ func (l *ClaimLog) ClaimedBenefitIDs(ctx context.Context, accountID string) (map
 	return out, nil
 }
 
+// Get returns one account's claim of a benefit.
+func (l *ClaimLog) Get(ctx context.Context, accountID, benefitID string) (ClaimEntry, error) {
+	r, err := l.Q.GetClaimLog(ctx, gen.GetClaimLogParams{AccountID: accountID, BenefitID: benefitID})
+	if err != nil {
+		return ClaimEntry{}, err
+	}
+	return claimEntries([]gen.ClaimLog{r})[0], nil
+}
+
 // Recent returns the newest claims across all accounts.
 func (l *ClaimLog) Recent(ctx context.Context, limit int) ([]ClaimEntry, error) {
 	rows, err := l.Q.ListRecentClaimLog(ctx, int64(limit))

@@ -56,6 +56,7 @@ type Querier interface {
 	GetAccount(ctx context.Context, id string) (Account, error)
 	GetAdmin(ctx context.Context) (Admin, error)
 	GetCampaign(ctx context.Context, id string) (Campaign, error)
+	GetClaimLog(ctx context.Context, arg GetClaimLogParams) (ClaimLog, error)
 	GetProgress(ctx context.Context, arg GetProgressParams) (Progress, error)
 	GetSession(ctx context.Context, accountID string) (Session, error)
 	GetSettingString(ctx context.Context, key string) ([]byte, error)

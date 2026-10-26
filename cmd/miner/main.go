@@ -739,26 +739,6 @@ func (nopRunner) Run(ctx context.Context) error { <-ctx.Done(); return ctx.Err()
 // the real idle reason instead of a blanket auth error.
 func (n nopRunner) IdleState() string { return n.reason }
 
-// loadLinkOverrides reads the manual "I've linked it" campaign overrides
-// from kv (keys prefixed store.LinkOverridePrefix) and returns a membership
-// predicate. Errors degrade to "no overrides" — the gate just stays on.
-func loadLinkOverrides(ctx context.Context, q *gen.Queries) func(campaignID string) bool {
-	set := map[string]bool{}
-	rows, err := q.ListKVByPrefix(ctx, sql.NullString{String: store.LinkOverridePrefix, Valid: true})
-	if err == nil {
-		for _, kv := range rows {
-			if string(kv.Value) != "1" {
-				continue
-			}
-			set[strings.TrimPrefix(kv.Key, store.LinkOverridePrefix)] = true
-		}
-	}
-	if len(set) == 0 {
-		return nil
-	}
-	return func(campaignID string) bool { return set[campaignID] }
-}
-
 // loadCollectOverrides reads the manual "mark collected" assertions from kv
 // (keys prefixed store.CollectOverridePrefix, value "1") and returns a
 // membership predicate keyed by (accountID, benefitID). The kv key encodes
