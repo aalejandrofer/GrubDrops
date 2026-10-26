@@ -56,6 +56,8 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- **Discord webhook URL in logs.** A failed Discord send no longer puts the webhook URL, whose path is the secret, in its error or the log.
+
 - **Twitch Android accounts never mined.** DropCampaignDetails reads its `channelLogin` variable as a user ID, but GrubDrops sent the login, so Twitch answered `user: null`, every campaign came back with no drops, and Up next stayed empty. It now sends the account's numeric user ID (from the session, or CurrentUser). An empty details answer is logged and no longer cached for 30 minutes.
 - **Kick watch time never accrued from EU hosts.** Kick now shows a OneTrust consent banner, and its player does not request the stream until the visitor picks an option, so the sidecar's video stayed at readyState 0 and every watch gave up with "player never started". The sidecar now accepts the banner each time it drives the player. A watch that still fails to start logs the page URL without its query, title, video state and error, whether the banner is showing, and whether the playback API and an HLS playlist were requested (no cookie or token values). Each player poll now has a 10 s timeout.
 - **Home order.** A game that is mining is listed above games that are only waiting, whatever their priority.

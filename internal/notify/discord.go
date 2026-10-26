@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -73,11 +74,12 @@ func (d *DiscordWebhook) Notify(ctx context.Context, event Event, fields map[str
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := d.HTTP.Do(req)
 	if err != nil {
-		return err
+		// url.Error carries the webhook URL, whose path is the secret.
+		return errors.New(strings.ReplaceAll(err.Error(), d.URL, "discord webhook"))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("discord webhook %s: %s", d.URL, resp.Status)
+		return fmt.Errorf("discord webhook: %s", resp.Status)
 	}
 	return nil
 }
