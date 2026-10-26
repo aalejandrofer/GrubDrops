@@ -29,6 +29,7 @@ All notable changes to GrubDrops.
 - v2 pool restarts a panicked runner from its builder after one minute.
 - The miner runs the v2 planner, runner and collector, and serves the JSON API; the web UI is a placeholder until the SvelteKit app lands (rebuild/v2).
 - `GET /api/events` streams every ring log line as a `log` event, and open streams end when the miner shuts down instead of holding shutdown for 5 s.
+- Adding or reordering chosen games returns at once. The runners reload in the background, one reload at a time with repeated changes folded together, and a `games` event fires when the reload finishes.
 
 ### Fixed
 

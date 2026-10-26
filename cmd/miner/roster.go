@@ -44,6 +44,9 @@ type roster struct {
 
 	backendFor func(gen.Account) (platform.Backend, error)
 	notifier   runner.Notifier
+
+	// gamesDirty queues one games reload; see requestGamesReload.
+	gamesDirty chan struct{} // set by newRoster
 }
 
 // accountNames maps account ID to display name in memory, so the log hook can
@@ -94,6 +97,7 @@ func (ro *roster) accountName(id string) string { return ro.names.get(id) }
 func newRoster(r roster, k *kick.Backend) *roster {
 	ro := &r
 	ro.names = &accountNames{}
+	ro.gamesDirty = make(chan struct{}, 1)
 	if k != nil {
 		ro.kick = k
 	}
@@ -133,6 +137,12 @@ func (ro *roster) idle(a gen.Account, st runner.State) runner.Entry {
 func (ro *roster) builder(a gen.Account) runner.Builder {
 	return func() runner.Entry {
 		ctx := ro.ctx
+		// Reread the row so a panic restart picks up a rename or login
+		// change; the captured row is the fallback.
+		a := a
+		if fresh, err := ro.q.GetAccount(ctx, a.ID); err == nil {
+			a = fresh
+		}
 		if a.Enabled == 0 {
 			return ro.idle(a, runner.StateIdle)
 		}
@@ -281,6 +291,27 @@ func (ro *roster) accountRemoved(id string) {
 	ro.hub.Publish(api.Event{Name: api.EventAccounts, Data: struct{}{}})
 }
 
+// requestGamesReload queues a games reload and returns at once. A trigger
+// that arrives while one is already queued folds into it.
+func (ro *roster) requestGamesReload() {
+	select {
+	case ro.gamesDirty <- struct{}{}:
+	default:
+	}
+}
+
+// runGamesReloader runs queued games reloads one at a time until ro.ctx ends.
+func (ro *roster) runGamesReloader() {
+	for {
+		select {
+		case <-ro.ctx.Done():
+			return
+		case <-ro.gamesDirty:
+			ro.gamesChanged()
+		}
+	}
+}
+
 // gamesChanged rebuilds every runner so each picks up the new chosen games.
 func (ro *roster) gamesChanged() {
 	accts, err := ro.q.ListAllAccounts(ro.ctx)
@@ -289,6 +320,9 @@ func (ro *roster) gamesChanged() {
 		return
 	}
 	for _, a := range accts {
+		if ro.ctx.Err() != nil {
+			return
+		}
 		ro.reloadAccount(a.ID)
 	}
 	ro.hub.Publish(api.Event{Name: api.EventGames, Data: struct{}{}})

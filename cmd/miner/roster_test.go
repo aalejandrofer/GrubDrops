@@ -268,6 +268,44 @@ func TestRoster_GamesChangedReloadsEach(t *testing.T) {
 	e.waitEvent(t, func(ev api.Event) bool { return ev.Name == api.EventGames })
 }
 
+func TestRoster_GamesReloadQueuedAndCoalesced(t *testing.T) {
+	e := newRosterEnv(t)
+	e.flushHub(t)
+	e.account(t, "a1", 1, true)
+	builds := 0
+	var mu sync.Mutex
+	e.ro.backendFor = func(gen.Account) (platform.Backend, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		builds++
+		return e.fake, nil
+	}
+	bs, err := e.ro.builders(e.ctx)
+	require.NoError(t, err)
+	require.NoError(t, e.ro.pool.Reload(e.ctx, bs))
+
+	// No reloader runs yet: each request returns at once and they fold
+	// into one queued reload.
+	for range 3 {
+		e.ro.requestGamesReload()
+	}
+	assert.Len(t, e.ro.gamesDirty, 1)
+	mu.Lock()
+	assert.Equal(t, 1, builds)
+	mu.Unlock()
+
+	go e.ro.runGamesReloader()
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return builds == 2 && len(e.ro.gamesDirty) == 0
+	}, 5*time.Second, 20*time.Millisecond)
+	e.waitEvent(t, func(ev api.Event) bool { return ev.Name == api.EventGames })
+	mu.Lock()
+	assert.Equal(t, 2, builds)
+	mu.Unlock()
+}
+
 func TestRoster_RunnerEventCarriesRenamedAccount(t *testing.T) {
 	e := newRosterEnv(t)
 	e.flushHub(t)

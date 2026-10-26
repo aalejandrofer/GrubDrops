@@ -49,7 +49,7 @@ type Deps struct {
 	// Games.
 	Chosen       *store.ChosenGames
 	Board        *collect.Board
-	GamesChanged func() // nil-safe
+	GamesChanged func() // nil-safe; must return at once, the reload runs in the background
 
 	// Accounts and logins.
 	Sessions       *store.SessionStore
