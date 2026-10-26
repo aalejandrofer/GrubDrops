@@ -6,6 +6,7 @@ All notable changes to GrubDrops.
 
 ### Added
 
+- v2 SPA serving: a "UI not built" page when the build is missing, no-cache index.html, immutable hashed assets, and 404 for missing assets (rebuild/v2).
 - v2 planner (`internal/plan`) and per-account runner + pool (`internal/runner`), replacing the watcher and scheduler.
 - v2 collection tables (migration 0016) and a one-time `<db>.pre-v2` backup written by `store.Open` before an existing database migrates.
 - v2 store wrappers for the claim log, drop states, watch minutes, account scans, chosen games and skips.

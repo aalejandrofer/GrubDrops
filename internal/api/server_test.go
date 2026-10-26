@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -33,6 +34,11 @@ type env struct {
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
+	return newEnvSPA(t, fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}})
+}
+
+func newEnvSPA(t *testing.T, spa fs.FS) *env {
+	t.Helper()
 	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "t.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
@@ -42,7 +48,7 @@ func newEnv(t *testing.T) *env {
 	s := newServer(Deps{
 		DB: db, Q: gen.New(db), Session: sm, Version: "test",
 		Hub: NewHub(),
-		SPA: fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}},
+		SPA: spa,
 	})
 	s.protected.Get("/overview", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"ok": "1"}) })
 	s.routesEvents(s.protected)
@@ -149,4 +155,41 @@ func (d adminErrDB) QueryRowContext(ctx context.Context, q string, args ...any) 
 		return d.DB.QueryRowContext(ctx, "SELECT x FROM no_such_table")
 	}
 	return d.DB.QueryRowContext(ctx, q, args...)
+}
+
+func TestSPA_NotBuilt(t *testing.T) {
+	e := newEnvSPA(t, fstest.MapFS{".gitkeep": {}})
+	for _, p := range []string{"/", "/games"} {
+		resp, b := e.do("GET", p, "", nil)
+		assert.Equal(t, 503, resp.StatusCode, p)
+		assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
+		assert.Equal(t, "no-store", resp.Header.Get("Cache-Control"))
+		assert.Contains(t, string(b), "UI not built, run <code>npm --prefix web run build</code>")
+	}
+	resp, b := e.do("GET", "/api/nope", "", nil)
+	assert.Equal(t, 404, resp.StatusCode)
+	assert.JSONEq(t, `{"error":"not_found"}`, string(b))
+}
+
+func TestSPA_CacheHeaders(t *testing.T) {
+	e := newEnvSPA(t, fstest.MapFS{
+		"index.html":                         {Data: []byte("<html>spa</html>")},
+		"_app/immutable/entry/app.abc123.js": {Data: []byte("export {}")},
+	})
+	for _, p := range []string{"/", "/rewards"} {
+		resp, _ := e.do("GET", p, "", nil)
+		assert.Equal(t, 200, resp.StatusCode, p)
+		assert.Equal(t, "no-cache", resp.Header.Get("Cache-Control"), p)
+	}
+	resp, _ := e.do("GET", "/_app/immutable/entry/app.abc123.js", "", nil)
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, "public, max-age=31536000, immutable", resp.Header.Get("Cache-Control"))
+	assert.True(t, strings.HasPrefix(resp.Header.Get("Content-Type"), "text/javascript"), resp.Header.Get("Content-Type"))
+}
+
+func TestSPA_MissingAssetIs404(t *testing.T) {
+	e := newEnv(t)
+	resp, b := e.do("GET", "/_app/immutable/chunks/gone.js", "", nil)
+	assert.Equal(t, 404, resp.StatusCode)
+	assert.NotContains(t, string(b), "spa")
 }

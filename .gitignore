@@ -34,6 +34,12 @@ coverage.out
 # build / dist
 dist/
 !internal/web/dist/
+internal/web/dist/*
+!internal/web/dist/.gitkeep
+
+web/node_modules/
+web/.svelte-kit/
+web/.shots/
 out/
 
 # stray local build binaries (cmd/* tools)

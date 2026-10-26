@@ -95,8 +95,9 @@ func TestRun_BootsAndServesAPI(t *testing.T) {
 	body, err := io.ReadAll(page.Body)
 	_ = page.Body.Close()
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, page.StatusCode)
-	assert.True(t, strings.Contains(string(body), "GrubDrops"), "placeholder SPA not served")
+	// 200 with a built SPA, 503 with the "UI not built" page.
+	assert.Contains(t, []int{http.StatusOK, http.StatusServiceUnavailable}, page.StatusCode)
+	assert.True(t, strings.Contains(string(body), "GrubDrops"), "SPA or not-built page not served")
 
 	start := time.Now()
 	cancel()

@@ -140,12 +140,30 @@ func (s *server) routesProtected(r chi.Router) {
 	s.routesHealth(r)
 }
 
+// notBuiltHTML is served with 503 when the embedded SPA has no index.html.
+const notBuiltHTML = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops</title>
+<style>body{font-family:system-ui,sans-serif;margin:3rem auto;max-width:36rem;padding:0 1rem}</style>
+</head>
+<body>
+<h1>GrubDrops</h1>
+<p>UI not built, run <code>npm --prefix web run build</code></p>
+</body>
+</html>
+`
+
 // spa serves the embedded SPA, falling back to index.html for unknown paths.
-// Paths under /api/ and /auth/ get a JSON 404 instead.
+// Paths under /api/ and /auth/ get a JSON 404 instead, and missing files under
+// /_app/ get a plain 404. index.html is never cached; hashed assets are
+// immutable. Without an index.html it serves notBuiltHTML with 503.
 func (s *server) spa() http.HandlerFunc {
 	var files http.Handler
 	if s.d.SPA != nil {
-		files = http.FileServer(http.FS(s.d.SPA))
+		files = http.FileServerFS(s.d.SPA)
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
@@ -157,17 +175,30 @@ func (s *server) spa() http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
+		if _, err := fs.Stat(s.d.SPA, "index.html"); err != nil {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-store")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(notBuiltHTML))
+			return
+		}
 		clean := strings.TrimPrefix(p, "/")
 		if clean != "" {
-			if f, err := s.d.SPA.Open(clean); err == nil {
-				st, serr := f.Stat()
-				_ = f.Close()
-				if serr == nil && !st.IsDir() {
-					files.ServeHTTP(w, r)
-					return
+			if st, err := fs.Stat(s.d.SPA, clean); err == nil && !st.IsDir() {
+				if strings.HasPrefix(p, "/_app/immutable/") {
+					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				} else {
+					w.Header().Set("Cache-Control", "no-cache")
 				}
+				files.ServeHTTP(w, r)
+				return
 			}
 		}
+		if strings.HasPrefix(p, "/_app/") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-cache")
 		r2 := r.Clone(r.Context())
 		r2.URL.Path = "/"
 		files.ServeHTTP(w, r2)

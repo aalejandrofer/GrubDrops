@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-// TestDistHasIndex guards the SPA fallback: the router serves index.html for
-// every unknown path, so the embed must always carry one.
-func TestDistHasIndex(t *testing.T) {
-	if _, err := fs.Stat(Dist(), "index.html"); err != nil {
-		t.Fatalf("dist/index.html missing: %v", err)
+// TestDistEmbeds guards the embed: dist/ always carries at least .gitkeep, so
+// go:embed compiles before the SPA is built.
+func TestDistEmbeds(t *testing.T) {
+	if _, err := fs.Stat(Dist(), ".gitkeep"); err != nil {
+		t.Fatalf("dist/.gitkeep missing: %v", err)
 	}
 }
