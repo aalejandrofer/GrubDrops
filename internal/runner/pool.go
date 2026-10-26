@@ -193,20 +193,7 @@ func (p *Pool) Reload(parent context.Context, builders []Builder) error {
 	defer p.reloadMu.Unlock()
 	base := p.base(parent)
 
-	p.buildMu.Lock()
-	entries := make([]Entry, 0, len(builders))
-	for _, b := range builders {
-		entries = append(entries, b())
-	}
-
-	// Old entries stay visible in Snapshots until the swap below.
-	p.mu.Lock()
-	old := slices.Clone(p.units)
-	p.mu.Unlock()
-	for _, u := range old {
-		u.cancel()
-	}
-	p.buildMu.Unlock()
+	entries, old := p.buildAll(builders)
 	for _, u := range old {
 		<-u.done
 	}
@@ -222,6 +209,48 @@ func (p *Pool) Reload(parent context.Context, builders []Builder) error {
 	p.units = units
 	p.mu.Unlock()
 	return nil
+}
+
+// buildAll builds the new entries and cancels the old units under buildMu.
+// The deferred unlock keeps a panicking builder from wedging later reloads
+// and restarts. Old entries stay visible in Snapshots until Reload swaps.
+func (p *Pool) buildAll(builders []Builder) ([]Entry, []*poolUnit) {
+	p.buildMu.Lock()
+	defer p.buildMu.Unlock()
+	entries := make([]Entry, 0, len(builders))
+	for _, b := range builders {
+		entries = append(entries, b())
+	}
+	p.mu.Lock()
+	old := slices.Clone(p.units)
+	p.mu.Unlock()
+	for _, u := range old {
+		u.cancel()
+	}
+	return entries, old
+}
+
+// buildOne builds id's new entry, when b is set, and cancels its old unit
+// under buildMu. It returns the old unit and its index, or nil and -1.
+func (p *Pool) buildOne(id string, b Builder) (Entry, *poolUnit, int) {
+	p.buildMu.Lock()
+	defer p.buildMu.Unlock()
+	var e Entry
+	if b != nil {
+		e = b()
+		e.ID = id
+	}
+	p.mu.Lock()
+	idx := slices.IndexFunc(p.units, func(u *poolUnit) bool { return u.entry.ID == id })
+	var old *poolUnit
+	if idx >= 0 {
+		old = p.units[idx]
+	}
+	p.mu.Unlock()
+	if old != nil {
+		old.cancel()
+	}
+	return e, old, idx
 }
 
 // release unhooks a stopped unit. A Runner only unhooks itself if it still
@@ -246,34 +275,18 @@ func (p *Pool) ReloadAccount(id string, b Builder) {
 		return // not running; the next Reload builds the roster
 	}
 
-	p.buildMu.Lock()
-	var e Entry
-	if b != nil {
-		e = b()
-		e.ID = id
-	}
-
-	p.mu.Lock()
-	idx := slices.IndexFunc(p.units, func(u *poolUnit) bool { return u.entry.ID == id })
-	var old *poolUnit
-	if idx >= 0 {
-		old = p.units[idx]
-	}
-	p.mu.Unlock()
-	if old != nil {
-		old.cancel()
-	}
-	p.buildMu.Unlock()
+	e, old, idx := p.buildOne(id, b)
 	if old != nil {
 		<-old.done
 		release(old.current())
 	}
 	if b == nil {
+		p.mu.Lock()
 		if old != nil {
-			p.mu.Lock()
 			p.units = slices.DeleteFunc(p.units, func(u *poolUnit) bool { return u == old })
-			p.mu.Unlock()
 		}
+		delete(p.orders, id)
+		p.mu.Unlock()
 		return
 	}
 

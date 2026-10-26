@@ -478,3 +478,53 @@ func TestPool_BuildPanicDuringRestartRetries(t *testing.T) {
 		t.Fatal("unit never rebuilt after build panic")
 	}
 }
+
+// reloadPanics runs f and reports whether it panicked.
+func reloadPanics(f func()) (panicked bool) {
+	defer func() { panicked = recover() != nil }()
+	f()
+	return false
+}
+
+func TestPool_BuilderPanicDoesNotWedgeLaterReloads(t *testing.T) {
+	p := NewPool(nil)
+	defer p.Stop()
+	var s int32
+	b, _ := blockBuilder("a", &s)
+	if err := p.Reload(context.Background(), []Builder{b}); err != nil {
+		t.Fatal(err)
+	}
+	bad := func() Entry { panic("build boom") }
+	if !reloadPanics(func() { _ = p.Reload(context.Background(), []Builder{bad}) }) {
+		t.Fatal("Reload did not panic")
+	}
+	if !reloadPanics(func() { p.ReloadAccount("a", bad) }) {
+		t.Fatal("ReloadAccount did not panic")
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		b2, _ := blockBuilder("a", &s)
+		_ = p.Reload(context.Background(), []Builder{b2})
+		b3, _ := blockBuilder("a", &s)
+		p.ReloadAccount("a", b3)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("reload wedged after a builder panic")
+	}
+}
+
+func TestPool_RemovedAccountDropsOrder(t *testing.T) {
+	p := NewPool(nil)
+	defer p.Stop()
+	var s int32
+	b, _ := blockBuilder("a", &s)
+	_ = p.Reload(context.Background(), []Builder{b})
+	p.SetOrder("a", []string{"x"})
+	p.ReloadAccount("a", nil)
+	if got := p.OrderFunc("a")(); got != nil {
+		t.Fatalf("got %v", got)
+	}
+}
