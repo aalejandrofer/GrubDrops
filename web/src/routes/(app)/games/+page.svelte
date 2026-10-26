@@ -8,7 +8,7 @@
 	import PageHead from '$lib/components/PageHead.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { relTime } from '$lib/format';
-	import { campaignLine, commitGames, moveGame, suggestions, withoutId } from '$lib/games';
+	import { campaignLine, commitGames, matchParts, moveGame, suggestions, withoutId } from '$lib/games';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
@@ -190,9 +190,10 @@
 				{#each sugg as s (s.kind === 'hit' ? `h:${s.hit.id}` : 'add')}
 					<li>
 						{#if s.kind === 'hit'}
+							{@const m = matchParts(s.hit.name, q)}
 							<span class="thumb" aria-hidden="true">{Array.from(s.hit.name)[0]?.toUpperCase() ?? '?'}</span>
 							<span class="nm">
-								<b>{s.hit.name}</b>
+								<b>{m.pre}{#if m.hit}<mark>{m.hit}</mark>{/if}{m.post}</b>
 								{#if s.hit.chosen && s.hit.priority !== null}
 									<small>{t('games.already', { n: s.hit.priority })}</small>
 								{/if}
@@ -344,6 +345,10 @@
 		gap: 12px;
 		padding: 8px 10px;
 		border-radius: 6px;
+	}
+	.sugg mark {
+		background: none;
+		color: var(--accent);
 	}
 	.sugg li:hover {
 		background: var(--surface-3);

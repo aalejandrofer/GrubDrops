@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Game, SearchHit } from '$lib/api/types';
 import { setLang } from '$lib/i18n/index.svelte';
-import { campaignLine, commitGames, moveGame, suggestions, withoutId } from './games';
+import { campaignLine, commitGames, matchParts, moveGame, suggestions, withoutId } from './games';
 
 beforeEach(() => setLang('en'));
 
@@ -90,5 +90,16 @@ describe('commitGames', () => {
 		const before = x.cur();
 		expect(await commitGames(x.io, [game('b')])).toBe(false);
 		expect(x.cur()).toBe(before);
+	});
+});
+
+describe('matchParts', () => {
+	it('splits on the first case-insensitive match', () => {
+		expect(matchParts('Dead by Daylight', 'dead')).toEqual({ pre: '', hit: 'Dead', post: ' by Daylight' });
+		expect(matchParts('Apex Legends', ' leg ')).toEqual({ pre: 'Apex ', hit: 'Leg', post: 'ends' });
+	});
+	it('no match or empty query leaves the name whole', () => {
+		expect(matchParts('Rust', 'tarkov')).toEqual({ pre: 'Rust', hit: '', post: '' });
+		expect(matchParts('Rust', '  ')).toEqual({ pre: 'Rust', hit: '', post: '' });
 	});
 });

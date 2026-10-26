@@ -18,6 +18,14 @@ export function suggestions(hits: SearchHit[], q: string): Suggestion[] {
 	return out;
 }
 
+/** Splits a name around the first case-insensitive match of the trimmed query, for highlighting. */
+export function matchParts(name: string, q: string): { pre: string; hit: string; post: string } {
+	const needle = q.trim().toLowerCase();
+	const i = needle ? name.toLowerCase().indexOf(needle) : -1;
+	if (i < 0) return { pre: name, hit: '', post: '' };
+	return { pre: name.slice(0, i), hit: name.slice(i, i + needle.length), post: name.slice(i + needle.length) };
+}
+
 export function campaignLine(c: Campaign, zone: string): string {
 	if (!c.ends_at) return tn('games.drops_open', c.drops);
 	return tn('games.drops', c.drops, { date: shortDate(c.ends_at, zone) });
