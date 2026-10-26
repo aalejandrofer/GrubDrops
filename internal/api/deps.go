@@ -14,6 +14,7 @@ type RunnerPool interface {
 	OrderFunc(accountID string) func() []string
 	RescanAll()
 	MineNow(accountID string) (string, error)
+	RecheckLinks(ctx context.Context, accountID string) (runner.LinkRecheck, error)
 }
 
 var _ RunnerPool = (*runner.Pool)(nil)

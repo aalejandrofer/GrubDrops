@@ -345,6 +345,27 @@ func (p *Pool) RescanAll() {
 	}
 }
 
+// RecheckLinks runs the account runner's link recheck. ErrNotRunning when the
+// account has no running runner.
+func (p *Pool) RecheckLinks(ctx context.Context, accountID string) (LinkRecheck, error) {
+	p.mu.Lock()
+	var unit Unit
+	for _, u := range p.units {
+		if u.entry.ID == accountID {
+			unit = u.entry.Unit
+			break
+		}
+	}
+	p.mu.Unlock()
+	lr, ok := unit.(interface {
+		RecheckLinks(ctx context.Context) (LinkRecheck, error)
+	})
+	if !ok {
+		return LinkRecheck{}, ErrNotRunning
+	}
+	return lr.RecheckLinks(ctx)
+}
+
 // switcher is a Unit that can drop its watch for another queued target.
 type switcher interface {
 	Unit

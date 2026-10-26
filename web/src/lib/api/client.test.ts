@@ -36,6 +36,14 @@ describe('client', () => {
 		for (const c of calls.slice(1)) expect(hdr(c, 'X-CSRF-Token')).toBe('tok');
 	});
 
+	it('recheckLinks posts with CSRF and returns counts', async () => {
+		const { api, calls } = setup([{ status: 200, body: '{"claimed":1,"still_needs_link":0}' }]);
+		expect(await api.recheckLinks('acc 1')).toEqual({ claimed: 1, still_needs_link: 0 });
+		expect(calls[0].url).toBe('/api/accounts/acc%201/recheck-links');
+		expect(calls[0].init.method).toBe('POST');
+		expect(hdr(calls[0], 'X-CSRF-Token')).toBe('tok');
+	});
+
 	it('json body and content-type on writes', async () => {
 		const { api, calls } = setup([{ status: 204 }]);
 		await api.setOrder('a1', ['b1', 'b2']);

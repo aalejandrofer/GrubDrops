@@ -114,6 +114,12 @@ export interface Game {
 	needs_link: NeedsLink[];
 }
 
+/** POST /api/accounts/{id}/recheck-links result. */
+export interface LinkRecheck {
+	claimed: number;
+	still_needs_link: number;
+}
+
 export interface GamesResp {
 	games: Game[];
 	last_scan_at: string | null;

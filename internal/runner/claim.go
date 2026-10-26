@@ -33,6 +33,10 @@ func (r *Runner) claim(ctx context.Context) error {
 		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
 			return fmt.Errorf("claim: %w", err)
 		}
+		if errors.Is(err, platform.ErrClaimNeedsLink) {
+			r.blockNotLinked(ctx, benefit, err)
+			return nil
+		}
 		slog.Error("runner claim failed", "kind", "error", "account", r.cfg.AccountID,
 			"benefit", benefit.ID, "err", err)
 		r.mu.Lock()

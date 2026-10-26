@@ -86,6 +86,11 @@ type Runner struct {
 	// claimFailSkipped holds benefits skipped for repeated claim failures,
 	// value = required minutes (Task 5).
 	claimFailSkipped map[string]int
+	// linkRefused holds benefits whose claim the platform refused until the
+	// user links an external account, value = last claim attempt. The plan
+	// blocks them as not linked; a scan retries each at most once per
+	// recheckInterval.
+	linkRefused map[string]time.Time
 	// Repeat-line suppression: each logs once per change.
 	logStepErr, logPicked, logStart, logProgress onceLog
 
@@ -473,6 +478,7 @@ func (r *Runner) scan(ctx context.Context, progress []platform.Progress, havePro
 		}
 		claimed = m
 	}
+	claimed, notLinked := r.retryLinkRefused(ctx, camps, progress, claimed)
 
 	var order []string
 	if r.cfg.Order != nil {
@@ -490,6 +496,7 @@ func (r *Runner) scan(ctx context.Context, progress []platform.Progress, havePro
 		Progress:    progress,
 		Claimed:     claimed,
 		Skipped:     skipped,
+		NotLinked:   notLinked,
 		ForceLinked: r.cfg.ForceLinked,
 		Order:       order,
 	})

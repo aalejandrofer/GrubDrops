@@ -25,11 +25,26 @@ import (
 )
 
 type fakePool struct {
-	mu      sync.Mutex
-	snaps   []runner.Snapshot
-	orders  map[string][]string
-	resets  []string
-	mineNow []string
+	mu         sync.Mutex
+	snaps      []runner.Snapshot
+	orders     map[string][]string
+	resets     []string
+	mineNow    []string
+	recheck    []string
+	recheckRes runner.LinkRecheck
+	recheckErr error
+}
+
+func (f *fakePool) RecheckLinks(_ context.Context, id string) (runner.LinkRecheck, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, s := range f.snaps {
+		if s.AccountID == id {
+			f.recheck = append(f.recheck, id)
+			return f.recheckRes, f.recheckErr
+		}
+	}
+	return runner.LinkRecheck{}, runner.ErrNotRunning
 }
 
 func (f *fakePool) Snapshots() []runner.Snapshot {

@@ -11,9 +11,39 @@ import {
 	matchParts,
 	moveGame,
 	moveTarget,
+	recheckAccounts,
 	suggestions,
 	withoutId
 } from './games';
+
+describe('recheckAccounts', () => {
+	const res = (claimed: number, still_needs_link: number) => async () => ({ claimed, still_needs_link });
+
+	it('sums claims across distinct accounts', async () => {
+		const seen: string[] = [];
+		const r = await recheckAccounts(['a', 'b', 'a'], async (id) => {
+			seen.push(id);
+			return { claimed: 1, still_needs_link: id === 'b' ? 1 : 0 };
+		});
+		expect(seen).toEqual(['a', 'b']);
+		expect(r).toEqual({ outcome: 'claimed', claimed: 2 });
+	});
+
+	it('still unlinked when nothing claimed', async () => {
+		expect(await recheckAccounts(['a'], res(0, 1))).toEqual({ outcome: 'still', claimed: 0 });
+	});
+
+	it('linked when nothing is left to claim or link', async () => {
+		expect(await recheckAccounts(['a'], res(0, 0))).toEqual({ outcome: 'linked', claimed: 0 });
+	});
+
+	it('failed when every call throws', async () => {
+		const r = await recheckAccounts(['a'], async () => {
+			throw new Error('net');
+		});
+		expect(r).toEqual({ outcome: 'failed', claimed: 0 });
+	});
+});
 
 beforeEach(() => setLang('en'));
 

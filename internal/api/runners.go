@@ -161,6 +161,30 @@ func (s *server) postRunnerMineNow(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// postAccountRecheckLinks retries the account's link-refused claims now,
+// after the user linked the external account.
+func (s *server) postAccountRecheckLinks(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, ok := s.account(w, r, id); !ok {
+		return
+	}
+	if s.d.Pool == nil {
+		writeErr(w, http.StatusConflict, "not_running")
+		return
+	}
+	res, err := s.d.Pool.RecheckLinks(r.Context(), id)
+	switch {
+	case errors.Is(err, runner.ErrNotRunning):
+		writeErr(w, http.StatusConflict, "not_running")
+	case err != nil:
+		writeErr(w, http.StatusBadGateway, "recheck_failed")
+	default:
+		writeJSON(w, http.StatusOK, map[string]int{
+			"claimed": res.Claimed, "still_needs_link": res.StillNeedsLink,
+		})
+	}
+}
+
 func (s *server) deleteRunnerOrder(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if _, ok := s.account(w, r, id); !ok {

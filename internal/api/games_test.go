@@ -39,6 +39,9 @@ func (p gamesFakePool) RescanAll() {
 }
 func (gamesFakePool) OrderFunc(string) func() []string { return nil }
 func (gamesFakePool) MineNow(string) (string, error)   { return "", nil }
+func (gamesFakePool) RecheckLinks(context.Context, string) (runner.LinkRecheck, error) {
+	return runner.LinkRecheck{}, nil
+}
 
 type gamesEnv struct {
 	*env

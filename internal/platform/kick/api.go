@@ -32,7 +32,11 @@ func (e *ClaimNeedsLinkError) Error() string {
 	return fmt.Sprintf("kick claim: account link required (status %d): %s", e.Status, e.ConnectURL)
 }
 
-func (e *ClaimNeedsLinkError) Is(target error) bool { return target == ErrClaimNeedsLink }
+// Is matches ErrClaimNeedsLink and the platform-wide platform.ErrClaimNeedsLink
+// the runner checks.
+func (e *ClaimNeedsLinkError) Is(target error) bool {
+	return target == ErrClaimNeedsLink || target == platform.ErrClaimNeedsLink
+}
 
 // kickFilesBase is the CDN host for Kick reward/drop images. The drops
 // API returns image_url as a host-relative path (e.g.

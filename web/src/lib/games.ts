@@ -50,6 +50,38 @@ export function linkNames(g: Pick<Game, 'needs_link'>): string[] {
 	return [...new Set((g.needs_link ?? []).map((n) => n.account_name))];
 }
 
+/** What a link recheck found across the accounts it ran for. */
+export type RecheckOutcome = 'claimed' | 'still' | 'linked' | 'failed';
+
+export interface RecheckResult {
+	outcome: RecheckOutcome;
+	claimed: number;
+}
+
+/**
+ * Recheck each account's link-refused claims and fold the results: any claim
+ * wins, then any account still unlinked, then a failure, else linked.
+ */
+export async function recheckAccounts(
+	ids: string[],
+	call: (id: string) => Promise<{ claimed: number; still_needs_link: number }>
+): Promise<RecheckResult> {
+	let claimed = 0;
+	let still = 0;
+	let failed = 0;
+	for (const id of new Set(ids)) {
+		try {
+			const r = await call(id);
+			claimed += r.claimed;
+			still += r.still_needs_link;
+		} catch {
+			failed++;
+		}
+	}
+	const outcome: RecheckOutcome = claimed > 0 ? 'claimed' : still > 0 ? 'still' : failed > 0 ? 'failed' : 'linked';
+	return { outcome, claimed };
+}
+
 export interface GamesIO {
 	get(): Game[];
 	set(games: Game[]): void;

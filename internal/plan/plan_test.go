@@ -272,3 +272,15 @@ func TestBuild_PreconditionUsesOverride(t *testing.T) {
 		t.Fatalf("blocked %+v", res.Blocked)
 	}
 }
+
+func TestBuild_NotLinkedBenefitBlocked(t *testing.T) {
+	res := Build(Input{
+		Games:     rust,
+		Campaigns: []platform.Campaign{camp("c1", "kick", "Rust", ben("d1", 30), ben("d2", 60))},
+		NotLinked: map[string]bool{"d1": true},
+	})
+	eq(t, ids(res.Queue), []string{"d2"})
+	if len(res.Blocked) != 1 || res.Blocked[0].Benefit.ID != "d1" || res.Blocked[0].Reason != ReasonNotLinked {
+		t.Fatalf("blocked=%+v", res.Blocked)
+	}
+}

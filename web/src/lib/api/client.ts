@@ -9,6 +9,7 @@ import type {
 	GamesResp,
 	Game,
 	Health,
+	LinkRecheck,
 	Overview,
 	Platform,
 	Runner,
@@ -74,6 +75,7 @@ export interface Api {
 	/** accountId signs that account in again; without it the server matches or creates the account. */
 	twitchAndroidLogin(url: string, accountId?: string): Promise<AndroidLogin>;
 	kickSession(id: string, cookiesTxt: string): Promise<{ verified: boolean }>;
+	recheckLinks(id: string): Promise<LinkRecheck>;
 	settings(): Promise<Settings>;
 	saveSettings(p: SettingsPatch): Promise<Settings>;
 	notifyTest(): Promise<void>;
@@ -205,6 +207,7 @@ export function createClient(opts: ClientOpts): Api {
 			post('/api/login/twitch/android', accountId ? { url, account_id: accountId } : { url }),
 		kickSession: (id, cookiesTxt) =>
 			post(`/api/accounts/${enc(id)}/kick/session`, { cookies_txt: cookiesTxt, channels: [] }),
+		recheckLinks: (id) => post(`/api/accounts/${enc(id)}/recheck-links`),
 		settings: () => get('/api/settings'),
 		saveSettings: (p) => send('PUT', '/api/settings', p) as Promise<Settings>,
 		notifyTest: () => post('/api/settings/notify-test'),
