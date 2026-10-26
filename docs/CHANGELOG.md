@@ -33,6 +33,7 @@ All notable changes to GrubDrops.
 - v2 Games page: search or type a game to add it, reorder priority by button or drag, remove with confirm.
 - v2 Rewards page: drops in progress with time left, claim history filtered by game or account, 10 at a time.
 - v2 Settings: language, time format, theme and timezone, Discord and notification toggles, update check and command, sign out.
+- v2 Settings accounts: add Twitch with a device code or Kick with cookies.txt, log in again, rename and remove.
 
 ### Changed
 
