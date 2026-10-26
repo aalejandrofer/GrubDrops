@@ -4,6 +4,8 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-10-26
+
 ### Added
 - **Reorder accounts.** Settings > Accounts has move up, move down and a drag handle on each row, like Games; Shift+click on a move button sends the account to the top or bottom. The order also applies to Home, Up next and Rewards, and Mine now acts on the first running account with a queue in that order. Mining stays parallel. New accounts go last. Stored in a new `accounts.sort_order` column (migration 0021, filled from the current order); `PUT /api/accounts/order` takes the full id list.
 - **First-run wizard.** With no accounts, Home opens a full-screen wizard at `/welcome` with a progress bar and Back/Continue: add one or more accounts (Twitch Android login, Twitch TV code or Kick cookies.txt; listed with a remove button, Add another account for more), then pick and order games. Two steps: Start mining on the second goes straight to Home. The Twitch Android paste field shows an example of the redirect URL with the token hidden. An account with no games opens on the games step; an install with accounts and games goes straight to Home. It replaces the old first-run panel on Home. The add-account flow is now one component shared with Settings > Accounts. A new Kick account is created on the first Save of its cookies, not when the form opens, so a reload mid-form leaves no half-made account.
