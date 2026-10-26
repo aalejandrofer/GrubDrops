@@ -1,5 +1,6 @@
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import { devProxy } from './dev-proxy.ts';
 
@@ -12,10 +13,12 @@ export default defineConfig({
 				assets: '../internal/web/dist',
 				fallback: 'index.html',
 				strict: true
-			}),
-			alias: { $locales: '../internal/i18n/locales' }
+			})
 		})
 	],
+	resolve: {
+		alias: { $locales: fileURLToPath(new URL('../internal/i18n/locales', import.meta.url)) }
+	},
 	server: {
 		proxy: devProxy(process.env.GRUB_DEV_API ?? 'http://localhost:8080'),
 		fs: { allow: ['../internal/i18n/locales', '../assets/img'] }

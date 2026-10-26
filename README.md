@@ -271,6 +271,7 @@ internal/store          SQLite (sqlc + goose), age-encrypted sessions
 ```bash
 npm --prefix web ci && npm --prefix web run build   # SPA into internal/web/dist
 web/scripts/dev-miner.sh                            # local miner on a temp DB
+GRUB_DEV_DIR=<dir> web/scripts/dev-seed.sh          # admin, sample games and accounts
 GRUB_DEV_API=http://127.0.0.1:18080 npm --prefix web run dev
 ```
 

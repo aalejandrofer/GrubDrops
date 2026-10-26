@@ -154,6 +154,15 @@ func TestGames_AddKeepsStoredName(t *testing.T) {
 	assert.Equal(t, "Rust", all[0].Name)
 }
 
+func TestGames_AddReusesSeededRowWithOtherID(t *testing.T) {
+	g := newGamesEnv(t)
+	require.NoError(t, g.q.UpsertGame(context.Background(),
+		gen.UpsertGameParams{ID: "g_apex", Name: "Apex Legends", Slug: "apex-legends"}))
+	resp, b := g.do("POST", "/api/games", g.csrf, map[string]string{"name": "Apex Legends"})
+	require.Equal(t, 201, resp.StatusCode, string(b))
+	assert.Equal(t, []string{"g_apex"}, g.chosenIDs())
+}
+
 func TestGames_AddDuplicateConflict(t *testing.T) {
 	g := newGamesEnv(t)
 	ids := g.seed("Rust")

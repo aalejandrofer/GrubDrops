@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Seed the dev miner. Needs GRUB_DEV_DIR. Usage: dev-seed.sh [--admin-only]
 set -euo pipefail
+umask 077
+# Targets a fresh DB: setup and games return 409 on a second run.
 PORT="${GRUB_DEV_PORT:-18080}"
 URL="${GRUB_DEV_URL:-http://127.0.0.1:$PORT}"
 D="${GRUB_DEV_DIR:?set GRUB_DEV_DIR to the dev-miner.sh directory}"

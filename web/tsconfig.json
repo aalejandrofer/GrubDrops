@@ -4,6 +4,7 @@
 	"exclude": ["src/service-worker"],
 	"compilerOptions": {
 		"strict": true,
+		"paths": { "$locales": ["../internal/i18n/locales"], "$locales/*": ["../internal/i18n/locales/*"] },
 		"allowJs": true,
 		"checkJs": true
 	}
