@@ -65,7 +65,7 @@ Twitch 走直连 HTTP，所以一个普通的 Go 二进制文件在任何地方�
 | Linux `arm64` / 树莓派 | ✅ | ✅ —— Chromium 边车容器，每个约 4 GB 内存 |
 | macOS / Windows · Docker Desktop（Intel） | ✅ | ✅ |
 | macOS / Windows · Apple Silicon | ✅ | ✅ —— arm64 Chromium 边车容器 |
-| 从源码 `go build`（任意操作系统） | ✅ | 边车容器需要 Docker |
+| 从源码 `go build`（任意操作系统） | ✅ | ✅ WS；Chrome 回退需要 Docker |
 
 ### 运行它
 

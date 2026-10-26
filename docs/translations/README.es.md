@@ -66,7 +66,7 @@ Twitch funciona sobre HTTP directo, así que un binario de Go normal lo mina en 
 | Linux `arm64` / Raspberry Pi | ✅ | ✅ — sidecar Chromium, ~4 GB RAM cada uno |
 | macOS / Windows · Docker Desktop (Intel) | ✅ | ✅ |
 | macOS / Windows · Apple Silicon | ✅ | ✅ — sidecar Chromium arm64 |
-| `go build` desde el código fuente (cualquier SO) | ✅ | necesita Docker para el sidecar |
+| `go build` desde el código fuente (cualquier SO) | ✅ | ✅ WS; el respaldo de Chrome necesita Docker |
 
 ### Ejecutarlo
 
