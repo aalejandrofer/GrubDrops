@@ -6,7 +6,14 @@ export type Queue = {
 	platform: Platform;
 	items: Target[];
 	custom: boolean;
+	/** The runner can switch to an Up next item now. */
+	canMine: boolean;
 };
+
+/** A signed-out or paused account cannot switch drops. */
+export function canMineNow(r: Pick<Runner, 'state'>): boolean {
+	return r.state !== 'needs_login' && r.state !== 'no_games' && r.state !== 'idle';
+}
 
 /** New array with the item at `from` moved to `to`. Out-of-range indexes return a plain copy. */
 export function moveItem<T>(list: readonly T[], from: number, to: number): T[] {
@@ -27,7 +34,8 @@ export function queues(runners: Runner[]): Queue[] {
 			accountName: r.account_name,
 			platform: r.platform,
 			items: r.up_next,
-			custom: r.order_custom
+			custom: r.order_custom,
+			canMine: canMineNow(r)
 		}));
 }
 

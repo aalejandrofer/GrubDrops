@@ -25,10 +25,11 @@ import (
 )
 
 type fakePool struct {
-	mu     sync.Mutex
-	snaps  []runner.Snapshot
-	orders map[string][]string
-	resets []string
+	mu      sync.Mutex
+	snaps   []runner.Snapshot
+	orders  map[string][]string
+	resets  []string
+	mineNow []string
 }
 
 func (f *fakePool) Snapshots() []runner.Snapshot {
@@ -60,6 +61,25 @@ func (f *fakePool) ResetOrder(id string) {
 }
 
 func (*fakePool) RescanAll() {}
+
+// MineNow mirrors the real pool's checks: the benefit must be in Up next.
+func (f *fakePool) MineNow(id, bid string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, s := range f.snaps {
+		if s.AccountID != id {
+			continue
+		}
+		for _, t := range s.UpNext {
+			if t.Benefit.ID == bid {
+				f.mineNow = append(f.mineNow, id+"/"+bid)
+				return nil
+			}
+		}
+		return runner.ErrNotQueued
+	}
+	return runner.ErrNotRunning
+}
 func (f *fakePool) OrderFunc(id string) func() []string {
 	return func() []string {
 		f.mu.Lock()
