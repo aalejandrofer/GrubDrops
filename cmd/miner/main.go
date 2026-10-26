@@ -19,7 +19,6 @@ import (
 	"filippo.io/age"
 	"github.com/alexedwards/scs/v2"
 
-	"github.com/aalejandrofer/grubdrops/internal/api"
 	"github.com/aalejandrofer/grubdrops/internal/auth/browser"
 	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
 	"github.com/aalejandrofer/grubdrops/internal/authcheck"
@@ -28,6 +27,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/discovery"
 	"github.com/aalejandrofer/grubdrops/internal/dockerctl"
 	"github.com/aalejandrofer/grubdrops/internal/i18n"
+	"github.com/aalejandrofer/grubdrops/internal/legacyapi"
 	mlog "github.com/aalejandrofer/grubdrops/internal/log"
 	"github.com/aalejandrofer/grubdrops/internal/netutil"
 	"github.com/aalejandrofer/grubdrops/internal/notify"
@@ -120,7 +120,7 @@ func run() error {
 	}
 
 	sm := scs.New()
-	sm.Store = api.NewKVSessionStore(db)
+	sm.Store = legacyapi.NewKVSessionStore(db)
 	sm.Lifetime = 12 * time.Hour
 	sm.Cookie.HttpOnly = true
 	sm.Cookie.SameSite = http.SameSiteStrictMode
@@ -640,14 +640,14 @@ func run() error {
 	}
 
 	// Avoid typed-nil-interface trap: only assign if the concrete pointer is non-nil.
-	var bc api.KickBrowserClient
+	var bc legacyapi.KickBrowserClient
 	if browserClient != nil {
 		bc = browserClient // *browser.Client satisfies KickBrowserClient
 	}
 	// The Kick registrar/verifier is the utls backend — always wire it
 	// (independent of the browser sidecar) so Kick login can register
 	// channels + verify cookies over utls with no sidecar.
-	var reg api.KickChannelRegistrar
+	var reg legacyapi.KickChannelRegistrar
 	if kickBackend != nil {
 		reg = kickBackend // *kick.Backend: RegisterChannels + VerifyAuth
 	}
@@ -660,7 +660,7 @@ func run() error {
 	displayZone := timeutil.NewZone(displayLoc)
 	cfg.Location = displayLoc
 
-	deps := api.Deps{
+	deps := legacyapi.Deps{
 		DB: db, Q: q, Templates: tmplSet, Session: sm,
 		Scheduler: sched, Reload: loadAndStart,
 		Sessions: sessions, Registry: registry,
@@ -694,7 +694,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.NewRouter(deps),
+		Handler:           legacyapi.NewRouter(deps),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -1006,7 +1006,7 @@ func loadAccountChannels(ctx context.Context, q *gen.Queries, accountID string) 
 type forceWatchStore struct{ q *gen.Queries }
 
 func (f forceWatchStore) Next(ctx context.Context, accountID string) (watcher.ForceTask, bool) {
-	v, err := f.q.GetSettingString(ctx, api.ForceWatchEnabledKey(accountID))
+	v, err := f.q.GetSettingString(ctx, legacyapi.ForceWatchEnabledKey(accountID))
 	if err != nil || string(v) != "1" {
 		return watcher.ForceTask{}, false
 	}
