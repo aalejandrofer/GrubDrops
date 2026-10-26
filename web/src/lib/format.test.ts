@@ -37,6 +37,7 @@ test('etaShort', () => {
 	expect(etaShort(18)).toBe('18m');
 	expect(etaShort(75)).toBe('1h 15m');
 	expect(etaShort(0)).toBe('0m');
+	expect(etaShort(718)).toBe('11h 58m');
 });
 
 test('uptime', () => {

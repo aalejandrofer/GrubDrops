@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { api } from '$lib/app';
-	import { nextScanMin } from '$lib/format';
+	import { etaShort, nextScanMin } from '$lib/format';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { afterLabel, anyCustom, commitMove, foldQueue, moveItem, queues } from '$lib/upnext';
@@ -116,7 +116,7 @@
 	<div class="panel-h"><h2>{t('upnext.title')}</h2><span class="n">{total}</span></div>
 	{#if qs.length === 0}
 		<p class="empty">
-			{lastScan ? tn('upnext.empty', emptyMin) : t('upnext.empty_plain')}
+			{lastScan ? t('upnext.empty', { time: etaShort(emptyMin) }) : t('upnext.empty_plain')}
 		</p>
 	{:else}
 		<div class="hint">{t('upnext.hint')}</div>
