@@ -65,7 +65,6 @@ type Querier interface {
 	// Per-account link state for a campaign, joined with the account handle.
 	// Drives the per-account connect chips on the not-linked table.
 	ListAccountLinksForCampaign(ctx context.Context, campaignID string) ([]ListAccountLinksForCampaignRow, error)
-	ListAccountNames(ctx context.Context) ([]ListAccountNamesRow, error)
 	ListAccountScans(ctx context.Context) ([]AccountScan, error)
 	ListActiveCampaignsForPlatform(ctx context.Context, arg ListActiveCampaignsForPlatformParams) ([]Campaign, error)
 	ListAllAccountChannels(ctx context.Context) ([]ListAllAccountChannelsRow, error)

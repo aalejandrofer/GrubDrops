@@ -86,38 +86,6 @@ func (q *Queries) DeleteDropStatesForAccount(ctx context.Context, accountID stri
 	return err
 }
 
-const listAccountNames = `-- name: ListAccountNames :many
-SELECT id, display_name FROM accounts ORDER BY created_at ASC, id ASC
-`
-
-type ListAccountNamesRow struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
-}
-
-func (q *Queries) ListAccountNames(ctx context.Context) ([]ListAccountNamesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAccountNames)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListAccountNamesRow
-	for rows.Next() {
-		var i ListAccountNamesRow
-		if err := rows.Scan(&i.ID, &i.DisplayName); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listAccountScans = `-- name: ListAccountScans :many
 SELECT account_id, scanned_at, reconciled_at, error FROM account_scans ORDER BY account_id ASC
 `

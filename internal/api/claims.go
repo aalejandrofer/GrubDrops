@@ -80,7 +80,7 @@ func (s *server) getClaims(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
 	}
-	accts, err := s.d.Q.ListAccountNames(ctx)
+	accts, err := s.d.Q.ListAllAccounts(ctx)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
