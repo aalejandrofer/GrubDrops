@@ -115,7 +115,9 @@
 </script>
 
 <section class="panel">
-	<div class="panel-h"><h2>{t('upnext.title')}</h2><span class="n">{total}</span></div>
+	<div class="panel-h">
+		<h2>{t('upnext.title')}</h2><span class="n">{total}</span><MineNow onresult={(ok) => (mineFailed = !ok)} />
+	</div>
 	{#if qs.length === 0}
 		<p class="empty">
 			{lastScan ? t('upnext.empty', { time: etaShort(emptyMin) }) : t('upnext.empty_plain')}
@@ -161,9 +163,6 @@
 								? t('upnext.meta_after', { min: item.required_minutes, drop: after })
 								: t('upnext.meta', { min: item.required_minutes })}
 						</div>
-					</div>
-					<div class="mn">
-						{#if q.canMine}<MineNow accountId={q.accountId} benefitId={item.benefit_id} onresult={(ok) => (mineFailed = !ok)} />{/if}
 					</div>
 					<div class="mv">
 						{#if i > 0}
@@ -255,7 +254,7 @@
 	}
 	.queue li {
 		display: grid;
-		grid-template-columns: 14px 14px minmax(0, 1fr) auto 22px;
+		grid-template-columns: 14px 14px minmax(0, 1fr) 22px;
 		gap: 8px;
 		align-items: center;
 		padding: 10px 8px 10px 10px;

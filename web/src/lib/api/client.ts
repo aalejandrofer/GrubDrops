@@ -56,7 +56,7 @@ export interface Api {
 	runners(): Promise<Runner[]>;
 	setOrder(accountId: string, benefitIds: string[]): Promise<void>;
 	resetOrder(accountId: string): Promise<void>;
-	mineNow(accountId: string, benefitId: string): Promise<void>;
+	mineNow(accountId: string): Promise<{ benefit_id: string }>;
 	games(): Promise<GamesResp>;
 	addGame(name: string): Promise<Game>;
 	scanGames(): Promise<void>;
@@ -176,7 +176,7 @@ export function createClient(opts: ClientOpts): Api {
 		setOrder: (id, benefitIds) =>
 			send('PUT', `/api/runners/${enc(id)}/order`, { benefit_ids: benefitIds }) as Promise<void>,
 		resetOrder: (id) => send('DELETE', `/api/runners/${enc(id)}/order`) as Promise<void>,
-		mineNow: (id, benefitId) => post(`/api/runners/${enc(id)}/mine-now`, { benefit_id: benefitId }),
+		mineNow: (id) => post(`/api/runners/${enc(id)}/mine-now`),
 		games: () => get('/api/games'),
 		addGame: (name) => post('/api/games', { name }),
 		scanGames: () => post('/api/games/scan'),

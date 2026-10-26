@@ -200,6 +200,7 @@
 						><circle cx="8" cy="8" r="6" /><path d="M8 4.8V8l2.2 1.4" stroke-linecap="round" stroke-linejoin="round" /></svg
 					>{t('upnext.title')} <span class="n">{queuedTotal}</span>
 				</h2>
+				<MineNow onresult={(ok) => (mineFailed = !ok)} />
 			</div>
 			<div class="panel">
 				{#each qs as q (q.accountId)}
@@ -214,9 +215,7 @@
 									<span class="acct"><PlatformMark platform={q.platform} size="sm" /><span class="pf-name {q.platform}">{q.accountName}</span></span>
 								</div>
 							</div>
-							<span class="req">{t('home.queued_min', { n: formatInt(item.required_minutes) })}</span>
-							{#if q.canMine}<MineNow accountId={q.accountId} benefitId={item.benefit_id} onresult={(ok) => (mineFailed = !ok)} />{/if}
-						</div>
+							<span class="req">{t('home.queued_min', { n: formatInt(item.required_minutes) })}</span>						</div>
 					{/each}
 					{#if fold.more > 0}
 						<button
@@ -478,7 +477,7 @@
 	}
 	.qrow {
 		display: grid;
-		grid-template-columns: 32px minmax(0, 1fr) auto auto;
+		grid-template-columns: 32px minmax(0, 1fr) auto;
 		gap: 12px;
 		align-items: center;
 		padding: 10px 14px;

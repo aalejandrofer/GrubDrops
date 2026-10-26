@@ -13,7 +13,7 @@ type RunnerPool interface {
 	ResetOrder(accountID string)
 	OrderFunc(accountID string) func() []string
 	RescanAll()
-	MineNow(accountID, benefitID string) error
+	MineNow(accountID string) (string, error)
 }
 
 var _ RunnerPool = (*runner.Pool)(nil)

@@ -131,24 +131,27 @@ func TestRunners_MineNow(t *testing.T) {
 		UpNext: []plan.Target{tgt("G", "n1", 0), tgt("G", "n2", 0)},
 	}}
 	_, tok := e.session()
-	resp, _ := e.do("POST", "/api/runners/a1/mine-now", tok, map[string]any{"benefit_id": "n2"})
+	// No body: the server starts the first Up next target.
+	resp, b := e.do("POST", "/api/runners/a1/mine-now", tok, nil)
 	assert.Equal(t, 202, resp.StatusCode)
-	assert.Equal(t, []string{"a1/n2"}, e.pool.mineNow)
+	assert.JSONEq(t, `{"benefit_id":"n1"}`, string(b))
+	assert.Equal(t, []string{"a1/n1"}, e.pool.mineNow)
 
-	resp, _ = e.do("POST", "/api/runners/a1/mine-now", "", map[string]any{"benefit_id": "n1"})
+	resp, _ = e.do("POST", "/api/runners/a1/mine-now", "", nil)
 	assert.Equal(t, 403, resp.StatusCode)
 
-	resp, b := e.do("POST", "/api/runners/a1/mine-now", tok, map[string]any{"benefit_id": "ghost"})
-	assert.Equal(t, 404, resp.StatusCode)
-	assert.JSONEq(t, `{"error":"not_queued"}`, string(b))
-
-	resp, b = e.do("POST", "/api/runners/b2/mine-now", tok, map[string]any{"benefit_id": "n1"})
+	resp, b = e.do("POST", "/api/runners/b2/mine-now", tok, nil)
 	assert.Equal(t, 409, resp.StatusCode)
 	assert.JSONEq(t, `{"error":"not_running"}`, string(b))
 
-	resp, _ = e.do("POST", "/api/runners/nope/mine-now", tok, map[string]any{"benefit_id": "n1"})
+	resp, _ = e.do("POST", "/api/runners/nope/mine-now", tok, nil)
 	assert.Equal(t, 404, resp.StatusCode)
-	resp, _ = e.do("POST", "/api/runners/a1/mine-now", tok, map[string]any{})
-	assert.Equal(t, 400, resp.StatusCode)
-	assert.Equal(t, []string{"a1/n2"}, e.pool.mineNow)
+
+	e.pool.mu.Lock()
+	e.pool.snaps[0].UpNext = nil
+	e.pool.mu.Unlock()
+	resp, b = e.do("POST", "/api/runners/a1/mine-now", tok, nil)
+	assert.Equal(t, 404, resp.StatusCode)
+	assert.JSONEq(t, `{"error":"not_queued"}`, string(b))
+	assert.Equal(t, []string{"a1/n1"}, e.pool.mineNow)
 }

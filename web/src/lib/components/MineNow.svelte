@@ -1,36 +1,49 @@
 <script lang="ts">
 	import { api } from '$lib/app';
 	import { t } from '$lib/i18n/index.svelte';
+	import { getLive } from '$lib/live-context';
+	import { commitMineNow, mineTarget, queues } from '$lib/upnext';
 
-	// The runner switches on its own goroutine; the live store picks the new
-	// current drop up from the runner event.
-	let {
-		accountId,
-		benefitId,
-		onresult
-	}: { accountId: string; benefitId: string; onresult: (ok: boolean) => void } = $props();
+	// Starts the first Up next drop of the first account that can switch. The
+	// runner switches on its own goroutine; its runner event carries the result.
+	let { onresult }: { onresult: (ok: boolean) => void } = $props();
+	const live = getLive();
+	const target = $derived(mineTarget(queues(live.runners)));
 	let busy = $state(false);
 
 	async function go(): Promise<void> {
-		if (busy) return;
+		if (busy || !target) return;
 		busy = true;
-		try {
-			await api.mineNow(accountId, benefitId);
-			onresult(true);
-		} catch {
-			onresult(false);
-		} finally {
-			busy = false;
-		}
+		const ok = await commitMineNow(
+			{
+				get: () => live.runners,
+				set: (r) => (live.runners = r),
+				mineNow: (id) => api.mineNow(id),
+				fetchRunners: () => api.runners()
+			},
+			target.accountId
+		);
+		busy = false;
+		onresult(ok);
 	}
 </script>
 
-<button class="mine" type="button" disabled={busy} aria-busy={busy} title={t('upnext.mine_now_title')} onclick={go}>
-	{t('upnext.mine_now')}
-</button>
+{#if target}
+	<button
+		class="mine"
+		type="button"
+		disabled={busy}
+		aria-busy={busy}
+		title={t('upnext.mine_now_title', { drop: target.items[0].benefit_name })}
+		onclick={go}
+	>
+		{t('upnext.mine_now')}
+	</button>
+{/if}
 
 <style>
 	.mine {
+		margin-left: auto;
 		font-size: 12px;
 		color: var(--t2);
 		background: none;
