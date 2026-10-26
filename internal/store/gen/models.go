@@ -20,6 +20,7 @@ type Account struct {
 	UpdatedAt       int64          `json:"updated_at"`
 	AvatarUrl       string         `json:"avatar_url"`
 	CustomName      string         `json:"custom_name"`
+	SortOrder       int64          `json:"sort_order"`
 }
 
 type AccountCampaignLink struct {

@@ -60,3 +60,8 @@ Decisions made while building v2 on `rebuild/v2` without check-ins. Each entry g
 - **Android login is a paste flow, not a sidecar-driven browser.** The user signs in on twitch.tv in their own browser with the Android client id and pastes the `#access_token=` address back. The browser sidecar has no interactive login UI, and 2FA, captchas and email codes need the user's own browser. The paste flow also works with no sidecar running.
 - **The token is checked at `id.twitch.tv/oauth2/validate`** and rejected unless its `client_id` is the Android client. The response gives the user id and login. The user id is kept inside the encrypted session, so adding the same Twitch user again updates its account instead of making a second one.
 - **Android paste sessions have no refresh token.** Refresh re-validates the token and pushes `ExpiresAt` forward. A 401 from validate marks the account signed out. Sessions marked `android` skip the "no refresh token" idle in session load.
+
+## Account order (2026-10-26)
+
+- **Account order is for display and one pick; mining stays parallel.** `accounts.sort_order` (migration 0021, backfilled from creation order) sorts `ListAllAccounts` and `ListEnabledAccounts`, so Settings > Accounts, Home rows, Up next, runners and Rewards follow it. Mine now acts on the first running account with a queue, and that now means the first in this order. Every runner still mines at once, and a reorder does not reload runners.
+- **`PUT /api/accounts/order` takes the full id list.** Unknown, repeated or missing ids get 400, so a stale client cannot silently drop an account from the order. New accounts take max + 1 and land last. The same up/down buttons, Shift+click and drag as Games, with an optimistic update that rolls back on error.

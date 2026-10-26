@@ -8,6 +8,7 @@
 		accountLine,
 		accountStatus,
 		androidErrorKey,
+		commitAccountOrder,
 		createDeviceFlow,
 		hasAndroidToken,
 		initials,
@@ -21,9 +22,11 @@
 	import CopyCommand from '$lib/components/CopyCommand.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
+	import { moveTarget } from '$lib/games';
 	import { t } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { loginFlow } from '$lib/login-flow.svelte';
+	import { moveItem } from '$lib/upnext';
 
 	const STATUS_KEYS = {
 		mining: 'accounts.status.mining',
@@ -67,6 +70,68 @@
 
 	const runnerOf = (id: string) => live.runners.find((r) => r.account_id === id);
 	const shown = (a: Account) => !(panel?.isNew && panel.id === a.id);
+
+	let ordering = $state(false);
+	let orderError = $state('');
+	let drag = $state<{ from: number; to: number } | null>(null);
+
+	// A half-made account stays out of the rows and last in the saved order.
+	const listed = $derived(live.accounts.filter(shown));
+	const rows = $derived(drag ? moveItem(listed, drag.from, drag.to) : listed);
+
+	async function commitOrder(next: Account[]): Promise<void> {
+		if (ordering) return;
+		ordering = true;
+		orderError = '';
+		const ok = await commitAccountOrder(
+			{
+				get: () => live.accounts,
+				set: (a) => (live.accounts = a),
+				setOrder: (ids) => api.setAccountOrder(ids),
+				fetchAccounts: () => api.accounts()
+			},
+			[...next, ...live.accounts.filter((a) => !shown(a))]
+		);
+		ordering = false;
+		if (!ok) orderError = t('accounts.reorder_failed');
+		else void live.refetchAll().catch(() => {});
+	}
+
+	function step(i: number, dir: -1 | 1, e: MouseEvent): void {
+		menu = null;
+		void commitOrder(moveItem(listed, i, moveTarget(listed.length, i, dir, e.shiftKey)));
+	}
+
+	function dragDown(e: PointerEvent, from: number): void {
+		if (e.button !== 0 || ordering) return;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+		drag = { from, to: from };
+	}
+
+	function dragMove(e: PointerEvent): void {
+		if (!drag) return;
+		const list = (e.currentTarget as HTMLElement).closest('#acct-list');
+		if (!list) return;
+		const els = Array.from(list.querySelectorAll(':scope > .acct'));
+		if (els.length === 0) return;
+		const y = e.clientY;
+		let to = drag.to;
+		els.forEach((el, i) => {
+			const b = el.getBoundingClientRect();
+			if (y >= b.top && y <= b.bottom) to = i;
+		});
+		if (y < els[0].getBoundingClientRect().top) to = 0;
+		if (y > els[els.length - 1].getBoundingClientRect().bottom) to = els.length - 1;
+		drag.to = to;
+	}
+
+	function dragUp(): void {
+		if (!drag) return;
+		const d = drag;
+		drag = null;
+		if (d.from !== d.to) void commitOrder(moveItem(listed, d.from, d.to));
+	}
+
 
 	function schedule(fn: () => void, ms: number): () => void {
 		const id = setTimeout(fn, ms);
@@ -451,13 +516,34 @@
 		</div>
 	</div>
 	{#if addError}<p class="bad top" role="alert">{addError}</p>{/if}
-	<div class="panel" id="acct-list" class:none={!panel?.isNew && live.accounts.filter(shown).length === 0}>
+	{#if orderError}<p class="bad top" role="alert">{orderError}</p>{/if}
+	<div class="panel" id="acct-list" class:none={!panel?.isNew && listed.length === 0}>
 		{#if panel?.isNew}{@render flowPanel()}{/if}
-		{#each live.accounts.filter(shown) as a (a.id)}
+		{#each rows as a, i (a.id)}
 			{@const r = runnerOf(a.id)}
 			{@const st = accountStatus(a, r)}
 			{@const acts = rowActions(a, r)}
-			<div class="row acct" class:problem={st === 'signed_out'}>
+			<div class="row acct" class:problem={st === 'signed_out'} class:dragging={drag && drag.to === i}>
+				<div class="grip">
+					<button type="button" aria-label={t('accounts.move_up')} title={t('accounts.move_up')} disabled={i === 0 || ordering} onclick={(e) => step(i, -1, e)}>
+						<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
+					</button>
+					<span
+						class="h"
+						title={t('accounts.drag')}
+						onpointerdown={(e) => dragDown(e, i)}
+						onpointermove={dragMove}
+						onpointerup={dragUp}
+						onpointercancel={() => (drag = null)}
+						onlostpointercapture={() => (drag = null)}
+						role="presentation"
+					>
+						<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3" /></svg>
+					</span>
+					<button type="button" aria-label={t('accounts.move_down')} title={t('accounts.move_down')} disabled={i === rows.length - 1 || ordering} onclick={(e) => step(i, 1, e)}>
+						<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+					</button>
+				</div>
 				<span class="av">
 					{#if a.avatar_url}<img src={a.avatar_url} alt={t('accounts.avatar', { name: a.name })} />{:else}{initials(a.name)}{/if}
 					<span class="mk"><PlatformMark platform={a.platform} /></span>
@@ -758,6 +844,47 @@
 	.st.paused {
 		color: var(--amber);
 		background: var(--amber-soft);
+	}
+	.acct.dragging {
+		background: var(--surface-2);
+		box-shadow: inset 2px 0 0 var(--accent);
+	}
+	.grip {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 2px;
+		color: var(--t3);
+		flex: none;
+	}
+	.h {
+		cursor: grab;
+		padding: 2px 0;
+		touch-action: none;
+		display: grid;
+	}
+	.grip button {
+		width: 26px;
+		height: 20px;
+		display: grid;
+		place-items: center;
+		border: 0;
+		background: none;
+		border-radius: 4px;
+		color: var(--t2);
+		cursor: pointer;
+	}
+	.grip button:hover:not(:disabled) {
+		background: var(--surface-3);
+		color: var(--text);
+	}
+	.grip button:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: -2px;
+	}
+	.grip button:disabled {
+		opacity: 0.3;
+		cursor: default;
 	}
 	.acct.problem {
 		background: linear-gradient(90deg, color-mix(in srgb, var(--red) 7%, transparent), transparent 60%);

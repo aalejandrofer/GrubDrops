@@ -4,7 +4,9 @@ import type { Account, DeviceStatus, Runner } from '$lib/api/types';
 import accountsFx from '$lib/fixtures/accounts.json';
 import runnersMining from '$lib/fixtures/runners.mining.json';
 import { prefs } from '$lib/prefs.svelte';
-import { MAX_POLL_FAILS, POLL_MS, accountLine, accountStatus, createDeviceFlow, renameRequest, rowActions } from './accounts';
+import { MAX_POLL_FAILS, POLL_MS, accountLine, accountStatus, commitAccountOrder, createDeviceFlow, renameRequest, rowActions } from './accounts';
+import { moveTarget } from './games';
+import { moveItem } from './upnext';
 
 const ACC = (id: string) => structuredClone(accountsFx.find((a) => a.id === id)) as Account;
 const RUN = (id: string) => structuredClone(runnersMining.find((r) => r.account_id === id)) as Runner;
@@ -270,5 +272,48 @@ describe('renameRequest', () => {
 	it('rejects more than 40 characters', () => {
 		expect(renameRequest(a, 'x'.repeat(41))).toEqual({ kind: 'too_long' });
 		expect(renameRequest(a, 'é'.repeat(40))).toEqual({ kind: 'send', name: 'é'.repeat(40) });
+	});
+});
+
+describe('commitAccountOrder', () => {
+	const acc = (id: string) => ({ id }) as Account;
+	function io(over: Partial<{ save: () => Promise<void>; fetch: () => Promise<Account[]> }> = {}) {
+		let cur = [acc('a'), acc('b'), acc('c')];
+		const saved: string[][] = [];
+		return {
+			saved,
+			cur: () => cur.map((x) => x.id),
+			io: {
+				get: () => cur,
+				set: (a: Account[]) => (cur = a),
+				setOrder: async (ids: string[]) => {
+					saved.push(ids);
+					await over.save?.();
+				},
+				fetchAccounts: over.fetch ?? (async () => cur)
+			}
+		};
+	}
+	it('saves the full order', async () => {
+		const x = io();
+		expect(await commitAccountOrder(x.io, moveItem(x.io.get(), 0, moveTarget(3, 0, 1, true)))).toBe(true);
+		expect(x.saved).toEqual([['b', 'c', 'a']]);
+		expect(x.cur()).toEqual(['b', 'c', 'a']);
+	});
+	it('skips an unchanged order', async () => {
+		const x = io();
+		expect(await commitAccountOrder(x.io, [acc('a'), acc('b'), acc('c')])).toBe(true);
+		expect(x.saved).toEqual([]);
+	});
+	it('takes the server list after a failed save', async () => {
+		const server = [acc('a'), acc('b'), acc('c')];
+		const x = io({ save: async () => Promise.reject(new Error('x')), fetch: async () => server });
+		expect(await commitAccountOrder(x.io, [acc('c'), acc('a'), acc('b')])).toBe(false);
+		expect(x.cur()).toEqual(['a', 'b', 'c']);
+	});
+	it('rolls back when the save and the refetch both fail', async () => {
+		const x = io({ save: async () => Promise.reject(new Error('x')), fetch: async () => Promise.reject(new Error('y')) });
+		expect(await commitAccountOrder(x.io, [acc('c'), acc('a'), acc('b')])).toBe(false);
+		expect(x.cur()).toEqual(['a', 'b', 'c']);
 	});
 });
