@@ -417,10 +417,11 @@ func run(ctx context.Context) error {
 		notifier:   notifier,
 	}, kickBackend)
 
+	bg.Go(ro.runGamesReloader)
+
 	// Every ring line goes out as a `log` SSE event. The hook runs on the
 	// logging goroutine, so it must not block: the account name comes from
 	// the roster's in-memory cache, never the DB.
-	bg.Go(ro.runGamesReloader)
 
 	ring.SetHook(logHook(hub, ro.accountName))
 	defer ring.SetHook(nil)

@@ -307,9 +307,22 @@ func (ro *roster) runGamesReloader() {
 		case <-ro.ctx.Done():
 			return
 		case <-ro.gamesDirty:
-			ro.gamesChanged()
+			if ro.ctx.Err() != nil {
+				return
+			}
+			ro.safeGamesChanged()
 		}
 	}
+}
+
+// safeGamesChanged keeps a builder panic from killing the reloader goroutine.
+func (ro *roster) safeGamesChanged() {
+	defer func() {
+		if r := recover(); r != nil {
+			ro.log().Error("games changed: reload panicked", "kind", "error", "panic", r)
+		}
+	}()
+	ro.gamesChanged()
 }
 
 // gamesChanged rebuilds every runner so each picks up the new chosen games.
