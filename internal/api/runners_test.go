@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -154,4 +155,32 @@ func TestRunners_MineNow(t *testing.T) {
 	assert.Equal(t, 404, resp.StatusCode)
 	assert.JSONEq(t, `{"error":"not_queued"}`, string(b))
 	assert.Equal(t, []string{"a1/n1"}, e.pool.mineNow)
+}
+
+func TestAccounts_RecheckLinks(t *testing.T) {
+	e := newResEnv(t, nil)
+	e.s.routesAccounts(e.s.protected)
+	e.pool.snaps = []runner.Snapshot{{AccountID: "b2", Platform: "kick", State: runner.StatePicking}}
+	e.pool.recheckRes = runner.LinkRecheck{Claimed: 2, StillNeedsLink: 1}
+	_, tok := e.session()
+
+	resp, b := e.do("POST", "/api/accounts/b2/recheck-links", tok, nil)
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.JSONEq(t, `{"claimed":2,"still_needs_link":1}`, string(b))
+	assert.Equal(t, []string{"b2"}, e.pool.recheck)
+
+	resp, _ = e.do("POST", "/api/accounts/b2/recheck-links", "", nil)
+	assert.Equal(t, 403, resp.StatusCode)
+
+	resp, b = e.do("POST", "/api/accounts/a1/recheck-links", tok, nil)
+	assert.Equal(t, 409, resp.StatusCode)
+	assert.JSONEq(t, `{"error":"not_running"}`, string(b))
+
+	resp, _ = e.do("POST", "/api/accounts/nope/recheck-links", tok, nil)
+	assert.Equal(t, 404, resp.StatusCode)
+
+	e.pool.recheckErr = errors.New("boom")
+	resp, b = e.do("POST", "/api/accounts/b2/recheck-links", tok, nil)
+	assert.Equal(t, 502, resp.StatusCode)
+	assert.JSONEq(t, `{"error":"recheck_failed"}`, string(b))
 }

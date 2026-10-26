@@ -21,6 +21,7 @@ type Input struct {
 	// An inventory row with Claimed set always counts.
 	Claimed     map[string]bool
 	Skipped     map[string]bool // benefit IDs the runner gave up on
+	NotLinked   map[string]bool // benefit IDs whose claim the platform refused until linked
 	ForceLinked map[string]bool // campaign IDs the user asserted are linked
 	Order       []string        // session Up next override, benefit IDs
 }
@@ -157,7 +158,7 @@ func Build(in Input) Result {
 			}
 			t := Target{Campaign: c, Benefit: b, Minutes: minutes[b.ID]}
 			switch {
-			case unlinked:
+			case unlinked, in.NotLinked[b.ID]:
 				e.blocked = append(e.blocked, Blocked{t, ReasonNotLinked})
 			case in.Skipped[b.ID]:
 				e.blocked = append(e.blocked, Blocked{t, ReasonSkipped})

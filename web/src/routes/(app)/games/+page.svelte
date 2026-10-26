@@ -4,6 +4,7 @@
 	import type { Game, SearchHit } from '$lib/api/types';
 	import BoxArt from '$lib/components/BoxArt.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import LinkRecheck from '$lib/components/LinkRecheck.svelte';
 	import PageHead from '$lib/components/PageHead.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { relTime } from '$lib/format';
@@ -334,6 +335,7 @@
 									{#if href}
 										<a {href} target="_blank" rel="noopener noreferrer">{t('games.link_account')}</a>
 									{/if}
+									<LinkRecheck accountIds={[n.account_id]} />
 								</li>
 							{/each}
 						</ul>

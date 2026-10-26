@@ -7,6 +7,7 @@
 	import { linkNames } from '$lib/games';
 	import BoxArt from './BoxArt.svelte';
 	import Icon from './Icon.svelte';
+	import LinkRecheck from './LinkRecheck.svelte';
 	import PlatformMark from './PlatformMark.svelte';
 
 	let {
@@ -69,7 +70,10 @@
 		</div>
 
 		{#if unlinked.length > 0}
-			<p class="link-l"><Icon name="alert" size={13} />{t('home.needs_link', { accounts: unlinked.join(', ') })}</p>
+			<p class="link-l">
+				<Icon name="alert" size={13} /><span>{t('home.needs_link', { accounts: unlinked.join(', ') })}</span>
+				<LinkRecheck accountIds={game.needs_link.map((n) => n.account_id)} />
+			</p>
 		{/if}
 
 		{#if readyAccounts !== null && card.pos === 1}
@@ -380,7 +384,8 @@
 		margin: 8px 0 0;
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		flex-wrap: wrap;
+		gap: 4px 6px;
 		color: var(--amber);
 		font-size: 12px;
 	}

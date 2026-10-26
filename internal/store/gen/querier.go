@@ -98,6 +98,9 @@ type Querier interface {
 	ListRecentClaimLog(ctx context.Context, limit int64) ([]ClaimLog, error)
 	ListRecentClaims(ctx context.Context, limit int64) ([]ListRecentClaimsRow, error)
 	ListUnclaimedProgressForAccount(ctx context.Context, arg ListUnclaimedProgressForAccountParams) ([]Progress, error)
+	// Account and campaign pairs whose claim the platform rejected until an
+	// external account is linked.
+	ListUnlinkedCampaignLinks(ctx context.Context) ([]ListUnlinkedCampaignLinksRow, error)
 	// Campaigns announced but not yet started. Whitelist filtering is
 	// applied in Go.
 	ListUpcomingCampaigns(ctx context.Context, arg ListUpcomingCampaignsParams) ([]Campaign, error)

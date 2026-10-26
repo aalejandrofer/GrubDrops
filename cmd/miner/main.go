@@ -215,7 +215,7 @@ func run(ctx context.Context) error {
 		kickOpts = append(kickOpts, kick.WithSidecarAutoCreate(cfg.KickSidecarImage, cfg.KickSidecarNetwork))
 		logger.Info("kick sidecar auto-create enabled", "image", cfg.KickSidecarImage, "network", cfg.KickSidecarNetwork)
 	}
-	kickOpts = append(kickOpts, kick.WithProxy(effectiveProxy))
+	kickOpts = append(kickOpts, kick.WithProxy(effectiveProxy), kick.WithLinkStore(store.NewCampaignLinks(q)))
 	kickBackend = kick.New(browserClient, dockerCtl, cfg.KickSidecarTemplate, cfg.KickSidecarPort, 10*time.Minute, kickOpts...)
 	// Watch path is operator-selectable (Settings → Experimental). "browser"
 	// (default) drives a real IVS <video> in the sidecar. "ws" is the

@@ -27,6 +27,9 @@ func (snapPool) ResetOrder(string)                {}
 func (snapPool) RescanAll()                       {}
 func (snapPool) MineNow(string) (string, error)   { return "", nil }
 func (snapPool) OrderFunc(string) func() []string { return nil }
+func (snapPool) RecheckLinks(context.Context, string) (runner.LinkRecheck, error) {
+	return runner.LinkRecheck{}, nil
+}
 
 // calls records AccountChanged / AccountRemoved invocations.
 type calls struct {

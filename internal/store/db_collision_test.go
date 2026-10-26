@@ -56,7 +56,7 @@ func TestOpen_1xPipelineV16GetsV2Tables(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	require.Equal(t, 19, schemaVersion(t, db))
+	require.Equal(t, 20, schemaVersion(t, db))
 	for _, tbl := range []string{"chosen_games", "claim_log", "drop_states", "watch_minutes", "account_scans", "drop_state"} {
 		count(t, db, tbl) // fails if the table is missing
 	}
@@ -84,7 +84,7 @@ func TestOpen_V2At16UpgradesTo17(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	require.Equal(t, 19, schemaVersion(t, db))
+	require.Equal(t, 20, schemaVersion(t, db))
 	got, err := NewChosenGames(db, gen.New(db)).List(ctx)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
