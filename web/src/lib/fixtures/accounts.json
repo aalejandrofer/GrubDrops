@@ -1,0 +1,47 @@
+[
+	{
+		"id": "acc-hjune",
+		"platform": "twitch",
+		"name": "hJune",
+		"platform_name": "hJune",
+		"avatar_url": "",
+		"state": "watching",
+		"needs_login": false,
+		"enabled": true,
+		"auth": {
+			"ok": true,
+			"detail": "token valid",
+			"checked_at": "2026-10-25T11:55:00Z"
+		}
+	},
+	{
+		"id": "acc-alt",
+		"platform": "twitch",
+		"name": "grub_alt",
+		"platform_name": "grub_alt",
+		"avatar_url": "",
+		"state": "watching",
+		"needs_login": false,
+		"enabled": true,
+		"auth": {
+			"ok": true,
+			"detail": "token valid",
+			"checked_at": "2026-10-25T11:55:00Z"
+		}
+	},
+	{
+		"id": "acc-kick",
+		"platform": "kick",
+		"name": "kick_main",
+		"platform_name": "kick_main",
+		"avatar_url": "",
+		"state": "needs_login",
+		"needs_login": true,
+		"enabled": true,
+		"auth": {
+			"ok": false,
+			"detail": "session expired",
+			"checked_at": "2026-10-25T11:55:00Z"
+		}
+	}
+]

@@ -38,6 +38,15 @@ type Ring struct {
 	size  int
 	next  int
 	count int
+	hook  func(LogLine)
+}
+
+// SetHook registers f to receive every line pushed from now on. f runs on the
+// pushing goroutine, outside the ring lock, so it must not block. nil clears it.
+func (r *Ring) SetHook(f func(LogLine)) {
+	r.mu.Lock()
+	r.hook = f
+	r.mu.Unlock()
 }
 
 func NewRing(size int) *Ring {
@@ -62,11 +71,15 @@ func NewRingFromEnv(def int) *Ring {
 
 func (r *Ring) Push(l LogLine) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.buf[r.next] = l
 	r.next = (r.next + 1) % r.size
 	if r.count < r.size {
 		r.count++
+	}
+	hook := r.hook
+	r.mu.Unlock()
+	if hook != nil {
+		hook(l)
 	}
 }
 

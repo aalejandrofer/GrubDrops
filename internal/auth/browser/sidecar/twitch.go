@@ -322,14 +322,14 @@ func (t *Twitch) GQL(ctx context.Context, accountID string, body []byte) ([]byte
 		if err == nil && status == 200 {
 			gqlCamps = extractGqlCampaigns(resp)
 		}
-		// Diagnostic: log the raw gql response so we can see WHY it's
-		// returning empty (auth missing? integrity blocked? actually
-		// empty?). Truncated to keep ring entries readable.
-		slog.Info("twitch gql raw response (diag)",
+		// Diagnostic at Debug: status, size and parsed count only. Never the
+		// raw body, which can carry token material.
+		slog.Debug("twitch gql campaigns response (diag)",
 			"account", accountID,
 			"status", status,
 			"err", err,
-			"body_prefix", truncate(string(resp), 600))
+			"body_bytes", len(resp),
+			"campaigns", len(gqlCamps))
 		scrapeCamps, scrapeErr := scrapeDropsCampaignsPage(tabCtx)
 		if scrapeErr == nil && len(scrapeCamps) > 0 {
 			t.rememberScrape(accountID, scrapeCamps)

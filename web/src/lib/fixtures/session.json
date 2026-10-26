@@ -1,0 +1,10 @@
+{
+	"authed": true,
+	"setup_needed": false,
+	"oidc": {
+		"enabled": false,
+		"name": ""
+	},
+	"csrf_token": "fixture-csrf",
+	"version": "v2.0.0"
+}

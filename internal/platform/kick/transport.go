@@ -173,7 +173,7 @@ func (d *httpDoer) do(ctx context.Context, sess platform.Session, method, rawURL
 		return nil, 0, fmt.Errorf("decode kick session: %w", err)
 	}
 	cookieHeader, xsrf, bearer := cookieHeaderFor(ks)
-	if cookieHeader == "" {
+	if cookieHeader == "" && !isAnonymous(ctx) {
 		return nil, 0, fmt.Errorf("kick session has no cookies")
 	}
 	u, err := neturl.Parse(rawURL)
@@ -202,7 +202,9 @@ func (d *httpDoer) do(ctx context.Context, sess platform.Session, method, rawURL
 	req.Header.Set("User-Agent", ua)
 	req.Header.Set("Accept", "application/json, text/plain, */*")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-	req.Header.Set("Cookie", cookieHeader)
+	if cookieHeader != "" {
+		req.Header.Set("Cookie", cookieHeader)
+	}
 	req.Header.Set("Referer", "https://kick.com/")
 	req.Header.Set("Origin", "https://kick.com")
 	req.Header.Set("Sec-Fetch-Site", "same-origin")

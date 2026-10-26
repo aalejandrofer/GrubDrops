@@ -45,7 +45,7 @@ func (f *fakeSidecar) TwitchGQL(_ context.Context, _, opName string, _ []byte) (
 		return []byte(`{"data":{"currentUser":{"dropCampaigns":[]}}}`), 200, nil
 	default:
 		// CurrentUser / resolveUserID / etc. — fail so PubSub defers and
-		// resolveCurrentLogin stays empty (no detail fetches needed for
+		// resolveCurrentUserID stays empty (no detail fetches needed for
 		// an empty dashboard).
 		return nil, 0, fmt.Errorf("fakeSidecar: unhandled op %q", opName)
 	}

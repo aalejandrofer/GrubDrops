@@ -19,6 +19,8 @@ type Account struct {
 	CreatedAt       int64          `json:"created_at"`
 	UpdatedAt       int64          `json:"updated_at"`
 	AvatarUrl       string         `json:"avatar_url"`
+	CustomName      string         `json:"custom_name"`
+	SortOrder       int64          `json:"sort_order"`
 }
 
 type AccountCampaignLink struct {
@@ -47,6 +49,13 @@ type AccountGame struct {
 	AccountID string `json:"account_id"`
 	GameID    string `json:"game_id"`
 	Rank      int64  `json:"rank"`
+}
+
+type AccountScan struct {
+	AccountID    string `json:"account_id"`
+	ScannedAt    int64  `json:"scanned_at"`
+	ReconciledAt int64  `json:"reconciled_at"`
+	Error        string `json:"error"`
 }
 
 type Admin struct {
@@ -84,6 +93,11 @@ type CampaignPriority struct {
 	Rank       int64          `json:"rank"`
 }
 
+type ChosenGame struct {
+	GameID string `json:"game_id"`
+	Rank   int64  `json:"rank"`
+}
+
 type Claim struct {
 	ID            string `json:"id"`
 	AccountID     string `json:"account_id"`
@@ -92,11 +106,43 @@ type Claim struct {
 	ValueMetaJson string `json:"value_meta_json"`
 }
 
+type ClaimLog struct {
+	AccountID    string `json:"account_id"`
+	BenefitID    string `json:"benefit_id"`
+	Platform     string `json:"platform"`
+	Game         string `json:"game"`
+	CampaignID   string `json:"campaign_id"`
+	CampaignName string `json:"campaign_name"`
+	BenefitName  string `json:"benefit_name"`
+	ImageUrl     string `json:"image_url"`
+	Code         string `json:"code"`
+	Source       string `json:"source"`
+	ClaimedAt    int64  `json:"claimed_at"`
+}
+
+type DropState struct {
+	AccountID       string `json:"account_id"`
+	BenefitID       string `json:"benefit_id"`
+	Platform        string `json:"platform"`
+	Game            string `json:"game"`
+	CampaignID      string `json:"campaign_id"`
+	CampaignName    string `json:"campaign_name"`
+	BenefitName     string `json:"benefit_name"`
+	ImageUrl        string `json:"image_url"`
+	State           string `json:"state"`
+	Reason          string `json:"reason"`
+	Minutes         int64  `json:"minutes"`
+	RequiredMinutes int64  `json:"required_minutes"`
+	EndsAt          int64  `json:"ends_at"`
+	UpdatedAt       int64  `json:"updated_at"`
+}
+
 type Game struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Slug     string `json:"slug"`
-	Priority int64  `json:"priority"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Slug         string `json:"slug"`
+	Priority     int64  `json:"priority"`
+	TwitchGameID string `json:"twitch_game_id"`
 }
 
 type GlobalGame struct {
@@ -140,4 +186,10 @@ type Session struct {
 	AccountID  string `json:"account_id"`
 	Ciphertext []byte `json:"ciphertext"`
 	ExpiresAt  int64  `json:"expires_at"`
+}
+
+type WatchMinute struct {
+	AccountID string `json:"account_id"`
+	Day       string `json:"day"`
+	Minutes   int64  `json:"minutes"`
 }

@@ -6,3 +6,8 @@ data/
 docs/
 deploy/
 README.md
+web/node_modules
+web/.svelte-kit
+web/.shots
+internal/web/dist/*
+!internal/web/dist/.gitkeep

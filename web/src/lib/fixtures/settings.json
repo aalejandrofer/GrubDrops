@@ -1,0 +1,23 @@
+{
+	"language": "en",
+	"time_format": "24h",
+	"theme": "dark",
+	"timezone": "",
+	"zone_effective": "UTC",
+	"discord": {
+		"configured": true,
+		"webhook_hint": "...a1b2"
+	},
+	"telegram": {
+		"configured": false,
+		"token_hint": "",
+		"chat_id": ""
+	},
+	"notify": {
+		"claim": true,
+		"auth": true,
+		"errors": false,
+		"daily_summary": true
+	},
+	"update_auto": true
+}

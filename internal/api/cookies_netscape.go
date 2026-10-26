@@ -13,6 +13,7 @@ import (
 func kickCookiesFromNetscape(raw string) (kickCookieForm, error) {
 	var f kickCookieForm
 	sawKick := false
+	raw = strings.TrimPrefix(raw, "\ufeff")
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimRight(line, "\r")
 		if line == "" || (strings.HasPrefix(line, "#") && !strings.HasPrefix(line, "#HttpOnly_")) {
@@ -39,7 +40,7 @@ func kickCookiesFromNetscape(raw string) (kickCookieForm, error) {
 		}
 	}
 	if !sawKick {
-		return kickCookieForm{}, fmt.Errorf("no kick.com cookies found — export cookies.txt while on kick.com")
+		return kickCookieForm{}, fmt.Errorf("no kick.com cookies found, export cookies.txt while on kick.com")
 	}
 	var missing []string
 	if f.KickSession == "" {
@@ -49,7 +50,7 @@ func kickCookiesFromNetscape(raw string) (kickCookieForm, error) {
 		missing = append(missing, "session_token")
 	}
 	if len(missing) > 0 {
-		return kickCookieForm{}, fmt.Errorf("missing required cookie(s): %s — make sure you're signed in to kick.com before exporting", strings.Join(missing, ", "))
+		return kickCookieForm{}, fmt.Errorf("missing required cookie(s): %s. Make sure you're signed in to kick.com before exporting", strings.Join(missing, ", "))
 	}
 	return f, nil
 }
@@ -57,41 +58,4 @@ func kickCookiesFromNetscape(raw string) (kickCookieForm, error) {
 func isKickDomain(d string) bool {
 	d = strings.TrimPrefix(strings.ToLower(d), ".")
 	return d == "kick.com" || strings.HasSuffix(d, ".kick.com")
-}
-
-// twitchAuthTokenFromNetscape extracts the Twitch auth-token cookie from a
-// Netscape cookies.txt export (the format "Get cookies.txt LOCALLY" produces),
-// mirroring the Kick paste flow. Note: a web-issued auth-token may not
-// authenticate against the Android client_id the direct backend uses — Twitch
-// login is device-code only — but this lets a user try a cookies.txt import
-// the same way Kick works.
-func twitchAuthTokenFromNetscape(raw string) (string, error) {
-	sawTwitch := false
-	for _, line := range strings.Split(raw, "\n") {
-		line = strings.TrimRight(line, "\r")
-		if line == "" || (strings.HasPrefix(line, "#") && !strings.HasPrefix(line, "#HttpOnly_")) {
-			continue
-		}
-		fields := strings.Split(line, "\t")
-		if len(fields) < 7 {
-			continue
-		}
-		domain := strings.TrimPrefix(fields[0], "#HttpOnly_")
-		if !isTwitchDomain(domain) {
-			continue
-		}
-		sawTwitch = true
-		if fields[5] == "auth-token" {
-			return fields[6], nil
-		}
-	}
-	if !sawTwitch {
-		return "", fmt.Errorf("no twitch.tv cookies found — export cookies.txt while on twitch.tv")
-	}
-	return "", fmt.Errorf("missing auth-token cookie — make sure you're signed in to twitch.tv before exporting")
-}
-
-func isTwitchDomain(d string) bool {
-	d = strings.TrimPrefix(strings.ToLower(d), ".")
-	return d == "twitch.tv" || strings.HasSuffix(d, ".twitch.tv")
 }

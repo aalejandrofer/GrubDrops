@@ -252,6 +252,46 @@ func TestRegistry_SweepRemovesOrphanSparesActiveAndUnlabeled(t *testing.T) {
 	}
 }
 
+func TestRegistry_SweepSparesOtherInstancesSidecars(t *testing.T) {
+	ctl := newFakeCtl()
+	ctl.containers = []dockerctl.ContainerInfo{
+		// another miner on the same docker host (staging) → spare
+		{Name: "grubdrops-staging-browser-ttik3r", Labels: map[string]string{
+			dockerctl.LabelManaged: "true", dockerctl.LabelAccount: "acc_other", dockerctl.LabelSlug: "ttik3r"}},
+		// ours, account gone → REMOVE
+		{Name: "grubdrops-browser-gone", Labels: map[string]string{
+			dockerctl.LabelManaged: "true", dockerctl.LabelAccount: "acc_dead", dockerctl.LabelSlug: "gone"}},
+	}
+	reg := newSidecarRegistry(ctl, "grubdrops-browser-{slug}", 9090, time.Minute).
+		withCreate("ghcr.io/x:latest", "")
+
+	reg.sweepOrphans(context.Background())
+
+	got := ctl.removedNames()
+	if len(got) != 1 || got[0] != "grubdrops-browser-gone" {
+		t.Fatalf("want only our orphan removed, got %v", got)
+	}
+}
+
+func TestOwnsSidecarName(t *testing.T) {
+	cases := []struct {
+		template, name string
+		want           bool
+	}{
+		{"grubdrops-browser-{slug}", "grubdrops-browser-ttik3r", true},
+		{"grubdrops-browser-{slug}", "grubdrops-staging-browser-ttik3r", false},
+		{"grubdrops-staging-browser-{slug}", "grubdrops-browser-ttik3r", false},
+		{"grubdrops-browser-{slug}", "grubdrops-browser-", false},
+		{"kick-{slug}-chrome", "kick-main-chrome", true},
+		{"kick-{slug}-chrome", "kick-main", false},
+	}
+	for _, c := range cases {
+		if got := ownsSidecarName(c.template, c.name); got != c.want {
+			t.Errorf("ownsSidecarName(%q, %q) = %v, want %v", c.template, c.name, got, c.want)
+		}
+	}
+}
+
 func TestRegistry_SweepNeverRemovesUnlabeled(t *testing.T) {
 	ctl := newFakeCtl()
 	// Even if an unlabeled container slips into the (unfiltered) list, the

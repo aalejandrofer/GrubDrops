@@ -37,3 +37,6 @@ ON CONFLICT(game_id) DO UPDATE SET rank = excluded.rank;
 
 -- name: ClearGlobalGames :exec
 DELETE FROM global_games;
+
+-- name: SetGameTwitchID :exec
+UPDATE games SET twitch_game_id = sqlc.arg(twitch_game_id) WHERE id = sqlc.arg(id) AND twitch_game_id <> sqlc.arg(twitch_game_id);

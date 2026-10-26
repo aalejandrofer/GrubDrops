@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops · 08 Game cards</title>
+<link rel="stylesheet" href="../_assets/base.css">
+<style>
+  /* Top bar */
+  .top { position: sticky; top: 0; z-index: 10; background: rgba(13,17,23,.92); border-bottom: 1px solid var(--border-soft); backdrop-filter: blur(6px); }
+  .top-in { max-width: 960px; margin: 0 auto; height: 52px; padding: 0 24px; display: flex; align-items: center; gap: 28px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -.01em; }
+  .brand img { width: 24px; height: 24px; border-radius: 6px; }
+  .tabs { display: flex; gap: 2px; }
+  .tabs a { padding: 6px 10px; border-radius: 6px; color: var(--muted); font-weight: 500; font-size: 13.5px; }
+  .tabs a:hover { color: var(--text); background: var(--surface); }
+  .tabs a.on { color: var(--text); background: var(--surface-2); }
+  .health { margin-left: auto; display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); }
+  .health i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+
+  main { max-width: 960px; margin: 0 auto; padding: 32px 24px 96px; }
+  .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+  .head h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -.015em; }
+  .head p { margin: 4px 0 0; color: var(--muted); }
+  .head .edit { color: var(--muted); font-size: 13px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; }
+  .head .edit:hover { color: var(--text); border-color: var(--muted); }
+  svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* Game card */
+  .game { display: grid; grid-template-columns: 220px 1fr; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); overflow: hidden; }
+  .game + .game { margin-top: 12px; }
+  .art { position: relative; min-height: 168px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; color: #fff; isolation: isolate; }
+  .art::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,.45)); }
+  .art .rank { font: 500 11px var(--mono); color: rgba(255,255,255,.6); }
+  .art .title { font-size: 26px; line-height: 1; font-weight: 700; letter-spacing: -.02em; text-transform: uppercase; }
+  /* Patterned placeholder art, one per game */
+  .art.rust { background-color: #3a2418; background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.05) 0 2px, transparent 2px 12px), repeating-linear-gradient(45deg, rgba(0,0,0,.18) 0 6px, transparent 6px 18px); }
+  .art.rust .title { color: #f0c7a8; }
+  .art.mr { background-color: #241a36; background-image: radial-gradient(rgba(255,255,255,.09) 1.2px, transparent 1.4px); background-size: 10px 10px; }
+  .art.mr .title { color: #d8c6ff; }
+  .art.ow { background-color: #1c232c; background-image: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px); background-size: 16px 16px; }
+  .art.ow .title { color: #8b949e; }
+
+  .body { padding: 16px 20px; min-width: 0; display: flex; flex-direction: column; }
+  .status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .state { font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 10px; display: inline-flex; align-items: center; gap: 6px; }
+  .state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .state.mining { color: var(--green); background: var(--green-soft); }
+  .state.wait { color: var(--accent); background: var(--accent-soft); }
+  .state.off { color: var(--dim); background: var(--surface-3); }
+  .camp { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .warn { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; color: var(--amber); background: var(--amber-soft); border: 1px solid rgba(210,153,34,.3); padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .warn:hover { border-color: var(--amber); }
+
+  .accts { margin-top: 14px; display: grid; gap: 12px; }
+  .acct { display: grid; grid-template-columns: 150px 1fr 64px; gap: 14px; align-items: center; }
+  .who { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .who b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pm { width: 14px; height: 14px; border-radius: 3px; display: inline-grid; place-items: center; font: 700 9px/1 var(--font); flex: none; }
+  .pm.tw { background: var(--twitch); color: #fff; }
+  .pm.kk { background: var(--kick); color: #0d1117; }
+  .drop { min-width: 0; }
+  .drop .l { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+  .drop .l span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .drop .l span:last-child { color: var(--muted); font: 12px var(--mono); white-space: nowrap; }
+  .bar { height: 5px; border-radius: 3px; background: var(--surface-3); margin-top: 6px; overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+  .eta { text-align: right; font: 500 13px var(--mono); }
+  .eta small { display: block; color: var(--dim); font: 11px var(--font); }
+  .ch { color: var(--dim); font-size: 12px; }
+
+  .note { margin-top: 12px; color: var(--muted); font-size: 13px; }
+  .foot { margin-top: auto; padding-top: 14px; color: var(--dim); font-size: 12px; display: flex; gap: 14px; flex-wrap: wrap; }
+
+  .game.quiet .body { justify-content: center; }
+  .game.quiet .art { min-height: 96px; }
+  .game.quiet .art .title { font-size: 20px; }
+
+  /* Rewards strip */
+  .rewards { margin-top: 28px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 14px 16px; border: 1px solid var(--border-soft); border-radius: 10px; }
+  .rewards .k { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+  .rewards .k svg { color: var(--accent); }
+  .rewards ul { display: flex; gap: 18px; margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: 13px; flex-wrap: wrap; }
+  .rewards ul li span { color: var(--dim); font: 12px var(--mono); margin-left: 6px; }
+  .rewards a { margin-left: auto; color: var(--accent); font-size: 13px; white-space: nowrap; }
+
+  @media (max-width: 720px) {
+    .top-in { padding: 0 16px; gap: 14px; }
+    .brand span, .health span { display: none; }
+    .tabs a { padding: 6px 8px; }
+    main { padding: 22px 16px 80px; }
+    .game { grid-template-columns: 1fr; }
+    .art { min-height: 84px; flex-direction: row; align-items: flex-end; }
+    .art .rank { order: 2; }
+    .game.quiet .art { min-height: 64px; }
+    .body { padding: 14px 16px; }
+    .warn { margin-left: 0; }
+    .camp { white-space: normal; }
+    .acct { grid-template-columns: 1fr auto; gap: 6px 12px; }
+    .drop { grid-column: 1 / -1; grid-row: 2; }
+    .eta small { display: inline; margin-left: 4px; }
+    .rewards a { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <a href="#" class="brand"><img src="../_assets/logo.png" alt=""><span>GrubDrops</span></a>
+    <nav class="tabs">
+      <a href="#" class="on">Home</a>
+      <a href="#">Games</a>
+      <a href="#">Rewards</a>
+      <a href="#">Settings</a>
+    </nav>
+    <div class="health"><i></i><span>Running</span></div>
+  </div>
+</header>
+
+<main>
+  <div class="head">
+    <div>
+      <h1>Your games</h1>
+      <p>Mining Rust on 2 accounts. Next drop in about 18 min.</p>
+    </div>
+    <a href="#" class="edit"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h6"/></svg>Edit games</a>
+  </div>
+
+  <!-- Rust -->
+  <article class="game">
+    <div class="art rust">
+      <span class="rank">01</span>
+      <span class="title">Rust</span>
+    </div>
+    <div class="body">
+      <div class="status">
+        <span class="state mining">Mining</span>
+        <span class="camp">Rust Twitch Drops Round 41</span>
+        <a href="#" class="warn" title="grub_alt: session expired. Open Settings &gt; Accounts.">
+          <svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>1 account needs login
+        </a>
+      </div>
+      <div class="accts">
+        <div class="acct">
+          <div class="who"><span class="pm tw">T</span><b>grubfan</b></div>
+          <div class="drop">
+            <div class="l"><span>Hazmat Suit Skin <span class="ch">· hJune</span></span><span>42/60</span></div>
+            <div class="bar"><i style="width:70%"></i></div>
+          </div>
+          <div class="eta">18m<small>left</small></div>
+        </div>
+        <div class="acct">
+          <div class="who"><span class="pm kk">K</span><b>grubfan_kick</b></div>
+          <div class="drop">
+            <div class="l"><span>Kick Garage Door <span class="ch">· posty</span></span><span>95/120</span></div>
+            <div class="bar"><i style="width:79%"></i></div>
+          </div>
+          <div class="eta">25m<small>left</small></div>
+        </div>
+      </div>
+      <div class="foot"><span>2 more drops queued after Hazmat Suit Skin</span></div>
+    </div>
+  </article>
+
+  <!-- Marvel Rivals -->
+  <article class="game">
+    <div class="art mr">
+      <span class="rank">02</span>
+      <span class="title">Marvel Rivals</span>
+    </div>
+    <div class="body">
+      <div class="status">
+        <span class="state wait">Waiting</span>
+        <span class="camp">Campaign live</span>
+      </div>
+      <p class="note">Accounts are busy with Rust. Starts here when Rust drops are done.</p>
+    </div>
+  </article>
+
+  <!-- Overwatch -->
+  <article class="game quiet">
+    <div class="art ow">
+      <span class="rank">03</span>
+      <span class="title">Overwatch</span>
+    </div>
+    <div class="body">
+      <div class="status">
+        <span class="state off">No campaign</span>
+        <span class="camp">Nothing live right now. We'll check again automatically.</span>
+      </div>
+    </div>
+  </article>
+
+  <section class="rewards" aria-label="Recent rewards">
+    <div class="k"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>3 claimed today</div>
+    <ul>
+      <li>Rust Wood Box Skin<span>09:12</span></li>
+      <li>Marvel Rivals Spray<span>07:40</span></li>
+      <li>Kick Rust Hoodie<span>yest. 22:05</span></li>
+    </ul>
+    <a href="#">27 all time</a>
+  </section>
+</main>
+
+<div class="mock-tag">08 · Game cards · <a href="../">all mockups</a></div>
+</body>
+</html>

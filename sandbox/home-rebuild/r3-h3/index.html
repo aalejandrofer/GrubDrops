@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops · r3 H3 · Home</title>
+<link rel="stylesheet" href="../_assets/base.css">
+<style>
+  svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* Shell: top bar + container (shared by all r3-h3 pages) */
+  .top { position: sticky; top: 0; z-index: 10; background: rgba(13,17,23,.92); border-bottom: 1px solid var(--border-soft); backdrop-filter: blur(6px); }
+  .top-in { max-width: 1160px; margin: 0 auto; height: 52px; padding: 0 24px; display: flex; align-items: center; gap: 28px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -.01em; }
+  .brand img { width: 24px; height: 24px; border-radius: 6px; }
+  .tabs { display: flex; gap: 2px; }
+  .tabs a { padding: 6px 10px; border-radius: 6px; color: var(--muted); font-weight: 500; font-size: 13.5px; }
+  .tabs a:hover { color: var(--text); background: var(--surface); }
+  .tabs a.on { color: var(--text); background: var(--surface-2); }
+  main { max-width: 1160px; margin: 0 auto; padding: 28px 24px 96px; }
+
+  /* Page header: title, plain status, amber problem chip (the app's notification pattern) */
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .head-l { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; min-width: 0; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .now { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--green); }
+  .now .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+  .now .sep { color: var(--dim); }
+  .alert { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--amber); background: var(--amber-soft); border: 1px solid rgba(210,153,34,.3); padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .alert:hover { border-color: var(--amber); }
+  .alert:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .stamp { color: var(--dim); font-size: 12px; font-family: var(--mono); }
+
+  /* App version, top bar right */
+  .ver { margin-left: auto; font: 12px var(--mono); color: var(--text); white-space: nowrap; }
+  a.ver.update { color: #58a6ff; }
+  a.ver.update:hover { text-decoration: underline; }
+
+  /* KPIs (09 Pulse) */
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border-soft); border-radius: var(--radius); background: var(--surface); margin-bottom: 28px; }
+  .kpi { padding: 16px 20px 18px; display: block; position: relative; min-width: 0; }
+  .kpi + .kpi { border-left: 1px solid var(--border-soft); }
+  .kpi .label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .kpi .val { font-size: 30px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.15; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .kpi .val small { font-size: 14px; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-left: 2px; }
+  .kpi .sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  a.kpi:hover .label { color: var(--text); }
+  a.kpi.bad { background: var(--amber-soft); border-radius: 0 var(--radius) var(--radius) 0; box-shadow: inset 0 0 0 1px rgba(210,153,34,.45); }
+  a.kpi.bad .label, a.kpi.bad .val { color: var(--amber); }
+  a.kpi.bad .val small { color: var(--amber); opacity: .7; }
+  a.kpi.bad .sub { color: var(--text); display: flex; align-items: center; gap: 4px; }
+  a.kpi.bad .sub svg { width: 12px; height: 12px; transition: transform .15s; }
+  a.kpi.bad:hover { box-shadow: inset 0 0 0 1px var(--amber); }
+  a.kpi.bad:hover .sub svg { transform: translateX(2px); }
+  a.kpi.bad:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+
+  /* Section heading over the game cards */
+  .cards-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; min-height: 28px; }
+  .cards-h h2 { margin: 0; font-size: 13px; font-weight: 600; }
+  .edit { color: var(--muted); font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; }
+  .edit:hover { color: var(--text); border-color: var(--muted); }
+
+  /* Game card (08) */
+  .game { display: grid; grid-template-columns: 190px minmax(0, 1fr); border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); overflow: hidden; }
+  .game + .game { margin-top: 12px; }
+  .art { position: relative; min-height: 156px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; color: #fff; isolation: isolate; }
+  .art::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,.45)); }
+  .art .rank { font: 500 11px var(--mono); color: rgba(255,255,255,.6); }
+  .art .title { font-size: 24px; line-height: 1; font-weight: 700; letter-spacing: -.02em; text-transform: uppercase; }
+  .art.rust { background-color: #3a2418; background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.05) 0 2px, transparent 2px 12px), repeating-linear-gradient(45deg, rgba(0,0,0,.18) 0 6px, transparent 6px 18px); }
+  .art.rust .title { color: #f0c7a8; }
+  .art.mr { background-color: #241a36; background-image: radial-gradient(rgba(255,255,255,.09) 1.2px, transparent 1.4px); background-size: 10px 10px; }
+  .art.mr .title { color: #d8c6ff; }
+  .art.ow { background-color: #1c232c; background-image: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px); background-size: 16px 16px; }
+  .art.ow .title { color: #8b949e; }
+
+  .body { padding: 16px 20px; min-width: 0; display: flex; flex-direction: column; }
+  .status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .state { font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 10px; display: inline-flex; align-items: center; gap: 6px; }
+  .state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .state.mining { color: var(--green); background: var(--green-soft); }
+  .state.wait { color: var(--accent); background: var(--accent-soft); }
+  .state.off { color: var(--dim); background: var(--surface-3); }
+  .camp { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+  .accts { margin-top: 14px; display: grid; gap: 12px; }
+  .acct { display: grid; grid-template-columns: 136px minmax(0, 1fr) 56px; gap: 14px; align-items: center; }
+  .who { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .who b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pm { width: 14px; height: 14px; border-radius: 3px; display: inline-grid; place-items: center; font: 700 9px/1 var(--font); flex: none; }
+  .pm.tw { background: var(--twitch); color: #fff; }
+  .pm.kk { background: var(--kick); color: #0d1117; }
+  .pm.sm { width: 8px; height: 8px; border-radius: 2px; font-size: 0; }
+  .drop { min-width: 0; }
+  .drop .l { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+  .drop .l span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .drop .l span:last-child { color: var(--muted); font: 12px var(--mono); white-space: nowrap; }
+  .bar { height: 5px; border-radius: 3px; background: var(--surface-3); margin-top: 6px; overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+  .eta { text-align: right; font: 500 13px var(--mono); }
+  .eta small { display: block; color: var(--dim); font: 11px var(--font); }
+  .ch { color: var(--dim); font-size: 12px; }
+  .acct.out .who b { color: var(--muted); }
+  .acct.out .drop { color: var(--dim); font-size: 13px; }
+  .acct.out .eta a { color: var(--amber); font: 500 12px var(--font); }
+  .acct.out .eta a:hover { text-decoration: underline; }
+  .note { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+  .foot { margin-top: auto; padding-top: 14px; color: var(--dim); font-size: 12px; }
+  .game.quiet .body { justify-content: center; }
+  .game.quiet .art { min-height: 84px; }
+  .game.quiet .art .title { font-size: 19px; }
+
+  /* Up next side column */
+  .panel { border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); }
+  .panel-h { display: flex; align-items: center; gap: 8px; padding: 12px 14px 0; }
+  .panel-h h2 { margin: 0; font-size: 13px; font-weight: 600; }
+  .panel-h .n { font: 11px var(--mono); color: var(--muted); background: var(--surface-3); border-radius: 10px; padding: 0 6px; }
+  .hint { padding: 4px 14px 10px; font-size: 12px; color: var(--dim); }
+  .hint .changed { display: none; color: var(--accent); }
+  .upnext.is-changed .hint .changed { display: inline; }
+  .upnext.is-changed .hint .def { display: none; }
+
+  .queue { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border-soft); }
+  .queue li { display: grid; grid-template-columns: 14px 14px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 10px 8px 10px 10px; background: var(--surface); }
+  .queue li + li { border-top: 1px solid var(--border-soft); }
+  .queue li.dragging { opacity: .4; }
+  .grip { color: var(--dim); cursor: grab; display: grid; place-items: center; }
+  .grip svg { width: 12px; height: 12px; }
+  .qn { font: 11px var(--mono); color: var(--dim); text-align: right; }
+  .qt { min-width: 0; }
+  .qt .d { font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .qt .g { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .qt .m { font-size: 11.5px; color: var(--dim); display: flex; align-items: center; gap: 5px; margin-top: 1px; white-space: nowrap; overflow: hidden; }
+  .qt .m .who { display: inline-flex; gap: 5px; color: var(--muted); }
+  .mv { display: flex; flex-direction: column; gap: 0; }
+  .mv button { width: 22px; height: 18px; display: grid; place-items: center; background: none; border: 1px solid transparent; border-radius: 4px; color: var(--muted); }
+  .mv button:hover:not(:disabled) { border-color: var(--border); color: var(--text); background: var(--surface-2); }
+  .mv button:disabled { opacity: .25; cursor: default; }
+  .mv svg { width: 11px; height: 11px; }
+  .panel-f { border-top: 1px solid var(--border-soft); padding: 10px 14px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dim); }
+  .reset { margin-left: auto; font-size: 12px; color: var(--muted); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; white-space: nowrap; }
+  .reset:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
+  .reset:disabled { opacity: .45; cursor: default; }
+
+  /* Claimed (03 Drop flow): a plain log, last 10 */
+  .sec { margin-top: 28px; min-width: 0; }
+  .sec-h { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; min-height: 26px; flex-wrap: wrap; }
+  .sec-h h2 { margin: 0; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .sec-h h2 svg { width: 14px; height: 14px; flex: none; }
+  .sec-h .meta { font-size: 12px; color: var(--dim); }
+  .claims { list-style: none; margin: 0; padding: 0; }
+  .claims .grp { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; padding: 10px 0 4px; }
+  .claims .grp:first-child { padding-top: 0; }
+  .claims .cl { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--border-soft); }
+  .claims .cl svg { width: 12px; height: 12px; color: var(--green); position: relative; top: 1px; }
+  .claims .old svg { color: var(--dim); }
+  .claims .nm { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .claims .nm span { color: var(--dim); font-size: 12px; margin-left: 6px; }
+  .claims .tm { font: 11px var(--mono); color: var(--dim); white-space: nowrap; }
+  .claims-foot { display: flex; justify-content: space-between; padding-top: 10px; font-size: 12px; color: var(--dim); }
+  .link { color: var(--muted); font-size: 12px; }
+  .link:hover { color: var(--accent); }
+
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 720px) {
+    .top-in { padding: 0 16px; gap: 14px; }
+    .brand span { display: none; }
+    .ver .vfrom, .ver .vtail { display: none; }
+    .tabs a { padding: 6px 8px; }
+  }
+  @media (max-width: 420px) {
+    .top-in { gap: 8px; }
+    .tabs a { padding: 6px 6px; font-size: 13px; }
+    .ver { font-size: 11px; }
+  }
+  @media (max-width: 720px) {
+    main { padding: 20px 16px 80px; }
+    .kpis { grid-template-columns: 1fr 1fr; }
+    .kpi { padding: 14px 16px; }
+    .kpi .val { font-size: 24px; }
+    .kpi:nth-child(3) { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--border-soft); }
+    a.kpi.bad { border-radius: 0 0 var(--radius) var(--radius); }
+    .game { grid-template-columns: minmax(0, 1fr); }
+    .art, .game.quiet .art { min-height: 64px; flex-direction: row; align-items: flex-end; justify-content: space-between; }
+    .art .rank { order: 2; }
+    .art .title { font-size: 20px; }
+    .body { padding: 14px 16px; }
+    .camp { white-space: normal; }
+    .acct { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
+    .drop { grid-column: 1 / -1; grid-row: 2; }
+    .eta small { display: inline; margin-left: 4px; }
+    .panel-f { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <a href="index.html" class="brand"><img src="../_assets/logo.png" alt=""><span>GrubDrops</span></a>
+    <nav class="tabs">
+      <a href="index.html" class="on">Home</a>
+      <a href="games.html">Games</a>
+      <a href="rewards.html">Rewards</a>
+      <a href="#">Settings</a>
+    </nav>
+    <span class="ver" title="You are on the latest version">v1.4.2</span>
+  </div>
+</header>
+
+<main>
+  <div class="head">
+    <div class="head-l">
+      <h1>Home</h1>
+      <span class="now"><span class="dot"></span>Mining Rust</span><a href="#" class="alert" title="grub_alt signed out. Open Settings &gt; Accounts."><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>1 account needs login</a>
+    </div>
+    <span class="stamp">Today · 10:11</span>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">Total Minutes Watched</div>
+      <div class="val">412<small>min</small></div>
+      <div class="sub">Across 2 accounts</div>
+    </div>
+    <a class="kpi" href="rewards.html">
+      <div class="label">Drops claimed today</div>
+      <div class="val">2</div>
+      <div class="sub">27 all time</div>
+    </a>
+    <a class="kpi bad" href="#" title="Open Settings &gt; Accounts">
+      <div class="label">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.75 15 14H1z"/><path d="M8 6.5v3.25M8 11.75h.01"/></svg>
+        Accounts healthy
+      </div>
+      <div class="val">2<small>/ 3</small></div>
+      <div class="sub">grub_alt signed out. Re-login
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5 10.5 8 6 12.5"/></svg>
+      </div>
+    </a>
+  </div>
+
+  <div class="layout">
+    <div class="cards">
+      <div class="cards-h">
+        <h2>Your games</h2>
+        <a href="games.html" class="edit"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h6"/></svg>Edit games</a>
+      </div>
+
+      <article class="game">
+        <div class="art rust"><span class="rank">01</span><span class="title">Rust</span></div>
+        <div class="body">
+          <div class="status">
+            <span class="state mining">Mining</span>
+            <span class="camp">Rust Twitch Drops Round 41</span>
+          </div>
+          <div class="accts">
+            <div class="acct">
+              <div class="who"><span class="pm tw">T</span><b>grubfan</b></div>
+              <div class="drop">
+                <div class="l"><span>Hazmat Suit Skin <span class="ch">· hJune</span></span><span>42/60</span></div>
+                <div class="bar"><i style="width:70%"></i></div>
+              </div>
+              <div class="eta">18m<small>left</small></div>
+            </div>
+            <div class="acct">
+              <div class="who"><span class="pm kk">K</span><b>grubfan_kick</b></div>
+              <div class="drop">
+                <div class="l"><span>Kick Garage Door <span class="ch">· posty</span></span><span>95/120</span></div>
+                <div class="bar"><i style="width:79%"></i></div>
+              </div>
+              <div class="eta">25m<small>left</small></div>
+            </div>
+            <div class="acct out">
+              <div class="who"><span class="pm tw">T</span><b>grub_alt</b></div>
+              <div class="drop">Signed out. Not mining.</div>
+              <div class="eta"><a href="#" title="Open Settings &gt; Accounts">Log in</a></div>
+            </div>
+          </div>
+          <div class="foot">2 more Rust drops in Up next</div>
+        </div>
+      </article>
+
+      <article class="game">
+        <div class="art mr"><span class="rank">02</span><span class="title">Marvel Rivals</span></div>
+        <div class="body">
+          <div class="status">
+            <span class="state wait">Waiting</span>
+            <span class="camp">Season 4 Twitch Drops</span>
+          </div>
+          <p class="note">Accounts are busy with Rust. 2 drops waiting in Up next.</p>
+        </div>
+      </article>
+
+      <article class="game quiet">
+        <div class="art ow"><span class="rank">03</span><span class="title">Overwatch</span></div>
+        <div class="body">
+          <div class="status">
+            <span class="state off">No campaign</span>
+            <span class="camp">Nothing live. We check again on each scan.</span>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <aside class="side-col">
+      <section class="panel upnext">
+        <div class="panel-h"><h2>Up next</h2><span class="n">4</span></div>
+        <div class="hint">
+          <span class="def">Drag or use the arrows to change the order.</span>
+          <span class="changed">Changed for this session only.</span>
+        </div>
+        <ol class="queue">
+          <li draggable="true" data-id="1">
+            <span class="grip" title="Drag to reorder"><svg viewBox="0 0 12 12" fill="currentColor"><circle cx="4" cy="3" r="1"/><circle cx="8" cy="3" r="1"/><circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/><circle cx="4" cy="9" r="1"/><circle cx="8" cy="9" r="1"/></svg></span>
+            <span class="qn">1</span>
+            <div class="qt"><div class="d">Road Sign Kilt</div><div class="g">Rust · Round 41</div><div class="m"><span class="who"><span class="pm tw sm"></span>grubfan</span>· 60 min · after Hazmat</div></div>
+            <div class="mv"><button data-mv="up" aria-label="Move up"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 6 4.5l3 3"/></svg></button><button data-mv="down" aria-label="Move down"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 7.5l3-3"/></svg></button></div>
+          </li>
+          <li draggable="true" data-id="2">
+            <span class="grip" title="Drag to reorder"><svg viewBox="0 0 12 12" fill="currentColor"><circle cx="4" cy="3" r="1"/><circle cx="8" cy="3" r="1"/><circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/><circle cx="4" cy="9" r="1"/><circle cx="8" cy="9" r="1"/></svg></span>
+            <span class="qn">2</span>
+            <div class="qt"><div class="d">Tempered AK</div><div class="g">Rust · Round 41</div><div class="m"><span class="who"><span class="pm tw sm"></span>grubfan</span>· 120 min</div></div>
+            <div class="mv"><button data-mv="up" aria-label="Move up"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 6 4.5l3 3"/></svg></button><button data-mv="down" aria-label="Move down"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 7.5l3-3"/></svg></button></div>
+          </li>
+          <li draggable="true" data-id="3">
+            <span class="grip" title="Drag to reorder"><svg viewBox="0 0 12 12" fill="currentColor"><circle cx="4" cy="3" r="1"/><circle cx="8" cy="3" r="1"/><circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/><circle cx="4" cy="9" r="1"/><circle cx="8" cy="9" r="1"/></svg></span>
+            <span class="qn">3</span>
+            <div class="qt"><div class="d">Spray: Grub Sighting</div><div class="g">Marvel Rivals · Season 4</div><div class="m">first free account · 30 min</div></div>
+            <div class="mv"><button data-mv="up" aria-label="Move up"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 6 4.5l3 3"/></svg></button><button data-mv="down" aria-label="Move down"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 7.5l3-3"/></svg></button></div>
+          </li>
+          <li draggable="true" data-id="4">
+            <span class="grip" title="Drag to reorder"><svg viewBox="0 0 12 12" fill="currentColor"><circle cx="4" cy="3" r="1"/><circle cx="8" cy="3" r="1"/><circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/><circle cx="4" cy="9" r="1"/><circle cx="8" cy="9" r="1"/></svg></span>
+            <span class="qn">4</span>
+            <div class="qt"><div class="d">Nameplate: Hive</div><div class="g">Marvel Rivals · Season 4</div><div class="m">60 min</div></div>
+            <div class="mv"><button data-mv="up" aria-label="Move up"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5 6 4.5l3 3"/></svg></button><button data-mv="down" aria-label="Move down"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5 6 7.5l3-3"/></svg></button></div>
+          </li>
+        </ol>
+        <div class="panel-f">
+          <span>Permanent order lives on <a href="games.html" class="link">Games</a>.</span>
+          <button class="reset" type="button" disabled>Reset to Games order</button>
+        </div>
+      </section>
+
+      <section class="sec" aria-label="Claimed">
+        <div class="sec-h">
+          <h2><svg viewBox="0 0 16 16" fill="none" stroke="var(--green)" stroke-width="1.6"><circle cx="8" cy="8" r="6"/><path d="m5.3 8.2 1.8 1.8 3.6-3.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Claimed</h2>
+          <span class="meta">last 10 · 2 today</span>
+        </div>
+        <ul class="claims">
+          <li class="grp">Today</li>
+          <li class="cl"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Rust Wood Box Skin<span>grubfan</span></span><span class="tm">09:12</span></li>
+          <li class="cl"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Marvel Rivals Spray<span>grubfan</span></span><span class="tm">07:40</span></li>
+          <li class="grp">Yesterday</li>
+          <li class="cl old"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Kick Rust Hoodie<span>grubfan_kick</span></span><span class="tm">22:05</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Rust Garage Door Skin<span>grubfan</span></span><span class="tm">18:30</span></li>
+          <li class="grp">Earlier</li>
+          <li class="cl old"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Marvel Rivals Banner<span>grubfan</span></span><span class="tm">Oct 23</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Kick Rust Bandana<span>grubfan_kick</span></span><span class="tm">Oct 23</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Overwatch Spray "Grub"<span>grubfan</span></span><span class="tm">Oct 21</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Overwatch Player Icon<span>grub_alt</span></span><span class="tm">Oct 21</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Rust Sleeping Bag Skin<span>grubfan</span></span><span class="tm">Oct 20</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Kick Rust Beanie<span>grubfan_kick</span></span><span class="tm">Oct 19</span></li>
+        </ul>
+        <div class="claims-foot"><span>27 all time</span><a href="rewards.html" class="link">All rewards</a></div>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<div class="mock-tag">r3 · H3 · Home · <a href="../">all mockups</a></div>
+<script>
+(() => {
+  const q = document.querySelector('.queue'), sec = q.closest('.upnext'), reset = sec.querySelector('.reset');
+  const base = [...q.children].map(li => li.dataset.id);
+  const sync = () => {
+    const items = [...q.children];
+    items.forEach((li, i) => {
+      li.querySelector('.qn').textContent = i + 1;
+      li.querySelector('[data-mv=up]').disabled = i === 0;
+      li.querySelector('[data-mv=down]').disabled = i === items.length - 1;
+    });
+    const changed = items.map(li => li.dataset.id).join() !== base.join();
+    sec.classList.toggle('is-changed', changed);
+    reset.disabled = !changed;
+  };
+  q.addEventListener('click', e => {
+    const b = e.target.closest('[data-mv]'); if (!b) return;
+    const li = b.closest('li');
+    if (b.dataset.mv === 'up' && li.previousElementSibling) q.insertBefore(li, li.previousElementSibling);
+    if (b.dataset.mv === 'down' && li.nextElementSibling) q.insertBefore(li.nextElementSibling, li);
+    sync();
+  });
+  let drag = null;
+  q.addEventListener('dragstart', e => { drag = e.target.closest('li'); drag.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', ''); });
+  q.addEventListener('dragover', e => {
+    e.preventDefault();
+    const over = e.target.closest('li'); if (!over || over === drag) return;
+    const r = over.getBoundingClientRect();
+    q.insertBefore(drag, e.clientY > r.top + r.height / 2 ? over.nextElementSibling : over);
+  });
+  q.addEventListener('dragend', () => { drag && drag.classList.remove('dragging'); drag = null; sync(); });
+  reset.addEventListener('click', () => { base.forEach(id => q.appendChild(q.querySelector(`[data-id="${id}"]`))); sync(); });
+  sync();
+})();
+</script>
+</body>
+</html>

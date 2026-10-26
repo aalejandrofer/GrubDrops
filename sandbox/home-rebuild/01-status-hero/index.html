@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops · 01 Status hero</title>
+<link rel="stylesheet" href="../_assets/base.css">
+<style>
+  /* ---- Top bar ---- */
+  .top { border-bottom: 1px solid var(--border-soft); background: var(--bg); }
+  .top-in { max-width: 880px; margin: 0 auto; padding: 0 24px; height: 52px; display: flex; align-items: center; gap: 28px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand img { width: 24px; height: 24px; border-radius: 6px; }
+  .tabs { display: flex; gap: 2px; height: 100%; }
+  .tabs a { display: flex; align-items: center; padding: 0 10px; color: var(--muted); font-weight: 500; font-size: 13.5px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tabs a:hover { color: var(--text); }
+  .tabs a[aria-current] { color: var(--text); border-bottom-color: var(--accent); }
+
+  /* ---- Problem banner ---- */
+  .banner { background: var(--red-soft); border-bottom: 1px solid rgba(248, 81, 73, 0.35); }
+  .banner-in { max-width: 880px; margin: 0 auto; padding: 10px 24px; display: flex; align-items: center; gap: 12px; }
+  .banner svg { flex: none; color: var(--red); }
+  .banner p { margin: 0; flex: 1; min-width: 0; color: var(--text); font-size: 13.5px; }
+  .banner p span { color: var(--muted); }
+  .fix { flex: none; background: var(--red); color: #fff; border: 0; border-radius: 6px; padding: 5px 14px; font-weight: 600; font-size: 13px; }
+  .fix:hover { background: #ff6a62; }
+
+  /* ---- Hero ---- */
+  main { max-width: 880px; margin: 0 auto; padding: 72px 24px 96px; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; color: var(--green); font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; }
+  .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 rgba(63,185,80,.6); animation: pulse 2.4s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(63,185,80,.5); } 70% { box-shadow: 0 0 0 8px rgba(63,185,80,0); } 100% { box-shadow: 0 0 0 0 rgba(63,185,80,0); } }
+  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+  h1 { margin: 18px 0 0; font-size: clamp(32px, 6vw, 54px); line-height: 1.08; letter-spacing: -0.035em; font-weight: 600; max-width: 15ch; }
+  h1 em { font-style: normal; color: var(--accent); }
+  h1 .soft { color: var(--muted); }
+
+  /* ---- Combined progress: one 30-minute runway ---- */
+  .runway { margin-top: 56px; }
+  .runway-head { display: flex; justify-content: space-between; align-items: baseline; color: var(--muted); font-size: 12.5px; margin-bottom: 14px; }
+  .runway-head b { color: var(--text); font-weight: 500; }
+  .track { position: relative; height: 6px; background: var(--surface-3); border-radius: 3px; }
+  .track .fill { position: absolute; inset: 0 auto 0 0; width: 60%; border-radius: 3px; background: linear-gradient(90deg, var(--accent-strong), var(--accent)); }
+  .track .fill.later { width: 83.3%; background: var(--accent-soft); }
+  .mark { position: absolute; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--bg); border: 2px solid var(--accent); }
+  .mark.k { border-color: var(--muted); }
+  .labels { position: relative; height: 54px; margin-top: 10px; }
+  .lab { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; text-align: center; font-size: 12.5px; }
+  .lab .t { font: 500 13px var(--mono); color: var(--text); }
+  .lab .d { color: var(--muted); display: flex; align-items: center; gap: 5px; justify-content: center; }
+  .lab.right { transform: translateX(-70%); }
+  .plat { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+  .plat.tw { background: var(--twitch); }
+  .plat.kk { background: var(--kick); }
+  .scale { display: flex; justify-content: space-between; color: var(--dim); font: 11px var(--mono); margin-top: 6px; }
+
+  /* ---- Quiet facts ---- */
+  .facts { margin-top: 56px; border-top: 1px solid var(--border-soft); }
+  .fact { display: flex; align-items: baseline; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--border-soft); }
+  .fact dt { width: 120px; flex: none; color: var(--dim); font-size: 12.5px; }
+  .fact dd { margin: 0; flex: 1; min-width: 0; color: var(--text); }
+  .fact dd .m { color: var(--muted); }
+  .fact dd .bad { color: var(--red); }
+  .fact a.more { flex: none; color: var(--muted); font-size: 12.5px; }
+  .fact a.more:hover { color: var(--accent); }
+  .chain { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+  .chain .sep { color: var(--dim); }
+
+  /* ---- Mobile ---- */
+  @media (max-width: 640px) {
+    .top-in, .banner-in, main { padding-left: 16px; padding-right: 16px; }
+    .top-in { gap: 12px; }
+    .brand span { display: none; }
+    .tabs a { padding: 0 8px; font-size: 13px; }
+    .banner-in { align-items: flex-start; }
+    main { padding-top: 44px; }
+    .runway { margin-top: 40px; }
+    .fact { flex-wrap: wrap; gap: 2px 16px; }
+    .fact dt { width: 100%; }
+    .labels { height: 96px; }
+    .lab.right { top: 46px; transform: translateX(-75%); }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#"><img src="../_assets/logo.png" alt=""><span>GrubDrops</span></a>
+    <nav class="tabs" aria-label="Main">
+      <a href="#" aria-current="page">Home</a>
+      <a href="#">Games</a>
+      <a href="#">Rewards</a>
+      <a href="#">Settings</a>
+    </nav>
+  </div>
+</header>
+
+<div class="banner" role="alert">
+  <div class="banner-in">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.8 14.6 13.5H1.4Z"/><path d="M8 6.2v3.3"/><path d="M8 11.6v.1"/></svg>
+    <p><b>grub_alt</b> is signed out of Twitch. <span>It isn't mining until you log in again.</span></p>
+    <button class="fix" type="button">Fix</button>
+  </div>
+</div>
+
+<main>
+  <div class="eyebrow"><span class="pulse"></span>Working</div>
+  <h1>Mining <em>Rust</em> on 2&nbsp;accounts. <span class="soft">Next drop in 18&nbsp;min.</span></h1>
+
+  <section class="runway" aria-label="Next 30 minutes">
+    <div class="runway-head"><span><b>Next 30 minutes</b></span><span>2 drops landing</span></div>
+    <div class="track">
+      <div class="fill later"></div>
+      <div class="fill"></div>
+      <span class="mark" style="left:60%"></span>
+      <span class="mark k" style="left:83.3%"></span>
+    </div>
+    <div class="labels">
+      <div class="lab" style="left:60%">
+        <div class="t">18 min</div>
+        <div class="d"><span class="plat tw"></span>Hazmat Suit Skin</div>
+      </div>
+      <div class="lab right" style="left:83.3%">
+        <div class="t">25 min</div>
+        <div class="d"><span class="plat kk"></span>Kick Garage Door</div>
+      </div>
+    </div>
+    <div class="scale"><span>now</span><span>+10</span><span>+20</span><span>+30</span></div>
+  </section>
+
+  <dl class="facts">
+    <div class="fact">
+      <dt>Accounts</dt>
+      <dd>2 of 3 accounts mining <span class="m">·</span> <span class="bad">1 needs login</span></dd>
+      <a class="more" href="#">Settings</a>
+    </div>
+    <div class="fact">
+      <dt>Your games</dt>
+      <dd><span class="chain"><span>Rust</span><span class="sep">/</span><span>Marvel Rivals <span class="m">waiting</span></span><span class="sep">/</span><span>Overwatch <span class="m">no campaign</span></span></span></dd>
+      <a class="more" href="#">Games</a>
+    </div>
+    <div class="fact">
+      <dt>Claimed today</dt>
+      <dd>3 rewards <span class="m">· last: Rust Wood Box Skin at 09:12 · 27 all time</span></dd>
+      <a class="more" href="#">Rewards</a>
+    </div>
+  </dl>
+</main>
+
+<div class="mock-tag">01 · Status hero · <a href="../">all mockups</a></div>
+</body>
+</html>

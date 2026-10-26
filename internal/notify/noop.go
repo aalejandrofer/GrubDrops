@@ -17,6 +17,6 @@ func (n *NoopNotifier) Notify(_ context.Context, event Event, fields map[string]
 	for k, v := range fields {
 		args = append(args, k, v)
 	}
-	n.Logger.Info("notify", args...)
+	n.Logger.Debug("notify", args...)
 	return nil
 }

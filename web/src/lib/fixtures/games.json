@@ -1,0 +1,77 @@
+{
+	"games": [
+		{
+			"id": "g-rust",
+			"name": "Rust",
+			"slug": "rust",
+			"priority": 1,
+			"box_art_url": "",
+			"state": "mining",
+			"campaigns": [
+				{
+					"id": "camp-rust",
+					"platform": "twitch",
+					"name": "Rust Drops",
+					"drops": 4,
+					"ends_at": "2026-11-02T18:00:00Z"
+				}
+			],
+			"needs_link": []
+		},
+		{
+			"id": "g-marvel",
+			"name": "Marvel Rivals",
+			"slug": "marvel-rivals",
+			"priority": 2,
+			"box_art_url": "",
+			"state": "waiting",
+			"campaigns": [
+				{
+					"id": "camp-marvel-rivals",
+					"platform": "twitch",
+					"name": "Marvel Rivals Drops",
+					"drops": 3,
+					"ends_at": "2026-11-02T18:00:00Z"
+				}
+			],
+			"needs_link": [
+				{
+					"account_id": "acc-kick",
+					"account_name": "kickfan",
+					"platform": "kick",
+					"url": "https://auth.riotgames.com/authorize"
+				}
+			]
+		},
+		{
+			"id": "g-apex",
+			"name": "Apex Legends",
+			"slug": "apex-legends",
+			"priority": 3,
+			"box_art_url": "",
+			"state": "waiting",
+			"campaigns": [
+				{
+					"id": "camp-apex-kick",
+					"platform": "kick",
+					"name": "Apex Legends Drops",
+					"drops": 2,
+					"ends_at": "2026-11-02T18:00:00Z"
+				}
+			],
+			"needs_link": []
+		},
+		{
+			"id": "g-delta",
+			"name": "Delta Force",
+			"slug": "delta-force",
+			"priority": 4,
+			"box_art_url": "",
+			"state": "no_campaign",
+			"campaigns": [],
+			"needs_link": []
+		}
+	],
+	"last_scan_at": "2026-10-25T11:58:00Z",
+	"next_scan_at": null
+}

@@ -1,0 +1,1235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops · r4 · Home states</title>
+<link rel="stylesheet" href="../_assets/base.css">
+<style>
+  /* r4: page-local secondary/tertiary text colours that pass WCAG AA on every surface (same as settings.html) */
+  :root { --t2: #a3acb7; --t3: #8b949e; }
+  svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* Shell: top bar + container (shared by all r3-h3 pages) */
+  .top { position: sticky; top: 0; z-index: 10; background: rgba(13,17,23,.92); border-bottom: 1px solid var(--border-soft); backdrop-filter: blur(6px); }
+  .top-in { max-width: 1160px; margin: 0 auto; height: 52px; padding: 0 24px; display: flex; align-items: center; gap: 28px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -.01em; }
+  .brand img { width: 24px; height: 24px; border-radius: 6px; }
+  .tabs { display: flex; gap: 2px; }
+  .tabs a { padding: 6px 10px; border-radius: 6px; color: var(--t2); font-weight: 500; font-size: 13.5px; }
+  .tabs a:hover { color: var(--text); background: var(--surface); }
+  .tabs a.on { color: var(--text); background: var(--surface-2); }
+  main { max-width: 1160px; margin: 0 auto; padding: 28px 24px 96px; }
+
+  /* Page header: title, plain status, amber problem chip (the app's notification pattern) */
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .head-l { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; min-width: 0; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .now { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--green); }
+  .now .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+  .now .sep { color: var(--t3); }
+  .alert { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--amber); background: var(--amber-soft); border: 1px solid rgba(210,153,34,.3); padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .alert:hover { border-color: var(--amber); }
+  .alert:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .stamp { color: var(--t3); font-size: 12px; font-family: var(--mono); }
+
+  /* App version, top bar right, opens a small popover */
+  .verwrap { margin-left: auto; position: relative; }
+  .ver { font: 12px var(--mono); color: var(--text); white-space: nowrap; background: none; border: 0; padding: 4px 6px; border-radius: 6px; }
+  .ver:hover, .ver[aria-expanded="true"] { background: var(--surface); }
+  .ver:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .ver.update { color: #58a6ff; }
+  .pop { position: absolute; right: 0; top: calc(100% + 8px); width: 300px; max-width: calc(100vw - 32px); background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.4); padding: 14px; font-size: 13px; z-index: 20; }
+  .pop[hidden] { display: none; }
+  .pop h3 { margin: 0; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .pop h3 svg { width: 14px; height: 14px; flex: none; }
+  .pop .cur { margin: 2px 0 0 22px; color: var(--t2); font-size: 12px; }
+  .pop ul { margin: 10px 0 0; padding: 0 0 0 22px; color: var(--text); display: grid; gap: 3px; }
+  .pop li::marker { color: var(--t2); }
+  .pop .lbl { margin: 12px 0 6px; color: var(--t2); font-size: 12px; }
+  .cmd { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); overflow: hidden; }
+  .cmd code { flex: 1; min-width: 0; padding: 7px 9px; font: 12px/1.45 var(--mono); color: var(--text); white-space: pre-wrap; word-break: break-word; }
+  .cmd button { flex: none; border: 0; border-left: 1px solid var(--border); background: var(--surface); color: var(--t2); font-size: 12px; padding: 0 10px; min-width: 64px; }
+  .cmd button:hover { color: var(--text); background: var(--surface-3); }
+  .cmd button.ok { color: var(--green); }
+  .pop .more { display: inline-block; margin-top: 12px; color: var(--accent); font-size: 12px; }
+  .pop .more:hover { text-decoration: underline; }
+
+  /* KPIs (09 Pulse) */
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border-soft); border-radius: var(--radius); background: var(--surface); margin-bottom: 28px; }
+  .kpi { padding: 16px 20px 18px; display: block; position: relative; min-width: 0; }
+  .kpi + .kpi { border-left: 1px solid var(--border-soft); }
+  .kpi .label { font-size: 12px; color: var(--t2); display: flex; align-items: center; gap: 6px; }
+  .kpi .val { font-size: 30px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.15; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .kpi .val small { font-size: 14px; font-weight: 500; color: var(--t2); letter-spacing: 0; margin-left: 2px; }
+  .kpi .sub { font-size: 12px; color: var(--t3); margin-top: 2px; }
+  a.kpi:hover .label { color: var(--text); }
+  .kpi.bad { background: var(--amber-soft); border-radius: 0 var(--radius) var(--radius) 0; box-shadow: inset 0 0 0 1px rgba(210,153,34,.45); }
+  .kpi.bad .label, .kpi.bad .val { color: var(--amber); }
+  .kpi.bad .val small { color: var(--amber); opacity: .8; }
+  .kpi.bad .sub { color: var(--text); }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+
+  /* Section heading over the game cards */
+  .cards-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; min-height: 28px; }
+  .cards-h h2 { margin: 0; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .cnt { font: 12px var(--mono); color: var(--t2); background: var(--surface-3); border-radius: 10px; padding: 0 6px; font-weight: 400; }
+  .edit { color: var(--t2); font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; }
+  .edit:hover { color: var(--text); border-color: var(--t2); }
+
+  /* Game card (08): real box art, cards 1 and 2 share the large size, 3 and below are small */
+  .game { display: grid; grid-template-columns: var(--aw) minmax(0, 1fr); border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); overflow: hidden; }
+  .game + .game { margin-top: 10px; }
+  .game.p2 { margin-top: 12px; }
+  .art { position: relative; overflow: hidden; background: #22262e; isolation: isolate; }
+  .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 30%; z-index: -2; }
+  .art::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 45%; z-index: -1; background: linear-gradient(180deg, transparent, rgba(0,0,0,.6)); }
+  .art .rank { position: absolute; left: 8px; bottom: 6px; font: 500 12px/1 var(--mono); color: rgba(255,255,255,.9); }
+
+  .body { padding: 16px 20px; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+  .status { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; min-width: 0; }
+  .gname { margin: 0 4px 0 0; font-size: 15px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; }
+  .state { font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 10px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .state.mining { color: var(--green); background: var(--green-soft); }
+  .state.wait { color: #b48cf8; background: var(--accent-soft); }
+  .state.off { color: var(--t2); background: var(--surface-3); }
+  .camp { color: var(--t2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+  /* p1: full per-account progress */
+  .p1 { --aw: 168px; }
+  .p1 .art { min-height: 200px; }
+  .p1 .body { padding: 18px 20px; justify-content: flex-start; }
+  .p1 .gname { font-size: 18px; }
+  /* p2: same size as p1 (art, title, padding); only its content is shorter */
+  .p2 { --aw: 168px; }
+  .p2 .art { min-height: 150px; }
+  .p2 .body { padding: 18px 20px; }
+  .p2 .gname { font-size: 18px; }
+  /* p3: one line */
+  .p3 { --aw: 80px; }
+  .p3 .art { min-height: 64px; }
+  .p3 .body { padding: 12px 16px; }
+  .p3 .gname { font-size: 14px; }
+  /* p4: one compact line */
+  .p4 { --aw: 56px; }
+  .p4 .art { min-height: 46px; }
+  .p4 .art .rank { left: 6px; bottom: 5px; }
+  .p4 .body { padding: 8px 14px; }
+  .p4 .gname { font-size: 13px; font-weight: 500; }
+  .p4 .camp { font-size: 12px; }
+
+  .accts { margin-top: 14px; display: grid; gap: 12px; }
+  .acct { display: grid; grid-template-columns: 136px minmax(0, 1fr) 56px; gap: 14px; align-items: center; }
+  .who { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .who b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pm { width: 14px; height: 14px; border-radius: 3px; display: inline-grid; place-items: center; flex: none; }
+  .pm svg { width: 10px; height: 10px; }
+  .pm.tw { background: var(--twitch); color: #fff; }
+  .pm.kk { background: var(--kick); color: #0d1117; }
+  .pm.sm { width: 8px; height: 8px; border-radius: 2px; font-size: 0; }
+  .drop { min-width: 0; }
+  .drop .l { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+  .drop .l span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .drop .l span:last-child { color: var(--t2); font: 12px var(--mono); white-space: nowrap; }
+  .bar { height: 5px; border-radius: 3px; background: var(--surface-3); margin-top: 6px; overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width .8s ease; }
+  .eta { text-align: right; font: 500 13px var(--mono); }
+  .eta small { display: block; color: var(--t3); font: 12px var(--font); }
+  .ch { color: var(--t3); font-size: 12px; }
+  .acct.out .who b, .acct.out .drop { color: var(--t2); }
+  .acct.out .drop { font-size: 13px; }
+  .foot { margin-top: auto; padding-top: 14px; color: var(--t3); font-size: 12px; }
+  .queued { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: 13px; }
+  .queued li { display: flex; justify-content: space-between; gap: 12px; min-width: 0; }
+  .queued li span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .queued li span:last-child { color: var(--t3); font: 12px var(--mono); white-space: nowrap; }
+  .queued .q-h { color: var(--t2); font-size: 12px; }
+
+  /* Up next side column */
+  .panel { border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); }
+  .panel-h { display: flex; align-items: center; gap: 8px; padding: 12px 14px 0; }
+  .panel-h h2 { margin: 0; font-size: 13px; font-weight: 600; }
+  .panel-h .n { font: 12px var(--mono); color: var(--t2); background: var(--surface-3); border-radius: 10px; padding: 0 6px; }
+  .hint { padding: 4px 14px 10px; font-size: 12px; color: var(--t3); }
+
+  .queue { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border-soft); }
+  .queue li { display: grid; grid-template-columns: 14px 14px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 10px 8px 10px 10px; background: var(--surface); }
+  .queue li + li { border-top: 1px solid var(--border-soft); }
+  .queue li.dragging { opacity: .4; }
+  .grip { color: var(--t3); cursor: grab; display: grid; place-items: center; }
+  .grip svg { width: 12px; height: 12px; }
+  .qn { font: 12px var(--mono); color: var(--t3); text-align: right; }
+  .qt { min-width: 0; }
+  .qt .d { font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .qt .g { font-size: 12px; color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .qt .m { font-size: 12px; color: var(--t3); display: flex; align-items: center; gap: 5px; margin-top: 1px; white-space: nowrap; overflow: hidden; }
+  .qt .m .who { display: inline-flex; gap: 5px; color: var(--t2); }
+  .mv { display: flex; flex-direction: column; gap: 0; }
+  .mv button { width: 22px; height: 18px; display: grid; place-items: center; background: none; border: 1px solid transparent; border-radius: 4px; color: var(--t2); }
+  .mv button:hover:not(:disabled) { border-color: var(--border); color: var(--text); background: var(--surface-2); }
+  .mv button:disabled { opacity: .25; cursor: default; }
+  .mv svg { width: 12px; height: 12px; }
+  .panel-f { border-top: 1px solid var(--border-soft); padding: 10px 14px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--t3); }
+  .reset { margin-left: auto; font-size: 12px; color: var(--t2); background: none; border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; white-space: nowrap; }
+  .reset:hover:not(:disabled) { color: var(--text); border-color: var(--t2); }
+  .reset[hidden] { display: none; }
+
+  /* Claimed (03 Drop flow): a plain log, last 10 */
+  .sec { margin-top: 28px; min-width: 0; }
+  .sec-h { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; min-height: 26px; flex-wrap: wrap; }
+  .sec-h h2 { margin: 0; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .sec-h h2 svg { width: 14px; height: 14px; flex: none; }
+  .sec-h .meta { font-size: 12px; color: var(--t3); }
+  .claims { list-style: none; margin: 0; padding: 0; }
+  .claims .grp { font-size: 12px; color: var(--t3); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; padding: 10px 0 4px; }
+  .claims .grp:first-child { padding-top: 0; }
+  .claims .cl { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--border-soft); }
+  .claims .cl svg { width: 12px; height: 12px; color: var(--green); position: relative; top: 1px; }
+  .claims .old svg { color: var(--t3); }
+  .claims .nm { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .claims .nm span { color: var(--t3); font-size: 12px; margin-left: 6px; }
+  .claims .tm { font: 12px var(--mono); color: var(--t3); white-space: nowrap; }
+  .claims-foot { display: flex; justify-content: space-between; padding-top: 10px; font-size: 12px; color: var(--t3); }
+  .link { color: var(--t2); font-size: 12px; }
+  .link:hover { color: var(--accent); }
+
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 720px) {
+    .top-in { padding: 0 16px; gap: 14px; }
+    .brand span { display: none; }
+    .ver .vfrom, .ver .vtail { display: none; }
+    .tabs a { padding: 6px 8px; }
+  }
+  @media (max-width: 420px) {
+    .top-in { gap: 8px; }
+    .tabs a { padding: 6px 6px; font-size: 13px; }
+    .ver { font-size: 12px; }
+  }
+  @media (max-width: 720px) {
+    main { padding: 20px 16px 80px; }
+    .kpis { grid-template-columns: 1fr 1fr; }
+    .kpi { padding: 14px 16px; }
+    .kpi .val { font-size: 24px; }
+    .kpi:nth-child(3) { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--border-soft); }
+    .kpi.bad { border-radius: 0 0 var(--radius) var(--radius); }
+    .p1 { --aw: 84px; } .p2 { --aw: 84px; } .p3 { --aw: 52px; } .p4 { --aw: 44px; }
+    .p1 .art { min-height: 0; }
+    .p1 .body, .p2 .body { padding: 14px 16px; }
+    .p3 .body { padding: 10px 14px; }
+    .p4 .body { padding: 8px 12px; }
+    .camp { white-space: normal; }
+    .acct { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
+    .drop { grid-column: 1 / -1; grid-row: 2; }
+    .eta small { display: inline; margin-left: 4px; }
+    .panel-f { flex-wrap: wrap; }
+  }
+
+  /* ---- states.html only: state switcher + per-state additions ---- */
+  .stbar { position: sticky; top: 52px; z-index: 9; background: var(--bg); border-bottom: 1px solid var(--border-soft); }
+  .stbar-in { max-width: 1160px; margin: 0 auto; padding: 10px 24px; display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; }
+  .seg { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .seg::-webkit-scrollbar { display: none; }
+  .seg button { flex: none; border: 0; background: none; color: var(--t2); font-size: 12.5px; font-weight: 500; padding: 4px 10px; border-radius: 6px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+  .seg button span { font: 12px var(--mono); color: var(--t3); }
+  .seg button:hover { color: var(--text); }
+  .seg button[aria-selected="true"] { background: var(--surface-3); color: var(--text); }
+  .seg button[aria-selected="true"] span { color: var(--t2); }
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .stdesc { margin: 0; font-size: 12px; color: var(--t2); min-width: 0; }
+  .stdesc b { color: var(--text); font-weight: 500; margin-right: 4px; }
+  .st[hidden] { display: none; }
+
+  /* Header status variants */
+  .now.idle { color: var(--t2); }
+  .now.idle .dot { background: var(--t3); }
+  .now.down { color: var(--red); }
+  .now.down .dot { background: var(--red); }
+  .alert.red { color: var(--red); background: var(--red-soft); border-color: rgba(248,81,73,.35); }
+  .alert.red:hover { border-color: rgba(248,81,73,.35); }
+  .alert .rmsg { font-variant-numeric: tabular-nums; }
+
+  /* Shared buttons (same as settings.html) */
+  .btn { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); white-space: nowrap; }
+  .btn:hover { border-color: var(--t2); }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* 1 first-run: setup steps */
+  .setup { border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); padding: 22px 24px 8px; }
+  .setup > h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+  .setup > p { margin: 2px 0 0; color: var(--t2); font-size: 13px; }
+  .steps { list-style: none; margin: 18px 0 0; padding: 0; }
+  .steps > li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; padding: 16px 0 18px; border-top: 1px solid var(--border-soft); }
+  .sn { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font: 500 12px var(--mono); color: var(--t2); border: 1px solid var(--border); }
+  .sn svg { width: 12px; height: 12px; display: none; }
+  .steps > li.cur .sn { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .steps > li.done .sn { color: var(--green); border-color: rgba(63,185,80,.5); background: var(--green-soft); }
+  .steps > li.done .sn b { display: none; }
+  .steps > li.done .sn svg { display: block; }
+  .steps h3 { margin: 1px 0 0; font-size: 14px; font-weight: 600; display: flex; align-items: baseline; gap: 8px; }
+  .steps h3 small { font: 12px var(--mono); color: var(--green); font-weight: 400; }
+  .steps p { margin: 2px 0 0; color: var(--t2); font-size: 13px; }
+  .acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .pick { margin-top: 12px; max-width: 520px; }
+  .search { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--t3); }
+  .search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .search input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: var(--text); font: inherit; }
+  .search input::placeholder { color: var(--t3); }
+  .sugg { margin: 6px 0 0; padding: 4px; list-style: none; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+  .sugg[hidden], .sugg li[hidden] { display: none; }
+  .sugg li { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 6px; }
+  .sugg li:hover { background: var(--surface-3); }
+  .sugg .thumb { width: 28px; height: 37px; border-radius: 4px; flex: none; overflow: hidden; display: grid; place-items: center; background: #22262e repeating-linear-gradient(45deg, rgba(255,255,255,.05) 0 2px, transparent 2px 8px); color: var(--t2); font: 600 12px var(--font); }
+  .sugg .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .sugg .nm { flex: 1; min-width: 0; }
+  .sugg .nm b { font-weight: 500; display: block; }
+  .sugg .nm small { color: var(--t3); font-size: 12px; }
+  .add-btn { font-size: 12.5px; font-weight: 500; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); }
+  .add-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .add-btn:disabled { color: var(--t2); background: none; border-color: transparent; cursor: default; }
+  .picked { margin-top: 8px; font-size: 12px; color: var(--t3); }
+  .how { padding: 0 14px 6px; margin: 8px 0 0; list-style: none; display: grid; }
+  .how li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; padding: 9px 0; font-size: 13px; color: var(--t2); }
+  .how li + li { border-top: 1px solid var(--border-soft); }
+  .how li span { font: 12px var(--mono); color: var(--t3); padding-top: 1px; }
+  .how li b { color: var(--text); font-weight: 500; }
+
+  /* 3 nothing-live: idle body line + empty queue */
+  .idle-l { margin-top: 10px; color: var(--t2); font-size: 13px; }
+  .empty { border-top: 1px solid var(--border-soft); padding: 18px 14px 20px; display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 10px; font-size: 13px; color: var(--t2); }
+  .empty svg { width: 16px; height: 16px; color: var(--t3); margin-top: 1px; }
+  .empty b { display: block; color: var(--text); font-weight: 500; }
+
+  /* 4 offline: one help line, last-known data dimmed and inert */
+  .help { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; margin: -8px 0 20px; font-size: 13px; color: var(--text); }
+  .help > svg { color: var(--t2); }
+  .help .cmd { display: inline-flex; }
+  .help .cmd code { padding: 3px 9px; white-space: nowrap; }
+  .help .cmd button { min-width: 56px; padding: 0 8px; }
+  .stale { opacity: .45; filter: saturate(.4); user-select: none; }
+  .stamp.last { color: var(--t2); }
+
+  /* 5 many-accounts: summary + fold */
+  .summ { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border-soft); font-size: 13px; color: var(--t2); }
+  .summ b { color: var(--text); font-weight: 500; }
+  .toggle { display: inline-flex; align-items: center; gap: 6px; background: none; border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; font-size: 12px; color: var(--t2); white-space: nowrap; }
+  .toggle:hover { color: var(--text); border-color: var(--t2); }
+  .toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .toggle svg { width: 12px; height: 12px; transition: transform .15s ease; }
+  .toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .rest { display: grid; gap: 12px; }
+  .rest[hidden] { display: none; }
+  .acct.idle .who b, .acct.idle .drop { color: var(--t2); }
+  .acct.idle .drop { font-size: 13px; }
+
+  @media (max-width: 720px) {
+    .stbar-in { padding: 8px 16px; }
+    .setup { padding: 18px 16px 4px; }
+    .help .cmd code { white-space: pre-wrap; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="g-tw" viewBox="0 0 24 24"><path d="M4 2 2 6v14h5v3h3l3-3h4l5-5V2H4zm16 12-3 3h-5l-3 3v-3H5V4h15v10zM15 7h2v5h-2zm-5 0h2v5h-2z" fill="currentColor"/></symbol>
+  <symbol id="g-kk" viewBox="0 0 24 24"><path d="M3 2h6v6h2V5h3V2h7v7h-3v3h-3v0h3v3h3v7h-7v-3h-3v-3H9v6H3z" fill="currentColor"/></symbol>
+  <symbol id="ck" viewBox="0 0 12 12"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="grip" viewBox="0 0 12 12"><g fill="currentColor"><circle cx="4" cy="3" r="1"/><circle cx="8" cy="3" r="1"/><circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/><circle cx="4" cy="9" r="1"/><circle cx="8" cy="9" r="1"/></g></symbol>
+  <symbol id="up" viewBox="0 0 12 12"><path d="M3 7.5 6 4.5l3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="dn" viewBox="0 0 12 12"><path d="M3 4.5 6 7.5l3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="okc" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="var(--green)" stroke-width="1.6"/><path d="m5.3 8.2 1.8 1.8 3.6-3.8" fill="none" stroke="var(--green)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+<header class="top">
+  <div class="top-in">
+    <a href="index.html" class="brand"><img src="../_assets/logo.png" alt=""><span>GrubDrops</span></a>
+    <nav class="tabs">
+      <a href="index.html" class="on">Home</a>
+      <a href="games.html">Games</a>
+      <a href="rewards.html">Rewards</a>
+      <a href="settings.html">Settings</a>
+    </nav>
+    <span class="verwrap">
+      <button type="button" class="ver" aria-expanded="false" aria-controls="verpop">v1.4.2</button>
+      <div class="pop" id="verpop" role="dialog" aria-label="Version" hidden>
+        <h3><svg viewBox="0 0 16 16"><use href="#okc"/></svg>You're on the latest version, v1.4.2</h3>
+        <a href="#" class="more">Release notes</a>
+      </div>
+    </span>
+  </div>
+</header>
+
+<div class="stbar">
+  <div class="stbar-in">
+    <div class="seg" role="tablist" aria-label="Home state">
+      <button type="button" role="tab" data-st="first-run"><span>1</span>First run</button>
+      <button type="button" role="tab" data-st="healthy"><span>2</span>Healthy</button>
+      <button type="button" role="tab" data-st="nothing-live"><span>3</span>Nothing live</button>
+      <button type="button" role="tab" data-st="offline"><span>4</span>Offline</button>
+      <button type="button" role="tab" data-st="many-accounts"><span>5</span>10 accounts</button>
+    </div>
+    <p class="stdesc" id="stdesc" aria-live="polite"></p>
+  </div>
+</div>
+
+<main>
+<!-- ================= 1 · first-run ================= -->
+<section class="st" data-st="first-run" data-name="First run" data-desc="Fresh install. No accounts or games yet; shown until the first account and game are added." hidden>
+  <div class="head">
+    <div class="head-l">
+      <h1>Home</h1>
+      <span class="now idle"><span class="dot"></span>Not set up</span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <section class="setup" aria-label="Set up GrubDrops">
+      <h2>Set up GrubDrops</h2>
+      <p>Three steps. After that it runs on its own.</p>
+      <ol class="steps">
+        <li class="cur">
+          <span class="sn"><b>1</b><svg viewBox="0 0 12 12"><use href="#ck"/></svg></span>
+          <div>
+            <h3>Add an account</h3>
+            <p>Sign in with the account that should earn the drops. You can add more later in Settings.</p>
+            <div class="acts">
+              <a href="settings.html#accounts" class="btn"><span class="pm tw"><svg><use href="#g-tw"/></svg></span>Add Twitch account</a>
+              <a href="settings.html#accounts" class="btn"><span class="pm kk"><svg><use href="#g-kk"/></svg></span>Add Kick account</a>
+            </div>
+          </div>
+        </li>
+        <li class="pick-step">
+          <span class="sn"><b>2</b><svg viewBox="0 0 12 12"><use href="#ck"/></svg></span>
+          <div>
+            <h3>Pick your games <small class="pcount" hidden></small></h3>
+            <p>Search for a game. Top of the list mines first; reorder it on Games.</p>
+            <div class="pick">
+              <label class="search">
+                <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input class="q" type="search" placeholder="Search games, e.g. Rust" autocomplete="off" aria-label="Search games">
+              </label>
+              <ul class="sugg" hidden>
+                <li data-name="Rust"><span class="thumb"><img src="https://static-cdn.jtvnw.net/ttv-boxart/263490_IGDB-285x380.jpg" alt=""></span><span class="nm"><b>Rust</b><small>Campaign live now</small></span><button class="add-btn" type="button">Add</button></li>
+                <li data-name="Marvel Rivals"><span class="thumb"><img src="https://static-cdn.jtvnw.net/ttv-boxart/1264310518_IGDB-285x380.jpg" alt=""></span><span class="nm"><b>Marvel Rivals</b><small>Campaign live now</small></span><button class="add-btn" type="button">Add</button></li>
+                <li data-name="Overwatch"><span class="thumb"><img src="https://static-cdn.jtvnw.net/ttv-boxart/515025_IGDB-285x380.jpg" alt=""></span><span class="nm"><b>Overwatch</b><small>No campaign right now. We'll watch for one.</small></span><button class="add-btn" type="button">Add</button></li>
+                <li data-name="Dead by Daylight"><span class="thumb"><img src="https://static-cdn.jtvnw.net/ttv-boxart/Dead%20by%20Daylight-285x380.jpg" alt=""></span><span class="nm"><b>Dead by Daylight</b><small>No campaign right now. We'll watch for one.</small></span><button class="add-btn" type="button">Add</button></li>
+                <li data-name="Deadlock"><span class="thumb" aria-hidden="true">D</span><span class="nm"><b>Deadlock</b><small>No campaign live</small></span><button class="add-btn" type="button">Add</button></li>
+              </ul>
+            </div>
+          </div>
+        </li>
+        <li>
+          <span class="sn"><b>3</b><svg viewBox="0 0 12 12"><use href="#ck"/></svg></span>
+          <div>
+            <h3>Done</h3>
+            <p>GrubDrops mines only those games and claims each drop for you. This page then shows what's mining.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <aside class="side-col">
+      <section class="panel">
+        <div class="panel-h"><h2>How it works</h2></div>
+        <ul class="how">
+          <li><span>1</span><div><b>Watches for you.</b> Each account watches one live stream of a game you picked.</div></li>
+          <li><span>2</span><div><b>Claims for you.</b> When a drop's time is reached, it's claimed right away.</div></li>
+          <li><span>3</span><div><b>Keeps looking.</b> New campaigns are checked every 5 min.</div></li>
+        </ul>
+      </section>
+    </aside>
+  </div>
+</section>
+
+<!-- ================= 2 · healthy ================= -->
+<section class="st" data-st="healthy" data-name="Healthy" data-desc="Everything works. All accounts signed in and mining your games; nothing to do." hidden>
+  <div class="head">
+    <div class="head-l">
+      <h1>Home</h1>
+      <span class="now"><span class="dot"></span>Mining Rust<span class="sep">·</span>Marvel Rivals</span>
+    </div>
+    <span class="stamp ago">updated 12 s ago</span>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">Total Minutes Watched</div>
+      <div class="val">18,240<small>min</small></div>
+      <div class="sub">412 today · 3 accounts</div>
+    </div>
+    <a class="kpi" href="rewards.html">
+      <div class="label">Drops claimed today</div>
+      <div class="val">2</div>
+      <div class="sub">27 all time</div>
+    </a>
+    <a class="kpi" href="settings.html#accounts">
+      <div class="label">Accounts healthy</div>
+      <div class="val">3<small>/ 3</small></div>
+      <div class="sub">all signed in</div>
+    </a>
+  </div>
+
+  <div class="layout">
+    <div class="cards">
+      <div class="cards-h">
+        <h2>Your games <span class="cnt">4</span></h2>
+        <a href="games.html" class="edit"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h6"/></svg>Edit games</a>
+      </div>
+
+      <article class="game p1">
+        <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/263490_IGDB-285x380.jpg" alt="Rust box art"><span class="rank">01</span></div>
+        <div class="body">
+          <div class="status">
+            <h3 class="gname">Rust</h3>
+            <span class="state mining">Mining</span>
+            <span class="camp">Rust Twitch Drops Round 41</span>
+          </div>
+          <div class="accts">
+            <div class="acct">
+              <div class="who"><span class="pm tw"><svg><use href="#g-tw"/></svg></span><b>grubfan</b></div>
+              <div class="drop">
+                <div class="l"><span>Hazmat Suit Skin <span class="ch">· hJune</span></span><span class="mm">42/60</span></div>
+                <div class="bar"><i style="width:70%"></i></div>
+              </div>
+              <div class="eta" data-m="42" data-t="60"><span class="left">18m</span><small>left</small></div>
+            </div>
+            <div class="acct">
+              <div class="who"><span class="pm kk"><svg><use href="#g-kk"/></svg></span><b>grubfan_kick</b></div>
+              <div class="drop">
+                <div class="l"><span>Kick Garage Door <span class="ch">· posty</span></span><span class="mm">95/120</span></div>
+                <div class="bar"><i style="width:79%"></i></div>
+              </div>
+              <div class="eta" data-m="95" data-t="120"><span class="left">25m</span><small>left</small></div>
+            </div>
+          </div>
+          <div class="foot">2 more Rust drops in Up next</div>
+        </div>
+      </article>
+
+      <article class="game p2">
+        <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/1264310518_IGDB-285x380.jpg" alt="Marvel Rivals box art"><span class="rank">02</span></div>
+        <div class="body">
+          <div class="status">
+            <h3 class="gname">Marvel Rivals</h3>
+            <span class="state mining">Mining</span>
+            <span class="camp">Season 4 Twitch Drops</span>
+          </div>
+          <div class="accts">
+            <div class="acct">
+              <div class="who"><span class="pm tw"><svg><use href="#g-tw"/></svg></span><b>grub_alt</b></div>
+              <div class="drop">
+                <div class="l"><span>Spray: Grub Sighting <span class="ch">· Seeeb</span></span><span class="mm">12/30</span></div>
+                <div class="bar"><i style="width:40%"></i></div>
+              </div>
+              <div class="eta" data-m="12" data-t="30"><span class="left">18m</span><small>left</small></div>
+            </div>
+          </div>
+          <ul class="queued"><li><span>Then Nameplate: Hive</span><span>60 min</span></li></ul>
+        </div>
+      </article>
+
+      <article class="game p3">
+        <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/515025_IGDB-285x380.jpg" alt="Overwatch box art"><span class="rank">03</span></div>
+        <div class="body">
+          <div class="status">
+            <h3 class="gname">Overwatch</h3>
+            <span class="state off">No campaign</span>
+            <span class="camp">Last scan 41 s ago</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="game p3">
+        <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/Dead%20by%20Daylight-285x380.jpg" alt="Dead by Daylight box art"><span class="rank">04</span></div>
+        <div class="body">
+          <div class="status">
+            <h3 class="gname">Dead by Daylight</h3>
+            <span class="state off">No campaign</span>
+            <span class="camp">Last scan 41 s ago</span>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <aside class="side-col">
+      <section class="panel upnext">
+        <div class="panel-h"><h2>Up next</h2><span class="n">3</span></div>
+        <div class="hint">Order for this session only</div>
+        <ol class="queue">
+          <li draggable="true" data-id="1"><span class="grip" title="Drag to reorder"><svg viewBox="0 0 12 12"><use href="#grip"/></svg></span><span class="qn">1</span>
+            <div class="qt"><div class="d">Road Sign Kilt</div><div class="g">Rust · Round 41</div><div class="m"><span class="who"><span class="pm tw sm"></span>grubfan</span>· 60 min · after Hazmat</div></div>
+            <div class="mv"><button data-mv="up" aria-label="Move up"><svg viewBox="0 0 12 12"><use href="#up"/></svg></button><button data-mv="down" aria-label="Move down"><svg viewBox="0 0 12 12"><use href="#dn"/></svg></button></div></li>
+          <li draggable="true" data-id="2"><span class="grip" title="Drag to reorder"><svg viewBox="0 0 12 12"><use href="#grip"/></svg></span><span class="qn">2</span>
+            <div class="qt"><div class="d">Tempered AK</div><div class="g">Rust · Round 41</div><div class="m"><span class="who"><span class="pm tw sm"></span>grubfan</span>· 120 min</div></div>
+            <div class="mv"><button data-mv="up" aria-label="Move up"><svg viewBox="0 0 12 12"><use href="#up"/></svg></button><button data-mv="down" aria-label="Move down"><svg viewBox="0 0 12 12"><use href="#dn"/></svg></button></div></li>
+          <li draggable="true" data-id="3"><span class="grip" title="Drag to reorder"><svg viewBox="0 0 12 12"><use href="#grip"/></svg></span><span class="qn">3</span>
+            <div class="qt"><div class="d">Nameplate: Hive</div><div class="g">Marvel Rivals · Season 4</div><div class="m"><span class="who"><span class="pm tw sm"></span>grub_alt</span>· 60 min · after Spray</div></div>
+            <div class="mv"><button data-mv="up" aria-label="Move up"><svg viewBox="0 0 12 12"><use href="#up"/></svg></button><button data-mv="down" aria-label="Move down"><svg viewBox="0 0 12 12"><use href="#dn"/></svg></button></div></li>
+        </ol>
+        <div class="panel-f">
+          <span>Permanent order lives on <a href="games.html" class="link">Games</a>.</span>
+          <button class="reset" type="button" hidden>Reset to Games order</button>
+        </div>
+      </section>
+
+      <section class="sec" aria-label="Claimed">
+        <div class="sec-h">
+          <h2><svg viewBox="0 0 16 16"><use href="#okc"/></svg>Claimed</h2>
+          <span class="meta">last 10 · 2 today</span>
+        </div>
+        <ul class="claims">
+          <li class="grp">Today</li>
+          <li class="cl"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Rust Wood Box Skin<span>grubfan</span></span><span class="tm">09:12</span></li>
+          <li class="cl"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Marvel Rivals Spray<span>grubfan</span></span><span class="tm">07:40</span></li>
+          <li class="grp">Yesterday</li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Kick Rust Hoodie<span>grubfan_kick</span></span><span class="tm">22:05</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Rust Garage Door Skin<span>grubfan</span></span><span class="tm">18:30</span></li>
+          <li class="grp">Earlier</li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Marvel Rivals Banner<span>grubfan</span></span><span class="tm">Oct 23</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Kick Rust Bandana<span>grubfan_kick</span></span><span class="tm">Oct 23</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Overwatch Spray "Grub"<span>grubfan</span></span><span class="tm">Oct 21</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Overwatch Player Icon<span>grub_alt</span></span><span class="tm">Oct 21</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Rust Sleeping Bag Skin<span>grubfan</span></span><span class="tm">Oct 20</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Kick Rust Beanie<span>grubfan_kick</span></span><span class="tm">Oct 19</span></li>
+        </ul>
+        <div class="claims-foot"><span>27 all time</span><a href="rewards.html" class="link">All rewards</a></div>
+      </section>
+    </aside>
+  </div>
+</section>
+
+<!-- ================= 3 · nothing-live ================= -->
+<section class="st" data-st="nothing-live" data-name="Nothing live" data-desc="All accounts are fine, but none of your games has a live campaign right now." hidden>
+  <div class="head">
+    <div class="head-l">
+      <h1>Home</h1>
+      <span class="now idle"><span class="dot"></span>Idle<span class="sep">·</span>watching for campaigns</span>
+    </div>
+    <span class="stamp ago">updated 12 s ago</span>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">Total Minutes Watched</div>
+      <div class="val">18,240<small>min</small></div>
+      <div class="sub">0 today · 3 accounts</div>
+    </div>
+    <a class="kpi" href="rewards.html">
+      <div class="label">Drops claimed today</div>
+      <div class="val">0</div>
+      <div class="sub">27 all time</div>
+    </a>
+    <a class="kpi" href="settings.html#accounts">
+      <div class="label">Accounts healthy</div>
+      <div class="val">3<small>/ 3</small></div>
+      <div class="sub">all signed in, ready</div>
+    </a>
+  </div>
+
+  <div class="layout">
+    <div class="cards">
+      <div class="cards-h">
+        <h2>Your games <span class="cnt">4</span></h2>
+        <a href="games.html" class="edit"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h6"/></svg>Edit games</a>
+      </div>
+
+      <article class="game p1">
+        <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/263490_IGDB-285x380.jpg" alt="Rust box art"><span class="rank">01</span></div>
+        <div class="body">
+          <div class="status">
+            <h3 class="gname">Rust</h3>
+            <span class="state off">No campaign</span>
+            <span class="camp">Last scan 2 min ago</span>
+          </div>
+          <p class="idle-l">All 3 accounts are ready. Mining starts on the next scan that finds a campaign.</p>
+        </div>
+      </article>
+
+      <article class="game p2">
+        <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/1264310518_IGDB-285x380.jpg" alt="Marvel Rivals box art"><span class="rank">02</span></div>
+        <div class="body">
+          <div class="status">
+            <h3 class="gname">Marvel Rivals</h3>
+            <span class="state off">No campaign</span>
+            <span class="camp">Last scan 2 min ago</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="game p3">
+        <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/515025_IGDB-285x380.jpg" alt="Overwatch box art"><span class="rank">03</span></div>
+        <div class="body">
+          <div class="status">
+            <h3 class="gname">Overwatch</h3>
+            <span class="state off">No campaign</span>
+            <span class="camp">Last scan 2 min ago</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="game p3">
+        <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/Dead%20by%20Daylight-285x380.jpg" alt="Dead by Daylight box art"><span class="rank">04</span></div>
+        <div class="body">
+          <div class="status">
+            <h3 class="gname">Dead by Daylight</h3>
+            <span class="state off">No campaign</span>
+            <span class="camp">Last scan 2 min ago</span>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <aside class="side-col">
+      <section class="panel">
+        <div class="panel-h"><h2>Up next</h2><span class="n">0</span></div>
+        <div class="hint">Order for this session only</div>
+        <div class="empty">
+          <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <div><b>Nothing queued.</b>We check every 5 min; next scan in 3 min.</div>
+        </div>
+      </section>
+
+      <section class="sec" aria-label="Claimed">
+        <div class="sec-h">
+          <h2><svg viewBox="0 0 16 16"><use href="#okc"/></svg>Claimed</h2>
+          <span class="meta">last 10 · 0 today</span>
+        </div>
+        <ul class="claims">
+          <li class="grp">Yesterday</li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Kick Rust Hoodie<span>grubfan_kick</span></span><span class="tm">22:05</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Rust Garage Door Skin<span>grubfan</span></span><span class="tm">18:30</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Rust Wood Box Skin<span>grubfan</span></span><span class="tm">09:12</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Marvel Rivals Spray<span>grubfan</span></span><span class="tm">07:40</span></li>
+          <li class="grp">Earlier</li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Marvel Rivals Banner<span>grubfan</span></span><span class="tm">Oct 23</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Kick Rust Bandana<span>grubfan_kick</span></span><span class="tm">Oct 23</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Overwatch Spray "Grub"<span>grubfan</span></span><span class="tm">Oct 21</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Overwatch Player Icon<span>grub_alt</span></span><span class="tm">Oct 21</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Rust Sleeping Bag Skin<span>grubfan</span></span><span class="tm">Oct 20</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Kick Rust Beanie<span>grubfan_kick</span></span><span class="tm">Oct 19</span></li>
+        </ul>
+        <div class="claims-foot"><span>27 all time</span><a href="rewards.html" class="link">All rewards</a></div>
+      </section>
+    </aside>
+  </div>
+</section>
+
+<!-- ================= 4 · offline ================= -->
+<section class="st" data-st="offline" data-name="Offline" data-desc="This page can't reach the miner daemon, e.g. the container stopped or is restarting." hidden>
+  <div class="head">
+    <div class="head-l">
+      <h1>Home</h1>
+      <span class="now down"><span class="dot"></span>Miner offline</span><span class="alert red"><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span class="rmsg">Can't reach the miner · retrying in 8 s</span></span>
+    </div>
+    <span class="stamp last">Last updated 10:11</span>
+  </div>
+
+  <p class="help">
+    <svg class="i" viewBox="0 0 24 24"><path d="m4 17 6-5-6-5M12 19h8"/></svg>
+    Check the container is running:
+    <span class="cmd"><code>docker compose ps</code><button type="button" class="copy">Copy</button></span>
+  </p>
+
+  <div class="stale" inert>
+    <div class="kpis">
+      <div class="kpi">
+        <div class="label">Total Minutes Watched</div>
+        <div class="val">18,236<small>min</small></div>
+        <div class="sub">408 today · 3 accounts</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Drops claimed today</div>
+        <div class="val">2</div>
+        <div class="sub">27 all time</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Accounts healthy</div>
+        <div class="val">3<small>/ 3</small></div>
+        <div class="sub">all signed in</div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="cards">
+        <div class="cards-h">
+          <h2>Your games <span class="cnt">4</span></h2>
+          <span class="edit"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h6"/></svg>Edit games</span>
+        </div>
+
+        <article class="game p1">
+          <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/263490_IGDB-285x380.jpg" alt="Rust box art"><span class="rank">01</span></div>
+          <div class="body">
+            <div class="status">
+              <h3 class="gname">Rust</h3>
+              <span class="state mining">Mining</span>
+              <span class="camp">Rust Twitch Drops Round 41</span>
+            </div>
+            <div class="accts">
+              <div class="acct">
+                <div class="who"><span class="pm tw"><svg><use href="#g-tw"/></svg></span><b>grubfan</b></div>
+                <div class="drop">
+                  <div class="l"><span>Hazmat Suit Skin <span class="ch">· hJune</span></span><span>41/60</span></div>
+                  <div class="bar"><i style="width:68%"></i></div>
+                </div>
+                <div class="eta"></div>
+              </div>
+              <div class="acct">
+                <div class="who"><span class="pm kk"><svg><use href="#g-kk"/></svg></span><b>grubfan_kick</b></div>
+                <div class="drop">
+                  <div class="l"><span>Kick Garage Door <span class="ch">· posty</span></span><span>94/120</span></div>
+                  <div class="bar"><i style="width:78%"></i></div>
+                </div>
+                <div class="eta"></div>
+              </div>
+            </div>
+            <div class="foot">2 more Rust drops in Up next</div>
+          </div>
+        </article>
+
+        <article class="game p2">
+          <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/1264310518_IGDB-285x380.jpg" alt="Marvel Rivals box art"><span class="rank">02</span></div>
+          <div class="body">
+            <div class="status">
+              <h3 class="gname">Marvel Rivals</h3>
+              <span class="state mining">Mining</span>
+              <span class="camp">Season 4 Twitch Drops</span>
+            </div>
+            <div class="accts">
+              <div class="acct">
+                <div class="who"><span class="pm tw"><svg><use href="#g-tw"/></svg></span><b>grub_alt</b></div>
+                <div class="drop">
+                  <div class="l"><span>Spray: Grub Sighting <span class="ch">· Seeeb</span></span><span>11/30</span></div>
+                  <div class="bar"><i style="width:37%"></i></div>
+                </div>
+                <div class="eta"></div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="game p3">
+          <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/515025_IGDB-285x380.jpg" alt="Overwatch box art"><span class="rank">03</span></div>
+          <div class="body">
+            <div class="status">
+              <h3 class="gname">Overwatch</h3>
+              <span class="state off">No campaign</span>
+              <span class="camp">Last scan 41 s ago</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="game p3">
+          <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/Dead%20by%20Daylight-285x380.jpg" alt="Dead by Daylight box art"><span class="rank">04</span></div>
+          <div class="body">
+            <div class="status">
+              <h3 class="gname">Dead by Daylight</h3>
+              <span class="state off">No campaign</span>
+              <span class="camp">Last scan 41 s ago</span>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <aside class="side-col">
+        <section class="panel">
+          <div class="panel-h"><h2>Up next</h2><span class="n">3</span></div>
+          <div class="hint">Order for this session only</div>
+          <ol class="queue">
+            <li><span class="grip"><svg viewBox="0 0 12 12"><use href="#grip"/></svg></span><span class="qn">1</span><div class="qt"><div class="d">Road Sign Kilt</div><div class="g">Rust · Round 41</div><div class="m"><span class="who"><span class="pm tw sm"></span>grubfan</span>· 60 min · after Hazmat</div></div><div></div></li>
+            <li><span class="grip"><svg viewBox="0 0 12 12"><use href="#grip"/></svg></span><span class="qn">2</span><div class="qt"><div class="d">Tempered AK</div><div class="g">Rust · Round 41</div><div class="m"><span class="who"><span class="pm tw sm"></span>grubfan</span>· 120 min</div></div><div></div></li>
+            <li><span class="grip"><svg viewBox="0 0 12 12"><use href="#grip"/></svg></span><span class="qn">3</span><div class="qt"><div class="d">Nameplate: Hive</div><div class="g">Marvel Rivals · Season 4</div><div class="m"><span class="who"><span class="pm tw sm"></span>grub_alt</span>· 60 min · after Spray</div></div><div></div></li>
+          </ol>
+        </section>
+
+        <section class="sec" aria-label="Claimed">
+          <div class="sec-h">
+            <h2><svg viewBox="0 0 16 16"><use href="#okc"/></svg>Claimed</h2>
+            <span class="meta">last 10 · 2 today</span>
+          </div>
+          <ul class="claims">
+            <li class="grp">Today</li>
+            <li class="cl"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Rust Wood Box Skin<span>grubfan</span></span><span class="tm">09:12</span></li>
+            <li class="cl"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Marvel Rivals Spray<span>grubfan</span></span><span class="tm">07:40</span></li>
+            <li class="grp">Yesterday</li>
+            <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Kick Rust Hoodie<span>grubfan_kick</span></span><span class="tm">22:05</span></li>
+            <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Rust Garage Door Skin<span>grubfan</span></span><span class="tm">18:30</span></li>
+            <li class="grp">Earlier</li>
+            <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Marvel Rivals Banner<span>grubfan</span></span><span class="tm">Oct 23</span></li>
+            <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Kick Rust Bandana<span>grubfan_kick</span></span><span class="tm">Oct 23</span></li>
+            <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Overwatch Spray "Grub"<span>grubfan</span></span><span class="tm">Oct 21</span></li>
+            <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Overwatch Player Icon<span>grub_alt</span></span><span class="tm">Oct 21</span></li>
+            <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Rust Sleeping Bag Skin<span>grubfan</span></span><span class="tm">Oct 20</span></li>
+            <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Kick Rust Beanie<span>grubfan_kick</span></span><span class="tm">Oct 19</span></li>
+          </ul>
+          <div class="claims-foot"><span>27 all time</span><span class="link">All rewards</span></div>
+        </section>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 5 · many-accounts ================= -->
+<section class="st" data-st="many-accounts" data-name="10 accounts" data-desc="A bigger setup: 10 accounts on one game. The card sums them up and folds the rest." hidden>
+  <div class="head">
+    <div class="head-l">
+      <h1>Home</h1>
+      <span class="now"><span class="dot"></span>Mining Rust on 8 accounts</span>
+    </div>
+    <span class="stamp ago">updated 12 s ago</span>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">Total Minutes Watched</div>
+      <div class="val">61,380<small>min</small></div>
+      <div class="sub">1,904 today · 10 accounts</div>
+    </div>
+    <a class="kpi" href="rewards.html">
+      <div class="label">Drops claimed today</div>
+      <div class="val">7</div>
+      <div class="sub">94 all time</div>
+    </a>
+    <a class="kpi" href="settings.html#accounts">
+      <div class="label">Accounts healthy</div>
+      <div class="val">10<small>/ 10</small></div>
+      <div class="sub">all signed in</div>
+    </a>
+  </div>
+
+  <div class="layout">
+    <div class="cards">
+      <div class="cards-h">
+        <h2>Your games <span class="cnt">4</span></h2>
+        <a href="games.html" class="edit"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h6"/></svg>Edit games</a>
+      </div>
+
+      <article class="game p1">
+        <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/263490_IGDB-285x380.jpg" alt="Rust box art"><span class="rank">01</span></div>
+        <div class="body">
+          <div class="status">
+            <h3 class="gname">Rust</h3>
+            <span class="state mining">Mining</span>
+            <span class="camp">Round 41 · Kick x Rust</span>
+          </div>
+          <div class="summ">
+            <span><b>8 mining</b> · 2 idle</span>
+            <button type="button" class="toggle" aria-expanded="false" aria-controls="rest10"><span>Show all 10</span><svg viewBox="0 0 12 12"><use href="#dn"/></svg></button>
+          </div>
+          <div class="accts">
+            <div class="acct">
+              <div class="who"><span class="pm tw"><svg><use href="#g-tw"/></svg></span><b>hivequeen</b></div>
+              <div class="drop">
+                <div class="l"><span>Hazmat Suit Skin <span class="ch">· hJune</span></span><span class="mm">54/60</span></div>
+                <div class="bar"><i style="width:90%"></i></div>
+              </div>
+              <div class="eta" data-m="54" data-t="60"><span class="left">6m</span><small>left</small></div>
+            </div>
+            <div class="acct">
+              <div class="who"><span class="pm kk"><svg><use href="#g-kk"/></svg></span><b>grubfan_kick</b></div>
+              <div class="drop">
+                <div class="l"><span>Kick Garage Door <span class="ch">· posty</span></span><span class="mm">95/120</span></div>
+                <div class="bar"><i style="width:79%"></i></div>
+              </div>
+              <div class="eta" data-m="95" data-t="120"><span class="left">25m</span><small>left</small></div>
+            </div>
+            <div class="acct">
+              <div class="who"><span class="pm tw"><svg><use href="#g-tw"/></svg></span><b>grubfan</b></div>
+              <div class="drop">
+                <div class="l"><span>Hazmat Suit Skin <span class="ch">· hJune</span></span><span class="mm">42/60</span></div>
+                <div class="bar"><i style="width:70%"></i></div>
+              </div>
+              <div class="eta" data-m="42" data-t="60"><span class="left">18m</span><small>left</small></div>
+            </div>
+            <div class="rest" id="rest10" hidden>
+            <div class="acct">
+              <div class="who"><span class="pm tw"><svg><use href="#g-tw"/></svg></span><b>nest_01</b></div>
+              <div class="drop">
+                <div class="l"><span>Hazmat Suit Skin <span class="ch">· Blooprint</span></span><span class="mm">38/60</span></div>
+                <div class="bar"><i style="width:63%"></i></div>
+              </div>
+              <div class="eta" data-m="38" data-t="60"><span class="left">22m</span><small>left</small></div>
+            </div>
+            <div class="acct">
+              <div class="who"><span class="pm tw"><svg><use href="#g-tw"/></svg></span><b>grub_alt</b></div>
+              <div class="drop">
+                <div class="l"><span>Hazmat Suit Skin <span class="ch">· hJune</span></span><span class="mm">30/60</span></div>
+                <div class="bar"><i style="width:50%"></i></div>
+              </div>
+              <div class="eta" data-m="30" data-t="60"><span class="left">30m</span><small>left</small></div>
+            </div>
+            <div class="acct">
+              <div class="who"><span class="pm tw"><svg><use href="#g-tw"/></svg></span><b>nest_02</b></div>
+              <div class="drop">
+                <div class="l"><span>Hazmat Suit Skin <span class="ch">· Spoonkid</span></span><span class="mm">21/60</span></div>
+                <div class="bar"><i style="width:35%"></i></div>
+              </div>
+              <div class="eta" data-m="21" data-t="60"><span class="left">39m</span><small>left</small></div>
+            </div>
+            <div class="acct">
+              <div class="who"><span class="pm kk"><svg><use href="#g-kk"/></svg></span><b>hive_kick</b></div>
+              <div class="drop">
+                <div class="l"><span>Kick Garage Door <span class="ch">· posty</span></span><span class="mm">34/120</span></div>
+                <div class="bar"><i style="width:28%"></i></div>
+              </div>
+              <div class="eta" data-m="34" data-t="120"><span class="left">86m</span><small>left</small></div>
+            </div>
+            <div class="acct">
+              <div class="who"><span class="pm tw"><svg><use href="#g-tw"/></svg></span><b>pupa</b></div>
+              <div class="drop">
+                <div class="l"><span>Hazmat Suit Skin <span class="ch">· hJune</span></span><span class="mm">9/60</span></div>
+                <div class="bar"><i style="width:15%"></i></div>
+              </div>
+              <div class="eta" data-m="9" data-t="60"><span class="left">51m</span><small>left</small></div>
+            </div>
+            <div class="acct idle">
+              <div class="who"><span class="pm kk"><svg><use href="#g-kk"/></svg></span><b>grub_alt_kick</b></div>
+              <div class="drop">Idle. Kick x Rust done on this account.</div>
+              <div class="eta"></div>
+            </div>
+            <div class="acct idle">
+              <div class="who"><span class="pm kk"><svg><use href="#g-kk"/></svg></span><b>nest_kick</b></div>
+              <div class="drop">Idle. Kick x Rust done on this account.</div>
+              <div class="eta"></div>
+            </div>
+            </div>
+          </div>
+          <div class="foot">Most advanced first · 2 more Rust drops in Up next</div>
+        </div>
+      </article>
+
+      <article class="game p2">
+        <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/1264310518_IGDB-285x380.jpg" alt="Marvel Rivals box art"><span class="rank">02</span></div>
+        <div class="body">
+          <div class="status">
+            <h3 class="gname">Marvel Rivals</h3>
+            <span class="state wait">Waiting</span>
+            <span class="camp">Season 4 Twitch Drops</span>
+          </div>
+          <ul class="queued">
+            <li class="q-h">Starts when a Twitch account is free. Queued:</li>
+            <li><span>Spray: Grub Sighting</span><span>30 min</span></li>
+            <li><span>Nameplate: Hive</span><span>60 min</span></li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="game p3">
+        <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/515025_IGDB-285x380.jpg" alt="Overwatch box art"><span class="rank">03</span></div>
+        <div class="body">
+          <div class="status">
+            <h3 class="gname">Overwatch</h3>
+            <span class="state off">No campaign</span>
+            <span class="camp">Last scan 41 s ago</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="game p3">
+        <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/Dead%20by%20Daylight-285x380.jpg" alt="Dead by Daylight box art"><span class="rank">04</span></div>
+        <div class="body">
+          <div class="status">
+            <h3 class="gname">Dead by Daylight</h3>
+            <span class="state off">No campaign</span>
+            <span class="camp">Last scan 41 s ago</span>
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <aside class="side-col">
+      <section class="panel upnext">
+        <div class="panel-h"><h2>Up next</h2><span class="n">4</span></div>
+        <div class="hint">Order for this session only</div>
+        <ol class="queue">
+          <li draggable="true" data-id="1"><span class="grip" title="Drag to reorder"><svg viewBox="0 0 12 12"><use href="#grip"/></svg></span><span class="qn">1</span>
+            <div class="qt"><div class="d">Road Sign Kilt</div><div class="g">Rust · Round 41</div><div class="m"><span class="who"><span class="pm tw sm"></span>hivequeen</span>· 60 min · after Hazmat</div></div>
+            <div class="mv"><button data-mv="up" aria-label="Move up"><svg viewBox="0 0 12 12"><use href="#up"/></svg></button><button data-mv="down" aria-label="Move down"><svg viewBox="0 0 12 12"><use href="#dn"/></svg></button></div></li>
+          <li draggable="true" data-id="2"><span class="grip" title="Drag to reorder"><svg viewBox="0 0 12 12"><use href="#grip"/></svg></span><span class="qn">2</span>
+            <div class="qt"><div class="d">Tempered AK</div><div class="g">Rust · Round 41</div><div class="m">each Twitch account · 120 min</div></div>
+            <div class="mv"><button data-mv="up" aria-label="Move up"><svg viewBox="0 0 12 12"><use href="#up"/></svg></button><button data-mv="down" aria-label="Move down"><svg viewBox="0 0 12 12"><use href="#dn"/></svg></button></div></li>
+          <li draggable="true" data-id="3"><span class="grip" title="Drag to reorder"><svg viewBox="0 0 12 12"><use href="#grip"/></svg></span><span class="qn">3</span>
+            <div class="qt"><div class="d">Spray: Grub Sighting</div><div class="g">Marvel Rivals · Season 4</div><div class="m">first free Twitch account · 30 min</div></div>
+            <div class="mv"><button data-mv="up" aria-label="Move up"><svg viewBox="0 0 12 12"><use href="#up"/></svg></button><button data-mv="down" aria-label="Move down"><svg viewBox="0 0 12 12"><use href="#dn"/></svg></button></div></li>
+          <li draggable="true" data-id="4"><span class="grip" title="Drag to reorder"><svg viewBox="0 0 12 12"><use href="#grip"/></svg></span><span class="qn">4</span>
+            <div class="qt"><div class="d">Nameplate: Hive</div><div class="g">Marvel Rivals · Season 4</div><div class="m">60 min</div></div>
+            <div class="mv"><button data-mv="up" aria-label="Move up"><svg viewBox="0 0 12 12"><use href="#up"/></svg></button><button data-mv="down" aria-label="Move down"><svg viewBox="0 0 12 12"><use href="#dn"/></svg></button></div></li>
+        </ol>
+        <div class="panel-f">
+          <span>Permanent order lives on <a href="games.html" class="link">Games</a>.</span>
+          <button class="reset" type="button" hidden>Reset to Games order</button>
+        </div>
+      </section>
+
+      <section class="sec" aria-label="Claimed">
+        <div class="sec-h">
+          <h2><svg viewBox="0 0 16 16"><use href="#okc"/></svg>Claimed</h2>
+          <span class="meta">last 10 · 7 today</span>
+        </div>
+        <ul class="claims">
+          <li class="grp">Today</li>
+          <li class="cl"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Rust Wood Box Skin<span>hivequeen</span></span><span class="tm">10:02</span></li>
+          <li class="cl"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Kick Garage Door<span>grub_alt_kick</span></span><span class="tm">09:48</span></li>
+          <li class="cl"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Rust Wood Box Skin<span>grubfan</span></span><span class="tm">09:12</span></li>
+          <li class="cl"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Kick Garage Door<span>nest_kick</span></span><span class="tm">08:55</span></li>
+          <li class="cl"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Marvel Rivals Spray<span>grubfan</span></span><span class="tm">07:40</span></li>
+          <li class="cl"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Marvel Rivals Spray<span>nest_01</span></span><span class="tm">07:38</span></li>
+          <li class="cl"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Rust Wood Box Skin<span>grub_alt</span></span><span class="tm">07:15</span></li>
+          <li class="grp">Yesterday</li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Kick Rust Hoodie<span>grubfan_kick</span></span><span class="tm">22:05</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Rust Garage Door Skin<span>grubfan</span></span><span class="tm">18:30</span></li>
+          <li class="cl old"><svg viewBox="0 0 12 12"><use href="#ck"/></svg><span class="nm">Kick Rust Hoodie<span>hive_kick</span></span><span class="tm">17:50</span></li>
+        </ul>
+        <div class="claims-foot"><span>94 all time</span><a href="rewards.html" class="link">All rewards</a></div>
+      </section>
+    </aside>
+  </div>
+</section>
+</main>
+
+<div class="mock-tag">r4 · States · <a href="../">all mockups</a></div>
+<script>
+/* State switcher: segmented control + #hash, defaults to first-run. */
+(() => {
+  const tabs = [...document.querySelectorAll('.seg [data-st]')];
+  const states = [...document.querySelectorAll('section.st')];
+  const desc = document.getElementById('stdesc');
+  const ids = states.map(s => s.dataset.st);
+  const show = id => {
+    if (!ids.includes(id)) id = ids[0];
+    states.forEach(s => { s.hidden = s.dataset.st !== id; });
+    tabs.forEach(t => { const on = t.dataset.st === id; t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1; });
+    const s = states.find(s => s.dataset.st === id);
+    desc.innerHTML = '';
+    const b = document.createElement('b'); b.textContent = s.dataset.name;
+    desc.append(b, s.dataset.desc);
+  };
+  tabs.forEach(t => t.addEventListener('click', () => { history.replaceState(null, '', '#' + t.dataset.st); show(t.dataset.st); }));
+  document.querySelector('.seg').addEventListener('keydown', e => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const i = tabs.findIndex(t => t.getAttribute('aria-selected') === 'true');
+    const n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+    n.click(); n.focus();
+  });
+  window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+  show(location.hash.slice(1));
+})();
+
+/* Up next: reorder (buttons + drag), Reset appears only when the order changed. One per state. */
+document.querySelectorAll('.upnext').forEach(sec => {
+  const q = sec.querySelector('.queue'), reset = sec.querySelector('.reset');
+  const base = [...q.children].map(li => li.dataset.id);
+  const sync = () => {
+    const items = [...q.children];
+    items.forEach((li, i) => {
+      li.querySelector('.qn').textContent = i + 1;
+      li.querySelector('[data-mv=up]').disabled = i === 0;
+      li.querySelector('[data-mv=down]').disabled = i === items.length - 1;
+    });
+    reset.hidden = items.map(li => li.dataset.id).join() === base.join();
+  };
+  q.addEventListener('click', e => {
+    const b = e.target.closest('[data-mv]'); if (!b) return;
+    const li = b.closest('li');
+    if (b.dataset.mv === 'up' && li.previousElementSibling) q.insertBefore(li, li.previousElementSibling);
+    if (b.dataset.mv === 'down' && li.nextElementSibling) q.insertBefore(li.nextElementSibling, li);
+    sync();
+  });
+  let drag = null;
+  q.addEventListener('dragstart', e => { drag = e.target.closest('li'); drag.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', ''); });
+  q.addEventListener('dragover', e => {
+    e.preventDefault();
+    const over = e.target.closest('li'); if (!over || over === drag) return;
+    const r = over.getBoundingClientRect();
+    q.insertBefore(drag, e.clientY > r.top + r.height / 2 ? over.nextElementSibling : over);
+  });
+  q.addEventListener('dragend', () => { drag && drag.classList.remove('dragging'); drag = null; sync(); });
+  reset.addEventListener('click', () => { base.forEach(id => q.appendChild(q.querySelector(`[data-id="${id}"]`))); sync(); });
+  sync();
+});
+
+/* Live feel: "updated N s ago" counts up, resets every 15 s and nudges live progress bars. */
+(() => {
+  const agos = [...document.querySelectorAll('.ago')];
+  const etas = [...document.querySelectorAll('.eta[data-m]')];
+  let s = 12;
+  setInterval(() => {
+    s++;
+    if (s >= 15) {
+      s = 0;
+      etas.forEach(e => {
+        const t = +e.dataset.t, m = Math.min(t, +e.dataset.m + 0.25);
+        e.dataset.m = m;
+        const row = e.closest('.acct');
+        row.querySelector('.mm').textContent = Math.floor(m) + '/' + t;
+        row.querySelector('.bar i').style.width = (m / t * 100).toFixed(1) + '%';
+        e.querySelector('.left').textContent = Math.ceil(t - m) + 'm';
+      });
+    }
+    agos.forEach(a => { a.textContent = s === 0 ? 'updated just now' : 'updated ' + s + ' s ago'; });
+  }, 1000);
+})();
+
+/* Offline: retry countdown 8 s, then "retrying now", then loop. */
+(() => {
+  const msg = document.querySelector('[data-st="offline"] .rmsg');
+  let n = 8;
+  setInterval(() => {
+    n = n === 0 ? 8 : n - 1;
+    msg.textContent = "Can't reach the miner · " + (n === 0 ? 'retrying now' : 'retrying in ' + n + ' s');
+  }, 1000);
+})();
+
+/* 10 accounts: fold / unfold the Rust account list. */
+document.querySelectorAll('.toggle[aria-controls]').forEach(b => {
+  const rest = document.getElementById(b.getAttribute('aria-controls'));
+  b.addEventListener('click', () => {
+    const open = rest.hidden;
+    rest.hidden = !open;
+    b.setAttribute('aria-expanded', open);
+    b.querySelector('span').textContent = open ? 'Show top 3' : 'Show all 10';
+  });
+});
+
+/* First run: game search suggests, Add marks it and ticks step 2. */
+(() => {
+  const step = document.querySelector('.pick-step'); if (!step) return;
+  const q = step.querySelector('.q'), sugg = step.querySelector('.sugg'), count = step.querySelector('.pcount');
+  let picked = 0;
+  q.addEventListener('input', () => {
+    const v = q.value.trim().toLowerCase();
+    let any = false;
+    sugg.querySelectorAll('li').forEach(li => {
+      const show = v.length > 1 && li.dataset.name.toLowerCase().includes(v);
+      li.hidden = !show; any = any || show;
+    });
+    sugg.hidden = !any;
+  });
+  sugg.addEventListener('click', e => {
+    const b = e.target.closest('.add-btn'); if (!b || b.disabled) return;
+    b.disabled = true; b.textContent = 'Added';
+    picked++;
+    count.hidden = false; count.textContent = picked + (picked === 1 ? ' game' : ' games');
+    step.classList.add('done');
+  });
+})();
+
+/* Copy buttons (offline help line) */
+document.querySelectorAll('.copy').forEach(btn => btn.addEventListener('click', () => {
+  const txt = btn.previousElementSibling.textContent;
+  const done = () => { btn.textContent = 'Copied'; btn.classList.add('ok'); setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('ok'); }, 1600); };
+  if (navigator.clipboard) navigator.clipboard.writeText(txt).then(done, done); else done();
+}));
+
+/* Version popover: toggle, outside click and Escape close it. */
+(() => {
+  const btn = document.querySelector('.ver'), pop = document.getElementById('verpop');
+  const set = open => { pop.hidden = !open; btn.setAttribute('aria-expanded', open); };
+  btn.addEventListener('click', e => { e.stopPropagation(); set(pop.hidden); });
+  document.addEventListener('click', e => { if (!pop.hidden && !pop.contains(e.target)) set(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !pop.hidden) { set(false); btn.focus(); } });
+})();
+</script>
+</body>
+</html>

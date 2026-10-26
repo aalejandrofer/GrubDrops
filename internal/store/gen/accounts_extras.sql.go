@@ -71,7 +71,7 @@ func (q *Queries) DeleteAccountSession(ctx context.Context, accountID string) er
 }
 
 const listAllAccounts = `-- name: ListAllAccounts :many
-SELECT id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url FROM accounts ORDER BY created_at ASC
+SELECT id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url, custom_name, sort_order FROM accounts ORDER BY sort_order ASC, created_at ASC
 `
 
 func (q *Queries) ListAllAccounts(ctx context.Context) ([]Account, error) {
@@ -94,6 +94,8 @@ func (q *Queries) ListAllAccounts(ctx context.Context) ([]Account, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.AvatarUrl,
+			&i.CustomName,
+			&i.SortOrder,
 		); err != nil {
 			return nil, err
 		}
@@ -108,6 +110,20 @@ func (q *Queries) ListAllAccounts(ctx context.Context) ([]Account, error) {
 	return items, nil
 }
 
+const setAccountSortOrder = `-- name: SetAccountSortOrder :exec
+UPDATE accounts SET sort_order = ? WHERE id = ?
+`
+
+type SetAccountSortOrderParams struct {
+	SortOrder int64  `json:"sort_order"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) SetAccountSortOrder(ctx context.Context, arg SetAccountSortOrderParams) error {
+	_, err := q.db.ExecContext(ctx, setAccountSortOrder, arg.SortOrder, arg.ID)
+	return err
+}
+
 const updateAccountAvatar = `-- name: UpdateAccountAvatar :exec
 UPDATE accounts SET avatar_url = ?, updated_at = ? WHERE id = ?
 `
@@ -120,6 +136,21 @@ type UpdateAccountAvatarParams struct {
 
 func (q *Queries) UpdateAccountAvatar(ctx context.Context, arg UpdateAccountAvatarParams) error {
 	_, err := q.db.ExecContext(ctx, updateAccountAvatar, arg.AvatarUrl, arg.UpdatedAt, arg.ID)
+	return err
+}
+
+const updateAccountCustomName = `-- name: UpdateAccountCustomName :exec
+UPDATE accounts SET custom_name = ?, updated_at = ? WHERE id = ?
+`
+
+type UpdateAccountCustomNameParams struct {
+	CustomName string `json:"custom_name"`
+	UpdatedAt  int64  `json:"updated_at"`
+	ID         string `json:"id"`
+}
+
+func (q *Queries) UpdateAccountCustomName(ctx context.Context, arg UpdateAccountCustomNameParams) error {
+	_, err := q.db.ExecContext(ctx, updateAccountCustomName, arg.CustomName, arg.UpdatedAt, arg.ID)
 	return err
 }
 

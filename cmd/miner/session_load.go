@@ -6,15 +6,13 @@ import (
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform/twitch"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
 // idleReasonNeedsAuth is the idleReason acquireSession returns when the
-// caller should park the account on an idle runner pending re-auth. It's
-// surfaced through nopRunner{reason: idleReasonNeedsAuth}; scheduler.idleState
-// already defaults a bare/empty reason to "needs_auth" (see
-// internal/scheduler/state.go), so this is behaviourally identical to the
-// old bare nopRunner{} — just explicit.
+// caller should park the account on an idle runner pending re-auth. The
+// roster parks it as runner.StateNeedsLogin.
 const idleReasonNeedsAuth = "needs_auth"
 
 // sessionRetryBackoff is the delay between attempts for both the
@@ -50,16 +48,13 @@ type sessionDeps struct {
 	verify func(ctx context.Context, s platform.Session) error
 }
 
-// acquireSession loads (and refreshes, if needed) an account's session. It
-// is the extracted, testable core of build()'s former inline session block
-// in main.go; see cmd/miner/main.go's build() for how the three return
-// shapes are turned into a scheduler.Entry:
+// acquireSession loads (and refreshes, if needed) an account's session. See
+// roster.builder for how the three return shapes become a runner.Entry:
 //
-//   - sess, "", nil        — usable session; caller proceeds to build the entry.
-//   - Session{}, reason, nil — caller should idle the account (nopRunner{reason: reason}).
+//   - sess, "", nil        — usable session; caller builds the runner.
+//   - Session{}, reason, nil — caller idles the account as needs-login.
 //   - Session{}, "", err     — the session store itself is unavailable after
-//     retries; caller currently surfaces this the same way it always has
-//     (logs "account skipped" and idles too).
+//     retries; caller logs it and idles the account as needs-login.
 //
 // now is passed in (instead of acquireSession calling time.Now itself) so
 // tests can pin the expired/valid boundary deterministically.
@@ -100,7 +95,9 @@ func acquireSession(ctx context.Context, deps sessionDeps, a gen.Account, now ti
 		return sess, "", nil
 	}
 
-	if sess.RefreshToken == "" {
+	// Android paste-login sessions never carry a refresh token: their
+	// RefreshSession re-validates the token instead, so let it run.
+	if sess.RefreshToken == "" && sess.ClientID != twitch.ClientAndroid {
 		deps.logger.Warn("session expired and no refresh token, will idle",
 			"account", a.ID, "platform", a.Platform)
 		return platform.Session{}, idleReasonNeedsAuth, nil

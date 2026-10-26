@@ -14,28 +14,6 @@ const cookiesTxtOK = "# Netscape HTTP Cookie File\n" +
 	".kick.com\tTRUE\t/\tTRUE\t1781000000\tcf_clearance\tcf-val\n" +
 	".example.com\tTRUE\t/\tTRUE\t1781000000\tkick_session\tWRONG-DOMAIN\n"
 
-func TestTwitchAuthTokenFromNetscape(t *testing.T) {
-	raw := "# Netscape HTTP Cookie File\n" +
-		"#HttpOnly_.twitch.tv\tTRUE\t/\tTRUE\t1781000000\tauth-token\tabc123\n" +
-		".example.com\tTRUE\t/\tTRUE\t1781000000\tauth-token\tWRONG\n"
-	tok, err := twitchAuthTokenFromNetscape(raw)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if tok != "abc123" {
-		t.Errorf("auth-token = %q, want abc123 (twitch.tv row, HttpOnly_ tolerated)", tok)
-	}
-
-	// twitch.tv cookies present but no auth-token -> clear error.
-	if _, err := twitchAuthTokenFromNetscape(".twitch.tv\tTRUE\t/\tTRUE\t1\tunique_id\tx\n"); err == nil {
-		t.Error("expected error when auth-token cookie is absent")
-	}
-	// no twitch rows at all -> error.
-	if _, err := twitchAuthTokenFromNetscape(".kick.com\tTRUE\t/\tTRUE\t1\tauth-token\ty\n"); err == nil {
-		t.Error("expected error when no twitch.tv cookies present")
-	}
-}
-
 func TestKickCookiesFromNetscape_HappyPath(t *testing.T) {
 	f, err := kickCookiesFromNetscape(cookiesTxtOK)
 	if err != nil {
@@ -83,5 +61,17 @@ func TestKickCookiesFromNetscape_GarbageAndCRLF(t *testing.T) {
 	}
 	if f.KickSession != "s" || f.SessionToken != "t" {
 		t.Errorf("CRLF parse: got %+v", f)
+	}
+}
+
+func TestKickCookiesFromNetscape_BOM(t *testing.T) {
+	f, err := kickCookiesFromNetscape("\ufeff" + cookiesTxtOK)
+	if err != nil || f.KickSession != "sess-val" {
+		t.Fatalf("BOM-prefixed export: f=%+v err=%v", f, err)
+	}
+	// BOM directly before a cookie row (no header comment).
+	f, err = kickCookiesFromNetscape("\ufeff.kick.com\tTRUE\t/\tTRUE\t1\tkick_session\ts\n.kick.com\tTRUE\t/\tTRUE\t1\tsession_token\tt\n")
+	if err != nil || f.KickSession != "s" {
+		t.Fatalf("BOM before first row: f=%+v err=%v", f, err)
 	}
 }

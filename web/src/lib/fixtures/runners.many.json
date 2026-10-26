@@ -1,0 +1,354 @@
+[
+	{
+		"account_id": "acc-seed-1",
+		"account_name": "seed_1",
+		"platform": "twitch",
+		"avatar_url": "",
+		"state": "watching",
+		"current": {
+			"game": "Rust",
+			"platform": "twitch",
+			"campaign_id": "camp-rust",
+			"campaign_name": "Rust Drops",
+			"benefit_id": "ben-rust-1",
+			"benefit_name": "Rust Reward 1",
+			"image_url": "",
+			"required_minutes": 60,
+			"minutes": 5,
+			"ends_at": "2026-11-02T18:00:00Z"
+		},
+		"channel": "seed_streamer",
+		"viewer_count": 1280,
+		"minutes": 5,
+		"started_at": "2026-10-25T11:00:00Z",
+		"last_scan_at": "2026-10-25T11:58:00Z",
+		"up_next": [
+			{
+				"game": "Rust",
+				"platform": "twitch",
+				"campaign_id": "camp-rust",
+				"campaign_name": "Rust Drops",
+				"benefit_id": "ben-rust-2",
+				"benefit_name": "Rust Reward 2",
+				"image_url": "",
+				"required_minutes": 120,
+				"minutes": 0,
+				"ends_at": "2026-11-02T18:00:00Z"
+			}
+		],
+		"blocked": [],
+		"order_custom": false
+	},
+	{
+		"account_id": "acc-seed-2",
+		"account_name": "seed_2",
+		"platform": "twitch",
+		"avatar_url": "",
+		"state": "watching",
+		"current": {
+			"game": "Rust",
+			"platform": "twitch",
+			"campaign_id": "camp-rust",
+			"campaign_name": "Rust Drops",
+			"benefit_id": "ben-rust-1",
+			"benefit_name": "Rust Reward 1",
+			"image_url": "",
+			"required_minutes": 60,
+			"minutes": 11,
+			"ends_at": "2026-11-02T18:00:00Z"
+		},
+		"channel": "seed_streamer",
+		"viewer_count": 1280,
+		"minutes": 11,
+		"started_at": "2026-10-25T11:00:00Z",
+		"last_scan_at": "2026-10-25T11:58:00Z",
+		"up_next": [
+			{
+				"game": "Rust",
+				"platform": "twitch",
+				"campaign_id": "camp-rust",
+				"campaign_name": "Rust Drops",
+				"benefit_id": "ben-rust-2",
+				"benefit_name": "Rust Reward 2",
+				"image_url": "",
+				"required_minutes": 120,
+				"minutes": 0,
+				"ends_at": "2026-11-02T18:00:00Z"
+			}
+		],
+		"blocked": [],
+		"order_custom": false
+	},
+	{
+		"account_id": "acc-seed-3",
+		"account_name": "seed_3",
+		"platform": "twitch",
+		"avatar_url": "",
+		"state": "watching",
+		"current": {
+			"game": "Rust",
+			"platform": "twitch",
+			"campaign_id": "camp-rust",
+			"campaign_name": "Rust Drops",
+			"benefit_id": "ben-rust-1",
+			"benefit_name": "Rust Reward 1",
+			"image_url": "",
+			"required_minutes": 60,
+			"minutes": 17,
+			"ends_at": "2026-11-02T18:00:00Z"
+		},
+		"channel": "seed_streamer",
+		"viewer_count": 1280,
+		"minutes": 17,
+		"started_at": "2026-10-25T11:00:00Z",
+		"last_scan_at": "2026-10-25T11:58:00Z",
+		"up_next": [
+			{
+				"game": "Rust",
+				"platform": "twitch",
+				"campaign_id": "camp-rust",
+				"campaign_name": "Rust Drops",
+				"benefit_id": "ben-rust-2",
+				"benefit_name": "Rust Reward 2",
+				"image_url": "",
+				"required_minutes": 120,
+				"minutes": 0,
+				"ends_at": "2026-11-02T18:00:00Z"
+			}
+		],
+		"blocked": [],
+		"order_custom": false
+	},
+	{
+		"account_id": "acc-seed-4",
+		"account_name": "seed_4",
+		"platform": "twitch",
+		"avatar_url": "",
+		"state": "watching",
+		"current": {
+			"game": "Rust",
+			"platform": "twitch",
+			"campaign_id": "camp-rust",
+			"campaign_name": "Rust Drops",
+			"benefit_id": "ben-rust-1",
+			"benefit_name": "Rust Reward 1",
+			"image_url": "",
+			"required_minutes": 60,
+			"minutes": 23,
+			"ends_at": "2026-11-02T18:00:00Z"
+		},
+		"channel": "seed_streamer",
+		"viewer_count": 1280,
+		"minutes": 23,
+		"started_at": "2026-10-25T11:00:00Z",
+		"last_scan_at": "2026-10-25T11:58:00Z",
+		"up_next": [
+			{
+				"game": "Rust",
+				"platform": "twitch",
+				"campaign_id": "camp-rust",
+				"campaign_name": "Rust Drops",
+				"benefit_id": "ben-rust-2",
+				"benefit_name": "Rust Reward 2",
+				"image_url": "",
+				"required_minutes": 120,
+				"minutes": 0,
+				"ends_at": "2026-11-02T18:00:00Z"
+			}
+		],
+		"blocked": [],
+		"order_custom": false
+	},
+	{
+		"account_id": "acc-seed-5",
+		"account_name": "seed_5",
+		"platform": "twitch",
+		"avatar_url": "",
+		"state": "watching",
+		"current": {
+			"game": "Rust",
+			"platform": "twitch",
+			"campaign_id": "camp-rust",
+			"campaign_name": "Rust Drops",
+			"benefit_id": "ben-rust-1",
+			"benefit_name": "Rust Reward 1",
+			"image_url": "",
+			"required_minutes": 60,
+			"minutes": 29,
+			"ends_at": "2026-11-02T18:00:00Z"
+		},
+		"channel": "seed_streamer",
+		"viewer_count": 1280,
+		"minutes": 29,
+		"started_at": "2026-10-25T11:00:00Z",
+		"last_scan_at": "2026-10-25T11:58:00Z",
+		"up_next": [
+			{
+				"game": "Rust",
+				"platform": "twitch",
+				"campaign_id": "camp-rust",
+				"campaign_name": "Rust Drops",
+				"benefit_id": "ben-rust-2",
+				"benefit_name": "Rust Reward 2",
+				"image_url": "",
+				"required_minutes": 120,
+				"minutes": 0,
+				"ends_at": "2026-11-02T18:00:00Z"
+			}
+		],
+		"blocked": [],
+		"order_custom": false
+	},
+	{
+		"account_id": "acc-seed-6",
+		"account_name": "seed_6",
+		"platform": "twitch",
+		"avatar_url": "",
+		"state": "watching",
+		"current": {
+			"game": "Rust",
+			"platform": "twitch",
+			"campaign_id": "camp-rust",
+			"campaign_name": "Rust Drops",
+			"benefit_id": "ben-rust-1",
+			"benefit_name": "Rust Reward 1",
+			"image_url": "",
+			"required_minutes": 60,
+			"minutes": 35,
+			"ends_at": "2026-11-02T18:00:00Z"
+		},
+		"channel": "seed_streamer",
+		"viewer_count": 1280,
+		"minutes": 35,
+		"started_at": "2026-10-25T11:00:00Z",
+		"last_scan_at": "2026-10-25T11:58:00Z",
+		"up_next": [
+			{
+				"game": "Rust",
+				"platform": "twitch",
+				"campaign_id": "camp-rust",
+				"campaign_name": "Rust Drops",
+				"benefit_id": "ben-rust-2",
+				"benefit_name": "Rust Reward 2",
+				"image_url": "",
+				"required_minutes": 120,
+				"minutes": 0,
+				"ends_at": "2026-11-02T18:00:00Z"
+			}
+		],
+		"blocked": [],
+		"order_custom": false
+	},
+	{
+		"account_id": "acc-seed-7",
+		"account_name": "seed_7",
+		"platform": "twitch",
+		"avatar_url": "",
+		"state": "watching",
+		"current": {
+			"game": "Rust",
+			"platform": "twitch",
+			"campaign_id": "camp-rust",
+			"campaign_name": "Rust Drops",
+			"benefit_id": "ben-rust-1",
+			"benefit_name": "Rust Reward 1",
+			"image_url": "",
+			"required_minutes": 60,
+			"minutes": 41,
+			"ends_at": "2026-11-02T18:00:00Z"
+		},
+		"channel": "seed_streamer",
+		"viewer_count": 1280,
+		"minutes": 41,
+		"started_at": "2026-10-25T11:00:00Z",
+		"last_scan_at": "2026-10-25T11:58:00Z",
+		"up_next": [
+			{
+				"game": "Rust",
+				"platform": "twitch",
+				"campaign_id": "camp-rust",
+				"campaign_name": "Rust Drops",
+				"benefit_id": "ben-rust-2",
+				"benefit_name": "Rust Reward 2",
+				"image_url": "",
+				"required_minutes": 120,
+				"minutes": 0,
+				"ends_at": "2026-11-02T18:00:00Z"
+			}
+		],
+		"blocked": [],
+		"order_custom": false
+	},
+	{
+		"account_id": "acc-seed-8",
+		"account_name": "seed_8",
+		"platform": "twitch",
+		"avatar_url": "",
+		"state": "watching",
+		"current": {
+			"game": "Rust",
+			"platform": "twitch",
+			"campaign_id": "camp-rust",
+			"campaign_name": "Rust Drops",
+			"benefit_id": "ben-rust-1",
+			"benefit_name": "Rust Reward 1",
+			"image_url": "",
+			"required_minutes": 60,
+			"minutes": 47,
+			"ends_at": "2026-11-02T18:00:00Z"
+		},
+		"channel": "seed_streamer",
+		"viewer_count": 1280,
+		"minutes": 47,
+		"started_at": "2026-10-25T11:00:00Z",
+		"last_scan_at": "2026-10-25T11:58:00Z",
+		"up_next": [
+			{
+				"game": "Rust",
+				"platform": "twitch",
+				"campaign_id": "camp-rust",
+				"campaign_name": "Rust Drops",
+				"benefit_id": "ben-rust-2",
+				"benefit_name": "Rust Reward 2",
+				"image_url": "",
+				"required_minutes": 120,
+				"minutes": 0,
+				"ends_at": "2026-11-02T18:00:00Z"
+			}
+		],
+		"blocked": [],
+		"order_custom": false
+	},
+	{
+		"account_id": "acc-seed-9",
+		"account_name": "seed_9",
+		"platform": "twitch",
+		"avatar_url": "",
+		"state": "idle",
+		"current": null,
+		"channel": "",
+		"viewer_count": 0,
+		"minutes": 0,
+		"started_at": null,
+		"last_scan_at": "2026-10-25T11:58:00Z",
+		"up_next": [],
+		"blocked": [],
+		"order_custom": false
+	},
+	{
+		"account_id": "acc-seed-10",
+		"account_name": "seed_10",
+		"platform": "twitch",
+		"avatar_url": "",
+		"state": "idle",
+		"current": null,
+		"channel": "",
+		"viewer_count": 0,
+		"minutes": 0,
+		"started_at": null,
+		"last_scan_at": "2026-10-25T11:58:00Z",
+		"up_next": [],
+		"blocked": [],
+		"order_custom": false
+	}
+]

@@ -33,6 +33,13 @@ coverage.out
 
 # build / dist
 dist/
+!internal/web/dist/
+internal/web/dist/*
+!internal/web/dist/.gitkeep
+
+web/node_modules/
+web/.svelte-kit/
+web/.shots/
 out/
 
 # stray local build binaries (cmd/* tools)
@@ -50,3 +57,6 @@ out/
 # Claude Code worktrees (nested git repos used by agents — never commit)
 .claude/worktrees/
 .claire/
+
+# impeccable skill binary (downloaded on first run)
+/.claude/skills/impeccable/scripts/bin/

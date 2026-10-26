@@ -1,88 +1,36 @@
-> [!WARNING]
-> **Drop discovery is limited.** 
-Twitch no longer lists campaigns for new logins, so GrubDrops only finds drops for games on your whitelist.
-
-> [!CAUTION]
-> **GrubDrops is currently not working as expected. Critical Auth Issues**
 <p align="center">
-  <img src="internal/web/static/img/logo.png" width="160" alt="GrubDrops">
+  <img src="assets/img/logo.png" width="160" alt="GrubDrops">
 </p>
 
 <p align="center"><sub><strong>English</strong> · <a href="docs/translations/README.zh-CN.md">简体中文</a> · <a href="docs/translations/README.es.md">Español</a></sub></p>
 
-<h3 align="center">Self-hosted, set-and-forget Twitch &amp; Kick drops miner.</h3>
+<h3 align="center">Self-hosted Twitch and Kick drops miner.</h3>
 
 <p align="center">
-  <img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white">
-  <img alt="Twitch" src="https://img.shields.io/badge/Twitch-drops-9146FF?logo=twitch&logoColor=white">
-  <img alt="Kick" src="https://img.shields.io/badge/Kick-drops-53FC18?logo=kick&logoColor=black">
-  <img alt="UI" src="https://img.shields.io/badge/UI-HTMX%20%2B%20Go%20templates-2c2c2c">
-  <img alt="Storage" src="https://img.shields.io/badge/DB-SQLite-003B57?logo=sqlite&logoColor=white">
-  <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-Docker-2496ED?logo=docker&logoColor=white">
-  <img alt="Tested browser" src="https://img.shields.io/badge/tested-Chrome%20149-4285F4?logo=googlechrome&logoColor=white">
   <a href="https://github.com/aalejandrofer/GrubDrops/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/aalejandrofer/GrubDrops?label=release&color=2c2c2c&logo=github"></a>
   <a href="https://github.com/aalejandrofer/GrubDrops/pkgs/container/grubdrops"><img alt="ghcr.io image" src="https://img.shields.io/badge/ghcr.io-grubdrops-2496ED?logo=github"></a>
+  <img alt="Twitch" src="https://img.shields.io/badge/Twitch-drops-9146FF?logo=twitch&logoColor=white">
+  <img alt="Kick" src="https://img.shields.io/badge/Kick-drops-53FC18?logo=kick&logoColor=black">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/console.png" width="900" alt="GrubDrops console: watch-time stats, per-account mining across Twitch and Kick, and a live event feed">
+  <img src="docs/screenshots/home.png" width="900" alt="GrubDrops Home: what each account is mining, the per-account Up next queue and recent claims">
 </p>
 
-<p align="center">
-  <img src="docs/screenshots/drops-whitelist.png" width="900" alt="GrubDrops drops catalog with one-click whitelisting, alongside the per-account game whitelist and priority list">
-</p>
-
----
-
-Watches the right Twitch and Kick streams, banks the watch-time, and claims the
-drops — across several accounts at once. One small self-hosted web app: a Docker
-image and a single SQLite file.
+GrubDrops watches Twitch and Kick streams for the games you pick, earns the
+watch time and claims the drops, on several accounts at once. It runs as one
+Docker container with a web UI and keeps everything in one SQLite file.
 
 ## Features
 
-- 🟣🟢 **Twitch and Kick, side by side** — many accounts, one dashboard.
-- 🎯 **Set and forget** — pick your games; it discovers, watches, banks the time, and claims for you.
-- 🔒 **Self-hosted and private** — one container, your accounts, your data.
-- ⚡ **Reliable on both platforms** — handles the awkward parts (logins, links, Kick playback) so you don't.
-- 🛠️ **Built to run unattended** — Discord alerts, update checks, multi-language, proxy, and SSO.
+- **Twitch and Kick, many accounts.** Each account mines in parallel and shows on one Home page.
+- **Discover.** Lists every current campaign on both platforms. Add a game to your list in one click.
+- **Priority you control.** Order your games on Games. Each account has its own Up next queue you can reorder, plus a Mine next button.
+- **Auto-claim.** Drops are claimed when done. If a drop needs a linked publisher account, link it and press Check now.
+- **Alerts and sign-in.** Discord and Telegram notifications, optional OIDC single sign-on, and a first-run wizard.
 
-## Getting started
-
-### Prerequisites
-
-**Docker + Docker Compose** (quick path) or **Go 1.26+** (build from source).
-What you need depends on which platform you're mining:
-
-| | Twitch | Kick |
-|---|---|---|
-| **Login** | device-code (`twitch.tv/activate`) | `cookies.txt` export |
-| **How it watches** | direct HTTP — no browser | WebSocket; Chrome **sidecar** fallback (IVS playback) |
-| **Docker** | optional | **strongly recommended** — WS works without it, but the Chrome IVS fallback needs the docker socket |
-| **Run from source, no Docker** | ✅ a plain `go build` binary works | ⚠️ WS works; the Chrome fallback needs Docker |
-| **CPU arch** | any — `amd64` + `arm64` | `amd64` + `arm64` (arm64 is heavy — see note) |
-
-Twitch is direct HTTP — a plain Go binary mines it anywhere, no Docker. Kick mines browserless over WebSocket by default; the dependable Chrome IVS fallback runs as a sidecar over the docker socket, so **Docker is strongly recommended for Kick**.
-
-> **Raspberry Pi / ARM:** both images ship `arm64`; the sidecar uses Debian Chromium (keeps the H.264/AAC codecs for Kick's IVS stream). Heavy — ~4 GB RAM each.
->
-> **Kick watch path:** defaults to *WS, fall back to Chrome* — tries the browserless WebSocket path first (no Docker) and switches to the Chrome sidecar only if WS stops accruing. Keep the docker-socket mount so the fallback works; force *Chrome sidecar* or *WebSocket only* in Settings → Experimental.
-
-### Supported platforms
-
-| Host | Twitch | Kick |
-|---|---|---|
-| Linux `x86-64` | ✅ | ✅ |
-| Linux `arm64` / Raspberry Pi | ✅ | ✅ — Chromium sidecar, ~4 GB RAM each |
-| macOS / Windows · Docker Desktop (Intel) | ✅ | ✅ |
-| macOS / Windows · Apple Silicon | ✅ | ✅ — arm64 Chromium sidecar |
-| `go build` from source (any OS) | ✅ | ✅ WS; Chrome fallback needs Docker |
-
-### Run it
-
-Compose with the published image — just the **miner**. It auto-creates a Chrome
-**sidecar** per Kick account on demand over the mounted docker socket; you define
-no sidecar services.
+## Quick start
 
 ```yaml
 # compose.yml
@@ -92,207 +40,109 @@ services:
     restart: unless-stopped
     ports: ["8080:8080"]
     environment:
-      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?generate one with docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen}"
-      GRUB_DB_PATH: /data/miner.db
-      GRUB_SECURE_COOKIES: "0"   # plain-HTTP localhost; set 1 behind HTTPS
-      TZ: Europe/London           # server-side timezone
+      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?run keygen first}"
+      GRUB_SECURE_COOKIES: "0"   # 1 behind HTTPS
+      TZ: Europe/London
     volumes:
       - ./data:/data
-      - /var/run/docker.sock:/var/run/docker.sock # Kick only, if WS Breaks
-
-  # Optional auto-update: pulls a new image and recreates the miner only.
-  # watchtower:
-  #   image: containrrr/watchtower:latest
-  #   restart: unless-stopped
-  #   volumes:
-  #     - /var/run/docker.sock:/var/run/docker.sock
-  #   command: --interval 21600 --cleanup grubdrops
+      - /var/run/docker.sock:/var/run/docker.sock   # Kick only
 ```
 
-`GRUB_MASTER_KEY` must be an **age X25519 identity** (`AGE-SECRET-KEY-1…`) — it
-encrypts the stored session tokens. A random string will not parse and the miner
-crashes at startup. Generate a valid one with just Docker:
-
 ```bash
-docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen
-# → AGE-SECRET-KEY-1... (keep it; reuse the SAME key on every restart)
-```
-
-The image runs as distroless `nonroot` (**UID 65532**), so make a bind-mounted
-`./data` writable first — otherwise it can't write `miner.db` and login fails
-with *"failed to persist session"*. (Or use a named volume.)
-
-```bash
+docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen   # save this key
 mkdir -p data && sudo chown 65532:65532 data
-GRUB_MASTER_KEY="$(docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen)" docker compose up -d
+GRUB_MASTER_KEY='AGE-SECRET-KEY-1...' docker compose up -d
 ```
 
-Open **http://localhost:8080** and create the admin login.
+Open http://localhost:8080 and create the admin login. A wizard then walks you
+through adding an account and picking games.
 
-- **Portainer / GUI deploy?** There's no shell to set the variable, so add
-  `GRUB_MASTER_KEY` (value from `keygen` above) in the stack's **Environment
-  variables** section before deploying. Use plain `docker compose`, not a Swarm
-  stack, on a current Docker Engine.
-- **Twitch only?** Drop the docker-socket mount — no sidecars get created.
-- **Every knob?** Reference compose: [`deploy/docker-compose.yml`](deploy/docker-compose.yml).
-- **Build it?** `docker build -f deploy/Dockerfile.miner .`, or `go build ./cmd/miner`.
+- `GRUB_MASTER_KEY` must be an age key from `keygen`, and you must reuse the same key on every restart. It encrypts the stored sessions.
+- The container runs as UID 65532, so `./data` must be writable by that user.
+- `GRUB_SECURE_COOKIES` must match how you reach the UI: `0` for plain HTTP, `1` for HTTPS. A mismatch causes "Invalid CSRF token".
+- The docker socket is only needed for Kick. The miner uses it to start a Chrome sidecar per Kick account. Drop the mount if you only mine Twitch.
+
+Images are built for `amd64` and `arm64`. On arm64 each Kick sidecar needs about 4 GB of RAM.
 
 ## Adding accounts
 
-Go to **Accounts** and add one per platform.
+Open **Settings > Accounts**, or use the first-run wizard.
 
-**Twitch.** Click add, then approve the code shown at `twitch.tv/activate`.
-That's the official device-code flow; your password and cookies never touch
-GrubDrops.
+**Twitch, Android login (recommended).** Sign in to Twitch in the tab GrubDrops
+opens. You land on a URL like `https://www.twitch.tv/#access_token=XXX&scope=&token_type=bearer`.
+Copy the whole URL and paste it into GrubDrops. Discover needs an Android login to list Twitch campaigns.
 
-**Kick.** Kick has no public login API, so you hand GrubDrops your existing
-kick.com session as a `cookies.txt` file exported from your browser:
+**Twitch, TV code.** Open the link shown and enter the code.
 
-1. Install a cookie-export extension:
-   [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
-   for Chrome/Edge/Brave, or
-   [cookies.txt](https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/) for Firefox.
-2. Sign in at `kick.com`, click the extension icon, **Export** the current site.
-3. In GrubDrops, open the account's **Authorize** page and upload (or paste) the export.
-
-Channels auto-discover from each campaign's game, so there's nothing else to
-configure. When the session goes stale (discovery logs Cloudflare or 401
-errors), re-export and paste again.
-
-## Pick what to mine
-
-GrubDrops is whitelist-driven: it only discovers and mines games you opt into,
-so **a fresh install mines nothing until you whitelist at least one game**. Until
-then `/drops` shows a prompt pointing you here, and accounts sit in a *"no games
-yet"* state (not an error).
-
-Add games either way — by name, no need to wait for a campaign to appear first:
-
-- **Global** (applies to every account): **Priority → add by name**.
-- **Per account** (overrides the global list): **Accounts → pick an account → add by name**.
-
-Discovery starts crawling that game on the next tick and live campaigns show up
-on `/drops`.
-
-## How it works
-
-- **Twitch:** device-code login, then GraphQL + PubSub to track progress and claim.
-- **Kick:** detection/claims ride a Chrome-TLS-fingerprinted HTTP client (`utls`) —
-  no Cloudflare dance, no browser. Watch-time needs a real player, so it runs in an
-  on-demand per-account Chrome sidecar (IVS playback) the miner creates/stops over
-  the docker socket; a sweep removes deleted accounts' containers.
-- **Discovery** scrapes both catalogs into SQLite every few minutes.
-
-## Priority logic
-
-Each account mines one campaign at a time. When several whitelisted campaigns
-are eligible, GrubDrops picks in this order:
-
-```
-1. Campaign, by your priority mode (Settings):
-   ├─ ordered (default)  → your whitelist rank, top of the list first
-   ├─ ending_soonest     → soonest deadline first
-   └─ low_avbl_first     → fewest available channels first
-2. Tiebreak: closest to a claim (fewest watch-minutes remaining)
-3. Restricted (team) campaigns ahead of open ones (both platforms)
-4. Channel: a live stream confirmed on the campaign's game,
-   highest viewer count first (Twitch also probes for one
-   actually serving the target drop)
-```
-
-Whitelist and priority are per-account, falling back to the global list. A
-campaign with no live stream is skipped, not slept on.
+**Kick.** Export your kick.com cookies in Netscape format with
+[Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
+(Chrome, Edge, Brave) or
+[cookies.txt](https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/)
+(Firefox), then upload or paste the file. When the session expires, export and
+paste again.
 
 ## Configuration
 
-Environment variables; only `GRUB_MASTER_KEY` is **required**, the rest take the
-default shown.
+Only `GRUB_MASTER_KEY` is required. Every variable is listed in
+[`deploy/docker-compose.yml`](deploy/docker-compose.yml).
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `GRUB_MASTER_KEY` | **required** | Key for the age-encrypted session store. |
-| `GRUB_HTTP_ADDR` | `:8080` | Listen address. |
-| `GRUB_DB_PATH` | `/data/miner.db` | SQLite path (use e.g. `./miner.db` outside Docker). |
-| `GRUB_KICK_SIDECAR_IMAGE` | `ghcr.io/aalejandrofer/grubdrops-browser:latest` | Sidecar image the miner pulls per account. |
-| `GRUB_KICK_SIDECAR_NETWORK` | auto-detected | Override the self-detected sidecar network. |
-| `GRUB_KICK_SIDECAR_TEMPLATE` | `grubdrops-browser-{slug}` | Sidecar container-name template. |
-| `GRUB_KICK_SIDECAR_PORT` | `9090` | Sidecar gRPC port. |
-| `GRUB_BROWSER_URL` | none | Fixed sidecar address (legacy always-on). |
-| `GRUB_BROWSER_URLS` | none | Always-on sidecar pool, comma-separated. |
-| `GRUB_DISCOVERY_INTERVAL` | `60m` | Catalog-scrape cadence; also in Settings. |
-| `GRUB_AUTHCHECK_INTERVAL` | `1h` | Auth-health sweep cadence. |
-| `GRUB_DISCORD_WEBHOOK` | none | Global Discord webhook. |
-| `GRUB_SECURE_COOKIES` | `0` | `1` marks cookies `Secure` (HTTPS only); keep `0` for plain HTTP — see note. |
-| `GRUB_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
-| `GRUB_AUTHBYPASS` | `false` | **Disables all auth** when truthy (`1`/`true`). |
-| `GRUB_TWITCH_BROWSER` | `0` | `1` routes Twitch through the browser sidecar instead of direct HTTP. Experimental; the default direct-HTTP path is recommended. |
-| `GRUB_CANARY_INTERVAL` | Health-tab value | Overrides the accrual-canary run cadence (e.g. `6h`); falls back to the Settings ▸ Health value. |
-
-> **"Invalid CSRF token"?** `GRUB_SECURE_COOKIES` must match your scheme: `0`
-> over plain HTTP, `1` over HTTPS (proxy must forward `X-Forwarded-Proto: https`).
-> A mismatch marks cookies `Secure` over HTTP, so they drop and POSTs fail. A
-> failed check logs `csrf check failed` with the likely cause.
+| `GRUB_MASTER_KEY` | required | age key that encrypts stored sessions |
+| `GRUB_HTTP_ADDR` | `0.0.0.0:8080` | Listen address |
+| `GRUB_DB_PATH` | `/data/miner.db` | SQLite file |
+| `GRUB_SECURE_COOKIES` | `0` | `1` when served over HTTPS |
+| `GRUB_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
+| `GRUB_DISCORD_WEBHOOK` | none | Discord webhook, used when none is saved in Settings |
+| `GRUB_TELEGRAM_BOT_TOKEN` | none | Telegram bot token, used when none is saved in Settings |
+| `GRUB_TELEGRAM_CHAT_ID` | none | Telegram chat ID, used when none is saved in Settings |
+| `GRUB_UPDATE_CHECK` | on | `0` turns off the GitHub release check |
+| `GRUB_KICK_SIDECAR_IMAGE` | `ghcr.io/aalejandrofer/grubdrops-browser:latest` | Kick sidecar image |
+| `GRUB_KICK_SIDECAR_NETWORK` | auto-detected | Docker network for Kick sidecars |
 
 ### Single sign-on (OIDC)
 
-Optional (password login stays as fallback). Any OIDC provider; switches on once
-the first four are set:
+SSO turns on when the first four variables are set. Password login still works.
 
 | Var | Required | Purpose |
 |-----|----------|---------|
-| `GRUB_OIDC_ISSUER` | yes | Issuer URL. |
-| `GRUB_OIDC_CLIENT_ID` | yes | OAuth client ID. |
-| `GRUB_OIDC_CLIENT_SECRET` | yes | OAuth client secret. |
-| `GRUB_OIDC_REDIRECT_URL` | yes | `https://<host>/auth/oidc/callback`, registered with the IdP. |
-| `GRUB_OIDC_PROVIDER_NAME` | no | Button label (default `SSO`). |
-| `GRUB_OIDC_ALLOWED_EMAILS` | no | Comma-separated email allowlist. |
-| `GRUB_OIDC_ALLOWED_GROUPS` | no | Required group(s) on the `groups` claim. |
+| `GRUB_OIDC_ISSUER` | yes | Issuer URL |
+| `GRUB_OIDC_CLIENT_ID` | yes | Client ID |
+| `GRUB_OIDC_CLIENT_SECRET` | yes | Client secret |
+| `GRUB_OIDC_REDIRECT_URL` | yes | `https://<host>/auth/oidc/callback` |
+| `GRUB_OIDC_PROVIDER_NAME` | no | Button label, default `SSO` |
+| `GRUB_OIDC_ALLOWED_EMAILS` | no | Comma-separated email allowlist |
+| `GRUB_OIDC_ALLOWED_GROUPS` | no | Required groups on the `groups` claim |
 
-> **Heads up:** with no allowlist set, anyone the IdP authenticates becomes an
-> admin. Scope membership in the IdP, or set an allowlist.
+> [!WARNING]
+> With no allowlist, anyone your identity provider signs in becomes an admin.
 
-## The pages
+## How it works
 
-| Page | What's on it |
-|------|------|
-| **Console** (`/`) | Lifetime stats, per-account mining, live event feed. |
-| **Drops** (`/drops`) | Past / current / upcoming campaigns, items, connect chips, one-click whitelisting. |
-| **Priority** (`/priority`) | Global and per-account game whitelist + mining order. |
-| **History** (`/history`) | Claim log across every account. |
-| **Settings** (`/settings`) | Intervals, Discord, proxy, language, health, log level, password. |
-| **Accounts** | Add accounts, per-account whitelists, re-auth, auth health. |
+- **Twitch** runs over direct HTTP with no browser: GraphQL for campaigns and claims, a watch beacon every minute.
+- **Kick** finds and claims drops over HTTP. Watch time goes over WebSocket first and falls back to the Chrome sidecar if that stops.
+- **Each account** has one runner. It mines the highest-priority drop it can make progress on, claims it, then moves to the next.
 
-## Architecture
+## Screenshots
 
+<p align="center">
+  <img src="docs/screenshots/discover.png" width="32%" alt="Discover: current Twitch and Kick campaigns grouped by game">
+  <img src="docs/screenshots/games.png" width="32%" alt="Games: chosen games in priority order">
+  <img src="docs/screenshots/rewards.png" width="32%" alt="Rewards: drops in progress, Up next and claim history">
+</p>
+
+## Development
+
+```bash
+npm --prefix web ci && npm --prefix web run build   # SPA into internal/web/dist
+web/scripts/dev-miner.sh                            # miner on a temp DB, prints GRUB_DEV_DIR
+GRUB_DEV_DIR=<dir> web/scripts/dev-seed.sh          # admin, sample games and accounts
+GRUB_DEV_API=http://127.0.0.1:18080 npm --prefix web run dev
 ```
-cmd/miner               main daemon
-internal/platform/...   per-platform backends (twitch, kick)
-internal/watcher        per-account state machine (watch, mine, claim)
-internal/dockerctl      on-demand sidecar start/stop over the docker socket
-internal/discovery      catalog scraper
-internal/api + web      HTMX UI and handlers
-internal/store          SQLite (sqlc + goose), age-encrypted sessions
-```
 
-## Credits
+## Credits, license and use
 
-Stands on the projects that cracked the hard parts first:
+Built on what [DevilXD/TwitchDropsMiner](https://github.com/DevilXD/TwitchDropsMiner) and [HyperBeats/KickDropsMiner](https://github.com/HyperBeats/KickDropsMiner) worked out about Twitch and Kick drops.
+Released under the [MIT License](LICENSE). Use it on your own accounts and within each platform's terms, at your own risk.
 
-- **[DevilXD/TwitchDropsMiner](https://github.com/DevilXD/TwitchDropsMiner)** — Twitch device-code flow, GraphQL, watch-time mechanics.
-- **[HyperBeats/KickDropsMiner](https://github.com/HyperBeats/KickDropsMiner)** — mapped how Kick drops work.
-
-GrubDrops is its own Go rewrite (web UI, multi-account) but wouldn't exist without their groundwork.
-
-## License
-
-Released under the [MIT License](LICENSE).
-
-## A note on responsible use
-
-Self-hosted, single-tenant. `/healthz` for liveness; keep `/data` across
-redeploys; reverse-proxy it if exposed. Stay within each platform's ToS, on your
-own accounts, at your own risk.
-
----
-
-<sub>Built by <a href="https://github.com/aalejandrofer">@aalejandrofer</a> with <a href="https://claude.com/claude-code">Claude Code</a>. See the <a href="docs/CHANGELOG.md">changelog</a> and <a href="docs/DESIGN.md">design notes</a>.</sub>
+<sub>See the <a href="docs/CHANGELOG.md">changelog</a> and <a href="docs/DESIGN.md">design notes</a>.</sub>

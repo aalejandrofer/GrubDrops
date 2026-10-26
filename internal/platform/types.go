@@ -16,6 +16,10 @@ type Session struct {
 	// Twitch accepts GQL reads under a mismatched Client-Id but silently
 	// credits zero watch-minutes.
 	ClientID string `json:"client_id,omitempty"`
+	// UserID is the platform user ID the token belongs to, when the login
+	// flow learned it (Twitch Android paste login). Used to match a
+	// re-added user to its existing account.
+	UserID string `json:"user_id,omitempty"`
 	// Games is the account's whitelisted game names, plumbed at use time
 	// (like GameFilter). TV sessions can't see the drops dashboard, so
 	// channel-first discovery needs the names to know which game
@@ -40,11 +44,16 @@ type Campaign struct {
 	ID       string
 	Platform string
 	Game     string
-	Name     string
-	StartsAt time.Time
-	EndsAt   time.Time
-	Status   string
-	Benefits []DropBenefit
+	GameID   string // Twitch game id; empty on other platforms
+	// BoxArtURL is the game's cover image as the platform sends it: the
+	// Twitch game.boxArtURL with its size filled in, or the Kick category
+	// image. Empty when the payload carries none.
+	BoxArtURL string
+	Name      string
+	StartsAt  time.Time
+	EndsAt    time.Time
+	Status    string
+	Benefits  []DropBenefit
 
 	// AccountLinked indicates whether the user has connected the
 	// external account this campaign requires for claims (e.g. Mojang
@@ -62,6 +71,10 @@ type Campaign struct {
 	// operator should visit to make AccountLinked true. Empty if not
 	// provided by the platform.
 	AccountLinkURL string
+	// ClaimNeedsLink is true when the platform rejected a claim for this
+	// account until an external account is linked (Kick connect_url). The
+	// planner ignores it; the Games page shows it.
+	ClaimNeedsLink bool
 	// Kind distinguishes "drop" (watch-time mining required) from
 	// "reward" (one-click claim from /drops/inventory once the account
 	// is linked — e.g. Minecraft Builder Cape). Empty defaults to

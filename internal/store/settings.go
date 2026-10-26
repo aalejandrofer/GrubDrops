@@ -14,20 +14,14 @@ import (
 
 const (
 	keyGlobalDiscord       = "settings:discord_webhook"
+	keyTelegramBotToken    = "settings:telegram_bot_token"
+	keyTelegramChatID      = "settings:telegram_chat_id"
 	keyNotifyAvatarURL     = "settings:notify_avatar_url"
-	keyLogRetention        = "settings:log_retention_days"
-	keyLogLevel            = "settings:log_level"
-	keyTickIntervalSec     = "settings:tick_interval_sec"
-	keyTickIntervalMs      = "settings:tick_interval_ms" // legacy; migrated to tick_interval_sec
-	keyDiscoveryIntvMin    = "settings:discovery_interval_min"
-	keyDiscoveryIntvSec    = "settings:discovery_interval_sec" // legacy; migrated to discovery_interval_min
 	keyNotifyClaim         = "settings:notify_claim"
 	keyNotifyProgress      = "settings:notify_progress"
 	keyNotifyAuth          = "settings:notify_auth"
 	keyNotifyError         = "settings:notify_error"
 	keyNotifyCanary        = "settings:notify_canary"
-	keyNotifyProgStep      = "settings:notify_progress_step_pct"
-	keyPriorityMode        = "settings:priority_mode"
 	keyKickWatchMode       = "settings:kick_watch_mode"
 	keyCanaryTwitchChannel = "settings:canary_twitch_channel"
 	keyCanaryKickChannel   = "settings:canary_kick_channel"
@@ -52,18 +46,6 @@ const (
 	KickWatchModeBrowser = "browser"
 	KickWatchModeWS      = "ws"
 	KickWatchModeAuto    = "auto"
-)
-
-// PriorityMode controls campaign pick ordering when multiple
-// whitelisted campaigns are eligible.
-//   - "ordered" (default): sort by whitelist rank, top = first.
-//   - "ending_soonest": sort by ends_at ascending so campaigns near
-//     expiry get mined first.
-//
-// Mirrors DevilXD/TwitchDropsMiner's PRIORITY_ORDER toggle.
-const (
-	PriorityModeOrdered       = "ordered"
-	PriorityModeEndingSoonest = "ending_soonest"
 )
 
 type Settings struct {
@@ -98,6 +80,24 @@ func (s *Settings) SetGlobalDiscordWebhook(ctx context.Context, url string) erro
 	return s.setString(ctx, keyGlobalDiscord, url)
 }
 
+// TelegramBotToken is the Telegram Bot API token. Empty means unset.
+func (s *Settings) TelegramBotToken(ctx context.Context) (string, error) {
+	return s.getString(ctx, keyTelegramBotToken)
+}
+
+func (s *Settings) SetTelegramBotToken(ctx context.Context, token string) error {
+	return s.setString(ctx, keyTelegramBotToken, strings.TrimSpace(token))
+}
+
+// TelegramChatID is the chat the bot posts to. Empty means unset.
+func (s *Settings) TelegramChatID(ctx context.Context) (string, error) {
+	return s.getString(ctx, keyTelegramChatID)
+}
+
+func (s *Settings) SetTelegramChatID(ctx context.Context, id string) error {
+	return s.setString(ctx, keyTelegramChatID, strings.TrimSpace(id))
+}
+
 // NotifyAvatarURL is the avatar image used for the Discord webhook sender.
 // Empty means "use the webhook's own avatar" (the payload field is omitted).
 func (s *Settings) NotifyAvatarURL(ctx context.Context) (string, error) {
@@ -108,122 +108,10 @@ func (s *Settings) SetNotifyAvatarURL(ctx context.Context, url string) error {
 	return s.setString(ctx, keyNotifyAvatarURL, url)
 }
 
-func (s *Settings) LogRetentionDays(ctx context.Context) (int, error) {
-	raw, err := s.getString(ctx, keyLogRetention)
-	if err != nil {
-		return 0, err
-	}
-	if raw == "" {
-		return 7, nil
-	}
-	n, err := strconv.Atoi(raw)
-	if err != nil {
-		return 7, nil
-	}
-	return n, nil
-}
-
-func (s *Settings) SetLogRetentionDays(ctx context.Context, days int) error {
-	return s.setString(ctx, keyLogRetention, strconv.Itoa(days))
-}
-
-// LogLevel is the runtime log level. "" means "use the launch env
-// GRUB_LOG_LEVEL"; explicit value here overrides it.
-func (s *Settings) LogLevel(ctx context.Context) (string, error) {
-	return s.getString(ctx, keyLogLevel)
-}
-
-func (s *Settings) SetLogLevel(ctx context.Context, level string) error {
-	return s.setString(ctx, keyLogLevel, level)
-}
-
-// TickIntervalSec is the watcher state-machine pulse in seconds (default 5).
-// Pure loop granularity — no network call rides on the tick itself; the
-// heartbeat/livecheck cadences are wall-clock and derived independently.
-// Falls back to the legacy ms key when unset. Clamped to [1s, 5m].
-func (s *Settings) TickIntervalSec(ctx context.Context) (int, error) {
-	raw, err := s.getString(ctx, keyTickIntervalSec)
-	if err != nil || raw == "" {
-		// Legacy migration: tick_interval_ms, rounded up to a whole second.
-		if legacy, lerr := s.getString(ctx, keyTickIntervalMs); lerr == nil && legacy != "" {
-			if ms, _ := strconv.Atoi(legacy); ms > 0 {
-				return clampInt((ms+999)/1000, 1, 300), nil
-			}
-		}
-		return 5, err
-	}
-	n, _ := strconv.Atoi(raw)
-	if n <= 0 {
-		return 5, nil
-	}
-	return clampInt(n, 1, 300), nil
-}
-
-func (s *Settings) SetTickIntervalSec(ctx context.Context, sec int) error {
-	return s.setString(ctx, keyTickIntervalSec, strconv.Itoa(sec))
-}
-
-// DiscoveryIntervalMin is the campaign-catalog re-scan cadence in minutes
-// (default 60). Falls back to the legacy seconds key when unset. Clamped to
-// [1m, 24h].
-func (s *Settings) DiscoveryIntervalMin(ctx context.Context) (int, error) {
-	raw, err := s.getString(ctx, keyDiscoveryIntvMin)
-	if err != nil || raw == "" {
-		// Legacy migration: discovery_interval_sec, rounded up to a minute.
-		if legacy, lerr := s.getString(ctx, keyDiscoveryIntvSec); lerr == nil && legacy != "" {
-			if sec, _ := strconv.Atoi(legacy); sec > 0 {
-				return clampInt((sec+59)/60, 1, 1440), nil
-			}
-		}
-		return 60, err
-	}
-	n, _ := strconv.Atoi(raw)
-	if n <= 0 {
-		return 60, nil
-	}
-	return clampInt(n, 1, 1440), nil
-}
-
-func (s *Settings) SetDiscoveryIntervalMin(ctx context.Context, min int) error {
-	return s.setString(ctx, keyDiscoveryIntvMin, strconv.Itoa(min))
-}
-
 // HeartbeatInterval is intentionally NOT a setting. It is locked to 60s in the
-// watcher build (cmd/miner): the Twitch watch-ping beacon cadence derives from
+// runner (runner.DefaultTick): the Twitch watch-ping beacon cadence derives from
 // it and Twitch credits exactly 1 minute per beacon, so any value >60s
 // under-credits Twitch watch-time. Do not re-expose this as a user setting.
-
-func clampInt(n, lo, hi int) int {
-	if n < lo {
-		return lo
-	}
-	if n > hi {
-		return hi
-	}
-	return n
-}
-
-// ProgressNotifyStepPct is the milestone granularity for Discord progress
-// notifications: fire at 0% (start), every N%, and 100%. Default 50 (so
-// start/50%/100%). 0 disables progress notifications entirely (claim only).
-func (s *Settings) ProgressNotifyStepPct(ctx context.Context) (int, error) {
-	raw, err := s.getString(ctx, keyNotifyProgStep)
-	if err != nil || raw == "" {
-		return 50, err
-	}
-	n, _ := strconv.Atoi(raw)
-	if n < 0 {
-		return 0, nil
-	}
-	if n > 100 {
-		return 100, nil
-	}
-	return n, nil
-}
-
-func (s *Settings) SetProgressNotifyStepPct(ctx context.Context, pct int) error {
-	return s.setString(ctx, keyNotifyProgStep, strconv.Itoa(pct))
-}
 
 // NotifyKinds returns the boolean toggles for each Discord
 // notification category. Defaults: claim+error on, progress+auth+canary off.
@@ -236,24 +124,6 @@ func (s *Settings) NotifyKinds(ctx context.Context) (claim, progress, auth, erro
 		return v == "1"
 	}
 	return get(keyNotifyClaim, true), get(keyNotifyProgress, false), get(keyNotifyAuth, false), get(keyNotifyError, true), get(keyNotifyCanary, false)
-}
-
-func (s *Settings) PriorityMode(ctx context.Context) (string, error) {
-	v, err := s.getString(ctx, keyPriorityMode)
-	if err != nil || v == "" {
-		return PriorityModeOrdered, err
-	}
-	if v != PriorityModeOrdered && v != PriorityModeEndingSoonest {
-		return PriorityModeOrdered, nil
-	}
-	return v, nil
-}
-
-func (s *Settings) SetPriorityMode(ctx context.Context, mode string) error {
-	if mode != PriorityModeOrdered && mode != PriorityModeEndingSoonest {
-		mode = PriorityModeOrdered
-	}
-	return s.setString(ctx, keyPriorityMode, mode)
 }
 
 // KickWatchMode returns the configured Kick watch path. Default is "auto"
@@ -419,4 +289,125 @@ func (s *Settings) SetTimezone(ctx context.Context, name string) error {
 		return fmt.Errorf("invalid timezone %q", name)
 	}
 	return s.setString(ctx, keyTimezone, name)
+}
+
+// v2 UI settings
+const (
+	keyUILanguage         = "settings:ui_language"
+	keyUITimeFormat       = "settings:ui_time_format"
+	keyUITheme            = "settings:ui_theme"
+	keyNotifyDailySummary = "settings:notify_daily_summary"
+	keyUpdateAuto         = "settings:update_auto"
+)
+
+// UILanguage is the UI and notification language: en, es or zh-CN. Default en.
+func (s *Settings) UILanguage(ctx context.Context) (string, error) {
+	return s.enumString(ctx, keyUILanguage, "en", "en", "es", "zh-CN")
+}
+
+func (s *Settings) SetUILanguage(ctx context.Context, v string) error {
+	return s.setEnum(ctx, keyUILanguage, v, "en", "es", "zh-CN")
+}
+
+// UITimeFormat is 24h or 12h. Default 24h.
+func (s *Settings) UITimeFormat(ctx context.Context) (string, error) {
+	return s.enumString(ctx, keyUITimeFormat, "24h", "24h", "12h")
+}
+
+func (s *Settings) SetUITimeFormat(ctx context.Context, v string) error {
+	return s.setEnum(ctx, keyUITimeFormat, v, "24h", "12h")
+}
+
+// UITheme is dark or light. Default dark.
+func (s *Settings) UITheme(ctx context.Context) (string, error) {
+	return s.enumString(ctx, keyUITheme, "dark", "dark", "light")
+}
+
+func (s *Settings) SetUITheme(ctx context.Context, v string) error {
+	return s.setEnum(ctx, keyUITheme, v, "dark", "light")
+}
+
+// NotifyDailySummary reports whether the midnight summary is sent. Default off.
+func (s *Settings) NotifyDailySummary(ctx context.Context) (bool, error) {
+	return s.boolKey(ctx, keyNotifyDailySummary, false)
+}
+
+func (s *Settings) SetNotifyDailySummary(ctx context.Context, on bool) error {
+	return s.setBool(ctx, keyNotifyDailySummary, on)
+}
+
+// UpdateAuto reports whether the app updates itself. Default on.
+func (s *Settings) UpdateAuto(ctx context.Context) (bool, error) {
+	return s.boolKey(ctx, keyUpdateAuto, true)
+}
+
+func (s *Settings) SetUpdateAuto(ctx context.Context, on bool) error {
+	return s.setBool(ctx, keyUpdateAuto, on)
+}
+
+// enumString returns the stored value when it is one of allowed, else def.
+func (s *Settings) enumString(ctx context.Context, key, def string, allowed ...string) (string, error) {
+	v, err := s.getString(ctx, key)
+	if err != nil {
+		return def, err
+	}
+	for _, a := range allowed {
+		if v == a {
+			return v, nil
+		}
+	}
+	return def, nil
+}
+
+func (s *Settings) setEnum(ctx context.Context, key, v string, allowed ...string) error {
+	for _, a := range allowed {
+		if v == a {
+			return s.setString(ctx, key, v)
+		}
+	}
+	return fmt.Errorf("invalid value %q for %s", v, key)
+}
+
+func (s *Settings) boolKey(ctx context.Context, key string, def bool) (bool, error) {
+	v, err := s.getString(ctx, key)
+	if err != nil || v == "" {
+		return def, err
+	}
+	return v == "1", nil
+}
+
+func (s *Settings) setBool(ctx context.Context, key string, on bool) error {
+	if on {
+		return s.setString(ctx, key, "1")
+	}
+	return s.setString(ctx, key, "0")
+}
+
+// v2 release notes
+
+const (
+	keyLatestReleaseNotes = "settings:latest_release_notes" // newline-joined highlight bullets
+	keyLatestReleaseURL   = "settings:latest_release_url"   // html_url of the latest release
+)
+
+// LatestReleaseNotes returns the stored release highlights, one per line.
+func (s *Settings) LatestReleaseNotes(ctx context.Context) ([]string, error) {
+	v, err := s.getString(ctx, keyLatestReleaseNotes)
+	if err != nil || v == "" {
+		return nil, err
+	}
+	return strings.Split(v, "\n"), nil
+}
+
+func (s *Settings) SetLatestReleaseNotes(ctx context.Context, notes []string) error {
+	return s.setString(ctx, keyLatestReleaseNotes, strings.Join(notes, "\n"))
+}
+
+// LatestReleaseURL is the GitHub page of the latest release. Empty when unset.
+func (s *Settings) LatestReleaseURL(ctx context.Context) (string, error) {
+	return s.getString(ctx, keyLatestReleaseURL)
+}
+
+func (s *Settings) SetLatestReleaseURL(ctx context.Context, url string) error {
+	return s.setString(ctx, keyLatestReleaseURL, strings.TrimSpace(url))
 }

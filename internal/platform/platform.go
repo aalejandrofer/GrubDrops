@@ -11,6 +11,19 @@ import (
 // account into needs_auth.
 var ErrIntegrityBlocked = errors.New("integrity check failed")
 
+// ErrClaimNeedsLink is matched with errors.Is on a Claim error when the
+// platform refused the claim until the user links an external account (Riot,
+// Steam, ...). The runner then blocks the drop as not linked instead of
+// counting a claim failure.
+var ErrClaimNeedsLink = errors.New("claim: account link required")
+
+// LinkRechecker is an optional backend capability: forget the account's
+// link-refused claims, retry them now, and report what was claimed and how
+// many campaigns still need a link.
+type LinkRechecker interface {
+	RecheckLinks(ctx context.Context, s Session) (claimed []ClaimedReward, stillNeedsLink int, err error)
+}
+
 type Backend interface {
 	Name() string
 

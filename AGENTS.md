@@ -1,8 +1,9 @@
 # AGENTS.md
 
 Guidance for AI coding agents working in this repo. GrubDrops is a self-hosted
-Twitch + Kick drops miner: a single Go daemon with an HTMX + `html/template` web
-UI, a SQLite store, and on-demand Chrome sidecars for Kick playback.
+Twitch + Kick drops miner: a single Go daemon serving a JSON + SSE API and an
+embedded SvelteKit SPA, a SQLite store, and on-demand Chrome sidecars for Kick
+playback.
 
 ## Build, test, format
 
@@ -27,13 +28,29 @@ docker build -f deploy/Dockerfile.miner .   # build the miner image
 
 ```bash
 mkdir -p data
-GRUB_MASTER_KEY=$(head -c32 /dev/urandom | base64) \
+GRUB_MASTER_KEY=$(go run ./cmd/miner keygen) \
   GRUB_DB_PATH=./data/miner.db GRUB_SECURE_COOKIES=0 \
   go run ./cmd/miner
 ```
 
-Open http://localhost:8080 and create the admin login. Only `GRUB_MASTER_KEY`
-is required; see the README "Configuration" table for the rest (`GRUB_*` prefix).
+Build the SPA into `internal/web/dist` (Go serves a 503 "UI not built" page
+without it):
+
+```bash
+npm --prefix web ci && npm --prefix web run build
+```
+
+UI dev loop (Vite proxies `/api` and `/auth` to the miner):
+
+```bash
+web/scripts/dev-miner.sh          # temp DB miner on :18080, prints GRUB_DEV_DIR
+GRUB_DEV_DIR=<dir> web/scripts/dev-seed.sh   # admin plus sample games and accounts
+GRUB_DEV_API=http://127.0.0.1:18080 npm --prefix web run dev
+```
+
+Create the admin with `POST /api/setup` (CSRF token from `GET /api/session`)
+when not seeding. Only `GRUB_MASTER_KEY` is required; see the README
+"Configuration" table for the rest (`GRUB_*` prefix).
 
 ## Layout
 
@@ -41,13 +58,16 @@ is required; see the README "Configuration" table for the rest (`GRUB_*` prefix)
 cmd/miner               main daemon
 cmd/browser-sidecar     chromedp sidecar binary (Kick IVS playback) — core, not dead code
 internal/platform/...   per-platform backends (twitch, kick)
-internal/watcher        per-account state machine (watch, mine, claim)
+internal/plan           pure planner: picks what each account mines next
+internal/runner         per-account runner (watch, mine, claim) and the pool
+internal/collect        runner hooks into the store (claims, minutes, scans)
+internal/summary        daily watch summary at local midnight
 internal/dockerctl      on-demand sidecar start/stop over the docker socket
-internal/discovery      catalog scraper
-internal/api            HTMX UI handlers (html/template)
-internal/web            embedded templates/ + static/ assets (go:embed)
+internal/api            JSON API + SSE (`/api/events`) for the SPA
+internal/web            embedded SPA build in dist/ (go:embed)
 internal/store          SQLite (sqlc + goose), age-encrypted sessions
-internal/i18n           locale JSON + the `{{t "key"}}` template helper
+internal/i18n           locale JSON: Go-sent strings and the Svelte UI
+web/                    SvelteKit SPA source (pages in src/routes, components in src/lib)
 proto/                  buf config + gRPC defs for the sidecar — core, not dead code
 ```
 
@@ -58,8 +78,8 @@ proto/                  buf config + gRPC defs for the sidecar — core, not dea
   + buf config, or the Twitch `BrowserBackend`. Kick watch-time (IVS playback
   credit) depends on the on-demand chromedp sidecars. Cleanup passes have
   wrongly flagged these as removable — leave them.
-- **Stay Go + `html/template` + HTMX.** A React/Vite port was tried and scrapped.
-  Do not re-propose a JS port; build features in templates.
+- **UI is a SvelteKit static SPA embedded in the Go binary; the Go side serves
+  JSON + SSE.**
 
 ## Platform gotchas
 
@@ -67,7 +87,7 @@ proto/                  buf config + gRPC defs for the sidecar — core, not dea
   `Client-Integrity` header — adding it is a self-inflicted integrity wall. Do
   not re-implement logged-out catalog scraping; `/drops/campaigns` while logged
   out is just a login wall.
-- **Twitch credit beacon is gated by `HeartbeatInterval`** (1 minute credited
+- **Twitch credit beacon is gated by `runner.DefaultTick`** (1 minute credited
   per beacon), so anything above 60s under-credits. Keep it at 60s. Kick is
   immune.
 - **Kick detection/claims** ride a Chrome-TLS-fingerprinted HTTP client (`utls`)
@@ -80,9 +100,12 @@ proto/                  buf config + gRPC defs for the sidecar — core, not dea
 
 ## Internationalization
 
-- User-facing strings go through `internal/i18n` (`{{t "key"}}` in templates,
-  `i18n.T(lang, key)` in Go). Add the key to **every** locale file under
-  `internal/i18n/locales/` — the locales must keep equal key sets.
+- User-facing strings Go sends go through `internal/i18n` (`i18n.T(lang, key)`).
+  Add the key to **every** locale file under
+  `internal/i18n/locales/` — the locales must keep equal key sets
+  (`TestLocaleParity`).
+- The Svelte UI reads the same files through `t()`/`tn()`.
+  `npm --prefix web run check` fails on unused or unequal keys.
 
 ## Releasing
 

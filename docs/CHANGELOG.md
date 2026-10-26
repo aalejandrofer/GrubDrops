@@ -4,9 +4,117 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
-### Docs
+## [2.0.0] — 2026-10-26
 
-- Added a warning that GrubDrops is currently not working as expected.
+### Added
+- **Reorder accounts.** Settings > Accounts has move up, move down and a drag handle on each row, like Games; Shift+click on a move button sends the account to the top or bottom. The order also applies to Home, Up next and Rewards, and Mine now acts on the first running account with a queue in that order. Mining stays parallel. New accounts go last. Stored in a new `accounts.sort_order` column (migration 0021, filled from the current order); `PUT /api/accounts/order` takes the full id list.
+- **First-run wizard.** With no accounts, Home opens a full-screen wizard at `/welcome` with a progress bar and Back/Continue: add one or more accounts (Twitch Android login, Twitch TV code or Kick cookies.txt; listed with a remove button, Add another account for more), then pick and order games. Two steps: Start mining on the second goes straight to Home. The Twitch Android paste field shows an example of the redirect URL with the token hidden. An account with no games opens on the games step; an install with accounts and games goes straight to Home. It replaces the old first-run panel on Home. The add-account flow is now one component shared with Settings > Accounts. A new Kick account is created on the first Save of its cookies, not when the form opens, so a reload mid-form leaves no half-made account.
+- **Log in again from the account menu.** Every account's ... menu has Log in again, not just signed-out ones, so a working account can switch its Twitch login from TV to Android or refresh its Kick cookies. The session is replaced on the same account.
+- **Telegram notifications.** Settings > Notifications takes a bot token and chat ID, with Send test and Change like Discord. The same events, toggles, daily summary and canary alerts go to Telegram (Bot API, HTML, drop image as a photo when there is one), and to both services when both are set. The token is never returned to the UI and is redacted from errors. A 429 waits `retry_after` (up to 10 s) and retries once. `GRUB_TELEGRAM_BOT_TOKEN` and `GRUB_TELEGRAM_CHAT_ID` are the env defaults. `POST /api/settings/notify-test` takes an optional `target` of `discord` or `telegram`.
+- **Account link warnings.** A chosen game whose drops an account can't claim until it links the publisher's account (Riot, Steam, ...) shows the account on Games with a Link account button, and a warning line on its Home card. Twitch uses the campaign's link state; Kick flags a campaign after it rejects a claim with a connect URL. Only http(s) link URLs are shown. `GET /api/games` gains `needs_link`. Kick's link flag is saved to `account_campaign_links`, so it survives a restart, and a successful claim clears it. A Check now button next to the warning retries the account's link-refused claims right away and shows what it claimed or that the account is still not linked (`POST /api/accounts/{id}/recheck-links`).
+- **Discover tab.** A new page between Games and Rewards lists every current drop campaign on Twitch and Kick, grouped by game: box art, campaign, time left and end date, rewards with images and minutes, and whether an account link is needed. Add to games adds the game in one click; games already chosen show Added. Search, a platform filter and Hide added narrow the list. `GET /api/discover` caches for 15 minutes (2 minutes after a failure) and fetches both platforms at once; `POST /api/discover/refresh` bypasses the cache at most once a minute. A platform that fails or times out is reported on its own while the other still lists. Twitch is read through an enabled Android-login account; without one the page says so and links to Settings > Accounts.
+- **Shift+click to move to the end.** On Games, Shift+click on Move up sends the game to the top and on Move down to the bottom. A plain click still moves one step.
+- **Rename accounts.** Settings > Accounts has Rename in each row's menu. The custom name shows everywhere the account is named (Home, Rewards, Health, notifications) and survives logins; an empty name resets to the platform name. Max 40 characters. Stored in a new `accounts.custom_name` column (migration 0019), so two accounts with the same platform name can be told apart.
+- **Twitch Android login.** Adding a Twitch account offers Android login (recommended) next to the TV code. Sign in to Twitch in a new tab, then copy the whole URL of the Twitch homepage it lands on and paste it in. Android tokens see the drops dashboard, so campaign discovery is complete; TV tokens get null from ViewerDropsDashboard and DropCampaignDetails. Adding the same Twitch user again updates its session.
+- **Mine now.** The Up next header on Home and Rewards has one Mine now button. It stops the current drop and starts the first Up next drop at once; the stopped drop moves to the top of Up next. The switch holds through rescans, including Twitch TV-token scans that briefly miss the campaign, until the drop is claimed, ends, is blocked or has no live stream. The button is hidden when Up next is empty or no listed account is running.
+- **Scan now.** A button at the top right of Games asks every account to rescan campaigns at once. It replaces the "GrubDrops only mines these" line.
+- **Up next on Rewards.** A read-only Up next section lists each account's queued drops (5 per account, with Show more), replacing the "more drops queued" line.
+- **Home game card queue.** A waiting game's card lists at most 3 queued drops and counts the rest.
+- **Rewards search.** A search box filters claim history by reward, campaign or game on the server, so it covers every claim, not just the loaded ones.
+- **Rewards pagination.** Previous / Next with page and range counts replace Load more; page size is 20, 50 or 100 and is kept per browser.
+- **Home shows at most 7 games.** Games that are mining or queued stay visible; a link to Games shows how many more are tracked.
+- **Compact list view on Games.** A Cards/List toggle shows one dense row per game with the same reordering; the choice is kept per browser.
+- **New web app.** A SvelteKit single-page app in `web/` is built by npm, the Docker image and CI, and embedded in the binary. A "UI not built" page shows when the build is missing; `index.html` is never cached and hashed assets are immutable.
+- **Home** with KPIs, ranked game cards with per-account progress, Up next, recent claims, and first-run, nothing-live, offline and many-account states.
+- **Up next** has one queue per account. Reorder by button or drag for this session, or Reset to Games order.
+- **Games** page: search or type a game to add it, reorder priority by button or drag, remove with confirm. Search runs locally and shows box art.
+- **Rewards** page: drops in progress with time left, and claim history filtered by game or account.
+- **Settings:** language, time format, theme and timezone, Discord and notification toggles, update check and command, sign out. Accounts: add Twitch with a device code or Kick with cookies.txt, log in again, rename and remove. Health: miner, sidecar, scan and canary status, a filtered live event log in your language, and a full log download.
+- **Pause and resume mining per account** (`PUT /api/accounts/{id}/enabled`), with a Paused status in Settings and a Home notice when every account is paused. Accounts paused in 1.x stay paused and can now be resumed.
+- **Planner and runner.** `internal/plan` and `internal/runner` replace the watcher and scheduler: one runner per account, a global chosen-games list, inventory progress that overrides a stale claim log entry, a plan rescan every 15 minutes while watching, and claimed drops of chosen active campaigns in the plan result.
+- **Collection store.** Migration 0017 adds claim log, drop state, watch minute, account scan, chosen game and skip tables, with the `collect` package filling them from runner scans, progress and claims. A one-time `<db>.pre-v2` backup is written before an existing database migrates.
+- **1.x upgrade** carries over chosen games (global list, then per-account games), claim history and total minutes watched.
+- **JSON API and live updates.** Session, setup, login and CSRF under `/api`; overview, runners, games, claims, accounts, settings, health, update check and the Kick image proxy; Server-Sent Events at `/api/events` for runner, claim, games, accounts and log.
+- **Daily Discord summary** at midnight in the configured timezone.
+- **Shared locales.** The web app reads `internal/i18n/locales`, and `npm run check` fails on missing, unused or mismatched keys.
+
+### Changed
+- **README rewritten for v2, new screenshots.** The README is shorter and covers Android login, Discover, per-account Up next and the first-run wizard. The Spanish and Chinese versions match it. `docs/screenshots` has new v2 shots of Home, Discover, Games and Rewards made with sample data; the old settings shot is removed.
+- **Mine now is now Mine next, per account.** On Home, each account's Up next header has its own Mine next button instead of one in the panel header. It starts that account's first Up next drop. It is disabled with a tooltip when the account is signed out, has no games or is idle, and a failure shows under that account. Rewards now shows the same Up next panel as Home, so its queue can be reordered by drag or move buttons and has the same Mine next buttons.
+- **Top bar order.** Home, Discover, Games, Rewards, Settings.
+- **Home game cards fill the left column.** On wide screens Home shows as many game cards as fit down to the bottom of the right column (Up next and Claimed), instead of a fixed 7, with at least 2. The narrow single-column layout keeps 7.
+- **Login and setup page.** A tighter centered card with the host below it. Password comes first; when SSO is on it sits under an "or" rule. Signing in shows a spinner and locks the field, a wrong password marks the field, and setup shows the 8-character hint and a mismatch error on the confirm field. After setup the app opens the first-run wizard.
+- **Light mode.** The light theme is one step darker: an off-white background instead of pure white, with darker surfaces, borders and text colors to match (GRUB-22).
+- **Scan cadence.** A watching account now rescans campaigns every 12 hours instead of every 15 minutes. Use Scan now on Games for a sooner one.
+- **Health log colors.** Each log line is tinted by its type: red for errors, amber for warnings, green for claims. Normal lines use the main text color instead of grey.
+
+- **Quieter logs.** Repeated lines log once per change: `runner progress` only when minutes change, the same step error once (with a recovery line carrying the suppressed count), and unchanged state, picked-drop and starting-watch lines are skipped. `notify` lines moved to DEBUG, and the Twitch campaigns diagnostic no longer logs the raw response body.
+- **Home card size.** Cards no longer show a rank number, and card size follows the order on the page, so an idle top-priority game listed below active ones is small. A waiting game now lists above games with no campaign even when nothing is queued for it yet.
+- **Up next account names.** Each name is tinted by platform: purple for Twitch, green for Kick.
+
+- The miner runs the v2 planner, runner and collector and serves the JSON API and the embedded SPA.
+- The pool restarts a panicked runner from its builder after one minute.
+- `GET /api/events` streams every ring log line as a `log` event, and open streams end at shutdown instead of holding it for 5 s.
+- Adding or reordering chosen games returns at once. Runners reload in the background, one reload at a time with repeated changes folded together, and a `games` event fires when the reload finishes.
+- A campaign with no live stream moves on to the next queued campaign without rescanning, and every pick retries campaigns that had no live stream earlier.
+- Swept rewards are recorded in the claim log under their planned game.
+- README, translations, DESIGN.md, the site and AGENTS.md describe the SvelteKit UI, chosen games, the planner, the runner and the new login flows. A source build says to build the UI before `go build`.
+- Home lists games that are mining or queued first, then the rest, each in priority order. Cards keep their real rank number.
+- Up next on Home shows 5 drops per account, with Show more / Show less for the rest.
+- The Health event log shows 10 events, with Show all for the rest of the last 50. DEBUG lines are left out of the list and its counts; Download full log still has them.
+- With no campaign to mine, a runner scans again after 12 hours instead of 5 minutes. Changing the chosen games or an account still rescans at once. Queued campaigns with no live stream, and awaiting a channel connect, still recheck every 5 minutes. The empty Up next line counts down to the server's next scan time, in hours and minutes.
+- The README and site screenshots show the current Home, Games, Rewards and Settings pages.
+
+### Fixed
+- Kick sidecar cleanup only removes sidecars named by this miner's own template, so two miners on one docker host (prod and staging) no longer delete each other's sidecars.
+- **Drag to reorder works.** Games, Settings > Accounts and Up next now pick a row up from anywhere on it (not only the dotted handle) after a 4 px move, so clicks still work. The drag no longer ends after one slot, no text gets selected while dragging, and Escape cancels. The dragged row is lifted with a shadow and accent border. One shared helper, `web/src/lib/drag.ts`, serves all three lists.
+
+- **Discord webhook URL in logs.** A failed Discord send no longer puts the webhook URL, whose path is the secret, in its error or the log.
+- **A drop that needs an account link no longer blocks the runner.** A Kick claim rejected for a missing link was retried, then skipped like any failure. The runner now marks the drop not linked, moves on to the next Up next target, and retries the claim every 5 minutes, so it lands once the account is linked. The link rows had also never saved: their campaigns foreign key failed on every insert, and migration 0020 drops it.
+- **Twitch Android accounts never mined.** DropCampaignDetails reads its `channelLogin` variable as a user ID, but GrubDrops sent the login, so Twitch answered `user: null`, every campaign came back with no drops, and Up next stayed empty. It now sends the account's numeric user ID (from the session, or CurrentUser). An empty details answer is logged and no longer cached for 30 minutes.
+- **Kick watch time never accrued from EU hosts.** Kick now shows a OneTrust consent banner, and its player does not request the stream until the visitor picks an option, so the sidecar's video stayed at readyState 0 and every watch gave up with "player never started". The sidecar now accepts the banner each time it drives the player. A watch that still fails to start logs the page URL without its query, title, video state and error, whether the banner is showing, and whether the playback API and an HLS playlist were requested (no cookie or token values). Each player poll now has a 10 s timeout.
+- **Home order.** A game that is mining is listed above games that are only waiting, whatever their priority.
+- Twitch watch time was not crediting even though the Spade beacon was accepted. Each heartbeat now fetches the stream's lowest-quality HLS playlist and sends a HEAD request to every chunk in it, the method TwitchDropsMiner moved to. The Spade beacon is still sent, and a heartbeat fails only when both fail. Playlist and chunk requests go only to ttvnw.net and live-video.net over https and carry no Twitch credentials.
+- Home cards are large by display position, so a mining game shown first is large. The rank on the card is unchanged.
+- Rewards search skips the reload when the text is unchanged, uses 16px text on phones so iOS does not zoom, and trims spaces after the 100 character cut.
+- Twitch integrity tokens and raw responses no longer appear in logs. The integrity line records only the expiry and bad-bot flag, and gql and PubSub lines drop the response body (GRUB-20).
+- The health canary says when it skipped because no account was signed in and unpaused, and tells you to sign in or resume one. Run now shows progress and a result or timeout message.
+- Box art shows for newer games such as Marvel Rivals and Delta Force.
+- The overview and games APIs report the next scan time (`next_scan_at`), and the scan stamp shows it.
+- Paused signed-out accounts show as needing login and offer "Log in again" next to Resume. Home counts only signed-out accounts when deciding all are signed out, and the header chip skips the account whose login is open in Settings.
+- Home is never blank: an unreachable miner, a failed load, no chosen games and all accounts signed out each show a message with a way forward.
+- Home lists a runner on its game card when the game matched by slug, not only by name.
+- Dates and clocks render in UTC when the saved timezone is one the browser rejects, such as "Local".
+- The version popover links release notes only over https, and shows `{current} → {latest} available` when an update exists.
+- Games search highlights the right letters in names that change length when lowercased, and suggestions highlight the typed match.
+- First-run setup says a game is already added, with its priority, instead of a generic failure.
+- `POST /api/games` returned 500 for games a migration seeded under another id (Apex Legends, Marvel Rivals); it now reuses the existing row by slug.
+- The pre-v2 backup is written to a `.tmp` file and renamed, so an interrupted backup is retried on the next boot.
+- Next scan time follows the runner's real recheck cadence and is blank for stopped accounts.
+- Home shows signed out before the all-paused notice, as the Accounts list does.
+- The collection migration is 0017 and safe to re-run. Databases at version 16 from the 1.x pipeline-v2 build skipped it, so Games search and Home failed on missing tables.
+- A swept reward is recorded only when its title resolves to one drop, looking in the current campaign, then the current game, then the rest of the plan. An ambiguous title records nothing.
+- A reward code is stored against the drop just claimed, within 10 minutes, never against the next drop. Each claim takes one code.
+- Progress notifications fire again (start, 50% and 100%) when turned on in Settings.
+- `log` events take the account name from memory, so logging never waits on the database.
+- Shutdown waits for background loops before closing the Twitch backends and the database, including after an HTTP listen failure.
+- Kick avatars on runners, the overview and `runner` events go through the Kick image proxy, so they load in the browser.
+- Every API time field is an RFC 3339 UTC string, and an unset time is `null` instead of `0001-01-01T00:00:00Z`.
+- Release notes with two equal lines, or a Twitch and a Kick campaign with the same id, no longer crash the page on a duplicate list key.
+- A failed OIDC sign-in redirects to `/login?login_error=oidc`, so the login page shows the SSO error.
+- A Twitch device status the UI does not know ends the flow with the error line instead of a blank panel.
+- Settings shows no empty strip under Accounts when there are none, and the Health "Last scan" dot stays grey until a scan has run.
+- The Discord webhook field is no longer a password input, so browsers stop autofilling the admin password into it. It saves only on Save or Enter, a URL that is not a Discord webhook shows an inline message, and language and timezone save only on a real change.
+- The health canary re-runs when an account is resumed or signs in and its platform's last result was Skipped, instead of showing Skipped until the next 6-hour run. A check already running is followed by one more.
+- **Box art missing on Discover, Games and Home.** Box art was built from the Twitch game ID as `<id>-144x192.jpg`, which newer IGDB-backed games such as ARKNIGHTS: ENDFIELD or Captain's Call redirect to Twitch's placeholder, and Kick campaigns used the name form, which only older games answer. Twitch campaigns now use the GQL `game.boxArtURL` with its size filled in, then the `<id>_IGDB-144x192.jpg` form. Kick campaigns use the category image through the Kick image proxy, then the same game's Twitch art from the same Discover result.
+- **"Needs account link" on almost every Twitch campaign.** Twitch leaves `self.isAccountConnected` false on many campaigns that need no link, with an empty or twitch.tv `accountLinkURL`. Discover and the planner (and so the Games link warning and Awaiting connect) now treat a Twitch campaign as needing a link only when it is not connected and its link page is off twitch.tv, such as a publisher's connect page.
+
+### Removed
+
+- HTML + HTMX web UI, watcher, scheduler and catalog scraper (replaced by v2).
+- The `GRUB_DISCOVERY_INTERVAL` env var, which only drove the removed catalog scraper.
+- Settings with no v2 reader: tick interval, discovery interval, progress notify step, priority mode, log level and log retention. Their stored values are ignored.
+- Per-account Discord webhooks; every notification goes to the global webhook.
 
 ## [1.4.2] — 2026-09-28
 

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>GrubDrops sandbox</title>
+<link rel="stylesheet" href="home-rebuild/_assets/base.css">
+<style>
+  main { max-width: 760px; margin: 0 auto; padding: 48px 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; display: flex; gap: 10px; align-items: center; }
+  h1 img { width: 28px; height: 28px; }
+  .lead { color: var(--muted); margin: 0 0 32px; }
+  .card { display: block; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+  .card:hover { border-color: var(--accent); }
+  .card h2 { font-size: 15px; margin: 0 0 4px; }
+  .card p { margin: 0 0 10px; color: var(--muted); }
+  .meta { display: flex; gap: 6px; flex-wrap: wrap; font-size: 12px; }
+  .tag { border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; color: var(--muted); }
+  .tag.date { font-family: var(--mono); }
+  .chosen { margin-top: 10px; font-size: 13px; color: var(--green); }
+  .cancelled { color: var(--dim); }
+</style>
+</head>
+<body>
+<main>
+  <h1><img src="home-rebuild/_assets/logo.png" alt="">GrubDrops sandbox</h1>
+  <p class="lead">Design mockups. Local and staging only; not part of the miner build.</p>
+  <div id="list"></div>
+</main>
+<script>
+const mockups = [
+  {
+    slug: 'home-rebuild',
+    created: '2026-10-25',
+    title: 'Home rebuild: 10 styles',
+    desc: 'Ten Home screens for the rebuild (GRUB-16). Each answers "is it working?" for set-and-forget self-hosters, with different nav, problem and account treatments.',
+    tags: ['rebuild', 'home', 'for approval'],
+  },
+];
+const list = document.getElementById('list');
+for (const m of mockups) {
+  const a = document.createElement('a');
+  a.className = 'card';
+  a.href = m.slug + '/';
+  const h = document.createElement('h2'); h.textContent = m.title;
+  const p = document.createElement('p'); p.textContent = m.desc;
+  const meta = document.createElement('div'); meta.className = 'meta';
+  for (const t of [m.created, ...m.tags]) {
+    const s = document.createElement('span'); s.className = 'tag' + (t === m.created ? ' date' : ''); s.textContent = t; meta.append(s);
+  }
+  a.append(h, p, meta);
+  if (m.chosen) { const c = document.createElement('div'); c.className = 'chosen' + (m.cancelled ? ' cancelled' : ''); c.textContent = m.chosen; a.append(c); }
+  list.append(a);
+}
+</script>
+</body>
+</html>

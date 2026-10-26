@@ -1,0 +1,151 @@
+/* Login and setup. Scoped under .auth, the (auth) layout root. */
+.auth ::selection {
+	background: var(--accent-soft);
+	color: var(--text);
+}
+.auth h1 {
+	margin: 0 0 16px;
+	font-size: 18px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	text-wrap: balance;
+}
+.auth .lead {
+	margin: -10px 0 16px;
+	color: var(--t2);
+	font-size: 13px;
+}
+.auth form {
+	display: grid;
+	gap: 6px;
+}
+.auth label {
+	font-size: 12px;
+	color: var(--t2);
+}
+.auth label:not(:first-child) {
+	margin-top: 6px;
+}
+.auth input {
+	font: inherit;
+	color: var(--text);
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	height: 36px;
+	padding: 0 10px;
+	width: 100%;
+	caret-color: var(--accent);
+}
+.auth input:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+.auth input:read-only {
+	color: var(--t3);
+	background: var(--surface-2);
+}
+.auth input[aria-invalid='true'] {
+	border-color: var(--red);
+}
+.auth .err {
+	margin: 0;
+	font-size: 12px;
+	color: var(--red);
+}
+.auth .hint {
+	margin: 0;
+	font-size: 12px;
+	color: var(--t3);
+}
+.auth .hint.err {
+	color: var(--red);
+}
+.auth .banner {
+	margin: 0 0 14px;
+	font-size: 13px;
+	color: var(--red);
+	background: var(--red-soft);
+	border: 1px solid color-mix(in srgb, var(--red) 35%, transparent);
+	border-radius: 6px;
+	padding: 8px 10px;
+}
+.auth .b {
+	margin-top: 8px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	height: 36px;
+	width: 100%;
+	font: inherit;
+	font-weight: 500;
+	border-radius: 6px;
+	padding: 0 12px;
+	cursor: pointer;
+	text-decoration: none;
+}
+.auth .b svg {
+	width: 15px;
+	height: 15px;
+	flex: none;
+}
+.auth .primary {
+	color: #fff;
+	background: var(--accent-strong);
+	border: 1px solid var(--accent-strong);
+}
+.auth .primary:hover:not(:disabled) {
+	background: var(--accent);
+	border-color: var(--accent);
+}
+.auth .ghost {
+	margin-top: 0;
+	color: var(--text);
+	background: transparent;
+	border: 1px solid var(--border);
+}
+.auth .ghost:hover {
+	border-color: var(--t2);
+}
+.auth .b:disabled {
+	opacity: 0.7;
+	cursor: default;
+}
+.auth .b:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+.auth .rule {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 16px 0 8px;
+	color: var(--t3);
+	font-size: 12px;
+}
+.auth .rule::before,
+.auth .rule::after {
+	content: '';
+	flex: 1;
+	height: 1px;
+	background: var(--border-soft);
+}
+.auth .spin {
+	width: 13px;
+	height: 13px;
+	border-radius: 50%;
+	border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+	border-top-color: currentColor;
+	animation: auth-spin 0.8s linear infinite;
+}
+@keyframes auth-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.auth .spin {
+		animation-duration: 2.4s;
+	}
+}

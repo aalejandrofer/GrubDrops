@@ -1,7 +1,7 @@
 // Package canary provides a scheduled accrual-canary Runner that periodically
 // probes the Twitch and Kick watch-time transports and persists results via
 // SaveResult / LoadResult. The Runner borrows ONE shared session per platform
-// (the first enabled account's) — the same pattern used by internal/discovery.
+// (the first enabled account's).
 package canary
 
 import (
@@ -26,7 +26,7 @@ type probe interface {
 // the Runner will skip that platform for the current tick without error.
 //
 // Implementations typically call q.ListEnabledAccounts and sessions.Get,
-// filtering by platform name — exactly the pattern in internal/discovery.
+// filtering by platform name (see cmd/miner).
 type SessionSource func(ctx context.Context, platform string) (platform.Session, bool, error)
 
 // RunnerSettings carries the per-run configuration read from settingsStore.
@@ -100,7 +100,7 @@ func NewRunnerWithSettingsReader(
 
 // RunOnce reads current settings, then for each platform:
 //   - skips if the configured channel is empty, OR
-//   - skips if no enabled session is available for that platform,
+//   - saves a skip result (no notification) if no enabled session is available,
 //   - otherwise runs the probe and persists the result via SaveResult.
 func (r *Runner) RunOnce(ctx context.Context) error {
 	settings := r.settingsReader(ctx)
@@ -124,12 +124,18 @@ func (r *Runner) runProbe(ctx context.Context, plat, channel string, p probe) {
 	}
 	if !ok {
 		r.log.Debug("canary: skipping platform (no enabled session)", "platform", plat)
+		if err := SaveResult(ctx, r.q, plat, Result{Skipped: true}); err != nil {
+			r.log.Warn("canary: persist skip failed", "platform", plat, "err", err)
+		}
 		return
 	}
 
 	// Load previous result BEFORE running the new probe so we can detect
 	// an OK→fail transition (or first-ever fail) for notifications.
 	prev, hasPrev, _ := LoadResult(ctx, r.q, plat)
+	if hasPrev && prev.Skipped {
+		hasPrev = false // a skip is no previous result
+	}
 
 	result := p.Run(ctx, sess, channel)
 

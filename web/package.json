@@ -1,0 +1,23 @@
+{
+  "name": "grubdrops-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build && node scripts/keep-dist.mjs",
+    "test": "svelte-kit sync && vitest run",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && node scripts/check-locales.mjs"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "4.0.0",
+    "@sveltejs/kit": "3.1.0",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "@types/node": "25.9.9",
+    "svelte": "5.57.2",
+    "svelte-check": "4.7.7",
+    "typescript": "6.0.3",
+    "vite": "8.3.5",
+    "vitest": "4.1.12"
+  }
+}

@@ -3,6 +3,7 @@ package twitch
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -17,13 +18,13 @@ type discovery struct {
 	// pendingAllowed accumulates per-campaign allow-lists as fetchDetails
 	// runs. Backend drains this via drainAllowed() after listActive returns.
 	pendingAllowed map[string][]string
-	// userLogin caches the authenticated user's twitch login. The
-	// DropCampaignDetails persisted query needs a non-empty
-	// channelLogin variable — passing "" makes the resolver return
-	// data.user:null, which silently kills Benefits population and
-	// makes the watcher fall back to synth-only campaigns. Cached
-	// once per session lifetime.
-	userLogin string
+	// userID caches the authenticated user's numeric twitch id. The
+	// DropCampaignDetails persisted query resolves its channelLogin
+	// variable as user(id: $channelLogin), despite the name: a login
+	// (or "") makes Twitch answer data.user:null, which leaves every
+	// campaign with zero benefits and nothing to mine. Cached once per
+	// session lifetime.
+	userID string
 	// detailsCache memoises DropCampaignDetails results per campaignID.
 	// A campaign's drops/benefits/allow-list are effectively immutable
 	// for its lifetime, so re-fetching them every discovery + pickCampaign
@@ -69,6 +70,7 @@ type campaignsData struct {
 			Game struct {
 				ID          string `json:"id"`
 				DisplayName string `json:"displayName"`
+				BoxArtURL   string `json:"boxArtURL"`
 			} `json:"game"`
 		} `json:"dropCampaigns"`
 	} `json:"currentUser"`
@@ -220,15 +222,20 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 	if err := d.c.gql(ctx, sess.AccessToken, OpCampaigns, vars, &page); err != nil {
 		return nil, fmt.Errorf("list campaigns: %w", err)
 	}
-	// Resolve + cache the authenticated user's login. fetchDetails
-	// passes this as channelLogin — empty value makes Twitch's
-	// resolver return data.user:null, which strips TimeBasedDrops and
-	// leaves real campaigns with Benefits=[] (so the watcher falls
-	// back to scrape-synth entries). One CurrentUser call per
-	// session lifetime.
-	if d.userLogin == "" {
-		if login, err := d.resolveCurrentLogin(ctx, sess); err == nil {
-			d.userLogin = login
+	// Resolve + cache the authenticated user's id. fetchDetails passes
+	// it as channelLogin: anything else makes Twitch's resolver return
+	// data.user:null, which strips TimeBasedDrops and leaves real
+	// campaigns with Benefits=[]. The session carries the id when the
+	// login flow learned it; otherwise one CurrentUser call per session
+	// lifetime.
+	if d.userID == "" {
+		if sess.UserID != "" {
+			d.userID = sess.UserID
+		} else if id, err := d.resolveCurrentUserID(ctx, sess); err == nil {
+			d.userID = id
+		} else {
+			slog.Warn("twitch: resolve user id for campaign details failed",
+				"account", sess.AccountID, "err", err)
 		}
 	}
 	out := make([]platform.Campaign, 0, len(page.CurrentUser.DropCampaigns))
@@ -259,6 +266,8 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 			ID:                 c.ID,
 			Platform:           "twitch",
 			Game:               c.Game.DisplayName,
+			GameID:             c.Game.ID,
+			BoxArtURL:          BoxArtURL(c.Game.BoxArtURL, c.Game.ID),
 			Name:               c.Name,
 			StartsAt:           parseISO(c.StartAtRaw),
 			EndsAt:             parseISO(c.EndAtRaw),
@@ -371,17 +380,18 @@ func (d *discovery) fetchDetails(ctx context.Context, sess platform.Session, cam
 	d.mu.Unlock()
 
 	var det campaignDetailsData
-	// channelLogin must be non-empty for the resolver to return the
-	// user object. Use the authenticated user's login (cached from
-	// CurrentUser); fall back to a generic value if resolution
-	// hasn't happened yet — anything is better than "".
-	channelLogin := d.userLogin
-	if channelLogin == "" {
-		channelLogin = "twitch"
-	}
+	// channelLogin is resolved as user(id:), so it must be the
+	// authenticated user's numeric id (see discovery.userID).
 	if err := d.c.gql(ctx, sess.AccessToken, OpDropCampaignDetails,
-		map[string]any{"dropID": campaignID, "channelLogin": channelLogin}, &det); err != nil {
+		map[string]any{"dropID": campaignID, "channelLogin": d.userID}, &det); err != nil {
 		return nil, nil, fmt.Errorf("campaign details %s: %w", campaignID, err)
+	}
+	// A null user or campaign is not a real "no drops" answer: say so,
+	// and keep it out of the cache so the next scan retries.
+	empty := det.User.DropCampaign.ID == "" && len(det.User.DropCampaign.TimeBasedDrops) == 0
+	if empty {
+		slog.Warn("twitch: campaign details came back empty",
+			"account", sess.AccountID, "campaign", campaignID)
 	}
 	benefits = make([]platform.DropBenefit, 0, len(det.User.DropCampaign.TimeBasedDrops))
 	for _, td := range det.User.DropCampaign.TimeBasedDrops {
@@ -416,6 +426,9 @@ func (d *discovery) fetchDetails(ctx context.Context, sess platform.Session, cam
 			allowedLogins = append(allowedLogins, ch.Name)
 		}
 	}
+	if empty {
+		return benefits, allowedLogins, nil
+	}
 	d.mu.Lock()
 	if d.detailsCache == nil {
 		d.detailsCache = map[string]cachedDetails{}
@@ -425,25 +438,24 @@ func (d *discovery) fetchDetails(ctx context.Context, sess platform.Session, cam
 	return benefits, allowedLogins, nil
 }
 
-// resolveCurrentLogin fetches the authenticated user's twitch login
-// via a single CurrentUser ad-hoc gql query. Only used to populate
-// the channelLogin arg of DropCampaignDetails — passing "" makes
-// Twitch's resolver return data.user:null which silently strips
-// benefits from real campaigns.
-func (d *discovery) resolveCurrentLogin(ctx context.Context, sess platform.Session) (string, error) {
-	const q = `query CurrentUser { currentUser { login } }`
+// resolveCurrentUserID fetches the authenticated user's numeric twitch
+// id via a single CurrentUser ad-hoc gql query. Only used to populate
+// the channelLogin arg of DropCampaignDetails, which Twitch resolves
+// as user(id:).
+func (d *discovery) resolveCurrentUserID(ctx context.Context, sess platform.Session) (string, error) {
+	const q = `query CurrentUser { currentUser { id } }`
 	var resp struct {
 		CurrentUser struct {
-			Login string `json:"login"`
+			ID string `json:"id"`
 		} `json:"currentUser"`
 	}
 	if err := d.c.gqlQuery(ctx, sess.AccessToken, "CurrentUser", q, nil, &resp); err != nil {
 		return "", err
 	}
-	if resp.CurrentUser.Login == "" {
-		return "", fmt.Errorf("currentUser.login empty")
+	if resp.CurrentUser.ID == "" {
+		return "", fmt.Errorf("currentUser.id empty")
 	}
-	return resp.CurrentUser.Login, nil
+	return resp.CurrentUser.ID, nil
 }
 
 // captureAllowed stores per-campaign allow-lists as a side-effect of

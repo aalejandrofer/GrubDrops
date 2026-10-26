@@ -1,0 +1,11 @@
+{
+	"extends": "$app/tsconfig",
+	"include": ["src", "scripts", "*.ts"],
+	"exclude": ["src/service-worker"],
+	"compilerOptions": {
+		"strict": true,
+		"paths": { "$lib": ["./src/lib"], "$lib/*": ["./src/lib/*"], "$locales": ["../internal/i18n/locales"], "$locales/*": ["../internal/i18n/locales/*"] },
+		"allowJs": true,
+		"checkJs": true
+	}
+}

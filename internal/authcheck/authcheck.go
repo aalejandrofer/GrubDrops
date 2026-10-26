@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
@@ -33,7 +34,7 @@ type sessionGetter interface {
 
 // Notifier fires an operator notification. Matches notify.Notifier; kept as
 // a local interface so this package stays decoupled from internal/notify
-// (same pattern as internal/api's Notifier in server.go).
+// (same pattern as internal/api's Notifier in deps.go).
 type Notifier interface {
 	Notify(ctx context.Context, event string, fields map[string]any) error
 }
@@ -115,7 +116,7 @@ func (c *Checker) CheckAll(ctx context.Context) {
 		return
 	}
 	for _, a := range accs {
-		c.checkOne(ctx, a.ID, a.Platform, a.DisplayName)
+		c.checkOne(ctx, a.ID, a.Platform, store.AccountName(a))
 	}
 }
 

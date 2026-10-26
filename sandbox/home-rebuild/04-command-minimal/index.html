@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops · 04 Command</title>
+<link rel="stylesheet" href="../_assets/base.css">
+<style>
+  .wrap { max-width: 640px; margin: 0 auto; padding: 40px 24px 96px; }
+
+  /* Command bar */
+  .top { display: flex; align-items: center; gap: 12px; margin-bottom: 48px; }
+  .top img { width: 24px; height: 24px; border-radius: 6px; flex: none; }
+  .cmd { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 8px 0 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--dim); font-size: 13px; text-align: left; }
+  .cmd:hover { border-color: #3d444d; color: var(--muted); }
+  .cmd svg { width: 14px; height: 14px; flex: none; }
+  .cmd .ph { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  kbd { font: 11px var(--mono); color: var(--muted); background: var(--surface-3); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; line-height: 18px; }
+
+  /* Headline */
+  .eyebrow { font: 12px var(--mono); color: var(--dim); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .eyebrow .d { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+  h1 { margin: 0 0 6px; font-size: 24px; line-height: 1.25; font-weight: 600; letter-spacing: -.02em; }
+  .lede { margin: 0 0 36px; color: var(--muted); font-size: 14px; }
+
+  /* Checklist */
+  .group { margin-bottom: 32px; }
+  .gh { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--dim); margin: 0 0 6px; }
+  .list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border-soft); }
+  .item { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 11px 0; border-bottom: 1px solid var(--border-soft); }
+  .ic { width: 16px; height: 16px; margin-top: 2px; }
+  .ok { color: var(--green); }
+  .wait { color: var(--amber); }
+  .idle { color: var(--dim); }
+  .bad { color: var(--red); }
+  .main-line { font-size: 14px; }
+  .main-line .who { font-weight: 500; }
+  .main-line .pf { color: var(--dim); font-size: 12px; margin-left: 6px; }
+  .detail { font-size: 13px; color: var(--muted); margin-top: 1px; }
+  .detail .m { font-family: var(--mono); font-size: 12px; }
+  .right { font: 12px var(--mono); color: var(--muted); text-align: right; white-space: nowrap; padding-top: 2px; }
+  .mini { width: 72px; height: 3px; background: var(--surface-3); border-radius: 2px; margin: 7px 0 0 auto; overflow: hidden; }
+  .mini i { display: block; height: 100%; background: var(--accent); }
+
+  .item.err .main-line, .item.err .who { color: var(--red); }
+  .item.err .detail { color: #f0a8a3; }
+  .item.err .detail a { color: var(--red); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(248,81,73,.5); }
+  .item.err .detail a:hover { text-decoration-color: var(--red); }
+
+  .foot { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--dim); margin-top: 8px; }
+  .foot a { color: var(--muted); }
+  .foot a:hover { color: var(--accent); }
+
+  /* Palette */
+  .scrim { position: fixed; inset: 0; background: rgba(1,4,9,.6); display: none; align-items: flex-start; justify-content: center; padding: 12vh 16px 0; z-index: 50; }
+  .scrim.open { display: flex; }
+  .pal { width: 100%; max-width: 520px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 16px 48px rgba(0,0,0,.5); overflow: hidden; }
+  .pal input { width: 100%; background: transparent; border: 0; border-bottom: 1px solid var(--border-soft); color: var(--text); font: 14px var(--font); padding: 14px 16px; outline: none; }
+  .pal input::placeholder { color: var(--dim); }
+  .pal ul { list-style: none; margin: 0; padding: 6px; }
+  .pal li a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; font-size: 13px; color: var(--muted); }
+  .pal li a svg { width: 15px; height: 15px; }
+  .pal li a .k { margin-left: auto; }
+  .pal li a.sel, .pal li a:hover { background: var(--surface-3); color: var(--text); }
+  .pal .sec { font-size: 11px; color: var(--dim); padding: 8px 10px 4px; }
+  .pal li a.warn { color: var(--red); }
+
+  @media (max-width: 520px) {
+    .wrap { padding: 20px 16px 80px; }
+    .top { margin-bottom: 32px; }
+    .cmd .hint { display: none; }
+    h1 { font-size: 20px; }
+    .pf { display: block; margin-left: 0 !important; }
+    .mini { width: 56px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <img src="../_assets/logo.png" alt="GrubDrops">
+    <button class="cmd" id="open" aria-label="Open command menu">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3" stroke-linecap="round"/></svg>
+      <span class="ph">Go to games, rewards, settings</span>
+      <span class="hint"><kbd>⌘</kbd> <kbd>K</kbd></span>
+    </button>
+  </div>
+
+  <div class="eyebrow"><span class="d"></span>running · checked 12s ago</div>
+  <h1>Working. 2 of 3 accounts mining Rust.</h1>
+  <p class="lede">Next drop in 18 min. One account needs a login.</p>
+
+  <div class="group">
+    <div class="gh">Accounts</div>
+    <ul class="list">
+      <li class="item">
+        <svg class="ic ok" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3 8.5 3.2 3.2L13 4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+          <div class="main-line"><span class="who">grubfan</span><span class="pf">Twitch</span></div>
+          <div class="detail">Mining Hazmat Suit Skin on hJune</div>
+        </div>
+        <div class="right"><span>42/60 · 18m</span><div class="mini"><i style="width:70%"></i></div></div>
+      </li>
+      <li class="item">
+        <svg class="ic ok" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3 8.5 3.2 3.2L13 4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+          <div class="main-line"><span class="who">grubfan_kick</span><span class="pf">Kick</span></div>
+          <div class="detail">Mining Kick Garage Door on posty</div>
+        </div>
+        <div class="right"><span>95/120 · 25m</span><div class="mini"><i style="width:79%"></i></div></div>
+      </li>
+      <li class="item err">
+        <svg class="ic bad" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 4 8 8M12 4l-8 8" stroke-linecap="round"/></svg>
+        <div>
+          <div class="main-line"><span class="who">grub_alt</span><span class="pf">Twitch</span></div>
+          <div class="detail">Session expired, not mining. <a href="#">Log in again</a></div>
+        </div>
+        <div class="right" style="color:var(--red)">stopped</div>
+      </li>
+    </ul>
+  </div>
+
+  <div class="group">
+    <div class="gh">Games</div>
+    <ul class="list">
+      <li class="item">
+        <svg class="ic ok" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3 8.5 3.2 3.2L13 4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+          <div class="main-line"><span class="who">Rust</span></div>
+          <div class="detail">Round 41 · 2 more drops queued</div>
+        </div>
+        <div class="right">mining</div>
+      </li>
+      <li class="item">
+        <svg class="ic wait" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="5.5"/><path d="M8 5.2V8l1.8 1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+          <div class="main-line"><span class="who">Marvel Rivals</span></div>
+          <div class="detail">Campaign live, waiting for Rust to finish</div>
+        </div>
+        <div class="right">waiting</div>
+      </li>
+      <li class="item">
+        <svg class="ic idle" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h8" stroke-linecap="round"/></svg>
+        <div>
+          <div class="main-line"><span class="who" style="color:var(--muted)">Overwatch</span></div>
+          <div class="detail">No campaign live</div>
+        </div>
+        <div class="right">idle</div>
+      </li>
+    </ul>
+  </div>
+
+  <div class="group">
+    <div class="gh">Claimed</div>
+    <ul class="list">
+      <li class="item">
+        <svg class="ic ok" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3 8.5 3.2 3.2L13 4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><div class="main-line">Rust Wood Box Skin</div></div>
+        <div class="right">09:12</div>
+      </li>
+      <li class="item">
+        <svg class="ic ok" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3 8.5 3.2 3.2L13 4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><div class="main-line">Marvel Rivals Spray</div></div>
+        <div class="right">07:40</div>
+      </li>
+      <li class="item">
+        <svg class="ic ok" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3 8.5 3.2 3.2L13 4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><div class="main-line">Kick Rust Hoodie</div></div>
+        <div class="right">yday 22:05</div>
+      </li>
+    </ul>
+    <div class="foot"><span>27 claimed all time</span><a href="#">Rewards</a></div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim">
+  <div class="pal" role="dialog" aria-label="Command menu">
+    <input id="q" placeholder="Type a command or page">
+    <ul>
+      <li class="sec">Go to</li>
+      <li><a href="#" class="sel"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 7 8 2.5 13.5 7v6.5h-11z" stroke-linejoin="round"/></svg>Home<kbd class="k">G H</kbd></a></li>
+      <li><a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.75" y="4.5" width="12.5" height="7.5" rx="3"/><path d="M5 7v2M4 8h2" stroke-linecap="round"/></svg>Games<kbd class="k">G G</kbd></a></li>
+      <li><a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="12" height="8" rx="1"/><path d="M1.5 4h13v2h-13zM8 4v10"/></svg>Rewards<kbd class="k">G R</kbd></a></li>
+      <li><a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.25"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2" stroke-linecap="round"/></svg>Settings<kbd class="k">G S</kbd></a></li>
+      <li class="sec">Fix</li>
+      <li><a href="#" class="warn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 8a5 5 0 1 1-1.5-3.55M13 2.5v3h-3" stroke-linecap="round" stroke-linejoin="round"/></svg>Log in again: grub_alt</a></li>
+    </ul>
+  </div>
+</div>
+
+<div class="mock-tag">04 · Command · <a href="../">all mockups</a></div>
+<script>
+  const s = document.getElementById('scrim'), q = document.getElementById('q');
+  const open = () => { s.classList.add('open'); q.focus(); };
+  const close = () => s.classList.remove('open');
+  document.getElementById('open').onclick = open;
+  s.onclick = e => { if (e.target === s) close(); };
+  document.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); open(); }
+    if (e.key === 'Escape') close();
+  });
+</script>
+</body>
+</html>

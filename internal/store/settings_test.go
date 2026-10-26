@@ -28,23 +28,6 @@ func TestSettings_RoundTrip(t *testing.T) {
 	assert.Equal(t, "https://discord.example/wh/abc", url)
 }
 
-func TestSettings_LogRetentionDays(t *testing.T) {
-	db, err := Open(context.Background(), filepath.Join(t.TempDir(), "t.db"))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-
-	s := NewSettings(gen.New(db))
-
-	days, err := s.LogRetentionDays(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, 7, days) // default
-
-	require.NoError(t, s.SetLogRetentionDays(context.Background(), 30))
-	days, err = s.LogRetentionDays(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, 30, days)
-}
-
 func TestSettings_Canary(t *testing.T) {
 	db, err := Open(context.Background(), filepath.Join(t.TempDir(), "t.db"))
 	require.NoError(t, err)
@@ -115,4 +98,42 @@ func TestSettings_KickWatchMode(t *testing.T) {
 	mode, err = s.KickWatchMode(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, KickWatchModeAuto, mode)
+}
+
+func TestSettings_UIDefaults(t *testing.T) {
+	db, err := Open(context.Background(), filepath.Join(t.TempDir(), "t.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	s := NewSettings(gen.New(db))
+	ctx := context.Background()
+
+	lang, _ := s.UILanguage(ctx)
+	tf, _ := s.UITimeFormat(ctx)
+	th, _ := s.UITheme(ctx)
+	sum, _ := s.NotifyDailySummary(ctx)
+	auto, _ := s.UpdateAuto(ctx)
+	assert.Equal(t, "en", lang)
+	assert.Equal(t, "24h", tf)
+	assert.Equal(t, "dark", th)
+	assert.False(t, sum)
+	assert.True(t, auto)
+
+	require.NoError(t, s.SetUILanguage(ctx, "zh-CN"))
+	require.NoError(t, s.SetUITimeFormat(ctx, "12h"))
+	require.NoError(t, s.SetUITheme(ctx, "light"))
+	require.NoError(t, s.SetNotifyDailySummary(ctx, true))
+	require.NoError(t, s.SetUpdateAuto(ctx, false))
+	lang, _ = s.UILanguage(ctx)
+	tf, _ = s.UITimeFormat(ctx)
+	th, _ = s.UITheme(ctx)
+	sum, _ = s.NotifyDailySummary(ctx)
+	auto, _ = s.UpdateAuto(ctx)
+	assert.Equal(t, "zh-CN", lang)
+	assert.Equal(t, "12h", tf)
+	assert.Equal(t, "light", th)
+	assert.True(t, sum)
+	assert.False(t, auto)
+
+	assert.Error(t, s.SetUILanguage(ctx, "fr"))
+	assert.Error(t, s.SetUITheme(ctx, "blue"))
 }

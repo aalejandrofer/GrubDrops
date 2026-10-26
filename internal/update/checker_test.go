@@ -2,10 +2,13 @@ package update
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -56,4 +59,67 @@ func TestRunOnce_BadResponseKeepsPriorCache(t *testing.T) {
 	require.Error(t, c.RunOnce(context.Background()))
 	_, latest := c.Status("v1.3.4")
 	require.Equal(t, "v1.3.5", latest, "prior cache retained on error")
+}
+
+func TestChecker_StoresNotes(t *testing.T) {
+	body := "Highlights\n\n- **One** first\n* Two second\n- Three third\n\nA closing paragraph."
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"tag_name": "v2.0.0", "body": body, "html_url": "https://github.com/o/r/releases/tag/v2.0.0",
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	s := newTestSettings(t)
+	c := NewChecker(srv.Client(), "owner/repo", s)
+	c.apiBase = srv.URL
+	require.NoError(t, c.RunOnce(context.Background()))
+
+	latest, url, notes, at := c.Release()
+	require.Equal(t, "v2.0.0", latest)
+	require.Equal(t, "https://github.com/o/r/releases/tag/v2.0.0", url)
+	require.Equal(t, []string{"**One** first", "Two second", "Three third"}, notes)
+	require.False(t, at.IsZero())
+
+	// A restart reloads the same answer from the store.
+	c2 := NewChecker(srv.Client(), "owner/repo", s)
+	latest, url, notes, at = c2.Release()
+	require.Equal(t, "v2.0.0", latest)
+	require.NotEmpty(t, url)
+	require.Len(t, notes, 3)
+	require.False(t, at.IsZero())
+}
+
+func TestChecker_AutoOffSkips(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write([]byte(`{"tag_name":"v2.0.0"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "u.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	q := gen.New(db)
+	require.NoError(t, q.UpsertSettingString(context.Background(), gen.UpsertSettingStringParams{
+		Key: "settings:update_auto", Value: []byte("0"),
+	}))
+	c := NewChecker(srv.Client(), "owner/repo", store.NewSettings(q))
+	c.apiBase = srv.URL
+
+	// Run checks immediately, then blocks until the context ends.
+	run := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+		defer cancel()
+		c.Run(ctx, time.Hour)
+	}
+	run()
+	require.Zero(t, hits.Load(), "auto off: no network call")
+
+	require.NoError(t, q.UpsertSettingString(context.Background(), gen.UpsertSettingStringParams{
+		Key: "settings:update_auto", Value: []byte("1"),
+	}))
+	run()
+	require.EqualValues(t, 1, hits.Load())
 }

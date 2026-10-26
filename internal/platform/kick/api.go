@@ -32,7 +32,11 @@ func (e *ClaimNeedsLinkError) Error() string {
 	return fmt.Sprintf("kick claim: account link required (status %d): %s", e.Status, e.ConnectURL)
 }
 
-func (e *ClaimNeedsLinkError) Is(target error) bool { return target == ErrClaimNeedsLink }
+// Is matches ErrClaimNeedsLink and the platform-wide platform.ErrClaimNeedsLink
+// the runner checks.
+func (e *ClaimNeedsLinkError) Is(target error) bool {
+	return target == ErrClaimNeedsLink || target == platform.ErrClaimNeedsLink
+}
 
 // kickFilesBase is the CDN host for Kick reward/drop images. The drops
 // API returns image_url as a host-relative path (e.g.
@@ -224,6 +228,7 @@ type kickCampaign struct {
 	Name       string
 	Game       string
 	GameSlug   string // authoritative category slug when the payload carries one
+	GameImage  string // category cover image (category.image_url), absolute
 	Status     string
 	StartsAt   string
 	EndsAt     string
@@ -271,6 +276,7 @@ func (a *api) Campaigns(ctx context.Context, sess platform.Session) ([]kickCampa
 			Name:       mstr(m, "name", "title"),
 			Game:       gameName(m),
 			GameSlug:   gameSlug(m),
+			GameImage:  gameImage(m),
 			Status:     mstr(m, "status", "state"),
 			StartsAt:   mstr(m, "starts_at", "startsAt", "start_at", "start_time"),
 			EndsAt:     mstr(m, "ends_at", "endsAt", "end_at", "end_time"),
@@ -619,6 +625,20 @@ func gameSlug(m map[string]any) string {
 		if sub, ok := m[k].(map[string]any); ok {
 			if s := mstr(sub, "slug"); s != "" {
 				return s
+			}
+		}
+	}
+	return ""
+}
+
+// gameImage extracts the campaign category's cover image: the nested
+// category/game object's image_url, then its banner or thumbnail. Empty when
+// absent.
+func gameImage(m map[string]any) string {
+	for _, k := range []string{"category", "game"} {
+		if sub, ok := m[k].(map[string]any); ok {
+			if s := mstr(sub, "image_url", "imageUrl", "banner_image_url", "bannerImageUrl", "thumbnail", "thumbnail_url", "banner"); s != "" {
+				return absImageURL(s)
 			}
 		}
 	}

@@ -1,0 +1,23 @@
+{
+	"status": {
+		"state": "nothing_live",
+		"accounts_total": 3,
+		"accounts_mining": 0,
+		"accounts_paused": 0,
+		"last_scan_at": "2026-10-25T11:58:00Z",
+		"next_scan_at": null
+	},
+	"problems": [],
+	"kpis": {
+		"minutes_total": 5230,
+		"minutes_today": 184,
+		"claimed_today": 3,
+		"claimed_all_time": 27,
+		"accounts_healthy": 3
+	},
+	"version": {
+		"current": "v2.0.0",
+		"latest": "v2.0.0",
+		"update_available": false
+	}
+}

@@ -1,0 +1,80 @@
+{
+	"miner": {
+		"started_at": "2026-10-24T08:00:00Z",
+		"version": "v2.0.0",
+		"commit": "abc1234"
+	},
+	"kick_sidecars": {
+		"running": [
+			"acc-kick"
+		]
+	},
+	"last_scan_at": "2026-10-25T11:58:00Z",
+	"canary": [
+		{
+			"platform": "twitch",
+			"ok": true,
+			"skipped": false,
+			"detail": "beacon credited",
+			"checked_at": "2026-10-25T11:30:00Z"
+		},
+		{
+			"platform": "kick",
+			"ok": false,
+			"skipped": false,
+			"detail": "websocket closed",
+			"checked_at": "2026-10-25T11:30:00Z"
+		}
+	],
+	"events": [
+		{
+			"at": "2026-10-25T11:58:00Z",
+			"level": "INFO",
+			"kind": "progress",
+			"account_id": "acc-hjune",
+			"account_name": "hJune",
+			"msg": "progress",
+			"fields": {
+				"minutes": "42",
+				"required": "60"
+			}
+		},
+		{
+			"at": "2026-10-25T11:50:00Z",
+			"level": "ERROR",
+			"kind": "auth",
+			"account_id": "acc-kick",
+			"account_name": "kick_main",
+			"msg": "kick session expired"
+		},
+		{
+			"at": "2026-10-25T09:30:00Z",
+			"level": "INFO",
+			"kind": "claim",
+			"account_id": "acc-hjune",
+			"account_name": "hJune",
+			"msg": "claimed drop"
+		},
+		{
+			"at": "2026-10-25T09:00:00Z",
+			"level": "WARN",
+			"kind": "error",
+			"account_id": "acc-alt",
+			"account_name": "grub_alt",
+			"msg": "beacon failed"
+		},
+		{
+			"at": "2026-10-25T08:00:00Z",
+			"level": "INFO",
+			"kind": "discovery",
+			"account_id": "",
+			"account_name": "",
+			"msg": "scan finished"
+		}
+	],
+	"counts": {
+		"all": 5,
+		"problems": 2,
+		"claims": 1
+	}
+}

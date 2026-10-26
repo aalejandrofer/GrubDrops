@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops · r2 03 Drop flow · Rewards</title>
+<link rel="stylesheet" href="../_assets/base.css">
+<style>
+  .app { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 100vh; }
+
+  /* Sidebar */
+  .side { border-right: 1px solid var(--border-soft); background: var(--bg); padding: 14px 10px; display: flex; flex-direction: column; gap: 18px; position: sticky; top: 0; height: 100vh; }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 4px 8px; font-weight: 600; font-size: 14px; }
+  .brand img { width: 22px; height: 22px; border-radius: 5px; }
+  .nav { display: flex; flex-direction: column; gap: 1px; }
+  .nav a { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; color: var(--muted); font-size: 13px; font-weight: 500; }
+  .nav a:hover { background: var(--surface); color: var(--text); }
+  .nav a.on { background: var(--surface-2); color: var(--text); }
+  .nav svg { width: 16px; height: 16px; flex: none; }
+  .nav .count { margin-left: auto; font: 11px var(--mono); color: var(--red); background: var(--red-soft); padding: 0 6px; border-radius: 10px; }
+  .side-label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; padding: 0 8px 6px; font-weight: 600; }
+  .games-mini a { display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: 13px; color: var(--muted); border-radius: 6px; }
+  .games-mini a:hover { background: var(--surface); color: var(--text); }
+  .games-mini .rank { font: 11px var(--mono); color: var(--dim); width: 12px; }
+  .games-mini .st { margin-left: auto; width: 6px; height: 6px; border-radius: 50%; }
+  .side-foot { margin-top: auto; padding: 8px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); flex: none; }
+
+  /* Main */
+  main { padding: 20px 28px 72px; min-width: 0; max-width: 1180px; }
+  .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+  .head h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+  .head .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .head .sub b { color: var(--text); font-weight: 500; }
+  .crumbs { color: var(--dim); font-size: 12px; font-family: var(--mono); }
+
+  /* Section heading: a label, not a column header */
+  .sec { margin-top: 26px; min-width: 0; }
+  .sec:first-of-type { margin-top: 0; }
+  .sec-h { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; min-height: 26px; flex-wrap: wrap; }
+  .sec-h h2 { margin: 0; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .sec-h h2 svg { width: 14px; height: 14px; flex: none; }
+  .sec-h .meta { font-size: 12px; color: var(--dim); }
+  .sec-h .end { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .n { font: 11px var(--mono); color: var(--muted); background: var(--surface-3); border-radius: 10px; padding: 0 6px; }
+
+  .panel { background: var(--surface); border: 1px solid var(--border-soft); border-radius: 10px; overflow: hidden; }
+  .panel > * + * { border-top: 1px solid var(--border-soft); }
+
+  .acct { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); background: var(--surface-3); border-radius: 4px; padding: 1px 6px 1px 5px; white-space: nowrap; }
+  .pm { width: 8px; height: 8px; border-radius: 2px; flex: none; display: inline-block; }
+  .pm.tw { background: var(--twitch); }
+  .pm.kk { background: var(--kick); }
+  .bar { height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+  .tag.live { color: var(--green); border-color: rgba(63,185,80,.35); }
+  .tag.wait { color: var(--amber); border-color: rgba(210,153,34,.35); }
+  .tag.bad { color: var(--red); border-color: rgba(248,81,73,.4); }
+  .mono { font-family: var(--mono); font-size: 11px; }
+  .muted { color: var(--muted); }
+  .dim { color: var(--dim); }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; color: var(--text); white-space: nowrap; }
+  .btn:hover { border-color: #3d444d; background: var(--surface-3); }
+  .btn svg { width: 12px; height: 12px; }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn.ghost:hover { color: var(--text); background: var(--surface-2); }
+  .btn.red { background: var(--red); border-color: var(--red); color: #fff; }
+  .btn.red:hover { background: #ff6a62; }
+  .btn.primary { background: var(--accent-strong); border-color: var(--accent-strong); color: #fff; }
+  .btn.primary:hover { background: var(--accent); }
+  .btn[disabled] { opacity: .45; cursor: default; }
+  .link { color: var(--muted); font-size: 12px; }
+  .link:hover { color: var(--accent); }
+
+  /* Reorder controls */
+  .handle { width: 14px; height: 14px; color: var(--dim); cursor: grab; flex: none; }
+  .mv { display: inline-flex; gap: 2px; flex: none; }
+  .mv button { width: 24px; height: 24px; display: grid; place-items: center; background: transparent; border: 1px solid transparent; border-radius: 5px; color: var(--dim); padding: 0; }
+  .mv button:hover:not([disabled]) { color: var(--text); background: var(--surface-3); border-color: var(--border); }
+  .mv button[disabled] { opacity: .3; cursor: default; }
+  .mv svg { width: 12px; height: 12px; }
+  .dragging { opacity: .5; }
+  .drop-over { box-shadow: inset 0 2px 0 var(--accent); }
+
+  @media (max-width: 760px) {
+    .app { grid-template-columns: minmax(0, 1fr); }
+    .side { position: static; height: auto; flex-direction: row; align-items: center; padding: 10px 16px; gap: 10px; border-right: 0; border-bottom: 1px solid var(--border-soft); }
+    .brand span, .side-games, .side-foot { display: none; }
+    .brand { padding: 0; }
+    .nav { flex-direction: row; gap: 2px; overflow: hidden; }
+    .nav a { padding: 6px 8px; }
+    .nav a .lbl { display: none; }
+    .nav a.on .lbl { display: inline; }
+    .nav .count { margin-left: 2px; }
+    main { padding: 16px 16px 72px; }
+  }
+  main { max-width: 960px; }
+  .totals { display: flex; gap: 22px; }
+  .totals div { text-align: right; }
+  .totals b { display: block; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .totals span { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+
+  /* In progress */
+  .prog { display: grid; grid-template-columns: minmax(0, 1fr) 200px 110px; gap: 16px; align-items: center; padding: 12px 14px; }
+  .prog .t { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prog .c { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; margin-top: 3px; flex-wrap: wrap; }
+  .prog .num { font: 11px var(--mono); color: var(--dim); display: flex; justify-content: space-between; margin-bottom: 5px; }
+  .prog .num b { color: var(--text); font-weight: 500; }
+  .prog .eta { text-align: right; font-size: 13px; font-weight: 500; }
+  .prog .eta span { display: block; font-size: 11px; color: var(--dim); font-weight: 400; }
+  .more-q { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; font-size: 12px; color: var(--muted); background: var(--surface-2); }
+
+  /* Filters */
+  .filters { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 10px; }
+  .fgroup { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .fgroup > span { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; margin-right: 4px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); background: transparent; border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; }
+  .chip:hover { color: var(--text); border-color: #3d444d; }
+  .chip.on { color: var(--text); background: var(--accent-soft); border-color: rgba(163,113,247,.5); }
+  .chip .pm { width: 6px; height: 6px; }
+
+  /* History */
+  .hist-h, .hrow { display: grid; grid-template-columns: 18px minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) 110px; gap: 12px; align-items: center; padding: 8px 14px; }
+  .hist-h { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; background: var(--surface-2); }
+  .hist-h span:last-child, .hrow .tm { text-align: right; }
+  .hrow { font-size: 13px; }
+  .hrow:hover { background: #181d24; }
+  .hrow svg { width: 12px; height: 12px; color: var(--green); }
+  .hrow.old svg { color: var(--dim); }
+  .hrow .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+  .hrow .gm { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hrow .tm { font: 12px var(--mono); color: var(--dim); white-space: nowrap; }
+  .hrow[hidden] { display: none; }
+  .empty { padding: 22px 14px; text-align: center; font-size: 13px; color: var(--dim); }
+  .hist-foot { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; font-size: 12px; color: var(--dim); background: var(--surface-2); }
+
+  @media (max-width: 760px) {
+    .totals b { font-size: 16px; }
+    .prog { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "what eta" "bar bar"; row-gap: 10px; }
+    .prog .what { grid-area: what; min-width: 0; }
+    .prog .eta { grid-area: eta; }
+    .prog .bw { grid-area: bar; }
+    .hist-h { display: none; }
+    .hrow { grid-template-columns: 14px minmax(0, 1fr) auto; grid-template-areas: "ic nm tm" ". sub sub"; row-gap: 2px; column-gap: 10px; }
+    .hrow svg { grid-area: ic; }
+    .hrow .nm { grid-area: nm; }
+    .hrow .tm { grid-area: tm; }
+    .hrow .gm { grid-area: sub; font-size: 12px; display: inline; }
+    .hrow .ac { grid-area: sub; justify-self: end; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><img src="../_assets/logo.png" alt=""><span>GrubDrops</span></div>
+    <nav class="nav">
+      <a href="index.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 7 8 2.5 13.5 7v6.5h-4v-4h-3v4h-4z" stroke-linejoin="round"/></svg><span class="lbl">Home</span></a>
+      <a href="games.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.75" y="4.5" width="12.5" height="7.5" rx="3"/><path d="M5 7v2M4 8h2M10.5 7.5h.01M12 9h.01" stroke-linecap="round"/></svg><span class="lbl">Games</span></a>
+      <a href="rewards.html" class="on"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="12" height="8" rx="1"/><path d="M1.5 4h13v2h-13zM8 4v10M8 4C6.5 1.5 4 2 4.5 3.5 5 4 8 4 8 4zM8 4c1.5-2.5 4-2 3.5-.5C11 4 8 4 8 4z" stroke-linejoin="round"/></svg><span class="lbl">Rewards</span></a>
+      <a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.25"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" stroke-linecap="round"/></svg><span class="lbl">Settings</span><span class="count" title="1 account needs login">1</span></a>
+    </nav>
+    <div class="side-games">
+      <div class="side-label">Your games</div>
+      <div class="games-mini">
+        <a href="games.html"><span class="rank">1</span>Rust<span class="st" style="background:var(--green)"></span></a>
+        <a href="games.html"><span class="rank">2</span>Marvel Rivals<span class="st" style="background:var(--amber)"></span></a>
+        <a href="games.html"><span class="rank">3</span>Overwatch<span class="st" style="background:var(--dim)"></span></a>
+      </div>
+    </div>
+    <div class="side-foot"><span class="pulse"></span>Running · 2 of 3 mining</div>
+  </aside>
+  <main>
+    <div class="head">
+      <div>
+        <h1>Rewards</h1>
+        <div class="sub">What's being earned now, and everything claimed so far.</div>
+      </div>
+      <div class="totals">
+        <div><b>2</b><span>Today</span></div>
+        <div><b>27</b><span>All time</span></div>
+      </div>
+    </div>
+
+    <section class="sec">
+      <div class="sec-h">
+        <h2><svg viewBox="0 0 16 16" fill="none" stroke="var(--accent)" stroke-width="1.6"><circle cx="8" cy="8" r="6" stroke="var(--surface-3)"/><path d="M8 2a6 6 0 0 1 6 6" stroke-linecap="round"/></svg>In progress <span class="n">2</span></h2>
+      </div>
+      <div class="panel">
+        <div class="prog">
+          <div class="what">
+            <div class="t">Hazmat Suit Skin</div>
+            <div class="c"><span>Rust · Twitch Drops Round 41</span><span class="acct"><span class="pm tw"></span>grubfan</span></div>
+          </div>
+          <div class="bw"><div class="num"><span><b>42</b> / 60 min</span><span>70%</span></div><div class="bar"><i style="width:70%"></i></div></div>
+          <div class="eta">~18 min<span>on hJune</span></div>
+        </div>
+        <div class="prog">
+          <div class="what">
+            <div class="t">Kick Garage Door</div>
+            <div class="c"><span>Rust · Kick x Rust</span><span class="acct"><span class="pm kk"></span>grubfan_kick</span></div>
+          </div>
+          <div class="bw"><div class="num"><span><b>95</b> / 120 min</span><span>79%</span></div><div class="bar"><i style="width:79%"></i></div></div>
+          <div class="eta">~25 min<span>on posty</span></div>
+        </div>
+        <div class="more-q"><span>4 more drops queued</span><a href="index.html" class="link">See Up next</a></div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-h">
+        <h2><svg viewBox="0 0 16 16" fill="none" stroke="var(--green)" stroke-width="1.6"><circle cx="8" cy="8" r="6"/><path d="m5.3 8.2 1.8 1.8 3.6-3.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Claimed <span class="n">27</span></h2>
+      </div>
+      <div class="filters">
+        <div class="fgroup" data-key="game">
+          <span>Game</span>
+          <button class="chip on" data-v="">All</button>
+          <button class="chip" data-v="Rust">Rust</button>
+          <button class="chip" data-v="Marvel Rivals">Marvel Rivals</button>
+          <button class="chip" data-v="Overwatch">Overwatch</button>
+        </div>
+        <div class="fgroup" data-key="acct">
+          <span>Account</span>
+          <button class="chip on" data-v="">All</button>
+          <button class="chip" data-v="grubfan"><span class="pm tw"></span>grubfan</button>
+          <button class="chip" data-v="grubfan_kick"><span class="pm kk"></span>grubfan_kick</button>
+          <button class="chip" data-v="grub_alt"><span class="pm tw"></span>grub_alt</button>
+        </div>
+      </div>
+      <div class="panel" id="hist">
+        <div class="hist-h"><span></span><span>Reward</span><span>Game</span><span>Account</span><span>Claimed</span></div>
+        <div class="hrow" data-game="Rust" data-acct="grubfan"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Rust Wood Box Skin</span><span class="gm">Rust</span><span class="ac"><span class="acct"><span class="pm tw"></span>grubfan</span></span><span class="tm">Today 09:12</span></div>
+        <div class="hrow" data-game="Marvel Rivals" data-acct="grubfan"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Marvel Rivals Spray</span><span class="gm">Marvel Rivals</span><span class="ac"><span class="acct"><span class="pm tw"></span>grubfan</span></span><span class="tm">Today 07:40</span></div>
+        <div class="hrow old" data-game="Rust" data-acct="grubfan_kick"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Kick Rust Hoodie</span><span class="gm">Rust</span><span class="ac"><span class="acct"><span class="pm kk"></span>grubfan_kick</span></span><span class="tm">Yest. 22:05</span></div>
+        <div class="hrow old" data-game="Rust" data-acct="grubfan"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Rust Garage Door Skin</span><span class="gm">Rust</span><span class="ac"><span class="acct"><span class="pm tw"></span>grubfan</span></span><span class="tm">Yest. 18:30</span></div>
+        <div class="hrow old" data-game="Marvel Rivals" data-acct="grubfan"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Marvel Rivals Banner</span><span class="gm">Marvel Rivals</span><span class="ac"><span class="acct"><span class="pm tw"></span>grubfan</span></span><span class="tm">Oct 23</span></div>
+        <div class="hrow old" data-game="Rust" data-acct="grubfan_kick"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Kick Rust Bandana</span><span class="gm">Rust</span><span class="ac"><span class="acct"><span class="pm kk"></span>grubfan_kick</span></span><span class="tm">Oct 23</span></div>
+        <div class="hrow old" data-game="Overwatch" data-acct="grubfan"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Overwatch Spray "Grub"</span><span class="gm">Overwatch</span><span class="ac"><span class="acct"><span class="pm tw"></span>grubfan</span></span><span class="tm">Oct 21</span></div>
+        <div class="hrow old" data-game="Overwatch" data-acct="grub_alt"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Overwatch Player Icon</span><span class="gm">Overwatch</span><span class="ac"><span class="acct"><span class="pm tw"></span>grub_alt</span></span><span class="tm">Oct 21</span></div>
+        <div class="hrow old" data-game="Rust" data-acct="grubfan"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Rust Sleeping Bag Skin</span><span class="gm">Rust</span><span class="ac"><span class="acct"><span class="pm tw"></span>grubfan</span></span><span class="tm">Oct 20</span></div>
+        <div class="hrow old" data-game="Rust" data-acct="grubfan_kick"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Kick Rust Beanie</span><span class="gm">Rust</span><span class="ac"><span class="acct"><span class="pm kk"></span>grubfan_kick</span></span><span class="tm">Oct 19</span></div>
+        <div class="empty" id="empty" hidden>No claims match these filters in the loaded rows.</div>
+        <div class="hist-foot"><span id="shown">Showing 10 of 27</span><button class="btn">Load more</button></div>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="mock-tag">r2 · 03 Drop flow · Rewards · <a href="../">all mockups</a></div>
+<script>
+  const f = { game: '', acct: '' };
+  document.querySelectorAll('.fgroup').forEach(g => g.addEventListener('click', e => {
+    const c = e.target.closest('.chip');
+    if (!c) return;
+    g.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === c));
+    f[g.dataset.key] = c.dataset.v;
+    let n = 0;
+    document.querySelectorAll('.hrow').forEach(r => {
+      const ok = (!f.game || r.dataset.game === f.game) && (!f.acct || r.dataset.acct === f.acct);
+      r.hidden = !ok;
+      if (ok) n++;
+    });
+    document.getElementById('empty').hidden = n > 0;
+    document.getElementById('shown').textContent = (f.game || f.acct) ? n + ' match in the latest 10' : 'Showing 10 of 27';
+  }));
+</script>
+</body>
+</html>

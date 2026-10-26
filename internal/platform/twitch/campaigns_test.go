@@ -60,6 +60,7 @@ func TestCampaigns_ListActive_ReturnsAllStatuses(t *testing.T) {
 	active := byID["camp1"]
 	assert.Equal(t, "active", active.Status)
 	assert.Equal(t, "Rust", active.Game)
+	assert.Equal(t, "263490", active.GameID)
 	require.Len(t, active.Benefits, 1)
 	assert.Equal(t, "Wolf Helmet", active.Benefits[0].Name)
 	assert.Equal(t, 60, active.Benefits[0].RequiredMinutes)
@@ -227,7 +228,7 @@ func newDetailsTestDiscovery(t *testing.T, detailsJSON string) *discovery {
 	}))
 	t.Cleanup(srv.Close)
 	c := newTestClient(srv.URL)
-	return &discovery{c: c, userLogin: "testuser"}
+	return &discovery{c: c, userID: "12345"}
 }
 
 // TestFetchDetails_IncludesZeroMinuteDrops proves sub/action drops

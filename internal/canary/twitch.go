@@ -29,7 +29,7 @@ type TwitchProbe struct {
 }
 
 // NewTwitchProbe creates a production TwitchProbe using the provided backend.
-// Pass beaconInterval=60s to match the watcher's HeartbeatInterval (the minimum
+// Pass beaconInterval=60s to match runner.DefaultTick (the minimum
 // Twitch credits per beacon). Use NewTwitchProbeForTest for test doubles.
 func NewTwitchProbe(b *twitch.Backend, beaconInterval time.Duration) TwitchProbe {
 	return TwitchProbe{backend: b, beaconInterval: beaconInterval}

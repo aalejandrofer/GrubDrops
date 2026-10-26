@@ -11,9 +11,9 @@ import (
 )
 
 const createAccount = `-- name: CreateAccount :one
-INSERT INTO accounts (id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url
+INSERT INTO accounts (id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, sort_order)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM accounts))
+RETURNING id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url, custom_name, sort_order
 `
 
 type CreateAccountParams struct {
@@ -52,12 +52,14 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AvatarUrl,
+		&i.CustomName,
+		&i.SortOrder,
 	)
 	return i, err
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url FROM accounts WHERE id = ?
+SELECT id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url, custom_name, sort_order FROM accounts WHERE id = ?
 `
 
 func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
@@ -74,12 +76,14 @@ func (q *Queries) GetAccount(ctx context.Context, id string) (Account, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.AvatarUrl,
+		&i.CustomName,
+		&i.SortOrder,
 	)
 	return i, err
 }
 
 const listEnabledAccounts = `-- name: ListEnabledAccounts :many
-SELECT id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url FROM accounts WHERE enabled = 1 ORDER BY created_at ASC
+SELECT id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url, custom_name, sort_order FROM accounts WHERE enabled = 1 ORDER BY sort_order ASC, created_at ASC
 `
 
 func (q *Queries) ListEnabledAccounts(ctx context.Context) ([]Account, error) {
@@ -102,6 +106,8 @@ func (q *Queries) ListEnabledAccounts(ctx context.Context) ([]Account, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.AvatarUrl,
+			&i.CustomName,
+			&i.SortOrder,
 		); err != nil {
 			return nil, err
 		}

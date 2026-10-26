@@ -22,7 +22,9 @@ var ErrAuthorizationPending = errors.New("authorization_pending")
 type authFlow struct {
 	deviceURL string
 	tokenURL  string
-	http      *http.Client
+	// validateURL is the token validate endpoint; "" means validateURL.
+	validateURL string
+	http        *http.Client
 }
 
 func newAuthFlow() *authFlow {
@@ -146,6 +148,11 @@ func computeExpiresAt(expiresIn int) time.Time {
 }
 
 func (a *authFlow) refresh(ctx context.Context, s platform.Session) (platform.Session, error) {
+	if s.RefreshToken == "" && s.ClientID == ClientAndroid {
+		// Implicit-grant Android tokens carry no refresh token: re-validate
+		// instead, so a live token stays signed in and a dead one fails.
+		return a.revalidate(ctx, s)
+	}
 	if s.RefreshToken == "" {
 		return platform.Session{}, errors.New("no refresh token")
 	}
@@ -188,6 +195,7 @@ func (a *authFlow) refresh(ctx context.Context, s platform.Session) (platform.Se
 		Cookies:      SynthCookieBlob(body.AccessToken),
 		GameFilter:   s.GameFilter,
 		ClientID:     s.ClientID,
+		UserID:       s.UserID,
 		Games:        s.Games,
 	}, nil
 }

@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops · r4 · Games</title>
+<link rel="stylesheet" href="../_assets/base.css">
+<style>
+  /* r4: page-local secondary/tertiary text colours that pass WCAG AA on every surface (same as settings.html) */
+  :root { --t2: #a3acb7; --t3: #8b949e; }
+  svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* Shell: top bar + container (shared by all r3-h3 pages) */
+  .top { position: sticky; top: 0; z-index: 10; background: rgba(13,17,23,.92); border-bottom: 1px solid var(--border-soft); backdrop-filter: blur(6px); }
+  .top-in { max-width: 1160px; margin: 0 auto; height: 52px; padding: 0 24px; display: flex; align-items: center; gap: 28px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -.01em; }
+  .brand img { width: 24px; height: 24px; border-radius: 6px; }
+  .tabs { display: flex; gap: 2px; }
+  .tabs a { padding: 6px 10px; border-radius: 6px; color: var(--t2); font-weight: 500; font-size: 13.5px; }
+  .tabs a:hover { color: var(--text); background: var(--surface); }
+  .tabs a.on { color: var(--text); background: var(--surface-2); }
+  main { max-width: 1160px; margin: 0 auto; padding: 28px 24px 96px; }
+
+  /* Page header: title, plain status, amber problem chip (the app's notification pattern) */
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .head-l { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; min-width: 0; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .now { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--green); }
+  .now .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+  .now .sep { color: var(--t3); }
+  .alert { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--amber); background: var(--amber-soft); border: 1px solid rgba(210,153,34,.3); padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .alert:hover { border-color: var(--amber); }
+  .alert:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .stamp { color: var(--t3); font-size: 12px; font-family: var(--mono); }
+
+  /* App version, top bar right, opens a small popover */
+  .verwrap { margin-left: auto; position: relative; }
+  .ver { font: 12px var(--mono); color: var(--text); white-space: nowrap; background: none; border: 0; padding: 4px 6px; border-radius: 6px; }
+  .ver:hover, .ver[aria-expanded="true"] { background: var(--surface); }
+  .ver:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .ver.update { color: #58a6ff; }
+  .pop { position: absolute; right: 0; top: calc(100% + 8px); width: 300px; max-width: calc(100vw - 32px); background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.4); padding: 14px; font-size: 13px; z-index: 20; }
+  .pop[hidden] { display: none; }
+  .pop h3 { margin: 0; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .pop h3 svg { width: 14px; height: 14px; flex: none; }
+  .pop .cur { margin: 2px 0 0 22px; color: var(--t2); font-size: 12px; }
+  .pop ul { margin: 10px 0 0; padding: 0 0 0 22px; color: var(--text); display: grid; gap: 3px; }
+  .pop li::marker { color: var(--t2); }
+  .pop .lbl { margin: 12px 0 6px; color: var(--t2); font-size: 12px; }
+  .cmd { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); overflow: hidden; }
+  .cmd code { flex: 1; min-width: 0; padding: 7px 9px; font: 12px/1.45 var(--mono); color: var(--text); white-space: pre-wrap; word-break: break-word; }
+  .cmd button { flex: none; border: 0; border-left: 1px solid var(--border); background: var(--surface); color: var(--t2); font-size: 12px; padding: 0 10px; min-width: 64px; }
+  .cmd button:hover { color: var(--text); background: var(--surface-3); }
+  .cmd button.ok { color: var(--green); }
+  .pop .more { display: inline-block; margin-top: 12px; color: var(--accent); font-size: 12px; }
+  .pop .more:hover { text-decoration: underline; }
+
+  /* Add game */
+  .add { position: relative; margin-bottom: 28px; }
+  .search { display: flex; align-items: center; gap: 10px; height: 42px; padding: 0 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--t3); }
+  .search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .search input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: var(--text); font: inherit; }
+  .search input::placeholder { color: var(--t3); }
+  .sugg { margin: 6px 0 0; padding: 4px; list-style: none; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+  .sugg[hidden] { display: none; }
+  .sugg li { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 6px; }
+  .sugg li[hidden] { display: none; }
+  .sugg li:hover { background: var(--surface-3); }
+  .sugg .thumb { width: 28px; height: 37px; border-radius: 4px; flex: none; overflow: hidden; display: grid; place-items: center; background: #22262e repeating-linear-gradient(45deg, rgba(255,255,255,.05) 0 2px, transparent 2px 8px); color: var(--t2); font: 600 12px var(--font); }
+  .sugg .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .sugg .nm { flex: 1; min-width: 0; }
+  .sugg .nm b { font-weight: 500; display: block; }
+  .sugg .nm small { color: var(--t3); font-size: 12px; }
+  .sugg mark { background: none; color: var(--accent); }
+  .add-btn { font-size: 12.5px; font-weight: 500; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); }
+  .add-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .add-btn:disabled { color: var(--t2); background: none; border-color: transparent; cursor: default; }
+  .hint { margin: 8px 2px 0; color: var(--t3); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+
+  /* Priority list */
+  .list-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .list-head h2 { margin: 0; font-size: 13px; font-weight: 600; }
+  .list-head p { margin: 0; color: var(--t2); font-size: 12.5px; }
+
+  /* Priority card: one size for every game on the Games page (p2) */
+  .game { --aw: 120px; display: grid; grid-template-columns: 36px var(--aw) 1fr; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); overflow: hidden; transition: border-color .15s; }
+  .game + .game { margin-top: 10px; }
+  .game.moved { border-color: var(--accent); }
+  .grip { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-right: 1px solid var(--border-soft); color: var(--t3); }
+  .grip .h { cursor: grab; padding: 2px 0; }
+  .grip button { width: 26px; height: 22px; display: grid; place-items: center; border: 0; background: none; border-radius: 4px; color: var(--t2); }
+  .grip button:hover:not(:disabled) { background: var(--surface-3); color: var(--text); }
+  .grip button:disabled { opacity: .3; cursor: default; }
+
+  .art { position: relative; overflow: hidden; isolation: isolate; min-height: 96px; background: #22262e; }
+  .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 30%; z-index: -2; }
+  .art::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 45%; z-index: -1; background: linear-gradient(180deg, transparent, rgba(0,0,0,.6)); }
+  .art .rank { position: absolute; left: 8px; bottom: 6px; font: 500 12px/1 var(--mono); color: rgba(255,255,255,.9); }
+  /* Fallback when no box art exists: patterned block with the name */
+  .art.fb { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.05) 0 2px, transparent 2px 8px); padding: 10px 10px 24px; }
+  .art.fb::after { display: none; }
+  .art.fb .title { display: block; font-size: 14px; line-height: 1.1; font-weight: 700; letter-spacing: -.01em; text-transform: uppercase; color: var(--t2); overflow-wrap: anywhere; }
+  .art .title { display: none; }
+  .art.fb .rank { color: var(--t2); }
+
+  .gname { margin: 0 4px 0 0; font-size: 15px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .game.p1 { --aw: 132px; } .game.p1 .art { min-height: 132px; } .game.p1 .gname { font-size: 16px; } .game.p1 .body { padding: 16px 18px; }
+  .game.p2 { --aw: 116px; } .game.p2 .art { min-height: 112px; }
+  .game.p3 { --aw: 100px; } .game.p3 .art { min-height: 96px; } .game.p3 .gname { font-size: 14px; } .game.p3 .body { padding: 12px 16px; }
+  .game.p4 { --aw: 88px; } .game.p4 .art { min-height: 84px; } .game.p4 .gname { font-size: 14px; } .game.p4 .body { padding: 10px 16px; gap: 6px; }
+  .game.p4 .camps li, .game.p4 .muted { font-size: 12.5px; }
+
+  .body { padding: 14px 18px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+  .status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .state { font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 10px; display: inline-flex; align-items: center; gap: 6px; }
+  .state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .state.mining { color: var(--green); background: var(--green-soft); }
+  .state.wait { color: #b48cf8; background: var(--accent-soft); }
+  .state.off { color: var(--t2); background: var(--surface-3); }
+  .status .rm { margin-left: auto; color: var(--t3); font-size: 12px; display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; padding: 2px 4px; border-radius: 4px; }
+  .status .rm:hover { color: var(--red); }
+  .camps { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+  .camps li { display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: center; font-size: 13px; }
+  .camps li span:nth-child(2) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .camps li small { color: var(--t3); font: 12px var(--mono); white-space: nowrap; }
+  .pm { width: 14px; height: 14px; border-radius: 3px; display: inline-grid; place-items: center; flex: none; }
+  .pm svg { width: 10px; height: 10px; }
+  .pm.tw { background: var(--twitch); color: #fff; }
+  .pm.kk { background: var(--kick); color: #0d1117; }
+  .muted { color: var(--t2); font-size: 13px; margin: 0; }
+  .empty { padding: 28px 16px; text-align: center; color: var(--t3); font-size: 13px; border: 1px dashed var(--border); border-radius: 10px; }
+  .empty[hidden] { display: none; }
+
+  @media (max-width: 720px) {
+    .top-in { padding: 0 16px; gap: 14px; }
+    .brand span { display: none; }
+    .ver .vfrom, .ver .vtail { display: none; }
+    .tabs a { padding: 6px 8px; }
+  }
+  @media (max-width: 420px) {
+    .top-in { gap: 8px; }
+    .tabs a { padding: 6px 6px; font-size: 13px; }
+    .ver { font-size: 12px; }
+  }
+  @media (max-width: 720px) {
+    main { padding: 20px 16px 80px; }
+    .game.p1 { --aw: 72px; } .game.p2 { --aw: 64px; } .game.p3 { --aw: 58px; } .game.p4 { --aw: 52px; }
+    .game .art { min-height: 0 !important; }
+    .game .body { padding: 12px 14px !important; }
+    .camps li { grid-template-columns: 14px 1fr; }
+    .camps li small { grid-column: 2; margin-top: -4px; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="g-tw" viewBox="0 0 24 24"><path d="M4 2 2 6v14h5v3h3l3-3h4l5-5V2H4zm16 12-3 3h-5l-3 3v-3H5V4h15v10zM15 7h2v5h-2zm-5 0h2v5h-2z" fill="currentColor"/></symbol>
+  <symbol id="g-kk" viewBox="0 0 24 24"><path d="M3 2h6v6h2V5h3V2h7v7h-3v3h-3v0h3v3h3v7h-7v-3h-3v-3H9v6H3z" fill="currentColor"/></symbol>
+</svg>
+<header class="top">
+  <div class="top-in">
+    <a href="index.html" class="brand"><img src="../_assets/logo.png" alt=""><span>GrubDrops</span></a>
+    <nav class="tabs">
+      <a href="index.html">Home</a>
+      <a href="games.html" class="on">Games</a>
+      <a href="rewards.html">Rewards</a>
+      <a href="settings.html">Settings</a>
+    </nav>
+    <span class="verwrap">
+      <button type="button" class="ver update" aria-expanded="false" aria-controls="verpop"><span class="vfrom">v1.4.2 → </span>v1.5.0<span class="vtail"> available</span></button>
+      <div class="pop" id="verpop" role="dialog" aria-label="Update available" hidden>
+        <h3><svg viewBox="0 0 16 16" fill="none" stroke="#58a6ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v6M5.5 8.5 8 11l2.5-2.5"/></svg>v1.5.0 is available</h3>
+        <p class="cur">You're on v1.4.2</p>
+        <ul>
+          <li>Telegram notifications</li>
+          <li>Faster game scan</li>
+          <li>Fix: Kick claims retry after timeout</li>
+        </ul>
+        <p class="lbl">Update with Docker Compose</p>
+        <div class="cmd"><code>docker compose pull &amp;&amp; docker compose up -d</code><button type="button" class="copy">Copy</button></div>
+        <a href="#" class="more">Full release notes</a>
+      </div>
+    </span>
+  </div>
+</header>
+
+<main>
+  <div class="head">
+    <div class="head-l">
+      <h1>Games</h1>
+      <span class="now"><span class="dot"></span><span id="count">4 games</span><span class="sep">·</span>last scan 41 s</span><a href="settings.html#accounts" class="alert" title="grub_alt signed out. Open Settings &gt; Accounts."><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>1 account needs login</a>
+    </div>
+    <span class="stamp">GrubDrops only mines these</span>
+  </div>
+
+  <section class="add" aria-label="Add a game">
+    <label class="search">
+      <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" value="dead" placeholder="Add a game" autocomplete="off">
+    </label>
+    <ul class="sugg" id="sugg">
+      <li data-name="Deadlock">
+        <span class="thumb" aria-hidden="true">D</span>
+        <span class="nm"><b><mark>Dead</mark>lock</b><small>No campaign live</small></span>
+        <button class="add-btn" type="button">Add</button>
+      </li>
+      <li data-name="Dead by Daylight">
+        <span class="thumb"><img src="https://static-cdn.jtvnw.net/ttv-boxart/Dead%20by%20Daylight-285x380.jpg" alt=""></span>
+        <span class="nm"><b><mark>Dead</mark> by Daylight</b><small>Already in your list, priority 4.</small></span>
+        <button class="add-btn" type="button" disabled>Added</button>
+      </li>
+    </ul>
+    <p class="hint"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Each extra game adds a little time to every scan.</p>
+  </section>
+
+  <div class="list-head">
+    <h2>Priority</h2>
+    <p>Top game mines first. Changes here are permanent.</p>
+  </div>
+
+  <div id="list">
+    <article class="game">
+      <div class="grip">
+        <button type="button" class="up" aria-label="Move up"><svg class="i" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
+        <svg class="i h" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3"/></svg>
+        <button type="button" class="down" aria-label="Move down"><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+      </div>
+      <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/263490_IGDB-285x380.jpg" alt="Rust box art"><span class="rank">01</span><span class="title">Rust</span></div>
+      <div class="body">
+        <div class="status">
+          <h3 class="gname">Rust</h3>
+          <span class="state mining">Mining</span>
+          <button type="button" class="rm"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>Remove</button>
+        </div>
+        <ul class="camps">
+          <li><span class="pm tw"><svg><use href="#g-tw"/></svg></span><span>Round 41</span><small>3 drops · ends Oct 31</small></li>
+          <li><span class="pm kk"><svg><use href="#g-kk"/></svg></span><span>Kick x Rust</span><small>2 drops · ends Nov 2</small></li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="game">
+      <div class="grip">
+        <button type="button" class="up" aria-label="Move up"><svg class="i" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
+        <svg class="i h" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3"/></svg>
+        <button type="button" class="down" aria-label="Move down"><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+      </div>
+      <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/1264310518_IGDB-285x380.jpg" alt="Marvel Rivals box art"><span class="rank">02</span><span class="title">Marvel Rivals</span></div>
+      <div class="body">
+        <div class="status">
+          <h3 class="gname">Marvel Rivals</h3>
+          <span class="state wait">Waiting</span>
+          <button type="button" class="rm"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>Remove</button>
+        </div>
+        <ul class="camps">
+          <li><span class="pm tw"><svg><use href="#g-tw"/></svg></span><span>Season 4 Twitch Drops</span><small>2 drops · ends Nov 8</small></li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="game">
+      <div class="grip">
+        <button type="button" class="up" aria-label="Move up"><svg class="i" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
+        <svg class="i h" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3"/></svg>
+        <button type="button" class="down" aria-label="Move down"><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+      </div>
+      <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/515025_IGDB-285x380.jpg" alt="Overwatch box art"><span class="rank">03</span><span class="title">Overwatch</span></div>
+      <div class="body">
+        <div class="status">
+          <h3 class="gname">Overwatch</h3>
+          <span class="state off">No campaign</span>
+          <button type="button" class="rm"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>Remove</button>
+        </div>
+        <p class="muted">Nothing live. Last scan 41 s ago.</p>
+      </div>
+    </article>
+    <article class="game">
+      <div class="grip">
+        <button type="button" class="up" aria-label="Move up"><svg class="i" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
+        <svg class="i h" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3"/></svg>
+        <button type="button" class="down" aria-label="Move down"><svg class="i" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+      </div>
+      <div class="art"><img src="https://static-cdn.jtvnw.net/ttv-boxart/Dead%20by%20Daylight-285x380.jpg" alt="Dead by Daylight box art"><span class="rank">04</span><span class="title">Dead by Daylight</span></div>
+      <div class="body">
+        <div class="status">
+          <h3 class="gname">Dead by Daylight</h3>
+          <span class="state off">No campaign</span>
+          <button type="button" class="rm"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>Remove</button>
+        </div>
+        <p class="muted">Nothing live. Last scan 41 s ago.</p>
+      </div>
+    </article>
+  </div>
+  <p class="empty" id="empty" hidden>No games yet. Add one above and GrubDrops starts watching for its campaigns.</p>
+</main>
+
+<div class="mock-tag">r4 · Games · <a href="../">all mockups</a></div>
+
+<script>
+  const list = document.getElementById('list');
+  const blank = list.lastElementChild.cloneNode(true);
+  function renumber() {
+    const games = [...list.children];
+    games.forEach((g, i) => {
+      g.querySelector('.rank').textContent = String(i + 1).padStart(2, '0');
+      g.classList.remove('p1', 'p2', 'p3', 'p4');
+      g.classList.add('p2');
+      g.querySelector('.up').disabled = i === 0;
+      g.querySelector('.down').disabled = i === games.length - 1;
+    });
+    document.getElementById('count').textContent = games.length + (games.length === 1 ? ' game' : ' games');
+    document.getElementById('empty').hidden = games.length > 0;
+  }
+  function flash(g) { g.classList.add('moved'); setTimeout(() => g.classList.remove('moved'), 600); }
+  list.addEventListener('click', e => {
+    const g = e.target.closest('.game'); if (!g) return;
+    if (e.target.closest('.up') && g.previousElementSibling) { list.insertBefore(g, g.previousElementSibling); flash(g); }
+    else if (e.target.closest('.down') && g.nextElementSibling) { list.insertBefore(g.nextElementSibling, g); flash(g); }
+    else if (e.target.closest('.rm')) { g.remove(); }
+    renumber();
+  });
+
+  const q = document.getElementById('q'), sugg = document.getElementById('sugg');
+  function filter() {
+    const v = q.value.trim().toLowerCase();
+    let any = false;
+    sugg.querySelectorAll('li').forEach(li => {
+      const show = v.length > 1 && li.dataset.name.toLowerCase().includes(v);
+      li.hidden = !show; any = any || show;
+    });
+    sugg.hidden = !any;
+  }
+  q.addEventListener('input', filter);
+  sugg.addEventListener('click', e => {
+    const b = e.target.closest('.add-btn'); if (!b || b.disabled) return;
+    const li = b.closest('li'), name = li.dataset.name;
+    const tpl = blank.cloneNode(true);
+    // No box art known for added games: show the patterned fallback with the name.
+    const art = tpl.querySelector('.art');
+    art.className = 'art fb';
+    art.querySelector('img').remove();
+    tpl.querySelector('.title').textContent = name;
+    tpl.querySelector('.gname').textContent = name;
+    tpl.querySelector('.state').textContent = 'Watching';
+    tpl.querySelector('.state').className = 'state off';
+    tpl.querySelector('.muted').textContent = "No campaign live";
+    list.appendChild(tpl); flash(tpl);
+    li.remove(); q.value = ''; filter(); renumber();
+  });
+  renumber(); filter();
+</script>
+<script>
+/* Version popover: toggle, outside click and Escape close it, Copy copies the command. */
+(() => {
+  const btn = document.querySelector('.ver'), pop = document.getElementById('verpop');
+  const set = open => { pop.hidden = !open; btn.setAttribute('aria-expanded', open); };
+  btn.addEventListener('click', e => { e.stopPropagation(); set(pop.hidden); });
+  document.addEventListener('click', e => { if (!pop.hidden && !pop.contains(e.target)) set(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !pop.hidden) { set(false); btn.focus(); } });
+  const copy = pop.querySelector('.copy');
+  if (copy) copy.addEventListener('click', () => {
+    const txt = pop.querySelector('code').textContent;
+    const done = () => { copy.textContent = 'Copied'; copy.classList.add('ok'); setTimeout(() => { copy.textContent = 'Copy'; copy.classList.remove('ok'); }, 1600); };
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).then(done, done); else done();
+  });
+})();
+</script>
+</body>
+</html>

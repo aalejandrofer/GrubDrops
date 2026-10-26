@@ -14,7 +14,6 @@ import (
 // fetchAndStoreAvatar fetches the account's profile picture from the backend
 // (if it supports platform.AvatarFetcher) and persists it on the account row.
 // Best-effort: any failure is logged and swallowed so it never blocks login.
-// Called on login; the periodic auth-health sweep keeps it fresh thereafter.
 func fetchAndStoreAvatar(ctx context.Context, q *gen.Queries, backend platform.Backend, accountID string, sess platform.Session) {
 	fetcher, ok := backend.(platform.AvatarFetcher)
 	if !ok {
@@ -41,21 +40,16 @@ func fetchAndStoreAvatar(ctx context.Context, q *gen.Queries, backend platform.B
 	slog.Info("avatar stored", "account", accountID)
 }
 
-// avatarSrc renders the <img> src for a stored avatar value, choosing direct
-// embedding for Twitch (public static-cdn.jtvnw.net) versus the /img/kick
-// proxy for Kick (Cloudflare 403s direct hotlinks). Returns "" when there is
-// no avatar, so callers fall back to the letter circle.
+// avatarSrc returns the URL the SPA uses for a stored avatar: Twitch embeds
+// the public CDN URL, Kick goes through the /api/img/kick proxy (Cloudflare
+// 403s direct hotlinks). Empty when there is no avatar.
 func avatarSrc(platformName, avatarURL string) string {
 	avatarURL = strings.TrimSpace(avatarURL)
 	if avatarURL == "" {
 		return ""
 	}
 	if platformName == "kick" {
-		// Pass the stored value through the existing image proxy. The
-		// handler trusts only the PATH, so an absolute or relative value
-		// both work; it serves user avatars from files.kick.com.
-		return "/img/kick?u=" + url.QueryEscape(avatarURL)
+		return "/api/img/kick?u=" + url.QueryEscape(avatarURL)
 	}
-	// Twitch (and any other platform): direct CDN URL.
 	return avatarURL
 }

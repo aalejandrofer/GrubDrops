@@ -1,0 +1,96 @@
+:root {
+	--bg: #0d1117;
+	--surface: #161b22;
+	--surface-2: #1c2129;
+	--surface-3: #262c36;
+	--border: #30363d;
+	--border-soft: #21262d;
+	--text: #e6edf3;
+	--muted: #8b949e;
+	--dim: #6e7681;
+	--t2: #a3acb7;
+	--t3: #8b949e;
+	--accent: #a371f7;
+	--accent-strong: #8957e5;
+	--accent-soft: rgba(163, 113, 247, 0.15);
+	--green: #3fb950;
+	--green-soft: rgba(63, 185, 80, 0.15);
+	--amber: #d29922;
+	--amber-soft: rgba(210, 153, 34, 0.15);
+	--red: #f85149;
+	--red-soft: rgba(248, 81, 73, 0.15);
+	--blue: #58a6ff;
+	--blue-soft: rgba(88, 166, 255, 0.15);
+	--twitch: #9146ff;
+	--kick: #53fc18;
+	--twitch-fg: #a970ff;
+	--kick-fg: #53fc18;
+	--art-bg: #22262e;
+	--radius: 8px;
+	--font: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+	color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+	--bg: #f1f3f5;
+	--surface: #e8ebee;
+	--surface-2: #dde1e5;
+	--surface-3: #c9ced4;
+	--border: #c2c8cf;
+	--border-soft: #d0d5db;
+	--text: #1f2328;
+	--muted: #4d5762;
+	--dim: #5c6671;
+	--t2: #3a424b;
+	--t3: #4d5762;
+	--accent: #7040cc;
+	--accent-strong: #5a2fb0;
+	--accent-soft: rgba(130, 80, 223, 0.14);
+	--green: #146a2b;
+	--green-soft: rgba(26, 127, 55, 0.15);
+	--amber: #7f5600;
+	--amber-soft: rgba(154, 103, 0, 0.15);
+	--red: #b81d27;
+	--red-soft: rgba(209, 36, 47, 0.15);
+	--blue: #0757b4;
+	--blue-soft: rgba(9, 105, 218, 0.15);
+	--twitch-fg: #7338d4;
+	--kick-fg: #1d6f00;
+	--art-bg: var(--surface-3);
+	color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+	font: 14px/1.5 var(--font);
+}
+
+a {
+	color: inherit;
+	text-decoration: none;
+}
+
+/* Account names tinted by platform. */
+.pf-name.twitch {
+	color: var(--twitch-fg);
+}
+.pf-name.kick {
+	color: var(--kick-fg);
+}
+
+/* Set on <html> while a list row is being dragged (lib/drag.ts). */
+html.grub-dragging,
+html.grub-dragging * {
+	user-select: none;
+	-webkit-user-select: none;
+	cursor: grabbing !important;
+}

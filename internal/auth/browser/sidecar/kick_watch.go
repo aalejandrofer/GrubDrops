@@ -93,6 +93,23 @@ type watchState struct {
 const kickPlayerDriveScript = `(() => {
   const out = {video: false, playing: false, muted: false, readyState: -1, currentTime: 0};
   try {
+    // Kick shows a OneTrust consent banner ("Tune your KICK experience") to
+    // EU visitors, and the player does not fetch its playback URL until the
+    // visitor makes a choice: the <video> sits at readyState 0 forever.
+    // Accept it (same tracking state the player had before the banner
+    // existed); fall back to Reject All if the accept button is missing.
+    try {
+      const banner = document.getElementById('onetrust-banner-sdk');
+      // The banner is position:fixed, which leaves its offset parent null; use
+      // its layout boxes and computed style to tell whether it is showing.
+      const cs = banner && getComputedStyle(banner);
+      const shown = banner && banner.getClientRects().length > 0 && cs.display !== 'none' && cs.visibility !== 'hidden';
+      if (shown) {
+        const btn = document.getElementById('onetrust-accept-btn-handler') || document.getElementById('onetrust-reject-all-handler');
+        if (btn) { btn.click(); out.consent = btn.id === 'onetrust-accept-btn-handler' ? 'accepted' : 'rejected'; }
+        else { out.consent = 'banner-no-button'; }
+      }
+    } catch (e) {}
     const v = document.querySelector('video');
     if (!v) return JSON.stringify(out);
     out.video = true;
@@ -202,6 +219,10 @@ func (k *Kick) OpenStreamWatch(channel string, session *pb.KickSession) (string,
 	if err != nil {
 		return "", err
 	}
+	// Observe which player requests the page makes, so a failed start can
+	// say whether the playback API / HLS playlist was ever requested.
+	netObs := &watchNetObserver{}
+	chromedp.ListenTarget(ctx, netObs.listen)
 	// Install stealth + cookies before navigation.
 	if err := chromedp.Run(ctx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
@@ -243,7 +264,11 @@ func (k *Kick) OpenStreamWatch(channel string, session *pb.KickSession) (string,
 	_ = chromedp.Run(ctx, chromedp.Sleep(kickWatchSettleWait))
 	deadline := time.Now().Add(kickWatchPlayTimeout)
 	for time.Now().Before(deadline) {
-		if err := chromedp.Run(ctx, chromedp.Evaluate(kickPlayerDriveScript, &status)); err != nil {
+		// Bound each drive: a wedged renderer must not hang the RPC forever.
+		evalCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		err := chromedp.Run(evalCtx, chromedp.Evaluate(kickPlayerDriveScript, &status))
+		cancel()
+		if err != nil {
 			k.b.CloseTab(handle)
 			return "", fmt.Errorf("kick watch drive player %s: %w", channel, err)
 		}
@@ -263,6 +288,7 @@ func (k *Kick) OpenStreamWatch(channel string, session *pb.KickSession) (string,
 	}
 	slog.Info("kick watch opened", "channel", channel, "handle", handle, "playing", playing, "player", status)
 	if !playing {
+		slog.Warn("kick watch: player never started", "channel", channel, "handle", handle, "diag", k.watchFailureDiag(ctx, netObs))
 		k.b.CloseTab(handle)
 		return "", fmt.Errorf("kick watch %s: player never started (last status %s)", channel, status)
 	}

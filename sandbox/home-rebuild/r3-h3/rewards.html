@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops · r3 H3 · Rewards</title>
+<link rel="stylesheet" href="../_assets/base.css">
+<style>
+  svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  /* Shell: top bar + container (shared by all r3-h3 pages) */
+  .top { position: sticky; top: 0; z-index: 10; background: rgba(13,17,23,.92); border-bottom: 1px solid var(--border-soft); backdrop-filter: blur(6px); }
+  .top-in { max-width: 1160px; margin: 0 auto; height: 52px; padding: 0 24px; display: flex; align-items: center; gap: 28px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -.01em; }
+  .brand img { width: 24px; height: 24px; border-radius: 6px; }
+  .tabs { display: flex; gap: 2px; }
+  .tabs a { padding: 6px 10px; border-radius: 6px; color: var(--muted); font-weight: 500; font-size: 13.5px; }
+  .tabs a:hover { color: var(--text); background: var(--surface); }
+  .tabs a.on { color: var(--text); background: var(--surface-2); }
+  main { max-width: 1160px; margin: 0 auto; padding: 28px 24px 96px; }
+
+  /* Page header: title, plain status, amber problem chip (the app's notification pattern) */
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .head-l { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; min-width: 0; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .now { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--green); }
+  .now .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+  .now .sep { color: var(--dim); }
+  .alert { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--amber); background: var(--amber-soft); border: 1px solid rgba(210,153,34,.3); padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .alert:hover { border-color: var(--amber); }
+  .alert:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .stamp { color: var(--dim); font-size: 12px; font-family: var(--mono); }
+
+  /* App version, top bar right */
+  .ver { margin-left: auto; font: 12px var(--mono); color: var(--text); white-space: nowrap; }
+  a.ver.update { color: #58a6ff; }
+  a.ver.update:hover { text-decoration: underline; }
+
+  /* Sections (03 Drop flow) */
+  .sec { margin-top: 28px; min-width: 0; }
+  .sec:first-of-type { margin-top: 0; }
+  .sec-h { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; min-height: 26px; flex-wrap: wrap; }
+  .sec-h h2 { margin: 0; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .sec-h h2 svg { width: 14px; height: 14px; flex: none; }
+  .n { font: 11px var(--mono); color: var(--muted); background: var(--surface-3); border-radius: 10px; padding: 0 6px; }
+
+  .panel { background: var(--surface); border: 1px solid var(--border-soft); border-radius: 10px; overflow: hidden; }
+  .panel > * + * { border-top: 1px solid var(--border-soft); }
+
+  .acct { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); background: var(--surface-3); border-radius: 4px; padding: 1px 6px 1px 5px; white-space: nowrap; }
+  .pm { width: 8px; height: 8px; border-radius: 2px; flex: none; display: inline-block; }
+  .pm.tw { background: var(--twitch); }
+  .pm.kk { background: var(--kick); }
+  .bar { height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 9px; color: var(--text); white-space: nowrap; }
+  .btn:hover:not([disabled]) { border-color: #3d444d; background: var(--surface-3); }
+  .btn[disabled] { opacity: .45; cursor: default; }
+  .link { color: var(--muted); font-size: 12px; }
+  .link:hover { color: var(--accent); }
+
+  /* In progress */
+  .prog { display: grid; grid-template-columns: minmax(0, 1fr) 240px 110px; gap: 16px; align-items: center; padding: 12px 14px; }
+  .prog .t { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prog .c { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; margin-top: 3px; flex-wrap: wrap; }
+  .prog .num { font: 11px var(--mono); color: var(--dim); display: flex; justify-content: space-between; margin-bottom: 5px; }
+  .prog .num b { color: var(--text); font-weight: 500; }
+  .prog .eta { text-align: right; font-size: 13px; font-weight: 500; }
+  .prog .eta span { display: block; font-size: 11px; color: var(--dim); font-weight: 400; }
+  .more-q { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; font-size: 12px; color: var(--muted); background: var(--surface-2); }
+
+  /* Filters */
+  .filters { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 10px; }
+  .fgroup { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .fgroup > span { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; margin-right: 4px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); background: transparent; border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; }
+  .chip:hover { color: var(--text); border-color: #3d444d; }
+  .chip.on { color: var(--text); background: var(--accent-soft); border-color: rgba(163,113,247,.5); }
+  .chip .pm { width: 6px; height: 6px; }
+
+  /* History */
+  .hist-h, .hrow { display: grid; grid-template-columns: 18px minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) 110px; gap: 12px; align-items: center; padding: 8px 14px; }
+  .hist-h { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; background: var(--surface-2); }
+  .hist-h span:last-child, .hrow .tm { text-align: right; }
+  .hrow { font-size: 13px; }
+  .hrow:hover { background: #181d24; }
+  .hrow svg { width: 12px; height: 12px; color: var(--green); }
+  .hrow.old svg { color: var(--dim); }
+  .hrow .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+  .hrow .gm { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hrow .tm { font: 12px var(--mono); color: var(--dim); white-space: nowrap; }
+  .hrow[hidden] { display: none; }
+  .hrow.fresh { animation: fresh 1.2s ease-out; }
+  @keyframes fresh { from { background: var(--accent-soft); } to { background: transparent; } }
+  .empty { padding: 22px 14px; text-align: center; font-size: 13px; color: var(--dim); }
+  .empty[hidden] { display: none; }
+  .hist-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; font-size: 12px; color: var(--dim); background: var(--surface-2); }
+
+  @media (max-width: 720px) {
+    .top-in { padding: 0 16px; gap: 14px; }
+    .brand span { display: none; }
+    .ver .vfrom, .ver .vtail { display: none; }
+    .tabs a { padding: 6px 8px; }
+  }
+  @media (max-width: 420px) {
+    .top-in { gap: 8px; }
+    .tabs a { padding: 6px 6px; font-size: 13px; }
+    .ver { font-size: 11px; }
+  }
+  @media (max-width: 720px) {
+    main { padding: 20px 16px 80px; }
+    .prog { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "what eta" "bar bar"; row-gap: 10px; }
+    .prog .what { grid-area: what; min-width: 0; }
+    .prog .eta { grid-area: eta; }
+    .prog .bw { grid-area: bar; }
+    .hist-h { display: none; }
+    .hrow { grid-template-columns: 14px minmax(0, 1fr) auto; grid-template-areas: "ic nm tm" ". sub sub"; row-gap: 2px; column-gap: 10px; }
+    .hrow svg { grid-area: ic; }
+    .hrow .nm { grid-area: nm; }
+    .hrow .tm { grid-area: tm; }
+    .hrow .gm { grid-area: sub; font-size: 12px; display: inline; }
+    .hrow .ac { grid-area: sub; justify-self: end; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <a href="index.html" class="brand"><img src="../_assets/logo.png" alt=""><span>GrubDrops</span></a>
+    <nav class="tabs">
+      <a href="index.html">Home</a>
+      <a href="games.html">Games</a>
+      <a href="rewards.html" class="on">Rewards</a>
+      <a href="#">Settings</a>
+    </nav>
+    <a href="#" class="ver update" title="Read the release notes"><span class="vfrom">v1.4.2 → </span>v1.5.0<span class="vtail"> available</span></a>
+  </div>
+</header>
+
+<main>
+  <div class="head">
+    <div class="head-l">
+      <h1>Rewards</h1>
+      <span class="now"><span class="dot"></span>2 today<span class="sep">·</span>27 all time</span><a href="#" class="alert" title="grub_alt signed out. Open Settings &gt; Accounts."><svg class="i" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>1 account needs login</a>
+    </div>
+    <span class="stamp">Today · 10:11</span>
+  </div>
+
+  <section class="sec">
+    <div class="sec-h">
+      <h2><svg viewBox="0 0 16 16" fill="none" stroke="var(--accent)" stroke-width="1.6"><circle cx="8" cy="8" r="6" stroke="var(--surface-3)"/><path d="M8 2a6 6 0 0 1 6 6" stroke-linecap="round"/></svg>In progress <span class="n">2</span></h2>
+    </div>
+    <div class="panel">
+      <div class="prog">
+        <div class="what">
+          <div class="t">Hazmat Suit Skin</div>
+          <div class="c"><span>Rust · Twitch Drops Round 41</span><span class="acct"><span class="pm tw"></span>grubfan</span></div>
+        </div>
+        <div class="bw"><div class="num"><span><b>42</b> / 60 min</span><span>70%</span></div><div class="bar"><i style="width:70%"></i></div></div>
+        <div class="eta">~18 min<span>on hJune</span></div>
+      </div>
+      <div class="prog">
+        <div class="what">
+          <div class="t">Kick Garage Door</div>
+          <div class="c"><span>Rust · Kick x Rust</span><span class="acct"><span class="pm kk"></span>grubfan_kick</span></div>
+        </div>
+        <div class="bw"><div class="num"><span><b>95</b> / 120 min</span><span>79%</span></div><div class="bar"><i style="width:79%"></i></div></div>
+        <div class="eta">~25 min<span>on posty</span></div>
+      </div>
+      <div class="more-q"><span>4 more drops queued</span><a href="index.html" class="link">See Up next</a></div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-h">
+      <h2><svg viewBox="0 0 16 16" fill="none" stroke="var(--green)" stroke-width="1.6"><circle cx="8" cy="8" r="6"/><path d="m5.3 8.2 1.8 1.8 3.6-3.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Claimed <span class="n">27</span></h2>
+    </div>
+    <div class="filters">
+      <div class="fgroup" data-key="game">
+        <span>Game</span>
+        <button class="chip on" data-v="">All</button>
+        <button class="chip" data-v="Rust">Rust</button>
+        <button class="chip" data-v="Marvel Rivals">Marvel Rivals</button>
+        <button class="chip" data-v="Overwatch">Overwatch</button>
+      </div>
+      <div class="fgroup" data-key="acct">
+        <span>Account</span>
+        <button class="chip on" data-v="">All</button>
+        <button class="chip" data-v="grubfan"><span class="pm tw"></span>grubfan</button>
+        <button class="chip" data-v="grubfan_kick"><span class="pm kk"></span>grubfan_kick</button>
+        <button class="chip" data-v="grub_alt"><span class="pm tw"></span>grub_alt</button>
+      </div>
+    </div>
+    <div class="panel" id="hist">
+      <div class="hist-h"><span></span><span>Reward</span><span>Game</span><span>Account</span><span>Claimed</span></div>
+      <div id="rows">
+        <div class="hrow" data-game="Rust" data-acct="grubfan"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Rust Wood Box Skin</span><span class="gm">Rust</span><span class="ac"><span class="acct"><span class="pm tw"></span>grubfan</span></span><span class="tm">Today 09:12</span></div>
+        <div class="hrow" data-game="Marvel Rivals" data-acct="grubfan"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Marvel Rivals Spray</span><span class="gm">Marvel Rivals</span><span class="ac"><span class="acct"><span class="pm tw"></span>grubfan</span></span><span class="tm">Today 07:40</span></div>
+        <div class="hrow old" data-game="Rust" data-acct="grubfan_kick"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Kick Rust Hoodie</span><span class="gm">Rust</span><span class="ac"><span class="acct"><span class="pm kk"></span>grubfan_kick</span></span><span class="tm">Yest. 22:05</span></div>
+        <div class="hrow old" data-game="Rust" data-acct="grubfan"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Rust Garage Door Skin</span><span class="gm">Rust</span><span class="ac"><span class="acct"><span class="pm tw"></span>grubfan</span></span><span class="tm">Yest. 18:30</span></div>
+        <div class="hrow old" data-game="Marvel Rivals" data-acct="grubfan"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Marvel Rivals Banner</span><span class="gm">Marvel Rivals</span><span class="ac"><span class="acct"><span class="pm tw"></span>grubfan</span></span><span class="tm">Oct 23</span></div>
+        <div class="hrow old" data-game="Rust" data-acct="grubfan_kick"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Kick Rust Bandana</span><span class="gm">Rust</span><span class="ac"><span class="acct"><span class="pm kk"></span>grubfan_kick</span></span><span class="tm">Oct 23</span></div>
+        <div class="hrow old" data-game="Overwatch" data-acct="grubfan"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Overwatch Spray "Grub"</span><span class="gm">Overwatch</span><span class="ac"><span class="acct"><span class="pm tw"></span>grubfan</span></span><span class="tm">Oct 21</span></div>
+        <div class="hrow old" data-game="Overwatch" data-acct="grub_alt"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Overwatch Player Icon</span><span class="gm">Overwatch</span><span class="ac"><span class="acct"><span class="pm tw"></span>grub_alt</span></span><span class="tm">Oct 21</span></div>
+        <div class="hrow old" data-game="Rust" data-acct="grubfan"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Rust Sleeping Bag Skin</span><span class="gm">Rust</span><span class="ac"><span class="acct"><span class="pm tw"></span>grubfan</span></span><span class="tm">Oct 20</span></div>
+        <div class="hrow old" data-game="Rust" data-acct="grubfan_kick"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="nm">Kick Rust Beanie</span><span class="gm">Rust</span><span class="ac"><span class="acct"><span class="pm kk"></span>grubfan_kick</span></span><span class="tm">Oct 19</span></div>
+      </div>
+      <div class="empty" id="empty" hidden>No claims match these filters in the loaded rows.</div>
+      <div class="hist-foot"><span id="shown">Showing 10 of 27</span><button class="btn" id="more" type="button">Load more</button></div>
+    </div>
+  </section>
+</main>
+
+<div class="mock-tag">r3 · H3 · Rewards · <a href="../">all mockups</a></div>
+<script>
+(() => {
+  const TOTAL = 27;
+  // Older sample claims, fetched 10 at a time by "Load more".
+  const older = [
+    ['Rust Tarp Door Skin', 'Rust', 'grubfan', 'Oct 18'],
+    ['Kick Rust Gloves', 'Rust', 'grubfan_kick', 'Oct 17'],
+    ['Overwatch Weapon Charm', 'Overwatch', 'grubfan', 'Oct 15'],
+    ['Overwatch Spray "Hive"', 'Overwatch', 'grub_alt', 'Oct 15'],
+    ['Rust Large Box Skin', 'Rust', 'grubfan', 'Oct 12'],
+    ['Kick Rust Boots', 'Rust', 'grubfan_kick', 'Oct 11'],
+    ['Marvel Rivals Emote', 'Marvel Rivals', 'grubfan', 'Oct 9'],
+    ['Marvel Rivals Sticker', 'Marvel Rivals', 'grub_alt', 'Oct 8'],
+    ['Overwatch Name Card', 'Overwatch', 'grubfan', 'Oct 6'],
+    ['Rust Furnace Skin', 'Rust', 'grubfan', 'Oct 4'],
+    ['Kick Rust Shirt', 'Rust', 'grubfan_kick', 'Oct 3'],
+    ['Overwatch Souvenir', 'Overwatch', 'grub_alt', 'Sep 30'],
+    ['Rust Rock Skin', 'Rust', 'grubfan', 'Sep 28'],
+    ['Marvel Rivals Nameplate', 'Marvel Rivals', 'grubfan', 'Sep 27'],
+    ['Kick Rust Pants', 'Rust', 'grubfan_kick', 'Sep 25'],
+    ['Overwatch Highlight Intro', 'Overwatch', 'grubfan', 'Sep 22'],
+    ['Rust Door Skin', 'Rust', 'grubfan', 'Sep 20'],
+  ];
+  const rows = document.getElementById('rows'), more = document.getElementById('more');
+  const shown = document.getElementById('shown'), empty = document.getElementById('empty');
+  const f = { game: '', acct: '' };
+  const check = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m2.5 6.3 2.3 2.3L9.5 3.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  function apply() {
+    const all = [...rows.children];
+    let n = 0;
+    all.forEach(r => {
+      const ok = (!f.game || r.dataset.game === f.game) && (!f.acct || r.dataset.acct === f.acct);
+      r.hidden = !ok;
+      if (ok) n++;
+    });
+    empty.hidden = n > 0;
+    const loaded = all.length;
+    shown.textContent = (f.game || f.acct)
+      ? n + ' match in the latest ' + loaded
+      : (loaded >= TOTAL ? 'Showing all ' + TOTAL : 'Showing ' + loaded + ' of ' + TOTAL);
+    if (loaded >= TOTAL) { more.disabled = true; more.textContent = 'All loaded'; }
+  }
+
+  document.querySelectorAll('.fgroup').forEach(g => g.addEventListener('click', e => {
+    const c = e.target.closest('.chip');
+    if (!c) return;
+    g.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === c));
+    f[g.dataset.key] = c.dataset.v;
+    apply();
+  }));
+
+  more.addEventListener('click', () => {
+    more.disabled = true; more.textContent = 'Loading…';
+    setTimeout(() => {
+      older.splice(0, 10).forEach(([nm, gm, ac, tm]) => {
+        const r = document.createElement('div');
+        r.className = 'hrow old fresh';
+        r.dataset.game = gm; r.dataset.acct = ac;
+        const pm = ac === 'grubfan_kick' ? 'kk' : 'tw';
+        r.innerHTML = check + '<span class="nm"></span><span class="gm"></span><span class="ac"><span class="acct"><span class="pm ' + pm + '"></span></span></span><span class="tm"></span>';
+        r.querySelector('.nm').textContent = nm;
+        r.querySelector('.gm').textContent = gm;
+        r.querySelector('.acct').append(ac);
+        r.querySelector('.tm').textContent = tm;
+        rows.appendChild(r);
+      });
+      more.disabled = false; more.textContent = 'Load more';
+      apply();
+    }, 350);
+  });
+  apply();
+})();
+</script>
+</body>
+</html>

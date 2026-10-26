@@ -59,9 +59,14 @@ type Backend struct {
 	// accountID + ":" + rewardID. Once set, the completed-claim sweep stops
 	// re-POSTing that reward — it can never succeed until the user links
 	// manually, so otherwise it re-attempts (and logs) every poll forever.
-	// In-memory only: a restart re-learns it on the first sweep (one log
-	// line), which is fine.
-	needsLink        map[string]bool
+	// In-memory only; linkCampaigns below is the persisted record.
+	needsLink map[string]bool
+	// linkCampaigns maps accountID + ":" + campaignID to the connect_url of a
+	// link-required claim rejection, so ListActiveCampaigns can flag the
+	// campaign as ClaimNeedsLink for that account and the sweep skips it.
+	// Loaded from and written through to links when set.
+	linkCampaigns    map[string]string
+	links            LinkStore
 	channelsByAcc    map[string][]string
 	campaignChannels map[string][]kickChannel // campaignID -> eligible channels (slug+id)
 	categoryChannels map[string][]kickChannel // game/category -> union of participating channels across campaigns
@@ -84,7 +89,19 @@ type options struct {
 	sidecarImage   string
 	sidecarNetwork string
 	proxyURL       string
+	links          LinkStore
 }
+
+// LinkStore persists link-refused claims per account and campaign so a
+// restart keeps them. Keys are accountID + ":" + campaignID.
+type LinkStore interface {
+	NeedsLink(ctx context.Context) (map[string]string, error)
+	SetNeedsLink(ctx context.Context, accountID, campaignID, linkURL string) error
+	ClearNeedsLink(ctx context.Context, accountID, campaignID string) error
+}
+
+// WithLinkStore loads and persists link-refused claims through ls.
+func WithLinkStore(ls LinkStore) Option { return func(o *options) { o.links = ls } }
 
 // WithSidecarAutoCreate enables auto-create of per-account browser sidecars:
 // the miner pulls image and creates+removes labelled containers over the
@@ -128,11 +145,24 @@ func New(c *browser.Client, ctl dockerctl.Controller, template string, port int,
 		sidecarPort:      port,
 		wsFailed:         map[string]bool{},
 		needsLink:        map[string]bool{},
+		linkCampaigns:    map[string]string{},
 		handleByAcc:      map[string]string{},
 		channelsByAcc:    map[string][]string{},
 		campaignChannels: map[string][]kickChannel{},
 		categoryChannels: map[string][]kickChannel{},
 		categorySlugs:    map[string]string{},
+		links:            o.links,
+	}
+	if b.links != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		m, err := b.links.NeedsLink(ctx)
+		cancel()
+		if err != nil {
+			slog.Warn("kick: load link-refused claims failed", "kind", "error", "err", err)
+		}
+		for k, u := range m {
+			b.linkCampaigns[k] = u
+		}
 	}
 	if ctl != nil {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -442,6 +472,14 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 		camp.AccountLinked = true
 		camp.AccountLinkChecked = true
 		camp.AccountLinkURL = c.ConnectURL
+		b.mu.Lock()
+		if u, ok := b.linkCampaigns[s.AccountID+":"+c.ID]; ok {
+			camp.ClaimNeedsLink = true
+			if camp.AccountLinkURL == "" {
+				camp.AccountLinkURL = u
+			}
+		}
+		b.mu.Unlock()
 		// Parse RFC3339 start/end so the /drops past|current|upcoming tabs work.
 		if t, err := time.Parse(time.RFC3339, c.StartsAt); err == nil {
 			camp.StartsAt = t.UTC()
@@ -808,8 +846,104 @@ func (b *Backend) StopWatch(ctx context.Context, h platform.WatchHandle) error {
 func (b *Backend) Claim(ctx context.Context, s platform.Session, drop platform.DropBenefit) error {
 	// Kick claim needs reward_id + campaign_id. drop.ID is the reward id;
 	// drop.CampaignID is the campaign.
-	return b.api.Claim(ctx, s, drop.ID, drop.CampaignID)
+	err := b.api.Claim(ctx, s, drop.ID, drop.CampaignID)
+	var linkErr *ClaimNeedsLinkError
+	switch {
+	case err == nil:
+		b.clearLink(s.AccountID, drop.CampaignID)
+	case errors.As(err, &linkErr):
+		b.mu.Lock()
+		b.needsLink[s.AccountID+":"+drop.ID] = true
+		b.mu.Unlock()
+		b.recordLink(s.AccountID, drop.CampaignID, linkErr.ConnectURL)
+	}
+	return err
 }
+
+// recordLink marks campaignID as link-refused for accountID and persists it.
+// A repeat rejection with the same URL does not write the store again.
+func (b *Backend) recordLink(accountID, campaignID, connectURL string) {
+	if campaignID == "" {
+		return
+	}
+	key := accountID + ":" + campaignID
+	b.mu.Lock()
+	prev, had := b.linkCampaigns[key]
+	b.linkCampaigns[key] = connectURL
+	b.mu.Unlock()
+	if b.links == nil || (had && prev == connectURL) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := b.links.SetNeedsLink(ctx, accountID, campaignID, connectURL); err != nil {
+		slog.Warn("kick: persist link-refused claim failed", "kind", "error",
+			"account", accountID, "campaign", campaignID, "err", err)
+	}
+}
+
+// clearLink forgets a link-refused campaign, e.g. after a claim for it
+// succeeded, and drops the account's per-reward marks so the sweep retries
+// the campaign's siblings.
+func (b *Backend) clearLink(accountID, campaignID string) {
+	key := accountID + ":" + campaignID
+	prefix := accountID + ":"
+	b.mu.Lock()
+	_, had := b.linkCampaigns[key]
+	delete(b.linkCampaigns, key)
+	if had {
+		for k := range b.needsLink {
+			if strings.HasPrefix(k, prefix) {
+				delete(b.needsLink, k)
+			}
+		}
+	}
+	b.mu.Unlock()
+	if !had || b.links == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := b.links.ClearNeedsLink(ctx, accountID, campaignID); err != nil {
+		slog.Warn("kick: clear link-refused claim failed", "kind", "error",
+			"account", accountID, "campaign", campaignID, "err", err)
+	}
+}
+
+// RecheckLinks forgets every link-refused claim of the account, runs the
+// completed-claim sweep at once, and reports the rewards claimed and the
+// campaigns still refused. Satisfies platform.LinkRechecker.
+func (b *Backend) RecheckLinks(ctx context.Context, s platform.Session) ([]platform.ClaimedReward, int, error) {
+	prefix := s.AccountID + ":"
+	b.mu.Lock()
+	var campaigns []string
+	for k := range b.linkCampaigns {
+		if strings.HasPrefix(k, prefix) {
+			campaigns = append(campaigns, strings.TrimPrefix(k, prefix))
+		}
+	}
+	for k := range b.needsLink {
+		if strings.HasPrefix(k, prefix) {
+			delete(b.needsLink, k)
+		}
+	}
+	b.mu.Unlock()
+	for _, c := range campaigns {
+		b.clearLink(s.AccountID, c)
+	}
+	claimed, err := b.SweepCompletedClaims(ctx, s)
+	still := 0
+	b.mu.Lock()
+	for k := range b.linkCampaigns {
+		if strings.HasPrefix(k, prefix) {
+			still++
+		}
+	}
+	b.mu.Unlock()
+	return claimed, still, err
+}
+
+var _ platform.LinkRechecker = (*Backend)(nil)
 
 // SweepCompletedClaims claims every Kick reward that has reached 100% and is
 // not yet granted. A single Kick watch advances many rewards at once (the open
@@ -837,9 +971,12 @@ func (b *Backend) SweepCompletedClaims(ctx context.Context, s platform.Session) 
 		// Skip rewards we've already learned require an external account
 		// link — they can never be claimed here, so re-POSTing every poll
 		// only spams the log and Kick.
+		// A campaign already refused for the account is skipped too: Kick
+		// links per campaign, and the persisted mark survives a restart.
 		linkKey := s.AccountID + ":" + r.RewardID
 		b.mu.Lock()
-		skip := b.needsLink[linkKey]
+		_, campRefused := b.linkCampaigns[s.AccountID+":"+r.CampaignID]
+		skip := b.needsLink[linkKey] || campRefused
 		b.mu.Unlock()
 		if skip {
 			continue
@@ -854,6 +991,7 @@ func (b *Backend) SweepCompletedClaims(ctx context.Context, s platform.Session) 
 				b.mu.Lock()
 				b.needsLink[linkKey] = true
 				b.mu.Unlock()
+				b.recordLink(s.AccountID, r.CampaignID, linkErr.ConnectURL)
 				slog.Info("kick sweep: reward needs account link; skipping until linked",
 					"kind", "claim", "account", s.AccountID, "reward", r.RewardID,
 					"name", r.Name, "connect_url", linkErr.ConnectURL)
@@ -867,6 +1005,7 @@ func (b *Backend) SweepCompletedClaims(ctx context.Context, s platform.Session) 
 				"kind", "claim", "account", s.AccountID, "reward", r.RewardID, "name", r.Name, "err", err)
 			continue
 		}
+		b.clearLink(s.AccountID, r.CampaignID)
 		slog.Info("kick sweep: claimed completed reward",
 			"kind", "claim", "account", s.AccountID, "reward", r.RewardID, "campaign", r.CampaignID, "name", r.Name)
 		claimed = append(claimed, platform.ClaimedReward{Game: "Rust", Title: r.Name})

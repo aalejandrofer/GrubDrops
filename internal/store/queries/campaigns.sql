@@ -79,3 +79,11 @@ FROM account_campaign_links l
 JOIN accounts a ON a.id = l.account_id
 WHERE l.campaign_id = ?
 ORDER BY a.display_name ASC;
+
+-- name: ListUnlinkedCampaignLinks :many
+-- Account and campaign pairs whose claim the platform rejected until an
+-- external account is linked.
+SELECT account_id, campaign_id, link_url
+FROM account_campaign_links
+WHERE linked = 0
+ORDER BY account_id, campaign_id;

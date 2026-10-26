@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrubDrops · r2 09 Pulse · Rewards</title>
+<link rel="stylesheet" href="../_assets/base.css">
+<style>
+  body { min-height: 100vh; }
+  .app { display: grid; grid-template-columns: 216px 1fr; min-height: 100vh; }
+
+  /* Sidebar */
+  .side { border-right: 1px solid var(--border-soft); padding: 16px 12px; display: flex; flex-direction: column; gap: 20px; position: sticky; top: 0; height: 100vh; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand img { width: 24px; height: 24px; border-radius: 6px; }
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav a { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; color: var(--muted); font-weight: 500; }
+  .nav a:hover { background: var(--surface); color: var(--text); }
+  .nav a.on { background: var(--surface-2); color: var(--text); }
+  .nav svg { width: 16px; height: 16px; flex: none; }
+  .nav .count { margin-left: auto; font: 11px var(--mono); color: var(--amber); background: var(--amber-soft); padding: 0 6px; border-radius: 10px; }
+  .side-foot { margin-top: auto; padding: 0 8px; font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 8px; }
+  .side-foot .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+  /* Main */
+  main { padding: 28px 40px 64px; max-width: 920px; width: 100%; min-width: 0; }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .head-l { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; padding: 4px 12px 4px 10px; border-radius: 999px; background: var(--green-soft); color: var(--green); border: 1px solid rgba(63,185,80,.3); }
+  .pill .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 rgba(63,185,80,.6); animation: pulse 2s infinite; }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 6px rgba(63,185,80,0); } 100% { box-shadow: 0 0 0 0 rgba(63,185,80,0); } }
+  .pill .sep { color: var(--dim); }
+  .pill .warn { color: var(--amber); }
+  .stamp { color: var(--dim); font-size: 12px; font-family: var(--mono); }
+
+  /* KPIs */
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border-soft); border-radius: var(--radius); background: var(--surface); }
+  .kpi { padding: 16px 20px 18px; display: block; position: relative; min-width: 0; }
+  .kpi + .kpi { border-left: 1px solid var(--border-soft); }
+  .kpi .label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .kpi .val { font-size: 30px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.15; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .kpi .val small { font-size: 14px; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-left: 2px; }
+  .kpi .sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  a.kpi.bad { background: var(--amber-soft); border-radius: 0 var(--radius) var(--radius) 0; box-shadow: inset 0 0 0 1px rgba(210,153,34,.45); }
+  a.kpi.bad .label, a.kpi.bad .val { color: var(--amber); }
+  a.kpi.bad .val small { color: var(--amber); opacity: .7; }
+  a.kpi.bad .sub { color: var(--text); display: flex; align-items: center; gap: 4px; }
+  a.kpi.bad .sub svg { width: 12px; height: 12px; transition: transform .15s; }
+  a.kpi.bad:hover { box-shadow: inset 0 0 0 1px var(--amber); }
+  a.kpi.bad:hover .sub svg { transform: translateX(2px); }
+  a.kpi.bad:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  /* Sections + lists */
+  .section { margin-top: 28px; }
+  .section-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+  .section-h h2 { font-size: 13px; font-weight: 600; margin: 0; color: var(--text); }
+  .section-h span, .section-h a { font-size: 12px; color: var(--dim); }
+  .section-h a:hover { color: var(--text); }
+  .list { border: 1px solid var(--border-soft); border-radius: var(--radius); }
+  .row { display: grid; grid-template-columns: 1fr 180px 64px; gap: 16px; align-items: center; padding: 12px 16px; }
+  .row + .row { border-top: 1px solid var(--border-soft); }
+  .who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .mark { width: 18px; height: 18px; border-radius: 4px; flex: none; display: grid; place-items: center; font: 700 10px var(--font); color: #0d1117; }
+  .mark.tw { background: var(--twitch); color: #fff; }
+  .mark.kk { background: var(--kick); }
+  .who .t { min-width: 0; }
+  .who .drop { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who .meta { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who .meta b { font-weight: 500; color: var(--text); }
+  .bar { height: 4px; background: var(--surface-3); border-radius: 2px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+  .prog .n { font: 11px var(--mono); color: var(--dim); margin-top: 6px; }
+  .eta { text-align: right; font: 500 13px var(--mono); color: var(--text); }
+  .eta small { display: block; font: 11px var(--font); color: var(--dim); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+  .chip i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .chip.ok { color: var(--green); border-color: rgba(63,185,80,.3); background: var(--green-soft); }
+  .chip.wait { color: var(--accent); border-color: rgba(163,113,247,.3); background: var(--accent-soft); }
+  .chip.off { color: var(--dim); }
+  .chip.bad { color: var(--amber); border-color: rgba(210,153,34,.35); background: var(--amber-soft); }
+  .btn { display: inline-flex; align-items: center; gap: 6px; font: 500 13px var(--font); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  .btn:hover { background: var(--surface-3); }
+  .btn svg { width: 14px; height: 14px; }
+  .icon-btn { width: 26px; height: 26px; display: grid; place-items: center; background: transparent; border: 1px solid transparent; border-radius: 6px; color: var(--dim); cursor: pointer; padding: 0; }
+  .icon-btn:hover:not(:disabled) { border-color: var(--border); color: var(--text); background: var(--surface-2); }
+  .icon-btn:disabled { opacity: .3; cursor: default; }
+  .icon-btn svg { width: 14px; height: 14px; }
+
+  /* Mobile */
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; }
+    .side { position: static; height: auto; flex-direction: row; align-items: center; padding: 10px 16px; gap: 12px; border-right: 0; border-bottom: 1px solid var(--border-soft); overflow: hidden; }
+    .brand span, .side-foot { display: none; }
+    .brand { padding: 0; }
+    .nav { flex-direction: row; gap: 0; }
+    .nav a { padding: 6px 8px; font-size: 13px; }
+    .nav a svg { display: none; }
+    .nav .count { margin-left: 4px; }
+    main { padding: 20px 16px 72px; }
+    .kpis { grid-template-columns: 1fr 1fr; }
+    .kpi { padding: 14px 16px; }
+    .kpi .val { font-size: 24px; }
+    .kpi:nth-child(3) { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--border-soft); }
+    a.kpi.bad { border-radius: 0 0 var(--radius) var(--radius); }
+    .row { grid-template-columns: 1fr 52px; gap: 12px; }
+    .row .prog { grid-column: 1 / -1; order: 3; }
+  }
+
+  /* Page */
+  .row.q { grid-template-columns: 1fr 180px 64px; }
+  .row.q .who .drop { color: var(--muted); font-weight: 400; }
+  .row.q .eta { color: var(--dim); }
+  .filters { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-bottom: 12px; }
+  .fgroup { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .fgroup > span { font-size: 12px; color: var(--dim); margin-right: 2px; }
+  .f { font: 500 12px var(--font); color: var(--muted); background: transparent; border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+  .f:hover { color: var(--text); border-color: var(--muted); }
+  .f[aria-pressed="true"] { color: var(--text); background: var(--surface-3); border-color: var(--border); box-shadow: inset 0 0 0 1px var(--accent); }
+  .vr { width: 1px; height: 18px; background: var(--border-soft); }
+  .hist { border: 1px solid var(--border-soft); border-radius: var(--radius); list-style: none; margin: 0; padding: 0; }
+  .h { display: grid; grid-template-columns: 16px 1fr 130px 110px; gap: 12px; align-items: center; padding: 10px 16px; font-size: 13px; }
+  .h + .h { border-top: 1px solid var(--border-soft); }
+  .h[hidden] { display: none; }
+  .h .ck { color: var(--green); display: grid; }
+  .h .ck svg { width: 14px; height: 14px; }
+  .h .nm { min-width: 0; }
+  .h .nm b { font-weight: 500; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .h .nm small { font-size: 12px; color: var(--dim); }
+  .h .ac { color: var(--muted); display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .h .ac .mark { width: 14px; height: 14px; font-size: 8px; border-radius: 3px; }
+  .h .tm { font: 12px var(--mono); color: var(--dim); text-align: right; white-space: nowrap; }
+  .empty { padding: 20px 16px; color: var(--dim); font-size: 13px; text-align: center; }
+  .more { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 12px; color: var(--dim); gap: 12px; flex-wrap: wrap; }
+  @media (max-width: 760px) {
+    .row.q { grid-template-columns: 1fr 52px; }
+    .h { grid-template-columns: 16px 1fr auto; row-gap: 2px; }
+    .h .ac { grid-column: 2; grid-row: 2; font-size: 12px; }
+    .h .tm { grid-row: 1 / span 2; grid-column: 3; }
+    .vr { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><img src="../_assets/logo.png" alt=""><span>GrubDrops</span></div>
+    <nav class="nav">
+      <a href="index.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7 8 2.5 13.5 7v6.5h-3.5V10h-4v3.5H2.5z"/></svg>Home</a>
+      <a href="games.html"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="4.5" width="13" height="8" rx="3"/><path d="M5 7v2.5M3.75 8.25h2.5M10.5 7.5h.01M12 9h.01"/></svg>Games</a>
+      <a href="rewards.html" class="on"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="12" height="8" rx="1"/><path d="M1.5 6h13M8 6v8M8 6S6.5 2.5 4.75 3.25 6 6 8 6zM8 6s1.5-3.5 3.25-2.75S10 6 8 6z"/></svg>Rewards</a>
+      <a href="#"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>Settings<span class="count">1</span></a>
+    </nav>
+    <div class="side-foot"><span class="dot"></span>Daemon up 6d 4h</div>
+  </aside>
+
+  <main>
+    <div class="head">
+      <div class="head-l">
+        <h1>Rewards</h1>
+        <span class="stamp">27 claimed all time</span>
+      </div>
+      <span class="stamp">Today · 10:11</span>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi">
+        <div class="label">Claimed today</div>
+        <div class="val">2</div>
+        <div class="sub">Last at 09:12</div>
+      </div>
+      <div class="kpi">
+        <div class="label">In progress</div>
+        <div class="val">2</div>
+        <div class="sub">Next claim in ~18 min</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Claimed all time</div>
+        <div class="val">27</div>
+        <div class="sub">Across 3 games, 3 accounts</div>
+      </div>
+    </div>
+
+    <section class="section">
+      <div class="section-h"><h2>In progress</h2><span>Claims run on their own</span></div>
+      <div class="list">
+        <div class="row">
+          <div class="who">
+            <span class="mark tw" title="Twitch">T</span>
+            <div class="t">
+              <div class="drop">Hazmat Suit Skin</div>
+              <div class="meta"><b>grubfan</b> · Rust · Round 41</div>
+            </div>
+          </div>
+          <div class="prog"><div class="bar"><i style="width:70%"></i></div><div class="n">42 / 60 min</div></div>
+          <div class="eta">18m<small>left</small></div>
+        </div>
+        <div class="row">
+          <div class="who">
+            <span class="mark kk" title="Kick">K</span>
+            <div class="t">
+              <div class="drop">Kick Garage Door</div>
+              <div class="meta"><b>grubfan_kick</b> · Rust · Kick x Rust</div>
+            </div>
+          </div>
+          <div class="prog"><div class="bar"><i style="width:79%"></i></div><div class="n">95 / 120 min</div></div>
+          <div class="eta">25m<small>left</small></div>
+        </div>
+        <div class="row q">
+          <div class="who">
+            <span class="mark tw" title="Twitch">T</span>
+            <div class="t">
+              <div class="drop">Road Sign Kilt</div>
+              <div class="meta">grubfan · Rust · after Hazmat Suit Skin</div>
+            </div>
+          </div>
+          <div class="prog"><div class="bar"><i style="width:0"></i></div><div class="n">0 / 60 min</div></div>
+          <div class="eta">Next</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-h"><h2>Claimed</h2><span id="count">Showing 10 of 27</span></div>
+      <div class="filters">
+        <div class="fgroup" data-key="game"><span>Game</span>
+          <button class="f" aria-pressed="true" data-v="">All</button>
+          <button class="f" aria-pressed="false" data-v="rust">Rust</button>
+          <button class="f" aria-pressed="false" data-v="mr">Marvel Rivals</button>
+          <button class="f" aria-pressed="false" data-v="ow">Overwatch</button>
+        </div>
+        <span class="vr"></span>
+        <div class="fgroup" data-key="acct"><span>Account</span>
+          <button class="f" aria-pressed="true" data-v="">All</button>
+          <button class="f" aria-pressed="false" data-v="grubfan">grubfan</button>
+          <button class="f" aria-pressed="false" data-v="grubfan_kick">grubfan_kick</button>
+          <button class="f" aria-pressed="false" data-v="grub_alt">grub_alt</button>
+        </div>
+      </div>
+      <ul class="hist" id="hist">
+        <li class="h" data-game="rust" data-acct="grubfan"><span class="ck"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg></span><span class="nm"><b>Rust Wood Box Skin</b><small>Rust</small></span><span class="ac"><span class="mark tw">T</span>grubfan</span><span class="tm">Today 09:12</span></li>
+        <li class="h" data-game="mr" data-acct="grubfan"><span class="ck"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg></span><span class="nm"><b>Marvel Rivals Spray</b><small>Marvel Rivals</small></span><span class="ac"><span class="mark tw">T</span>grubfan</span><span class="tm">Today 07:40</span></li>
+        <li class="h" data-game="rust" data-acct="grubfan_kick"><span class="ck"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg></span><span class="nm"><b>Kick Rust Hoodie</b><small>Rust</small></span><span class="ac"><span class="mark kk">K</span>grubfan_kick</span><span class="tm">Yest 22:05</span></li>
+        <li class="h" data-game="rust" data-acct="grubfan"><span class="ck"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg></span><span class="nm"><b>Rust Garage Door Skin</b><small>Rust</small></span><span class="ac"><span class="mark tw">T</span>grubfan</span><span class="tm">Yest 18:30</span></li>
+        <li class="h" data-game="mr" data-acct="grubfan"><span class="ck"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg></span><span class="nm"><b>Marvel Rivals Banner</b><small>Marvel Rivals</small></span><span class="ac"><span class="mark tw">T</span>grubfan</span><span class="tm">Oct 23</span></li>
+        <li class="h" data-game="rust" data-acct="grubfan_kick"><span class="ck"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg></span><span class="nm"><b>Kick Rust Bandana</b><small>Rust</small></span><span class="ac"><span class="mark kk">K</span>grubfan_kick</span><span class="tm">Oct 23</span></li>
+        <li class="h" data-game="ow" data-acct="grubfan"><span class="ck"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg></span><span class="nm"><b>Overwatch Spray "Grub"</b><small>Overwatch</small></span><span class="ac"><span class="mark tw">T</span>grubfan</span><span class="tm">Oct 21</span></li>
+        <li class="h" data-game="ow" data-acct="grub_alt"><span class="ck"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg></span><span class="nm"><b>Overwatch Player Icon</b><small>Overwatch</small></span><span class="ac"><span class="mark tw">T</span>grub_alt</span><span class="tm">Oct 21</span></li>
+        <li class="h" data-game="rust" data-acct="grubfan"><span class="ck"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg></span><span class="nm"><b>Rust Sleeping Bag Skin</b><small>Rust</small></span><span class="ac"><span class="mark tw">T</span>grubfan</span><span class="tm">Oct 20</span></li>
+        <li class="h" data-game="rust" data-acct="grubfan_kick"><span class="ck"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg></span><span class="nm"><b>Kick Rust Beanie</b><small>Rust</small></span><span class="ac"><span class="mark kk">K</span>grubfan_kick</span><span class="tm">Oct 19</span></li>
+        <li class="empty" id="empty" hidden>No claims match these filters in the last 10.</li>
+      </ul>
+      <div class="more"><span>Newest first</span><button class="btn" type="button">Load 10 more</button></div>
+    </section>
+  </main>
+</div>
+<div class="mock-tag">r2 · 09 Pulse · Rewards · <a href="../">all mockups</a></div>
+<script>
+  (function () {
+    var sel = { game: '', acct: '' }, rows = document.querySelectorAll('#hist .h'), empty = document.getElementById('empty'), count = document.getElementById('count');
+    document.querySelectorAll('.fgroup').forEach(function (g) {
+      g.addEventListener('click', function (e) {
+        var b = e.target.closest('.f'); if (!b) return;
+        g.querySelectorAll('.f').forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+        sel[g.dataset.key] = b.dataset.v;
+        var n = 0;
+        rows.forEach(function (r) {
+          var ok = (!sel.game || r.dataset.game === sel.game) && (!sel.acct || r.dataset.acct === sel.acct);
+          r.hidden = !ok; if (ok) n++;
+        });
+        empty.hidden = n > 0;
+        count.textContent = (sel.game || sel.acct) ? n + ' shown' : 'Showing 10 of 27';
+      });
+    });
+  })();
+</script>
+</body>
+</html>
