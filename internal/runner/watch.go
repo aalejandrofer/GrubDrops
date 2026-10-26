@@ -93,6 +93,7 @@ func (r *Runner) start(ctx context.Context) error {
 		r.current = nil
 		r.clearWatchViewLocked()
 		r.noStream = map[string]bool{}
+		r.sleepNoStream = true
 		r.mu.Unlock()
 		slog.Info("runner no eligible streams live in any queued campaign; sleeping",
 			"kind", "discovery", "account", r.cfg.AccountID, "campaign", camp.Name)

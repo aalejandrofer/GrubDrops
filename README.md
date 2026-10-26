@@ -182,9 +182,10 @@ change what mines first. Each change reloads the runners in the background.
   deleted accounts.
 - **Runner:** each account has one runner. It scans the account's campaigns and
   inventory, asks the planner for a queue, watches the top drop and claims it
-  when done. It rebuilds the plan every 15 minutes while it watches. With
-  nothing live it scans again after 12 hours, or at once when the chosen games
-  or an account change.
+  when done. It rebuilds the plan every 15 minutes while it watches. With no
+  campaign to mine it scans again after 12 hours, or at once when the chosen
+  games or an account change. Queued campaigns with no live stream are
+  rechecked every 5 minutes.
 
 ## Priority logic
 

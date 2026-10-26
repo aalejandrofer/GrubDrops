@@ -346,6 +346,35 @@ func TestSnapshot_NextScanAt_Sleeping(t *testing.T) {
 	}
 }
 
+func TestSnapshot_NextScanAt_NoStreamSleep(t *testing.T) {
+	f := platformtest.NewFake()
+	f.Campaigns = []platform.Campaign{camp("c1", "Rust", "d1")} // queued, no streams
+	r := newRunner(f, nil)
+	steps(t, r, 2) // pick, then start finds no stream
+	if r.State() != StateSleeping {
+		t.Fatal(r.State())
+	}
+	r.mu.Lock()
+	last := r.lastScanTry
+	r.mu.Unlock()
+	if got := r.Snapshot().NextScanAt; !got.Equal(last.Add(5 * time.Minute)) {
+		t.Fatalf("no-stream NextScanAt=%v want %v", got, last.Add(5*time.Minute))
+	}
+
+	f.Campaigns = nil // next pick has an empty queue
+	r.setState(context.Background(), StatePicking)
+	steps(t, r, 1)
+	if r.State() != StateSleeping {
+		t.Fatal(r.State())
+	}
+	r.mu.Lock()
+	last = r.lastScanTry
+	r.mu.Unlock()
+	if got := r.Snapshot().NextScanAt; !got.Equal(last.Add(12 * time.Hour)) {
+		t.Fatalf("empty-queue NextScanAt=%v want %v", got, last.Add(12*time.Hour))
+	}
+}
+
 func TestSnapshot_NextScanAt_StoppedIsZero(t *testing.T) {
 	f := platformtest.NewFake()
 	f.ListErr = fmt.Errorf("x: %w", platform.ErrIntegrityBlocked)

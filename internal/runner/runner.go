@@ -21,11 +21,11 @@ var (
 // Safeguard values carried over from 1.x. idleRecheck, recheckInterval,
 // stepErrBackoff and rescanEvery are vars so tests can shrink them.
 var (
-	// idleRecheck is the wait while sleeping with nothing live. A games or
-	// account change rebuilds the runner, which scans at once.
+	// idleRecheck is the wait while sleeping with an empty plan queue. A
+	// games or account change rebuilds the runner, which scans at once.
 	idleRecheck = 12 * time.Hour
-	// recheckInterval is the wait in every other idle state, such as
-	// awaiting a channel connect.
+	// recheckInterval is the wait in every other idle state: queued
+	// campaigns with no live stream, or awaiting a channel connect.
 	recheckInterval = 5 * time.Minute
 	stepErrBackoff  = 5 * time.Second
 	// rescanEvery is how often a watching runner rebuilds the plan.
@@ -53,15 +53,18 @@ type Runner struct {
 	startedAt   time.Time
 	lastPollAt  time.Time
 	lastScanAt  time.Time
-	lastScanTry time.Time     // last scan attempt, failed or not; paces rescans
-	nextRecheck time.Time     // deadline of the armed idle wait timer; zero = none
-	lastBeatAt  time.Time     // when the current watch last beaconed; zero = not yet
-	wake        chan struct{} // signalled on every state change, cap 1
-	tramp       *trampoline   // PubSub forwarder for this account; nil = none
-	queue       []plan.Target
-	blocked     []plan.Blocked
-	skipped     map[string]bool
-	noStream    map[string]bool // campaign IDs with no live channel this cycle
+	lastScanTry time.Time // last scan attempt, failed or not; paces rescans
+	nextRecheck time.Time // deadline of the armed idle wait timer; zero = none
+	// sleepNoStream marks a sleep with campaigns queued but no eligible live
+	// stream; it waits recheckInterval, not idleRecheck. pick clears it.
+	sleepNoStream bool
+	lastBeatAt    time.Time     // when the current watch last beaconed; zero = not yet
+	wake          chan struct{} // signalled on every state change, cap 1
+	tramp         *trampoline   // PubSub forwarder for this account; nil = none
+	queue         []plan.Target
+	blocked       []plan.Blocked
+	skipped       map[string]bool
+	noStream      map[string]bool // campaign IDs with no live channel this cycle
 
 	// claimFailures counts consecutive Claim failures per benefit (Task 5).
 	claimFailures map[string]int
@@ -159,7 +162,7 @@ func (r *Runner) Snapshot() Snapshot {
 		if !r.nextRecheck.IsZero() {
 			s.NextScanAt = r.nextRecheck
 		} else if !r.lastScanTry.IsZero() {
-			s.NextScanAt = r.lastScanTry.Add(idleWait(r.state))
+			s.NextScanAt = r.lastScanTry.Add(idleWait(r.state, r.sleepNoStream))
 		}
 	default:
 		if !r.lastScanTry.IsZero() {
@@ -230,9 +233,11 @@ func (r *Runner) step(ctx context.Context) error {
 	return errIdle
 }
 
-// idleWait is how long Run waits after errIdle in state s.
-func idleWait(s State) time.Duration {
-	if s == StateSleeping {
+// idleWait is how long Run waits after errIdle in state s. Only a sleep with
+// an empty plan queue waits idleRecheck; noStream means campaigns are queued
+// but none has an eligible live stream.
+func idleWait(s State, noStream bool) time.Duration {
+	if s == StateSleeping && !noStream {
 		return idleRecheck
 	}
 	return recheckInterval
@@ -269,6 +274,7 @@ func (r *Runner) pick(ctx context.Context) error {
 	// A fresh pick retries every campaign: start keeps its own no-stream set
 	// while it walks the queue, so a campaign offline earlier is not starved.
 	r.noStream = map[string]bool{}
+	r.sleepNoStream = false
 	var next *plan.Target
 	if len(res.Queue) > 0 {
 		t := res.Queue[0]
@@ -478,9 +484,9 @@ func (r *Runner) Run(ctx context.Context) error {
 			return nil
 		case errors.Is(err, errIdle):
 			backoff = 0
-			wait := idleWait(before)
-			timer := time.NewTimer(wait)
 			r.mu.Lock()
+			wait := idleWait(before, r.sleepNoStream)
+			timer := time.NewTimer(wait)
 			r.nextRecheck = time.Now().Add(wait)
 			r.mu.Unlock()
 			select {

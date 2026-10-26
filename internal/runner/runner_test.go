@@ -332,11 +332,44 @@ func TestIdleWait(t *testing.T) {
 	if idleRecheck != 12*time.Hour || recheckInterval != 5*time.Minute {
 		t.Fatalf("idleRecheck=%v recheckInterval=%v", idleRecheck, recheckInterval)
 	}
-	if got := idleWait(StateSleeping); got != idleRecheck {
-		t.Fatalf("sleeping wait=%v", got)
+	if got := idleWait(StateSleeping, false); got != idleRecheck {
+		t.Fatalf("empty-queue sleep wait=%v", got)
 	}
-	if got := idleWait(StateAwaitingConnect); got != recheckInterval {
+	if got := idleWait(StateSleeping, true); got != recheckInterval {
+		t.Fatalf("no-stream sleep wait=%v", got)
+	}
+	if got := idleWait(StateAwaitingConnect, false); got != recheckInterval {
 		t.Fatalf("awaiting connect wait=%v", got)
+	}
+}
+
+// A sleep from start (campaigns queued, no live stream) arms the 5 min
+// recheck in Run, not the 12 h idle wait.
+func TestRunner_NoStreamSleepArmsRecheck(t *testing.T) {
+	f := platformtest.NewFake()
+	f.Campaigns = []platform.Campaign{camp("c1", "Rust", "d1")} // no streams
+	r := newRunner(f, func(c *Config) { c.TickInterval = time.Millisecond })
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- r.Run(ctx) }()
+	var dl time.Time
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		r.mu.Lock()
+		dl = r.nextRecheck
+		r.mu.Unlock()
+		if !dl.IsZero() {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	<-done
+	if dl.IsZero() {
+		t.Fatalf("no recheck armed; state=%s", r.State())
+	}
+	if left := time.Until(dl); left > recheckInterval || left < recheckInterval-time.Minute {
+		t.Fatalf("recheck in %v, want about %v", left, recheckInterval)
 	}
 }
 
