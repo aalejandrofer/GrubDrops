@@ -28,6 +28,9 @@ All notable changes to GrubDrops.
 
 ### Changed
 
+- **Home card size.** Cards no longer show a rank number, and card size follows the order on the page, so an idle top-priority game listed below active ones is small.
+- **Up next account names.** Each name is tinted by platform: purple for Twitch, green for Kick.
+
 - The miner runs the v2 planner, runner and collector and serves the JSON API and the embedded SPA.
 - The pool restarts a panicked runner from its builder after one minute.
 - `GET /api/events` streams every ring log line as a `log` event, and open streams end at shutdown instead of holding it for 5 s.

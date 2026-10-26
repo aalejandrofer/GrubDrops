@@ -11,6 +11,8 @@ export type AccountRow = { runner: Runner; progress: number; muted: boolean; pau
 export type GameCard = {
 	game: Game;
 	rank: number;
+	/** 1-based position on Home; sets the card layout. */
+	pos: number;
 	size: 'lg' | 'sm';
 	rows: AccountRow[];
 	queued: Target[];
@@ -51,6 +53,7 @@ export function gameCards(g: Game[], r: Runner[], paused: ReadonlySet<string> = 
 		return {
 			game,
 			rank,
+			pos: rank,
 			size: rank <= 2 ? 'lg' : 'sm',
 			rows,
 			queued,
@@ -63,14 +66,15 @@ export function gameCards(g: Game[], r: Runner[], paused: ReadonlySet<string> = 
 /**
  * At most max cards for Home. Cards that are mining or queued come first, in
  * rank order, then the rest in rank order, so a low-priority game that is
- * mining is not hidden behind idle top games. Each card keeps its real rank;
- * the first two shown are large.
+ * mining is not hidden behind idle top games. Layout follows the display
+ * position: the first two shown are large.
  */
 export function visibleCards(cards: GameCard[], max = 7): { shown: GameCard[]; hidden: number } {
 	const active = (c: GameCard) => c.rows.some((r) => !r.muted && r.runner.current !== null) || c.queued.length > 0;
 	const ordered = cards.filter(active).concat(cards.filter((c) => !active(c)));
-	// Size follows display position; the rank on each card stays the real priority.
-	const shown = ordered.slice(0, max).map((c, i) => ({ ...c, size: i < 2 ? ('lg' as const) : ('sm' as const) }));
+	const shown = ordered
+		.slice(0, max)
+		.map((c, i) => ({ ...c, pos: i + 1, size: i < 2 ? ('lg' as const) : ('sm' as const) }));
 	return { shown, hidden: cards.length - shown.length };
 }
 

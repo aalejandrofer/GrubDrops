@@ -126,7 +126,7 @@
 		{@const full = shown(q.accountId, q.items)}
 		{@const fold = foldQueue(full, open[q.accountId] === true)}
 		{#if qs.length > 1}
-			<div class="acct"><PlatformMark platform={q.platform} size="sm" />{q.accountName}</div>
+			<div class="acct"><PlatformMark platform={q.platform} size="sm" /><span class="pf-name {q.platform}">{q.accountName}</span></div>
 		{/if}
 		<ol class="queue">
 			{#each fold.rows as item, i (item.benefit_id)}
@@ -154,9 +154,10 @@
 						<div class="d">{item.benefit_name}</div>
 						<div class="g">{item.game} · {item.campaign_name}</div>
 						<div class="m">
+							<span class="pf-name {q.platform}">{q.accountName}</span> ·
 							{after
-								? t('upnext.meta_after', { account: q.accountName, min: item.required_minutes, drop: after })
-								: t('upnext.meta', { account: q.accountName, min: item.required_minutes })}
+								? t('upnext.meta_after', { min: item.required_minutes, drop: after })
+								: t('upnext.meta', { min: item.required_minutes })}
 						</div>
 					</div>
 					<div class="mv">

@@ -50,10 +50,9 @@
 	}
 </script>
 
-<article class="game p{card.rank <= 2 ? card.rank : 3}">
+<article class="game p{card.pos <= 2 ? card.pos : 3}">
 	<div class="artw">
 		<BoxArt src={game.box_art_url} name={game.name} size={card.size} />
-		<span class="rank">{String(card.rank).padStart(2, '0')}</span>
 	</div>
 	<div class="body">
 		<div class="status">
@@ -66,7 +65,7 @@
 			{/if}
 		</div>
 
-		{#if readyAccounts !== null && card.rank === 1}
+		{#if readyAccounts !== null && card.pos === 1}
 			<p class="idle-l">{tn('home.ready_all', readyAccounts)}</p>
 		{/if}
 
@@ -158,14 +157,6 @@
 		z-index: 1;
 		background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.6));
 		pointer-events: none;
-	}
-	.rank {
-		position: absolute;
-		left: 8px;
-		bottom: 6px;
-		z-index: 2;
-		font: 500 12px/1 var(--mono);
-		color: rgba(255, 255, 255, 0.9);
 	}
 	.body {
 		padding: 16px 20px;

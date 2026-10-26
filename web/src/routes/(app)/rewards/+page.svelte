@@ -209,7 +209,7 @@
 								<div class="t">{item.benefit_name}</div>
 								<div class="c">
 									<span>{item.game} · {item.campaign_name}</span>
-									<span class="acct"><PlatformMark platform={q.platform} size="sm" />{q.accountName}</span>
+									<span class="acct"><PlatformMark platform={q.platform} size="sm" /><span class="pf-name {q.platform}">{q.accountName}</span></span>
 								</div>
 							</div>
 							<span class="req">{t('home.queued_min', { n: formatInt(item.required_minutes) })}</span>

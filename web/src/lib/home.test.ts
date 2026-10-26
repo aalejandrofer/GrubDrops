@@ -221,6 +221,7 @@ describe('visibleCards', () => {
 		Array.from({ length: n }, (_, i) => ({
 			game: { id: String(i + 1) } as unknown as Game,
 			rank: i + 1,
+			pos: i + 1,
 			size: 'sm' as const,
 			rows: active.includes(i + 1)
 				? [{ runner: { current: { game: 'x' } } as Runner, progress: 0, muted: false, paused: false }]
@@ -239,9 +240,10 @@ describe('visibleCards', () => {
 		expect(r.shown.map((c) => c.rank)).toEqual([1, 2, 3, 4, 5, 6, 7]);
 		expect(r.hidden).toBe(3);
 	});
-	it('sizes by display position, keeps rank', () => {
+	it('sizes by display position', () => {
 		const r = visibleCards(mk(4, [4]));
 		expect(r.shown.map((c) => c.rank)).toEqual([4, 1, 2, 3]);
+		expect(r.shown.map((c) => c.pos)).toEqual([1, 2, 3, 4]);
 		expect(r.shown.map((c) => c.size)).toEqual(['lg', 'lg', 'sm', 'sm']);
 	});
 	it('keeps a mining low-priority game and lists it first', () => {

@@ -23,6 +23,8 @@
 	--blue-soft: rgba(88, 166, 255, 0.15);
 	--twitch: #9146ff;
 	--kick: #53fc18;
+	--twitch-fg: #a970ff;
+	--kick-fg: #53fc18;
 	--art-bg: #22262e;
 	--radius: 8px;
 	--font: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -53,6 +55,8 @@
 	--red-soft: rgba(209, 36, 47, 0.15);
 	--blue: #0969da;
 	--blue-soft: rgba(9, 105, 218, 0.15);
+	--twitch-fg: #7d3ee0;
+	--kick-fg: #217a00;
 	--art-bg: var(--surface-3);
 	color-scheme: light;
 }
@@ -73,4 +77,12 @@ body {
 a {
 	color: inherit;
 	text-decoration: none;
+}
+
+/* Account names tinted by platform. */
+.pf-name.twitch {
+	color: var(--twitch-fg);
+}
+.pf-name.kick {
+	color: var(--kick-fg);
 }
