@@ -75,6 +75,7 @@ All notable changes to GrubDrops.
 
 ### Docs
 
+- v2 README: a source build says to build the UI before `go build`, since a binary without it serves only the "UI not built" page; the Home row lists recent claims.
 - Added a warning that GrubDrops is currently not working as expected.
 - README describes the v2 global chosen-games list, the planner and the runner.
 

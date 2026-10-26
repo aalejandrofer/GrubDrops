@@ -59,10 +59,10 @@ What you need depends on which platform you're mining:
 | **Login** | device-code (`twitch.tv/activate`) | `cookies.txt` export |
 | **How it watches** | direct HTTP — no browser | WebSocket; Chrome **sidecar** fallback (IVS playback) |
 | **Docker** | optional | **strongly recommended** — WS works without it, but the Chrome IVS fallback needs the docker socket |
-| **Run from source, no Docker** | ✅ a plain `go build` binary works | ⚠️ WS works; the Chrome fallback needs Docker |
+| **Run from source, no Docker** | ✅ build the UI, then `go build` (see [Development](#development)) | ⚠️ WS works; the Chrome fallback needs Docker |
 | **CPU arch** | any — `amd64` + `arm64` | `amd64` + `arm64` (arm64 is heavy — see note) |
 
-Twitch is direct HTTP — a plain Go binary mines it anywhere, no Docker. Kick mines browserless over WebSocket by default; the dependable Chrome IVS fallback runs as a sidecar over the docker socket, so **Docker is strongly recommended for Kick**.
+Twitch is direct HTTP — a Go binary mines it anywhere, no Docker. Kick mines browserless over WebSocket by default; the dependable Chrome IVS fallback runs as a sidecar over the docker socket, so **Docker is strongly recommended for Kick**.
 
 > **Raspberry Pi / ARM:** both images ship `arm64`; the sidecar uses Debian Chromium (keeps the H.264/AAC codecs for Kick's IVS stream). Heavy — ~4 GB RAM each.
 >
@@ -76,7 +76,7 @@ Twitch is direct HTTP — a plain Go binary mines it anywhere, no Docker. Kick m
 | Linux `arm64` / Raspberry Pi | ✅ | ✅ — Chromium sidecar, ~4 GB RAM each |
 | macOS / Windows · Docker Desktop (Intel) | ✅ | ✅ |
 | macOS / Windows · Apple Silicon | ✅ | ✅ — arm64 Chromium sidecar |
-| `go build` from source (any OS) | ✅ | ✅ WS; Chrome fallback needs Docker |
+| From source: UI build, then `go build` (any OS) | ✅ | ✅ WS; Chrome fallback needs Docker |
 
 ### Run it
 
@@ -135,7 +135,9 @@ Open **http://localhost:8080** and create the admin login.
   stack, on a current Docker Engine.
 - **Twitch only?** Drop the docker-socket mount — no sidecars get created.
 - **Every knob?** Reference compose: [`deploy/docker-compose.yml`](deploy/docker-compose.yml).
-- **Build it?** `docker build -f deploy/Dockerfile.miner .`, or `go build ./cmd/miner`.
+- **Build it?** `docker build -f deploy/Dockerfile.miner .`. From source, build the UI first:
+  `npm --prefix web ci && npm --prefix web run build`, then `go build ./cmd/miner`.
+  Without the UI build the miner serves a "UI not built" page.
 
 ## Adding accounts
 
@@ -256,7 +258,7 @@ Pages:
 
 | Page | What it shows |
 |------|------|
-| **Home** | What each account is mining, the up-next queue, recent events. |
+| **Home** | What each account is mining, the up-next queue, recent claims. |
 | **Games** | Your chosen games, added by name, in a priority order you drag. |
 | **Rewards** | Claimed drops across accounts, with filters. |
 | **Settings** | General, Accounts, Notifications, Updates and Health. |
