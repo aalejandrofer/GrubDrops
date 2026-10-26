@@ -226,14 +226,14 @@ describe('accountStatus', () => {
 		expect(accountStatus(ACC('acc-hjune'), r)).toBe('idle');
 		expect(accountStatus(ACC('acc-hjune'), undefined)).toBe('idle');
 	});
-	it('paused wins over idle, mining and signed out', () => {
+	it('paused wins over idle and mining, signed out wins over paused', () => {
 		const a = ACC('acc-hjune');
 		a.enabled = false;
 		expect(accountStatus(a, RUN('acc-hjune'))).toBe('paused');
 		expect(accountStatus(a, undefined)).toBe('paused');
 		const k = ACC('acc-kick');
 		k.enabled = false;
-		expect(accountStatus(k, undefined)).toBe('paused');
+		expect(accountStatus(k, undefined)).toBe('signed_out');
 	});
 });
 

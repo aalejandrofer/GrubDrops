@@ -112,10 +112,10 @@ export function createDeviceFlow(deps: DeviceFlowDeps): DeviceFlow {
 
 export type AccountStatus = 'paused' | 'mining' | 'signed_out' | 'idle';
 
-/** Paused wins over every other status: the runner idles, sign-in state aside. */
+/** Signed out wins, then paused: a paused account without a session still needs a login. */
 export function accountStatus(a: Account, r: Runner | undefined): AccountStatus {
-	if (!a.enabled) return 'paused';
 	if (a.needs_login || r?.state === 'needs_login') return 'signed_out';
+	if (!a.enabled) return 'paused';
 	if (r?.current && (r.state === 'watching' || r.state === 'claiming')) return 'mining';
 	return 'idle';
 }

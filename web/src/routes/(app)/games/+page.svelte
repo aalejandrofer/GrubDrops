@@ -41,7 +41,7 @@
 		scanStamp(lastScan, live.games?.next_scan_at ?? null, new Date(now))
 			.filter((x) => x.key !== 'home.last_scan')
 			.map((x) => t(x.key, x.vars))
-			.join(' ')
+			.join(' · ')
 	);
 	const rows = $derived(drag ? moveGame(games, drag.from, drag.to) : games);
 	const sugg = $derived(suggestions(hits, q));
@@ -284,7 +284,7 @@
 							{/each}
 						</ul>
 					{:else}
-						<p class="muted">{t('games.nothing_live', { rel: relTime(lastScan, now) })}{#if nextText} {nextText}{/if}</p>
+						<p class="muted">{t('games.nothing_live', { rel: relTime(lastScan, now) })}{#if nextText} · {nextText}{/if}</p>
 					{/if}
 				</div>
 			</article>
