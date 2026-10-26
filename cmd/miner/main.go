@@ -267,14 +267,6 @@ func run(ctx context.Context) error {
 		logger.Info("twitch backend: direct HTTP (Android device-code, no integrity header)")
 	}
 
-	resolver := func(accountID string) string {
-		acc, err := q.GetAccount(ctx, accountID)
-		if err != nil || !acc.WebhookUrl.Valid {
-			return ""
-		}
-		return acc.WebhookUrl.String
-	}
-
 	buildNotifier := func() notify.Notifier {
 		// Build the per-kind filter from the saved toggles every time so a
 		// settings save takes effect. State events are never sent to Discord
@@ -312,10 +304,7 @@ func run(ctx context.Context) error {
 		} else {
 			fallback = &notify.NoopNotifier{Logger: logger}
 		}
-		routed := notify.NewAccountRouted(fallback, resolver, filter, proxyTransport)
-		routed.Username = botUsername
-		routed.AvatarURL = avatarURL
-		return routed
+		return fallback
 	}
 
 	var notifierMu sync.Mutex
