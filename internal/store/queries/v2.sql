@@ -84,17 +84,25 @@ DELETE FROM chosen_games;
 INSERT INTO chosen_games (game_id, rank) VALUES (?, ?);
 
 -- name: ListClaimLogPage :many
--- An empty game or account_id matches any.
+-- An empty game, account_id or pattern matches any. The pattern is a LIKE pattern with bang as the escape char, applied through the like function.
 SELECT * FROM claim_log
 WHERE (sqlc.arg(game) = '' OR game = sqlc.arg(game))
   AND (sqlc.arg(account_id) = '' OR account_id = sqlc.arg(account_id))
+  AND (sqlc.arg(pattern) = ''
+    OR like(sqlc.arg(pattern), benefit_name, '!')
+    OR like(sqlc.arg(pattern), campaign_name, '!')
+    OR like(sqlc.arg(pattern), game, '!'))
 ORDER BY claimed_at DESC, benefit_id ASC
 LIMIT sqlc.arg(limit) OFFSET sqlc.arg(offset);
 
 -- name: CountClaimLogFiltered :one
 SELECT COUNT(*) FROM claim_log
 WHERE (sqlc.arg(game) = '' OR game = sqlc.arg(game))
-  AND (sqlc.arg(account_id) = '' OR account_id = sqlc.arg(account_id));
+  AND (sqlc.arg(account_id) = '' OR account_id = sqlc.arg(account_id))
+  AND (sqlc.arg(pattern) = ''
+    OR like(sqlc.arg(pattern), benefit_name, '!')
+    OR like(sqlc.arg(pattern), campaign_name, '!')
+    OR like(sqlc.arg(pattern), game, '!'));
 
 -- name: ListClaimLogGames :many
 SELECT DISTINCT game FROM claim_log WHERE game <> '' ORDER BY game ASC;

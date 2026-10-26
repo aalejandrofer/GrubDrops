@@ -293,3 +293,48 @@ func TestClaimLog_GetOne(t *testing.T) {
 	_, err = l.Get(ctx, "a1", "nope")
 	require.Error(t, err)
 }
+
+func TestClaimLog_PageQuery(t *testing.T) {
+	_, q := openV2(t)
+	l := NewClaimLog(q)
+	ctx := context.Background()
+	base := time.Unix(1_700_000_000, 0)
+	rows := []ClaimEntry{
+		{AccountID: "a1", BenefitID: "b1", Game: "Rust", CampaignName: "Winter Event", BenefitName: "Golden Hat", ClaimedAt: base.Add(1 * time.Second)},
+		{AccountID: "a1", BenefitID: "b2", Game: "Apex", CampaignName: "Season Start", BenefitName: "Skin 100% off", ClaimedAt: base.Add(2 * time.Second)},
+		{AccountID: "a1", BenefitID: "b3", Game: "Rust", CampaignName: "Spring", BenefitName: "Under_score", ClaimedAt: base.Add(3 * time.Second)},
+		{AccountID: "a2", BenefitID: "b4", Game: "Apex Legends", CampaignName: "Spring", BenefitName: "Banner!", ClaimedAt: base.Add(4 * time.Second)},
+	}
+	for _, e := range rows {
+		e.Platform, e.Source = "twitch", ClaimSourceGrubDrops
+		require.NoError(t, l.Record(ctx, e))
+	}
+	cases := []struct {
+		name  string
+		f     ClaimFilter
+		want  []string
+		total int
+	}{
+		{"benefit", ClaimFilter{Query: "golden", Limit: 10}, []string{"b1"}, 1},
+		{"campaign", ClaimFilter{Query: "SPRING", Limit: 10}, []string{"b4", "b3"}, 2},
+		{"game", ClaimFilter{Query: "apex", Limit: 10}, []string{"b4", "b2"}, 2},
+		{"percent literal", ClaimFilter{Query: "%", Limit: 10}, []string{"b2"}, 1},
+		{"underscore literal", ClaimFilter{Query: "_", Limit: 10}, []string{"b3"}, 1},
+		{"escape char literal", ClaimFilter{Query: "!", Limit: 10}, []string{"b4"}, 1},
+		{"wildcard not special", ClaimFilter{Query: "g%t", Limit: 10}, []string{}, 0},
+		{"with game", ClaimFilter{Query: "spring", Game: "Rust", Limit: 10}, []string{"b3"}, 1},
+		{"with account", ClaimFilter{Query: "spring", AccountID: "a2", Limit: 10}, []string{"b4"}, 1},
+		{"total ignores paging", ClaimFilter{Query: "spring", Limit: 1}, []string{"b4"}, 2},
+		{"no match", ClaimFilter{Query: "zzz", Limit: 10}, []string{}, 0},
+	}
+	for _, c := range cases {
+		got, total, err := l.Page(ctx, c.f)
+		require.NoError(t, err, c.name)
+		ids := []string{}
+		for _, e := range got {
+			ids = append(ids, e.BenefitID)
+		}
+		require.Equal(t, c.want, ids, c.name)
+		require.Equal(t, c.total, total, c.name)
+	}
+}

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
@@ -98,22 +99,29 @@ func claimEntries(rows []gen.ClaimLog) []ClaimEntry {
 	return out
 }
 
-// ClaimFilter selects a page of claim history. An empty Game or AccountID
-// matches any.
+// ClaimFilter selects a page of claim history. An empty Game, AccountID or
+// Query matches any. Query is a case-insensitive substring of the benefit
+// name, campaign name or game.
 type ClaimFilter struct {
-	Game, AccountID string
-	Limit, Offset   int
+	Game, AccountID, Query string
+	Limit, Offset          int
 }
+
+var likeEscaper = strings.NewReplacer(`!`, `!!`, `%`, `!%`, `_`, `!_`)
 
 // Page returns one page of claims, newest first, and the total row count
 // that matches the filter.
 func (l *ClaimLog) Page(ctx context.Context, f ClaimFilter) ([]ClaimEntry, int, error) {
-	total, err := l.Q.CountClaimLogFiltered(ctx, gen.CountClaimLogFilteredParams{Game: f.Game, AccountID: f.AccountID})
+	pattern := ""
+	if f.Query != "" {
+		pattern = "%" + likeEscaper.Replace(f.Query) + "%"
+	}
+	total, err := l.Q.CountClaimLogFiltered(ctx, gen.CountClaimLogFilteredParams{Game: f.Game, AccountID: f.AccountID, Pattern: pattern})
 	if err != nil {
 		return nil, 0, err
 	}
 	rows, err := l.Q.ListClaimLogPage(ctx, gen.ListClaimLogPageParams{
-		Game: f.Game, AccountID: f.AccountID, Limit: int64(f.Limit), Offset: int64(f.Offset),
+		Game: f.Game, AccountID: f.AccountID, Pattern: pattern, Limit: int64(f.Limit), Offset: int64(f.Offset),
 	})
 	if err != nil {
 		return nil, 0, err

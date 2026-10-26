@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -13,6 +14,7 @@ import (
 const (
 	claimsDefaultLimit = 10
 	claimsMaxLimit     = 100
+	claimsMaxQuery     = 100
 )
 
 type claimItem struct {
@@ -62,6 +64,15 @@ func queryInt(r *http.Request, key string, def int) (int, bool) {
 	return n, true
 }
 
+// claimQuery trims the search text and caps it at claimsMaxQuery runes.
+func claimQuery(v string) string {
+	v = strings.TrimSpace(v)
+	if r := []rune(v); len(r) > claimsMaxQuery {
+		v = string(r[:claimsMaxQuery])
+	}
+	return v
+}
+
 func (s *server) getClaims(w http.ResponseWriter, r *http.Request) {
 	limit, ok := queryInt(r, "limit", claimsDefaultLimit)
 	if !ok {
@@ -79,7 +90,7 @@ func (s *server) getClaims(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	q := r.URL.Query()
 	entries, total, err := s.d.Claims.Page(ctx, store.ClaimFilter{
-		Game: q.Get("game"), AccountID: q.Get("account"), Limit: limit, Offset: offset,
+		Game: q.Get("game"), AccountID: q.Get("account"), Query: claimQuery(q.Get("q")), Limit: limit, Offset: offset,
 	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "internal")

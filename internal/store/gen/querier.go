@@ -76,7 +76,7 @@ type Querier interface {
 	ListChosenGames(ctx context.Context) ([]ListChosenGamesRow, error)
 	ListClaimLogBenefitIDs(ctx context.Context, accountID string) ([]string, error)
 	ListClaimLogGames(ctx context.Context) ([]string, error)
-	// An empty game or account_id matches any.
+	// An empty game, account_id or pattern matches any. The pattern is a LIKE pattern with bang as the escape char, applied through the like function.
 	ListClaimLogPage(ctx context.Context, arg ListClaimLogPageParams) ([]ClaimLog, error)
 	// All benefit ids this account already has a claim row for. The watcher
 	// skips re-mining these: a claim is keyed by benefit id which is unique per

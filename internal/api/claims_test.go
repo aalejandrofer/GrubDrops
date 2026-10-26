@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -105,4 +107,29 @@ func TestClaims_BadLimit400(t *testing.T) {
 	// over-cap limit is clamped, not rejected
 	resp, _ := e.do("GET", "/api/claims?limit=1000", "", nil)
 	require.Equal(t, 200, resp.StatusCode)
+}
+
+func TestClaims_Query(t *testing.T) {
+	e := claimsEnv(t)
+	loginAdmin(t, e)
+	seedClaimAccount(t, e, "a1", "Alice")
+	recordClaim(t, e, "a1", "b1", "Rust", 1_700_000_001)
+	recordClaim(t, e, "a1", "b2", "Apex", 1_700_000_002)
+	get := func(qs string) (int, int) {
+		_, b := e.do("GET", "/api/claims?"+qs, "", nil)
+		var got struct {
+			Total int   `json:"total"`
+			Items []any `json:"items"`
+		}
+		require.NoError(t, json.Unmarshal(b, &got))
+		return got.Total, len(got.Items)
+	}
+	total, n := get("q=" + url.QueryEscape("  NAME-B1 "))
+	require.Equal(t, 1, total)
+	require.Equal(t, 1, n)
+	total, _ = get("q=apex&game=Rust")
+	require.Equal(t, 0, total)
+	total, _ = get("q=" + url.QueryEscape(strings.Repeat("x", 500)))
+	require.Equal(t, 0, total)
+	require.Equal(t, strings.Repeat("é", 100), claimQuery(" "+strings.Repeat("é", 150)))
 }

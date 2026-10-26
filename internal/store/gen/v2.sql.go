@@ -52,15 +52,20 @@ const countClaimLogFiltered = `-- name: CountClaimLogFiltered :one
 SELECT COUNT(*) FROM claim_log
 WHERE (?1 = '' OR game = ?1)
   AND (?2 = '' OR account_id = ?2)
+  AND (?3 = ''
+    OR like(?3, benefit_name, '!')
+    OR like(?3, campaign_name, '!')
+    OR like(?3, game, '!'))
 `
 
 type CountClaimLogFilteredParams struct {
 	Game      interface{} `json:"game"`
 	AccountID interface{} `json:"account_id"`
+	Pattern   interface{} `json:"pattern"`
 }
 
 func (q *Queries) CountClaimLogFiltered(ctx context.Context, arg CountClaimLogFilteredParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countClaimLogFiltered, arg.Game, arg.AccountID)
+	row := q.db.QueryRowContext(ctx, countClaimLogFiltered, arg.Game, arg.AccountID, arg.Pattern)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -289,22 +294,28 @@ const listClaimLogPage = `-- name: ListClaimLogPage :many
 SELECT account_id, benefit_id, platform, game, campaign_id, campaign_name, benefit_name, image_url, code, source, claimed_at FROM claim_log
 WHERE (?1 = '' OR game = ?1)
   AND (?2 = '' OR account_id = ?2)
+  AND (?3 = ''
+    OR like(?3, benefit_name, '!')
+    OR like(?3, campaign_name, '!')
+    OR like(?3, game, '!'))
 ORDER BY claimed_at DESC, benefit_id ASC
-LIMIT ?4 OFFSET ?3
+LIMIT ?5 OFFSET ?4
 `
 
 type ListClaimLogPageParams struct {
 	Game      interface{} `json:"game"`
 	AccountID interface{} `json:"account_id"`
+	Pattern   interface{} `json:"pattern"`
 	Offset    int64       `json:"offset"`
 	Limit     int64       `json:"limit"`
 }
 
-// An empty game or account_id matches any.
+// An empty game, account_id or pattern matches any. The pattern is a LIKE pattern with bang as the escape char, applied through the like function.
 func (q *Queries) ListClaimLogPage(ctx context.Context, arg ListClaimLogPageParams) ([]ClaimLog, error) {
 	rows, err := q.db.QueryContext(ctx, listClaimLogPage,
 		arg.Game,
 		arg.AccountID,
+		arg.Pattern,
 		arg.Offset,
 		arg.Limit,
 	)
