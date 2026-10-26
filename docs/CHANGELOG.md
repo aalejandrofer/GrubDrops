@@ -57,6 +57,7 @@ All notable changes to GrubDrops.
 - v2 JSON API: Kick avatars on runners, the overview and SSE `runner` events go through the Kick image proxy, so they load in the browser.
 - v2 JSON API: every time field is an RFC 3339 UTC string, and an unset time is `null` instead of `0001-01-01T00:00:00Z` (games, health, update).
 - v2 Home first run: the setup lead reads "Three steps." without the dropped filler line.
+- v2 Settings accounts: a Twitch device status the UI does not know ends the flow with the error line instead of a blank panel; the `device.json` fixture carries `status: pending`.
 
 ### Removed
 

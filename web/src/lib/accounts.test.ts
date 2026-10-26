@@ -67,6 +67,15 @@ describe('device flow', () => {
 		expect(flow.state).toBe('code');
 	});
 
+	it('an unknown status ends in error instead of a blank panel', async () => {
+		const f = fake([undefined as unknown as DeviceStatus['status']]);
+		const flow = createDeviceFlow({ api: f.api, accountId: 'a9', schedule: f.schedule, isNew: true });
+		await flow.start();
+		await f.fire();
+		expect(flow.state).toBe('error');
+		expect(f.hasPending()).toBe(false);
+	});
+
 	it('cancel on a new account deletes it', async () => {
 		const f = fake(['pending']);
 		const flow = createDeviceFlow({ api: f.api, accountId: 'a9', schedule: f.schedule, isNew: true });

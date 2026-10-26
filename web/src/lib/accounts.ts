@@ -103,7 +103,7 @@ export function createDeviceFlow(deps: DeviceFlowDeps): DeviceFlow {
 			arm(mine);
 			return;
 		}
-		flow.state = status;
+		flow.state = status === 'done' || status === 'expired' ? status : 'error';
 		listener();
 	}
 
