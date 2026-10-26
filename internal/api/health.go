@@ -32,12 +32,12 @@ func (s *server) routesHealth(r chi.Router) {
 }
 
 type healthEvent struct {
-	At          time.Time `json:"at"`
-	Level       string    `json:"level"`
-	Kind        string    `json:"kind"`
-	AccountID   string    `json:"account_id"`
-	AccountName string    `json:"account_name"`
-	Msg         string    `json:"msg"`
+	At          *string `json:"at"`
+	Level       string  `json:"level"`
+	Kind        string  `json:"kind"`
+	AccountID   string  `json:"account_id"`
+	AccountName string  `json:"account_name"`
+	Msg         string  `json:"msg"`
 }
 
 // LogAccountID returns the account a ring line is about, or "".
@@ -48,7 +48,7 @@ func LogAccountID(l mlog.LogLine) string {
 
 func logEvent(l mlog.LogLine, accountName string) healthEvent {
 	return healthEvent{
-		At: l.TS, Level: l.Level, Kind: l.Kind,
+		At: rfc3339(l.TS), Level: l.Level, Kind: l.Kind,
 		AccountID: LogAccountID(l), AccountName: accountName, Msg: l.Msg,
 	}
 }
@@ -59,10 +59,10 @@ func LogEventJSON(l mlog.LogLine, accountName string) any {
 }
 
 type canaryOut struct {
-	Platform  string    `json:"platform"`
-	OK        bool      `json:"ok"`
-	Detail    string    `json:"detail"`
-	CheckedAt time.Time `json:"checked_at"`
+	Platform  string  `json:"platform"`
+	OK        bool    `json:"ok"`
+	Detail    string  `json:"detail"`
+	CheckedAt *string `json:"checked_at"`
 }
 
 func isProblem(l mlog.LogLine) bool {
@@ -111,13 +111,12 @@ func (s *server) getHealth(w http.ResponseWriter, r *http.Request) {
 		events = append(events, logEvent(l, names[LogAccountID(l)]))
 	}
 
-	var lastScan *time.Time
+	var lastScan time.Time
 	if s.d.Scans != nil {
 		if scans, err := s.d.Scans.List(ctx); err == nil {
 			for _, sc := range scans {
-				if !sc.ScannedAt.IsZero() && (lastScan == nil || sc.ScannedAt.After(*lastScan)) {
-					t := sc.ScannedAt
-					lastScan = &t
+				if sc.ScannedAt.After(lastScan) {
+					lastScan = sc.ScannedAt
 				}
 			}
 		}
@@ -126,7 +125,7 @@ func (s *server) getHealth(w http.ResponseWriter, r *http.Request) {
 	cans := []canaryOut{}
 	for _, p := range []string{"twitch", "kick"} {
 		if res, ok, err := canary.LoadResult(ctx, s.d.Q, p); err == nil && ok {
-			cans = append(cans, canaryOut{Platform: p, OK: res.OK, Detail: res.Detail, CheckedAt: res.CheckedAt})
+			cans = append(cans, canaryOut{Platform: p, OK: res.OK, Detail: res.Detail, CheckedAt: rfc3339(res.CheckedAt)})
 		}
 	}
 
@@ -138,9 +137,9 @@ func (s *server) getHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"miner":         map[string]any{"started_at": s.d.StartTime, "version": s.d.Version, "commit": s.d.Commit},
+		"miner":         map[string]any{"started_at": rfc3339(s.d.StartTime), "version": s.d.Version, "commit": s.d.Commit},
 		"kick_sidecars": map[string]any{"running": running},
-		"last_scan_at":  lastScan,
+		"last_scan_at":  rfc3339(lastScan),
 		"canary":        cans,
 		"events":        events,
 		"counts":        counts,

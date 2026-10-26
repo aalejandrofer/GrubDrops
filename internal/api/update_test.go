@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -56,5 +57,6 @@ func TestUpdate_ShapeAndCheck(t *testing.T) {
 	assert.Equal(t, true, got["update_available"])
 	assert.Equal(t, []any{"fast", "fixed"}, got["notes"])
 	assert.Equal(t, "https://example.test/rel", got["notes_url"])
-	assert.NotNil(t, got["checked_at"])
+	require.IsType(t, "", got["checked_at"])
+	assert.True(t, strings.HasSuffix(got["checked_at"].(string), "Z"), got["checked_at"])
 }

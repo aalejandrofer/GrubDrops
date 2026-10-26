@@ -188,3 +188,33 @@ func TestLogEventJSON_MatchesHealthEvent(t *testing.T) {
 	assert.JSONEq(t, `{"at":"2026-10-25T12:00:00Z","level":"INFO","kind":"claim","account_id":"a1","account_name":"Alice","msg":"claimed"}`, string(b))
 	assert.Equal(t, "", LogAccountID(mlog.LogLine{}))
 }
+
+func TestHealth_TimesUTCOrNull(t *testing.T) {
+	plus1 := time.FixedZone("plus1", 3600)
+	ring := mlog.NewRing(10)
+	ring.PushEvent(mlog.KindState, "INFO", "x", nil)
+	e := newHealthEnv(t, func(d *Deps) {
+		d.Ring = ring
+		d.StartTime = time.Date(2026, 10, 25, 13, 0, 0, 0, plus1)
+	})
+	// A stored canary result with no check time renders checked_at as null.
+	require.NoError(t, e.s.d.Q.UpsertSettingString(context.Background(), gen.UpsertSettingStringParams{
+		Key: "canary:kick", Value: []byte(`{"ok":true,"detail":"d"}`),
+	}))
+	_, b := e.do("GET", "/api/health", "", nil)
+	var got struct {
+		Miner      map[string]any   `json:"miner"`
+		LastScanAt *string          `json:"last_scan_at"`
+		Canary     []map[string]any `json:"canary"`
+		Events     []map[string]any `json:"events"`
+	}
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.Equal(t, "2026-10-25T12:00:00Z", got.Miner["started_at"])
+	assert.Nil(t, got.LastScanAt)
+	require.Len(t, got.Canary, 1)
+	v, ok := got.Canary[0]["checked_at"]
+	assert.True(t, ok)
+	assert.Nil(t, v)
+	require.Len(t, got.Events, 1)
+	assert.True(t, strings.HasSuffix(got.Events[0]["at"].(string), "Z"), got.Events[0]["at"])
+}

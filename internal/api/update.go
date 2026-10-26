@@ -13,7 +13,7 @@ func (s *server) updateBody(ctx context.Context) map[string]any {
 	var (
 		latest, notesURL string
 		notes            = []string{}
-		checkedAt        *time.Time
+		checkedAt        *string
 	)
 	available := false
 	if s.d.Update != nil {
@@ -23,9 +23,7 @@ func (s *server) updateBody(ctx context.Context) map[string]any {
 		if len(n) > 0 {
 			notes = n
 		}
-		if !at.IsZero() {
-			checkedAt = &at
-		}
+		checkedAt = rfc3339(at)
 		available, _ = s.d.Update.Status(s.d.Version)
 	}
 	auto := true

@@ -17,11 +17,11 @@ import (
 const maxGameSearch = 10
 
 type gameCampaignJSON struct {
-	ID       string     `json:"id"`
-	Platform string     `json:"platform"`
-	Name     string     `json:"name"`
-	Drops    int        `json:"drops"`
-	EndsAt   *time.Time `json:"ends_at"`
+	ID       string  `json:"id"`
+	Platform string  `json:"platform"`
+	Name     string  `json:"name"`
+	Drops    int     `json:"drops"`
+	EndsAt   *string `json:"ends_at"`
 }
 
 type gameJSON struct {
@@ -36,7 +36,7 @@ type gameJSON struct {
 
 type gamesJSON struct {
 	Games      []gameJSON `json:"games"`
-	LastScanAt *time.Time `json:"last_scan_at"`
+	LastScanAt *string    `json:"last_scan_at"`
 }
 
 type gameHitJSON struct {
@@ -99,10 +99,9 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 		}
 		if i < len(statuses) {
 			for _, cs := range statuses[i].Campaigns {
-				cj := gameCampaignJSON{ID: cs.ID, Platform: cs.Platform, Name: cs.Name, Drops: cs.Drops}
-				if !cs.EndsAt.IsZero() {
-					t := cs.EndsAt
-					cj.EndsAt = &t
+				cj := gameCampaignJSON{
+					ID: cs.ID, Platform: cs.Platform, Name: cs.Name, Drops: cs.Drops,
+					EndsAt: rfc3339(cs.EndsAt),
 				}
 				g.Campaigns = append(g.Campaigns, cj)
 			}
@@ -118,9 +117,7 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 		}
 		out.Games[i] = g
 	}
-	if !last.IsZero() {
-		out.LastScanAt = &last
-	}
+	out.LastScanAt = rfc3339(last)
 	return out, nil
 }
 

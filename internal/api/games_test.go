@@ -96,9 +96,11 @@ func TestGames_ListStatesAndOrder(t *testing.T) {
 	g := newGamesEnv(t, snap)
 	ids := g.seed("Rust", "Overwatch", "Dead by Daylight")
 	require.NoError(t, g.chosen.Set(context.Background(), ids[:2]))
-	g.board.Observe(runner.Scan{AccountID: "a1", Platform: "twitch", At: time.Now(), Campaigns: []platform.Campaign{{
+	plus1 := time.FixedZone("plus1", 3600)
+	ends := time.Date(2026, 11, 1, 13, 0, 0, 0, plus1)
+	g.board.Observe(runner.Scan{AccountID: "a1", Platform: "twitch", At: time.Date(2026, 10, 25, 11, 0, 0, 0, plus1), Campaigns: []platform.Campaign{{
 		ID: "c1", Platform: "twitch", Game: "Rust", Name: "Rust Drops", Status: "active",
-		StartsAt: time.Now().Add(-time.Hour), EndsAt: time.Now().Add(time.Hour),
+		StartsAt: time.Now().Add(-time.Hour), EndsAt: ends,
 		Benefits: []platform.DropBenefit{{ID: "b1", RequiredMinutes: 30}},
 	}}})
 
@@ -116,7 +118,10 @@ func TestGames_ListStatesAndOrder(t *testing.T) {
 	assert.Equal(t, 1, rust.Campaigns[0].Drops)
 	assert.Equal(t, 2, ow.Priority)
 	assert.Equal(t, "no_campaign", ow.State)
-	assert.NotNil(t, got.LastScanAt)
+	require.NotNil(t, rust.Campaigns[0].EndsAt)
+	assert.Equal(t, "2026-11-01T12:00:00Z", *rust.Campaigns[0].EndsAt)
+	require.NotNil(t, got.LastScanAt)
+	assert.Equal(t, "2026-10-25T10:00:00Z", *got.LastScanAt)
 	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/Dead%20by%20Daylight-144x192.jpg", boxArtURL("Dead by Daylight"))
 }
 
