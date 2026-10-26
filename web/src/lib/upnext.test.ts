@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Runner } from '$lib/api/types';
 import mining from '$lib/fixtures/runners.mining.json';
-import { afterLabel, anyCustom, moveItem, queues } from './upnext';
+import { afterLabel, anyCustom, commitMove, moveItem, queues } from './upnext';
 
 const fx = () => structuredClone(mining) as Runner[];
 
@@ -44,5 +44,53 @@ describe('anyCustom', () => {
 		local[0].order_custom = true;
 		expect(anyCustom(local)).toBe(true);
 		expect(anyCustom(fx())).toBe(false);
+	});
+});
+
+describe('commitMove', () => {
+	const mk = (setOrder: () => Promise<void>, fetchRunners: () => Promise<Runner[]>) => {
+		let cur = fx();
+		const calls: string[][] = [];
+		return {
+			get cur() {
+				return cur;
+			},
+			calls,
+			io: {
+				get: () => cur,
+				set: (r: Runner[]) => (cur = r),
+				setOrder: async (_id: string, ids: string[]) => {
+					calls.push(ids);
+					return setOrder();
+				},
+				fetchRunners
+			}
+		};
+	};
+	const first = fx()[0].up_next.map((x) => x.benefit_id);
+
+	it('moves optimistically, saves, then takes the server list', async () => {
+		const server = fx();
+		const h = mk(async () => {}, async () => server);
+		expect(await commitMove(h.io, 'acc-hjune', 1, 0)).toBe(true);
+		expect(h.calls).toEqual([[first[1], first[0]]]);
+		expect(h.cur).toBe(server);
+	});
+	it('failed save takes the server list', async () => {
+		const server = fx();
+		const h = mk(() => Promise.reject(new Error('x')), async () => server);
+		expect(await commitMove(h.io, 'acc-hjune', 1, 0)).toBe(false);
+		expect(h.cur).toBe(server);
+	});
+	it('failed save and failed refetch roll back', async () => {
+		const h = mk(() => Promise.reject(new Error('x')), () => Promise.reject(new Error('y')));
+		const before = h.cur;
+		expect(await commitMove(h.io, 'acc-hjune', 1, 0)).toBe(false);
+		expect(h.cur).toBe(before);
+	});
+	it('a no-op move makes no request', async () => {
+		const h = mk(async () => {}, async () => fx());
+		await commitMove(h.io, 'acc-hjune', 0, 0);
+		expect(h.calls).toEqual([]);
 	});
 });

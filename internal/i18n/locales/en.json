@@ -54,5 +54,6 @@
   "upnext.reset": "Reset to Games order",
   "upnext.empty.one": "Nothing queued. Next scan in {n} min.",
   "upnext.empty.other": "Nothing queued. Next scan in {n} min.",
-  "upnext.save_failed": "Couldn't save the order."
+  "upnext.save_failed": "Couldn't save the order.",
+  "upnext.empty_plain": "Nothing queued."
 }

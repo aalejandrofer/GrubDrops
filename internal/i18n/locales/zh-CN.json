@@ -54,5 +54,6 @@
   "upnext.reset": "恢复为游戏页顺序",
   "upnext.empty.one": "队列为空。下次扫描在 {n} 分钟后。",
   "upnext.empty.other": "队列为空。下次扫描在 {n} 分钟后。",
-  "upnext.save_failed": "无法保存顺序。"
+  "upnext.save_failed": "无法保存顺序。",
+  "upnext.empty_plain": "队列为空。"
 }

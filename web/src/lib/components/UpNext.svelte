@@ -3,7 +3,7 @@
 	import { nextScanMin } from '$lib/format';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
-	import { afterLabel, anyCustom, moveItem, queues } from '$lib/upnext';
+	import { afterLabel, anyCustom, commitMove, moveItem, queues } from '$lib/upnext';
 	import type { Runner } from '$lib/api/types';
 	import PlatformMark from './PlatformMark.svelte';
 
@@ -19,12 +19,13 @@
 	const qs = $derived(queues(live.runners));
 	const total = $derived(qs.reduce((n, q) => n + q.items.length, 0));
 	const custom = $derived(anyCustom(live.runners));
-	// The scan times come from the runners; the latest one is the last full scan.
+	// The overview carries the last scan; fall back to the latest per-runner scan.
 	const lastScan = $derived(
-		live.runners.reduce<string | null>(
-			(a, r) => (r.last_scan_at && (!a || r.last_scan_at > a) ? r.last_scan_at : a),
-			null
-		)
+		live.overview?.status.last_scan_at ??
+			live.runners.reduce<string | null>(
+				(a, r) => (r.last_scan_at && (!a || r.last_scan_at > a) ? r.last_scan_at : a),
+				null
+			)
 	);
 	const perm = $derived(t('upnext.permanent', { games: '\u0000' }).split('\u0000'));
 
@@ -41,20 +42,19 @@
 	}
 
 	async function commit(id: string, from: number, to: number): Promise<void> {
-		const r = runner(id);
-		if (!r || from === to) return;
-		const next = moveItem(r.up_next, from, to);
-		if (next.every((x, i) => x === r.up_next[i])) return;
 		failed = false;
-		live.runners = live.runners.map((x) =>
-			x.account_id === id ? { ...x, up_next: next, order_custom: true } : x
+		const ok = await commitMove(
+			{
+				get: () => live.runners,
+				set: (r) => (live.runners = r),
+				setOrder: (i, ids) => api.setOrder(i, ids),
+				fetchRunners: () => api.runners()
+			},
+			id,
+			from,
+			to
 		);
-		try {
-			await api.setOrder(id, next.map((x) => x.benefit_id));
-		} catch {
-			failed = true;
-			await refetch();
-		}
+		if (!ok) failed = true;
 	}
 
 	async function reset(): Promise<void> {
@@ -93,6 +93,10 @@
 		drag.to = to;
 	}
 
+	function cancel(): void {
+		drag = null;
+	}
+
 	function up(): void {
 		if (!drag) return;
 		const d = drag;
@@ -103,9 +107,12 @@
 
 <section class="panel">
 	<div class="panel-h"><h2>{t('upnext.title')}</h2><span class="n">{total}</span></div>
-	<div class="hint">{t('upnext.hint')}</div>
 	{#if qs.length === 0}
-		<p class="empty">{tn('upnext.empty', nextScanMin(lastScan, now), {})}</p>
+		<p class="empty">
+			{lastScan ? tn('upnext.empty', nextScanMin(lastScan, now)) : t('upnext.empty_plain')}
+		</p>
+	{:else}
+		<div class="hint">{t('upnext.hint')}</div>
 	{/if}
 	{#each qs as q (q.accountId)}
 		{@const r = runner(q.accountId)}
@@ -122,7 +129,7 @@
 						onpointerdown={(e) => down(e, q.accountId, i)}
 						onpointermove={move}
 						onpointerup={up}
-						onpointercancel={up}
+						onpointercancel={cancel}
 						role="presentation"
 					>
 						<svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"

@@ -40,3 +40,36 @@ export function afterLabel(r: Runner, index: number): string | null {
 export function anyCustom(runners: Runner[]): boolean {
 	return runners.some((r) => r.order_custom);
 }
+
+export interface OrderIO {
+	get(): Runner[];
+	set(runners: Runner[]): void;
+	setOrder(accountId: string, benefitIds: string[]): Promise<void>;
+	fetchRunners(): Promise<Runner[]>;
+}
+
+/**
+ * Apply a move locally, save it, then replace the list with the server's.
+ * On failure the server list wins; if that fetch also fails, the previous list is restored.
+ * Returns true when the save succeeded.
+ */
+export async function commitMove(io: OrderIO, accountId: string, from: number, to: number): Promise<boolean> {
+	const before = io.get();
+	const r = before.find((x) => x.account_id === accountId);
+	if (!r) return true;
+	const next = moveItem(r.up_next, from, to);
+	if (next.every((x, i) => x === r.up_next[i])) return true;
+	io.set(before.map((x) => (x.account_id === accountId ? { ...x, up_next: next, order_custom: true } : x)));
+	let ok = true;
+	try {
+		await io.setOrder(accountId, next.map((x) => x.benefit_id));
+	} catch {
+		ok = false;
+	}
+	try {
+		io.set(await io.fetchRunners());
+	} catch {
+		if (!ok) io.set(before);
+	}
+	return ok;
+}

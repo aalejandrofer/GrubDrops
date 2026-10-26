@@ -54,5 +54,6 @@
   "upnext.reset": "Restablecer al orden de Juegos",
   "upnext.empty.one": "Nada en cola. Próximo escaneo en {n} min.",
   "upnext.empty.other": "Nada en cola. Próximo escaneo en {n} min.",
-  "upnext.save_failed": "No se pudo guardar el orden."
+  "upnext.save_failed": "No se pudo guardar el orden.",
+  "upnext.empty_plain": "Nada en cola."
 }
