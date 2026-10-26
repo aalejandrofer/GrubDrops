@@ -76,7 +76,7 @@ export interface Api {
 	kickSession(id: string, cookiesTxt: string): Promise<{ verified: boolean }>;
 	settings(): Promise<Settings>;
 	saveSettings(p: SettingsPatch): Promise<Settings>;
-	notifyTest(): Promise<void>;
+	notifyTest(target?: 'discord' | 'telegram'): Promise<void>;
 	health(filter: 'all' | 'problems' | 'claims'): Promise<Health>;
 	runCanary(): Promise<void>;
 	update(): Promise<UpdateInfo>;
@@ -207,7 +207,7 @@ export function createClient(opts: ClientOpts): Api {
 			post(`/api/accounts/${enc(id)}/kick/session`, { cookies_txt: cookiesTxt, channels: [] }),
 		settings: () => get('/api/settings'),
 		saveSettings: (p) => send('PUT', '/api/settings', p) as Promise<Settings>,
-		notifyTest: () => post('/api/settings/notify-test'),
+		notifyTest: (target) => post(`/api/settings/notify-test${target ? `?target=${target}` : ''}`),
 		health: (filter) => get(`/api/health?filter=${filter}`),
 		runCanary: () => post('/api/health/canary'),
 		update: () => get('/api/update'),

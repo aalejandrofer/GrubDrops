@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -19,6 +20,11 @@ var webhookPrefixes = []string{
 	"https://discordapp.com/api/webhooks/",
 }
 
+var (
+	telegramTokenRe = regexp.MustCompile(`^[0-9]+:[A-Za-z0-9_-]+$`)
+	telegramChatRe  = regexp.MustCompile(`^(-?[0-9]+|@[A-Za-z0-9_]{5,})$`)
+)
+
 func (s *server) routesSettings(r chi.Router) {
 	r.Get("/settings", s.getSettings)
 	r.Put("/settings", s.putSettings)
@@ -28,6 +34,12 @@ func (s *server) routesSettings(r chi.Router) {
 type settingsDiscord struct {
 	Configured  bool   `json:"configured"`
 	WebhookHint string `json:"webhook_hint"`
+}
+
+type settingsTelegram struct {
+	Configured bool   `json:"configured"`
+	TokenHint  string `json:"token_hint"`
+	ChatID     string `json:"chat_id"`
 }
 
 type settingsNotify struct {
@@ -43,10 +55,11 @@ type settingsBody struct {
 	Theme      string `json:"theme"`
 	Timezone   string `json:"timezone"`
 	// ZoneEffective is the zone the server resolves; Local is reported as UTC.
-	ZoneEffective string          `json:"zone_effective"`
-	Discord       settingsDiscord `json:"discord"`
-	Notify        settingsNotify  `json:"notify"`
-	UpdateAuto    bool            `json:"update_auto"`
+	ZoneEffective string           `json:"zone_effective"`
+	Discord       settingsDiscord  `json:"discord"`
+	Telegram      settingsTelegram `json:"telegram"`
+	Notify        settingsNotify   `json:"notify"`
+	UpdateAuto    bool             `json:"update_auto"`
 }
 
 // webhookHint keeps the URL up to /webhooks/ and hides the id and token.
@@ -56,6 +69,34 @@ func webhookHint(url string) string {
 		return url[:i+len(marker)] + "••••"
 	}
 	return "••••"
+}
+
+// tokenHint keeps the bot id before the colon and hides the secret.
+func tokenHint(token string) string {
+	if i := strings.IndexByte(token, ':'); i > 0 {
+		return token[:i+1] + "••••"
+	}
+	return "••••"
+}
+
+// telegramEffective is the stored Telegram token and chat ID, each falling
+// back to its env default.
+func (s *server) telegramEffective(ctx context.Context) (token, chat string, storedToken bool, err error) {
+	st := s.d.Settings
+	if token, err = st.TelegramBotToken(ctx); err != nil {
+		return "", "", false, err
+	}
+	storedToken = token != ""
+	if token == "" {
+		token = s.d.TelegramTokenFallback
+	}
+	if chat, err = st.TelegramChatID(ctx); err != nil {
+		return "", "", false, err
+	}
+	if chat == "" {
+		chat = s.d.TelegramChatFallback
+	}
+	return token, chat, storedToken, nil
 }
 
 func (s *server) loadSettings(ctx context.Context) (settingsBody, error) {
@@ -86,6 +127,15 @@ func (s *server) loadSettings(ctx context.Context) (settingsBody, error) {
 	if hook != "" {
 		b.Discord.WebhookHint = webhookHint(hook)
 	}
+	token, chat, storedToken, err := s.telegramEffective(ctx)
+	if err != nil {
+		return b, err
+	}
+	b.Telegram.Configured = token != "" && chat != ""
+	if storedToken {
+		b.Telegram.TokenHint = tokenHint(token)
+	}
+	b.Telegram.ChatID = chat
 	b.Notify.Claim, _, b.Notify.Auth, b.Notify.Errors, _ = st.NotifyKinds(ctx)
 	if b.Notify.DailySummary, err = st.NotifyDailySummary(ctx); err != nil {
 		return b, err
@@ -113,7 +163,11 @@ type settingsPut struct {
 	// Discord is accepted so a client can send the GET body back. Ignored.
 	Discord        json.RawMessage `json:"discord"`
 	DiscordWebhook *string         `json:"discord_webhook"`
-	Notify         *struct {
+	// Telegram is accepted so a client can send the GET body back. Ignored.
+	Telegram         json.RawMessage `json:"telegram"`
+	TelegramBotToken *string         `json:"telegram_bot_token"`
+	TelegramChatID   *string         `json:"telegram_chat_id"`
+	Notify           *struct {
 		Claim        *bool `json:"claim"`
 		Auth         *bool `json:"auth"`
 		Errors       *bool `json:"errors"`
@@ -143,6 +197,12 @@ func validWebhook(v string) bool {
 	return false
 }
 
+// validOptional accepts an empty value, which clears the setting.
+func validOptional(re *regexp.Regexp, v string) bool {
+	v = strings.TrimSpace(v)
+	return v == "" || re.MatchString(v)
+}
+
 func (s *server) putSettings(w http.ResponseWriter, r *http.Request) {
 	var req settingsPut
 	if !readJSON(w, r, &req) {
@@ -152,7 +212,9 @@ func (s *server) putSettings(w http.ResponseWriter, r *http.Request) {
 		(req.TimeFormat == nil || oneOf(*req.TimeFormat, "24h", "12h")) &&
 		(req.Theme == nil || oneOf(*req.Theme, "dark", "light")) &&
 		(req.Timezone == nil || *req.Timezone == "" || validZone(*req.Timezone)) &&
-		(req.DiscordWebhook == nil || validWebhook(*req.DiscordWebhook))
+		(req.DiscordWebhook == nil || validWebhook(*req.DiscordWebhook)) &&
+		(req.TelegramBotToken == nil || validOptional(telegramTokenRe, *req.TelegramBotToken)) &&
+		(req.TelegramChatID == nil || validOptional(telegramChatRe, *req.TelegramChatID))
 	if !valid {
 		writeErr(w, http.StatusBadRequest, "bad_request")
 		return
@@ -211,6 +273,16 @@ func (s *server) applySettings(ctx context.Context, req settingsPut) error {
 			return err
 		}
 	}
+	if req.TelegramBotToken != nil {
+		if err := st.SetTelegramBotToken(ctx, *req.TelegramBotToken); err != nil {
+			return err
+		}
+	}
+	if req.TelegramChatID != nil {
+		if err := st.SetTelegramChatID(ctx, *req.TelegramChatID); err != nil {
+			return err
+		}
+	}
 	if n := req.Notify; n != nil && (n.Claim != nil || n.Auth != nil || n.Errors != nil) {
 		claim, progress, auth, errs, canary := st.NotifyKinds(ctx)
 		if n.Claim != nil {
@@ -237,16 +309,40 @@ func (s *server) applySettings(ctx context.Context, req settingsPut) error {
 	return nil
 }
 
-// notifyTest sends one sample claim through the live notifier.
+// notifyTest sends one sample claim through the live notifier. The optional
+// target query parameter, discord or telegram, limits it to one service.
 func (s *server) notifyTest(w http.ResponseWriter, r *http.Request) {
-	hook, err := s.d.Settings.GlobalDiscordWebhook(r.Context())
+	ctx := r.Context()
+	target := r.URL.Query().Get("target")
+	if target != "" && target != notify.TargetDiscord && target != notify.TargetTelegram {
+		writeErr(w, http.StatusBadRequest, "bad_request")
+		return
+	}
+	hook, err := s.d.Settings.GlobalDiscordWebhook(ctx)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
 	}
-	if hook == "" && s.d.WebhookFallback == "" {
+	token, chat, _, err := s.telegramEffective(ctx)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	discordOn := hook != "" || s.d.WebhookFallback != ""
+	telegramOn := token != "" && chat != ""
+	configured := discordOn || telegramOn
+	switch target {
+	case notify.TargetDiscord:
+		configured = discordOn
+	case notify.TargetTelegram:
+		configured = telegramOn
+	}
+	if !configured {
 		writeErr(w, http.StatusBadRequest, "bad_request")
 		return
+	}
+	if target != "" {
+		ctx = notify.WithTarget(ctx, target)
 	}
 	if s.d.Notifier == nil {
 		writeErr(w, http.StatusBadGateway, "upstream")
@@ -261,7 +357,7 @@ func (s *server) notifyTest(w http.ResponseWriter, r *http.Request) {
 		"cur_min":  60,
 		"req_min":  60,
 	}
-	if err := s.d.Notifier.Notify(r.Context(), notify.EventTest, sample); err != nil {
+	if err := s.d.Notifier.Notify(ctx, notify.EventTest, sample); err != nil {
 		slog.Warn("notify test failed", "kind", "error", "err", err)
 		writeErr(w, http.StatusBadGateway, "upstream")
 		return

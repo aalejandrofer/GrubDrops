@@ -29,8 +29,8 @@
 		if (!s) return false;
 		const prev = s;
 		errs[key] = false;
-		const { discord_webhook: hook, notify, ...plain } = patch;
-		if (hook === undefined) {
+		const { discord_webhook: hook, telegram_bot_token: tok, telegram_chat_id: chat, notify, ...plain } = patch;
+		if (hook === undefined && tok === undefined && chat === undefined) {
 			s = { ...s, ...plain, notify: { ...s.notify, ...notify } } as Settings;
 			applyPrefs(s);
 		}

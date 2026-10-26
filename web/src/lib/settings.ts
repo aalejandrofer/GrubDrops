@@ -28,3 +28,13 @@ export const WEBHOOK_PREFIXES = ['https://discord.com/api/webhooks/', 'https://d
 export function isDiscordWebhook(v: string): boolean {
 	return WEBHOOK_PREFIXES.some((p) => v.startsWith(p) && v.length > p.length);
 }
+
+/** Same pattern as the server's telegramTokenRe. */
+export function isTelegramToken(v: string): boolean {
+	return /^[0-9]+:[A-Za-z0-9_-]+$/.test(v);
+}
+
+/** Same pattern as the server's telegramChatRe: a numeric ID or an @channel name. */
+export function isTelegramChat(v: string): boolean {
+	return /^(-?[0-9]+|@[A-Za-z0-9_]{5,})$/.test(v);
+}

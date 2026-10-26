@@ -14,6 +14,8 @@ import (
 
 const (
 	keyGlobalDiscord       = "settings:discord_webhook"
+	keyTelegramBotToken    = "settings:telegram_bot_token"
+	keyTelegramChatID      = "settings:telegram_chat_id"
 	keyNotifyAvatarURL     = "settings:notify_avatar_url"
 	keyNotifyClaim         = "settings:notify_claim"
 	keyNotifyProgress      = "settings:notify_progress"
@@ -76,6 +78,24 @@ func (s *Settings) GlobalDiscordWebhook(ctx context.Context) (string, error) {
 
 func (s *Settings) SetGlobalDiscordWebhook(ctx context.Context, url string) error {
 	return s.setString(ctx, keyGlobalDiscord, url)
+}
+
+// TelegramBotToken is the Telegram Bot API token. Empty means unset.
+func (s *Settings) TelegramBotToken(ctx context.Context) (string, error) {
+	return s.getString(ctx, keyTelegramBotToken)
+}
+
+func (s *Settings) SetTelegramBotToken(ctx context.Context, token string) error {
+	return s.setString(ctx, keyTelegramBotToken, strings.TrimSpace(token))
+}
+
+// TelegramChatID is the chat the bot posts to. Empty means unset.
+func (s *Settings) TelegramChatID(ctx context.Context) (string, error) {
+	return s.getString(ctx, keyTelegramChatID)
+}
+
+func (s *Settings) SetTelegramChatID(ctx context.Context, id string) error {
+	return s.setString(ctx, keyTelegramChatID, strings.TrimSpace(id))
 }
 
 // NotifyAvatarURL is the avatar image used for the Discord webhook sender.

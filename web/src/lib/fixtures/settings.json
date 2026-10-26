@@ -8,6 +8,11 @@
 		"configured": true,
 		"webhook_hint": "...a1b2"
 	},
+	"telegram": {
+		"configured": false,
+		"token_hint": "",
+		"chat_id": ""
+	},
 	"notify": {
 		"claim": true,
 		"auth": true,

@@ -215,6 +215,8 @@ GrubDrops 只挖你选择的游戏。全新安装在你至少添加一个游戏�
 | `GRUB_BROWSER_URLS` | 无 | 逗号分隔的常驻边车容器池（每个 Kick 账户一个 Chrome）。 |
 | `GRUB_AUTHCHECK_INTERVAL` | `12h` | 认证健康检查的扫描节奏。 |
 | `GRUB_DISCORD_WEBHOOK` | 无 | 可选的全局 Discord webhook。 |
+| `GRUB_TELEGRAM_BOT_TOKEN` | 无 | Telegram 机器人令牌，设置中未保存时使用。 |
+| `GRUB_TELEGRAM_CHAT_ID` | 无 | Telegram 聊天 ID，设置中未保存时使用。 |
 | `GRUB_SECURE_COOKIES` | `0` | 安全会话 cookie + CSRF 同源方案。通过纯 HTTP（`http://pi:8080`）访问时保持 `0`；仅当通过 HTTPS 访问时（直接访问，或位于设置 `X-Forwarded-Proto: https` 的 TLS 终结代理之后）才设为 `1`。见下方说明。 |
 | `GRUB_LOG_LEVEL` | `info` | `debug`、`info`、`warn`、`error`。 |
 | `GRUB_AUTHBYPASS` | `false` | 为真值（`1`/`true`）时**禁用所有鉴权**。 |

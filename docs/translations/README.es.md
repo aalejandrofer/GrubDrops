@@ -224,6 +224,8 @@ valor por defecto mostrado.
 | `GRUB_BROWSER_URLS` | ninguna | Conjunto de sidecars siempre activos separados por comas (un Chrome por cuenta de Kick). |
 | `GRUB_AUTHCHECK_INTERVAL` | `12h` | Cadencia del barrido de salud de autenticación. |
 | `GRUB_DISCORD_WEBHOOK` | ninguna | Webhook global opcional de Discord. |
+| `GRUB_TELEGRAM_BOT_TOKEN` | ninguna | Token del bot de Telegram, usado si no hay uno guardado en Ajustes. |
+| `GRUB_TELEGRAM_CHAT_ID` | ninguna | ID del chat de Telegram, usado si no hay uno guardado en Ajustes. |
 | `GRUB_SECURE_COOKIES` | `0` | Cookies de sesión seguras + esquema CSRF de mismo origen. Déjala en `0` para HTTP plano (`http://pi:8080`); ponla en `1` solo cuando se acceda por HTTPS (directamente o detrás de un proxy que termina TLS y que establece `X-Forwarded-Proto: https`). Ver nota más abajo. |
 | `GRUB_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
 | `GRUB_AUTHBYPASS` | `false` | **Desactiva toda la autenticación** cuando es verdadero (`1`/`true`). |

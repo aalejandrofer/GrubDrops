@@ -3,7 +3,7 @@
 	import { ApiError } from '$lib/api/client';
 	import type { Settings, SettingsPatch } from '$lib/api/types';
 	import { t } from '$lib/i18n/index.svelte';
-	import { isDiscordWebhook } from '$lib/settings';
+	import { isDiscordWebhook, isTelegramChat, isTelegramToken } from '$lib/settings';
 
 	let {
 		s,
@@ -61,7 +61,7 @@
 		testing = true;
 		feedback = null;
 		try {
-			await api.notifyTest();
+			await api.notifyTest('discord');
 			feedback = { ok: true, text: t('settings.test_ok') };
 		} catch (e) {
 			const code = e instanceof ApiError ? e.status : 0;
@@ -76,6 +76,81 @@
 			};
 		} finally {
 			testing = false;
+		}
+	}
+
+	let tgEditing = $state(false);
+	let tgToken = $state('');
+	let tgChat = $state('');
+	let tgBusy = false;
+	let tgTokenBad = $state(false);
+	let tgChatBad = $state(false);
+	let tgTesting = $state(false);
+	let tgFeedback = $state<{ ok: boolean; text: string } | null>(null);
+	let tgInput: HTMLInputElement | undefined = $state();
+
+	const tgShowInput = $derived(!s.telegram.configured || tgEditing);
+	// A configured bot can change its chat ID without re-entering the token.
+	const tgCanSave = $derived(tgChat.trim() !== '' && (tgToken.trim() !== '' || s.telegram.configured));
+
+	// Same rule as the Discord field: saves only on Save or Enter.
+	async function tgCommit(): Promise<void> {
+		const tok = tgToken.trim();
+		const chat = tgChat.trim();
+		if (tgBusy || !tgCanSave) return;
+		tgTokenBad = tok !== '' && !isTelegramToken(tok);
+		tgChatBad = !isTelegramChat(chat);
+		if (tgTokenBad || tgChatBad) return;
+		tgBusy = true;
+		const ok = await save('telegram', tok ? { telegram_bot_token: tok, telegram_chat_id: chat } : { telegram_chat_id: chat });
+		tgBusy = false;
+		if (ok) {
+			tgToken = '';
+			tgChat = '';
+			tgEditing = false;
+			tgFeedback = null;
+		}
+	}
+
+	function tgCancel(): void {
+		tgToken = '';
+		tgChat = '';
+		tgTokenBad = false;
+		tgChatBad = false;
+		tgEditing = false;
+	}
+
+	function tgChange(): void {
+		tgEditing = true;
+		tgChat = s.telegram.chat_id;
+		tgFeedback = null;
+		queueMicrotask(() => tgInput?.focus());
+	}
+
+	function tgKey(e: KeyboardEvent): void {
+		if (e.key === 'Enter' && e.isTrusted) void tgCommit();
+		else if (e.key === 'Escape') tgCancel();
+	}
+
+	async function tgSendTest(): Promise<void> {
+		tgTesting = true;
+		tgFeedback = null;
+		try {
+			await api.notifyTest('telegram');
+			tgFeedback = { ok: true, text: t('settings.test_ok_telegram') };
+		} catch (e) {
+			const code = e instanceof ApiError ? e.status : 0;
+			tgFeedback = {
+				ok: false,
+				text:
+					code === 502
+						? t('settings.test_rejected_telegram')
+						: code === 400
+							? t('settings.test_no_telegram')
+							: t('settings.test_failed')
+			};
+		} finally {
+			tgTesting = false;
 		}
 	}
 
@@ -137,18 +212,75 @@
 		</div>
 		<div class="card-body">
 			<div class="card-title">
-				<b>{t('settings.telegram')}</b><span class="tag soon">{t('settings.telegram_soon')}</span>
+				<b>{t('settings.telegram')}</b>
+				{#if s.telegram.configured}<span class="tag ok">{t('settings.connected')}</span>{/if}
 			</div>
-			<div class="two">
-				<div class="field">
-					<label for="tt">{t('settings.bot_token')}</label>
-					<input class="inp" id="tt" type="text" placeholder="123456:ABC-DEF…" disabled />
+			{#if tgShowInput}
+				<div class="two">
+					<div class="field">
+						<label for="tg-token">{t('settings.bot_token')}</label>
+						<input
+							class="inp masked"
+							id="tg-token"
+							name="tg-token"
+							type="text"
+							autocomplete="off"
+							spellcheck="false"
+							data-1p-ignore
+							data-lpignore="true"
+							data-bwignore
+							placeholder={s.telegram.configured ? t('settings.token_keep') : '123456:ABC-DEF…'}
+							aria-invalid={tgTokenBad ? true : undefined}
+							bind:value={tgToken}
+							bind:this={tgInput}
+							oninput={() => (tgTokenBad = false)}
+							onkeydown={tgKey}
+						/>
+					</div>
+					<div class="field">
+						<label for="tg-chat">{t('settings.chat_id')}</label>
+						<input
+							class="inp"
+							id="tg-chat"
+							name="tg-chat"
+							type="text"
+							autocomplete="off"
+							spellcheck="false"
+							placeholder="-1001234567890"
+							aria-invalid={tgChatBad ? true : undefined}
+							bind:value={tgChat}
+							oninput={() => (tgChatBad = false)}
+							onkeydown={tgKey}
+						/>
+					</div>
 				</div>
-				<div class="field">
-					<label for="tc">{t('settings.chat_id')}</label>
-					<input class="inp" id="tc" type="text" placeholder="-1001234567890" disabled />
+				<div class="inline wrap">
+					<button type="button" class="btn" disabled={!tgCanSave} onclick={tgCommit}>{t('accounts.save')}</button>
+					{#if s.telegram.configured}
+						<button type="button" class="btn" onclick={tgCancel}>{t('accounts.cancel')}</button>
+					{/if}
 				</div>
-			</div>
+			{:else}
+				<div class="two">
+					<div class="field">
+						<label for="tg-token">{t('settings.bot_token')}</label>
+						<input class="inp" id="tg-token" type="text" value={s.telegram.token_hint} readonly />
+					</div>
+					<div class="field">
+						<label for="tg-chat">{t('settings.chat_id')}</label>
+						<input class="inp" id="tg-chat" type="text" value={s.telegram.chat_id} readonly />
+					</div>
+				</div>
+				<div class="inline wrap">
+					<button type="button" class="btn" disabled={tgTesting} onclick={tgSendTest}>{t('settings.send_test')}</button>
+					<button type="button" class="btn" onclick={tgChange}>{t('settings.change')}</button>
+				</div>
+			{/if}
+			<small class="help">{t('settings.telegram_help')}</small>
+			{#if tgTokenBad}<span class="feedback bad" role="alert">{t('settings.token_invalid')}</span>{/if}
+			{#if tgChatBad}<span class="feedback bad" role="alert">{t('settings.chat_invalid')}</span>{/if}
+			{#if errs.telegram}<span class="feedback bad">{t('settings.save_failed')}</span>{/if}
+			{#if tgFeedback}<span class="feedback" class:bad={!tgFeedback.ok} role="status">{tgFeedback.text}</span>{/if}
 		</div>
 	</div>
 
@@ -180,5 +312,9 @@
 	}
 	.bad {
 		color: var(--red);
+	}
+	.help {
+		color: var(--t2);
+		font-size: 12px;
 	}
 </style>

@@ -180,6 +180,8 @@ export interface Settings {
 	/** The zone the server resolves; added by the settings task. */
 	zone_effective?: string;
 	discord: { configured: boolean; webhook_hint: string };
+	/** token_hint is empty when the token comes from the env default. */
+	telegram: { configured: boolean; token_hint: string; chat_id: string };
 	notify: { claim: boolean; auth: boolean; errors: boolean; daily_summary: boolean };
 	update_auto: boolean;
 }
@@ -192,6 +194,8 @@ export interface SettingsPatch {
 	notify?: Partial<Settings['notify']>;
 	update_auto?: boolean;
 	discord_webhook?: string;
+	telegram_bot_token?: string;
+	telegram_chat_id?: string;
 }
 
 export type HealthEventKind = 'claim' | 'progress' | 'state' | 'discovery' | 'error' | 'auth' | 'info';

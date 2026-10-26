@@ -290,7 +290,7 @@ func run(ctx context.Context) error {
 		}
 		avatarURL, _ := settingsStore.NotifyAvatarURL(ctx)
 		const botUsername = "GrubDrops"
-		var fallback notify.Notifier
+		multi := &notify.Multi{}
 		if globalURL != "" {
 			var wh *notify.DiscordWebhook
 			if proxyTransport != nil {
@@ -300,11 +300,18 @@ func run(ctx context.Context) error {
 			}
 			wh.Username = botUsername
 			wh.AvatarURL = avatarURL
-			fallback = wh
-		} else {
-			fallback = &notify.NoopNotifier{Logger: logger}
+			multi.Targets = append(multi.Targets, notify.Named{Name: notify.TargetDiscord, Notifier: wh})
 		}
-		return fallback
+		tgToken, tgChat := telegramConfig(ctx, settingsStore, cfg)
+		if tgToken != "" && tgChat != "" {
+			// proxyTransport is nil when no proxy is configured (direct).
+			bot := notify.NewTelegramBotWithTransport(tgToken, tgChat, filter, proxyTransport)
+			multi.Targets = append(multi.Targets, notify.Named{Name: notify.TargetTelegram, Notifier: bot})
+		}
+		if len(multi.Targets) == 0 {
+			return &notify.NoopNotifier{Logger: logger}
+		}
+		return multi
 	}
 
 	var notifierMu sync.Mutex
@@ -554,10 +561,12 @@ func run(ctx context.Context) error {
 		// Rename fires no reload; only the log name cache follows it.
 		AccountRenamed: ro.names.set,
 
-		Settings:         settingsStore,
-		Notifier:         notifier,
-		WebhookFallback:  cfg.DiscordWebhookURL,
-		OnSettingsUpdate: onSettingsUpdate,
+		Settings:              settingsStore,
+		Notifier:              notifier,
+		WebhookFallback:       cfg.DiscordWebhookURL,
+		TelegramTokenFallback: cfg.TelegramBotToken,
+		TelegramChatFallback:  cfg.TelegramChatID,
+		OnSettingsUpdate:      onSettingsUpdate,
 		SetZone: func(name string) {
 			displayZone.Set(timeutil.Resolve(name, os.Getenv("TZ")))
 		},
@@ -611,6 +620,20 @@ func logHook(hub *api.Hub, name func(id string) string) func(mlog.LogLine) {
 		}
 		hub.Publish(api.Event{Name: api.EventLog, Data: api.LogEventJSON(l, n)})
 	}
+}
+
+// telegramConfig returns the stored Telegram bot token and chat ID, each
+// falling back to its env default when unset.
+func telegramConfig(ctx context.Context, st *store.Settings, cfg config.Config) (token, chat string) {
+	token, _ = st.TelegramBotToken(ctx)
+	if token == "" {
+		token = cfg.TelegramBotToken
+	}
+	chat, _ = st.TelegramChatID(ctx)
+	if chat == "" {
+		chat = cfg.TelegramChatID
+	}
+	return token, chat
 }
 
 type indirectNotifier struct {

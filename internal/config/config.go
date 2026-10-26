@@ -13,8 +13,12 @@ type Config struct {
 	DBPath            string
 	MasterKey         string
 	DiscordWebhookURL string
-	SecureCookies     bool
-	BrowserURL        string
+	// TelegramBotToken / TelegramChatID are the Telegram defaults used when
+	// none is stored in settings.
+	TelegramBotToken string
+	TelegramChatID   string
+	SecureCookies    bool
+	BrowserURL       string
 	// Location is the timezone used for all displayed times. Loaded from the
 	// TZ environment variable (e.g. "Asia/Shanghai"). Defaults to UTC.
 	Location *time.Location
@@ -54,6 +58,8 @@ func Load() (Config, error) {
 		DBPath:            getenv("GRUB_DB_PATH", "/data/miner.db"),
 		MasterKey:         os.Getenv("GRUB_MASTER_KEY"),
 		DiscordWebhookURL: os.Getenv("GRUB_DISCORD_WEBHOOK"),
+		TelegramBotToken:  strings.TrimSpace(os.Getenv("GRUB_TELEGRAM_BOT_TOKEN")),
+		TelegramChatID:    strings.TrimSpace(os.Getenv("GRUB_TELEGRAM_CHAT_ID")),
 		SecureCookies:     parseBool(os.Getenv("GRUB_SECURE_COOKIES")),
 		BrowserURL:        os.Getenv("GRUB_BROWSER_URL"),
 		LogLevel:          strings.ToLower(getenv("GRUB_LOG_LEVEL", "info")),

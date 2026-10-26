@@ -61,11 +61,14 @@ type Deps struct {
 	AccountRenamed func(id, name string) // nil-safe; must not block
 
 	// Settings and notifications.
-	Settings         *store.Settings
-	Notifier         Notifier
-	WebhookFallback  string            // env webhook used when none is stored
-	OnSettingsUpdate func()            // nil-safe
-	SetZone          func(name string) // nil-safe
+	Settings        *store.Settings
+	Notifier        Notifier
+	WebhookFallback string // env webhook used when none is stored
+	// Env Telegram defaults, each used when its stored value is empty.
+	TelegramTokenFallback string
+	TelegramChatFallback  string
+	OnSettingsUpdate      func()            // nil-safe
+	SetZone               func(name string) // nil-safe
 
 	// Health and updates.
 	Ring         *mlog.Ring

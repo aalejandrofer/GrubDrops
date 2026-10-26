@@ -221,6 +221,8 @@ default shown.
 | `GRUB_BROWSER_URLS` | none | Always-on sidecar pool, comma-separated. |
 | `GRUB_AUTHCHECK_INTERVAL` | `1h` | Auth-health sweep cadence. |
 | `GRUB_DISCORD_WEBHOOK` | none | Global Discord webhook. |
+| `GRUB_TELEGRAM_BOT_TOKEN` | none | Telegram bot token, used when none is saved in Settings. |
+| `GRUB_TELEGRAM_CHAT_ID` | none | Telegram chat ID, used when none is saved in Settings. |
 | `GRUB_SECURE_COOKIES` | `0` | `1` marks cookies `Secure` (HTTPS only); keep `0` for plain HTTP — see note. |
 | `GRUB_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
 | `GRUB_AUTHBYPASS` | `false` | **Disables all auth** when truthy (`1`/`true`). |

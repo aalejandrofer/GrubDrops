@@ -1,7 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { setLang } from '$lib/i18n/index.svelte';
 import { readFileSync } from 'node:fs';
-import { SECTIONS, isDiscordWebhook, sectionFromHash, timeExample, zoneOptions } from './settings';
+import {
+	SECTIONS,
+	isDiscordWebhook,
+	isTelegramChat,
+	isTelegramToken,
+	sectionFromHash,
+	timeExample,
+	zoneOptions
+} from './settings';
 
 beforeEach(() => setLang('en'));
 
@@ -27,6 +35,19 @@ describe('settings helpers', () => {
 		expect(timeExample('24h', 'UTC', now)).toBe('09:12');
 		expect(timeExample('12h', 'UTC', now)).toBe('9:12 AM');
 		expect(timeExample('24h', 'Asia/Shanghai', now)).toBe('17:12');
+	});
+});
+
+describe('telegram', () => {
+	it('accepts bot tokens and chat IDs the server accepts', () => {
+		expect(isTelegramToken('123456:ABC-def_789')).toBe(true);
+		expect(isTelegramToken('ABC-def')).toBe(false);
+		expect(isTelegramToken('123:abc/x')).toBe(false);
+		expect(isTelegramChat('-1001234567890')).toBe(true);
+		expect(isTelegramChat('42')).toBe(true);
+		expect(isTelegramChat('@grub_alerts')).toBe(true);
+		expect(isTelegramChat('@x')).toBe(false);
+		expect(isTelegramChat('chat')).toBe(false);
 	});
 });
 
