@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { Game, SearchHit } from '$lib/api/types';
 import { setLang } from '$lib/i18n/index.svelte';
 import { ApiError } from '$lib/api/client';
-import { campaignLine, commitGames, dupePriority, matchParts, moveGame, suggestions, withoutId } from './games';
+import { campaignLine, commitGames, dupePriority, matchParts, moveGame, moveTarget, suggestions, withoutId } from './games';
 
 beforeEach(() => setLang('en'));
 
@@ -49,6 +49,25 @@ describe('moveGame', () => {
 	it('moves', () => {
 		const l = [game('a'), game('b'), game('c')];
 		expect(moveGame(l, 2, 0).map((g) => g.id)).toEqual(['c', 'a', 'b']);
+	});
+});
+
+describe('moveTarget', () => {
+	it('steps one without shift', () => {
+		expect(moveTarget(4, 2, -1, false)).toBe(1);
+		expect(moveTarget(4, 2, 1, false)).toBe(3);
+	});
+	it('shift up goes to top', () => expect(moveTarget(4, 2, -1, true)).toBe(0));
+	it('shift down goes to bottom', () => expect(moveTarget(4, 1, 1, true)).toBe(3));
+	it('already first stays', () => expect(moveTarget(4, 0, -1, true)).toBe(0));
+	it('already last stays', () => expect(moveTarget(4, 3, 1, true)).toBe(3));
+	it('shift up moves item to the top of the list', () => {
+		const l = [game('a'), game('b'), game('c')];
+		expect(moveGame(l, 2, moveTarget(3, 2, -1, true)).map((g) => g.id)).toEqual(['c', 'a', 'b']);
+	});
+	it('shift down moves item to the bottom of the list', () => {
+		const l = [game('a'), game('b'), game('c')];
+		expect(moveGame(l, 0, moveTarget(3, 0, 1, true)).map((g) => g.id)).toEqual(['b', 'c', 'a']);
 	});
 });
 

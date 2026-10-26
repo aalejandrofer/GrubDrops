@@ -68,6 +68,12 @@ export function moveGame(games: Game[], from: number, to: number): Game[] {
 	return moveItem(games, from, to);
 }
 
+/** Target index for a move button: one step, or the very top/bottom with Shift. */
+export function moveTarget(len: number, i: number, dir: -1 | 1, toEnd: boolean): number {
+	const t = toEnd ? (dir < 0 ? 0 : len - 1) : i + dir;
+	return Math.max(0, Math.min(len - 1, t));
+}
+
 /** The existing priority when an add failed because the game is already chosen, else null. */
 export function dupePriority(e: unknown): number | null {
 	return e instanceof ApiError && e.status === 409 && typeof e.body.priority === 'number' ? e.body.priority : null;

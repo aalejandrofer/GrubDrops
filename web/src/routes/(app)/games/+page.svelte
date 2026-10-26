@@ -7,7 +7,7 @@
 	import PageHead from '$lib/components/PageHead.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { relTime } from '$lib/format';
-	import { campaignLine, commitGames, dupePriority, matchParts, moveGame, suggestions, withoutId } from '$lib/games';
+	import { campaignLine, commitGames, dupePriority, matchParts, moveGame, moveTarget, suggestions, withoutId } from '$lib/games';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
@@ -333,7 +333,7 @@
 
 	{#snippet grip(g: Game, i: number)}
 			<div class="grip">
-				<button type="button" aria-label={t('games.move_up')} title={t('games.move_up')} disabled={i === 0 || saving} onclick={() => commit(moveGame(games, i, i - 1), g.id)}>
+				<button type="button" aria-label={t('games.move_up')} title={t('games.move_up')} disabled={i === 0 || saving} onclick={(e) => commit(moveGame(games, i, moveTarget(games.length, i, -1, e.shiftKey)), g.id)}>
 					<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
 				</button>
 				<span
@@ -348,7 +348,7 @@
 				>
 					<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3" /></svg>
 				</span>
-				<button type="button" aria-label={t('games.move_down')} title={t('games.move_down')} disabled={i === rows.length - 1 || saving} onclick={() => commit(moveGame(games, i, i + 1), g.id)}>
+				<button type="button" aria-label={t('games.move_down')} title={t('games.move_down')} disabled={i === rows.length - 1 || saving} onclick={(e) => commit(moveGame(games, i, moveTarget(games.length, i, 1, e.shiftKey)), g.id)}>
 					<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
 				</button>
 			</div>
