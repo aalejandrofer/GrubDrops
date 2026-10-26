@@ -318,5 +318,6 @@
   "health.msg.sidecar_ready": "Kick sidecar ready",
   "health.msg.sidecar_stop": "Kick sidecar idle, stopping",
   "health.msg.canary_done": "Canary check finished",
-  "health.msg.canary_failed": "Canary run failed: {err}"
+  "health.msg.canary_failed": "Canary run failed: {err}",
+  "health.kind.heartbeat": "Heartbeat"
 }

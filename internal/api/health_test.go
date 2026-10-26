@@ -12,6 +12,7 @@ import (
 	"testing"
 	"testing/fstest"
 	"time"
+	"unicode/utf8"
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/stretchr/testify/assert"
@@ -269,4 +270,23 @@ func TestHealth_EventFieldsAllowlisted(t *testing.T) {
 	assert.Len(t, []rune(f["err"]), 200)
 	assert.NotContains(t, f, "cookie")
 	assert.NotContains(t, f, "account")
+}
+
+func TestLogEventJSON_AppliesAllowlist(t *testing.T) {
+	l := mlog.LogLine{
+		TS: time.Now(), Level: "INFO", Kind: mlog.KindClaim, Msg: "m",
+		Fields: map[string]any{"game": "Rust", "cookie": "secret", "account": "a1", "err": strings.Repeat("é", 300)},
+	}
+	b, err := json.Marshal(LogEventJSON(l, "Alice"))
+	require.NoError(t, err)
+	var got struct {
+		Fields map[string]string `json:"fields"`
+	}
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.Len(t, got.Fields, 2)
+	assert.Equal(t, "Rust", got.Fields["game"])
+	assert.NotContains(t, string(b), "secret")
+	assert.True(t, utf8.ValidString(got.Fields["err"]))
+	assert.Equal(t, 200, utf8.RuneCountInString(got.Fields["err"]))
+	assert.Equal(t, strings.Repeat("é", 200), got.Fields["err"])
 }

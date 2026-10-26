@@ -30,6 +30,11 @@ describe('eventText', () => {
 	it('unknown msg shows raw', () => {
 		expect(eventText(ev({ msg: 'something new' }))).toBe('something new');
 	});
+	it('state and prev go through the runner state labels', () => {
+		setLang('es');
+		expect(eventText(ev({ msg: 'runner state change', fields: { prev: 'idle', state: 'needs_login' } }))).toContain('Inactiva');
+		expect(eventText(ev({ msg: 'runner state change', fields: { prev: 'idle', state: 'weird' } }))).toContain('weird');
+	});
 	it('err appended once', () => {
 		expect(eventText(ev({ msg: 'runner progress', fields: { err: 'boom' } }))).toBe('Watch progress · boom');
 		expect(eventText(ev({ msg: 'runner claim failed', fields: { err: 'boom' } }))).toBe('Claim failed: boom');
@@ -40,8 +45,8 @@ describe('eventText', () => {
 describe('kindLabel', () => {
 	it('maps known kinds, passes unknown through', () => {
 		expect(kindLabel('claim')).toBe('Claim');
-		expect(kindLabel('heartbeat')).toBe('heartbeat');
-		expect(kindLabel('toString')).toBe('toString');
+		expect(kindLabel('heartbeat')).toBe('Heartbeat');
+				expect(kindLabel('toString')).toBe('toString');
 	});
 });
 

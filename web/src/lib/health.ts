@@ -34,8 +34,31 @@ const KIND_KEYS: Record<string, string> = {
 	discovery: 'health.kind.discovery',
 	error: 'health.kind.error',
 	auth: 'health.kind.auth',
-	info: 'health.kind.info'
+	info: 'health.kind.info',
+	heartbeat: 'health.kind.heartbeat'
 };
+
+const STATES = new Set([
+	'idle',
+	'picking',
+	'starting',
+	'watching',
+	'claiming',
+	'sleeping',
+	'awaiting_connect',
+	'needs_login',
+	'no_games'
+]);
+
+/** Runner state enums read through the accounts.state.* labels; anything else stays raw. */
+function localiseFields(f: Record<string, string>): Record<string, string> {
+	const out = { ...f };
+	for (const k of ['state', 'prev']) {
+		const v = out[k];
+		if (v !== undefined && STATES.has(v)) out[k] = t(`accounts.state.${v}`);
+	}
+	return out;
+}
 
 export function kindLabel(kind: string): string {
 	const key = Object.hasOwn(KIND_KEYS, kind) ? KIND_KEYS[kind] : undefined;
@@ -55,7 +78,7 @@ export function eventText(e: HealthEvent): string {
 	if (key) {
 		const names = [...t(key).matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
 		if (names.every((n) => n in f)) {
-			text = t(key, f);
+			text = t(key, localiseFields(f));
 			hasErr = names.includes('err');
 		}
 	}

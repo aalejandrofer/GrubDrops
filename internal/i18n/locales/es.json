@@ -318,5 +318,6 @@
   "health.msg.sidecar_ready": "Sidecar de Kick listo",
   "health.msg.sidecar_stop": "Sidecar de Kick inactivo, deteniendo",
   "health.msg.canary_done": "Comprobación canary terminada",
-  "health.msg.canary_failed": "Ejecución canary fallida: {err}"
+  "health.msg.canary_failed": "Ejecución canary fallida: {err}",
+  "health.kind.heartbeat": "Latido"
 }

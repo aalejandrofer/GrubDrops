@@ -33,6 +33,7 @@
 	let now = $state(Date.now());
 	let seq = 0;
 	let lastHead: HealthEvent | undefined;
+	let destroyed = false;
 	let refetchTimer: ReturnType<typeof setTimeout> | undefined;
 	let clockTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -72,6 +73,7 @@
 			return;
 		}
 		canaryBusy = false;
+		if (destroyed) return;
 		clearTimeout(refetchTimer);
 		refetchTimer = setTimeout(() => void load(filter), CANARY_REFETCH_MS);
 	}
@@ -81,6 +83,7 @@
 		clockTimer = setInterval(() => (now = Date.now()), 15000);
 	});
 	onDestroy(() => {
+		destroyed = true;
 		clearTimeout(refetchTimer);
 		clearInterval(clockTimer);
 	});
@@ -137,7 +140,7 @@
 				<div class="row">
 					<div class="lbl">
 						<b>{t(p.key)}</b>
-						{#if !c}
+						{#if !c || (c.ok && !c.checked_at)}
 							<small>{t('health.canary_none')}</small>
 						{:else if c.ok}
 							<small class="good">{t('health.canary_ok', { rel: relTime(c.checked_at, now) })}</small>
