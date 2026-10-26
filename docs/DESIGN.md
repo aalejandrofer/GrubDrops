@@ -48,9 +48,12 @@ Routes under `web/src/routes/`:
 - `(app)`: Home, Games (`games/`), Discover (`discover/`), Rewards
   (`rewards/`), Settings
   (`settings/`) with sections General, Accounts, Notifications, Updates and
-  Health, each its own component.
-- `(auth)`: Login (`login/`) and first-run Setup (`setup/`), styled by
-  `auth.css`.
+  Health, each its own component. `welcome/` is the first-run wizard (add an
+  account, pick games, mining started), full screen without the top bar.
+  Home sends a first run with no accounts there.
+- `(auth)`: Login (`login/`) and first-run Setup (`setup/`): a centered card
+  with the host below it, styled by `auth.css`. Password first, then SSO
+  under an "or" rule when OIDC is on.
 
 ## Components
 
@@ -67,7 +70,7 @@ In `web/src/lib/components/`:
 | `PlatformMark` | Twitch or Kick mark, sizes `md` and `sm`. |
 | `Icon` | Inline SVG icons by name. |
 | `CopyCommand` | A command with a copy button. |
-| `FirstRun` | Empty-state guidance before accounts or games exist. |
+| `AccountFlow` | Add or re-login one account: Twitch Android paste, Twitch TV code, Kick cookies.txt. Used by Settings > Accounts and the first-run wizard. |
 
 ## Rules
 

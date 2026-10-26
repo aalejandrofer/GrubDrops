@@ -6,7 +6,6 @@
 	import { ApiError, Unreachable } from '$lib/api/client';
 	import { retryUnreachable } from '$lib/retry';
 	import { t } from '$lib/i18n/index.svelte';
-	import '../auth.css';
 
 	let password = $state('');
 	let error = $state('');
@@ -50,10 +49,34 @@
 <form onsubmit={submit}>
 	<label for="pw">{t('auth.password')}</label>
 	<!-- svelte-ignore a11y_autofocus -->
-	<input id="pw" type="password" autocomplete="current-password" autofocus required bind:value={password} aria-invalid={shown ? true : undefined} />
-	{#if shown}<p class="err" role="alert">{shown}</p>{/if}
-	<button type="submit" class="primary" disabled={busy}>{t('auth.login_submit')}</button>
+	<input
+		id="pw"
+		type="password"
+		autocomplete="current-password"
+		autofocus
+		required
+		readonly={busy}
+		bind:value={password}
+		aria-invalid={shown ? true : undefined}
+		aria-describedby={shown ? 'pw-err' : undefined}
+	/>
+	{#if shown}<p class="err" id="pw-err" role="alert">{shown}</p>{/if}
+	<button type="submit" class="b primary" disabled={busy}>
+		{#if busy}<span class="spin" aria-hidden="true"></span>{t('auth.signing_in')}{:else}{t('auth.login_submit')}{/if}
+	</button>
 </form>
 {#if session.oidc.enabled}
-	<a class="sso" href="/auth/oidc/login">{t('auth.sso', { name: session.oidc.name })}</a>
+	<div class="rule"><span>{t('auth.or')}</span></div>
+	<a class="b ghost" href="/auth/oidc/login">
+		<svg viewBox="0 0 24 24" aria-hidden="true"
+			><path
+				d="M15 7a3 3 0 1 1-3 3M14.2 12.8 21 19.6V22h-3v-2h-2v-2h-2l-2.2-2.2A6 6 0 1 1 15 7"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="1.7"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			/></svg
+		>{t('auth.sso', { name: session.oidc.name })}
+	</a>
 {/if}

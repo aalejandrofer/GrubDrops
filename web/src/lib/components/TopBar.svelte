@@ -9,8 +9,8 @@
 
 	const items = [
 		{ href: '/', key: 'nav.home' },
-		{ href: '/games', key: 'nav.games' },
 		{ href: '/discover', key: 'nav.discover' },
+		{ href: '/games', key: 'nav.games' },
 		{ href: '/rewards', key: 'nav.rewards' },
 		{ href: '/settings', key: 'nav.settings' }
 	];

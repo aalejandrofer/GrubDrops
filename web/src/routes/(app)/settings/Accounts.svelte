@@ -1,31 +1,24 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/app';
 	import { ApiError } from '$lib/api/client';
-	import type { Account, DeviceStart, Platform } from '$lib/api/types';
+	import type { Account, Platform } from '$lib/api/types';
 	import {
 		accountLine,
 		accountStatus,
-		androidErrorKey,
 		commitAccountOrder,
-		createDeviceFlow,
-		hasAndroidToken,
 		initials,
 		NAME_MAX,
 		renameRequest,
-		rowActions,
-		type DeviceFlow,
-		type DeviceState,
-		type TwitchMethod
+		rowActions
 	} from '$lib/accounts';
-	import CopyCommand from '$lib/components/CopyCommand.svelte';
+	import AccountFlow from '$lib/components/AccountFlow.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { moveTarget } from '$lib/games';
 	import { t } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
-	import { loginFlow } from '$lib/login-flow.svelte';
 	import { moveItem } from '$lib/upnext';
 	import { reorder } from '$lib/drag';
 
@@ -53,21 +46,7 @@
 	let renaming = $state<string | null>(null);
 	let renameValue = $state('');
 
-	let ds = $state<DeviceState>('idle');
-	let dcode = $state<DeviceStart | null>(null);
-	let flow: DeviceFlow | null = null;
-	let cancelTimer: (() => void) | null = null;
-
-	let method = $state<TwitchMethod | null>(null);
-	let androidUrl = $state('');
-	let paste = $state('');
-	let androidMsg = $state('');
-	let androidDone = $state(false);
-
-	let cookies = $state('');
-	let saving = $state(false);
-	let kickMsg = $state('');
-	let kickSaved = $state<'ok' | 'unverified' | null>(null);
+	let flowEl = $state<AccountFlow | null>(null);
 
 	const runnerOf = (id: string) => live.runners.find((r) => r.account_id === id);
 	const shown = (a: Account) => !(panel?.isNew && panel.id === a.id);
@@ -117,34 +96,8 @@
 		onCancel: () => (drag = null)
 	};
 
-
-	function schedule(fn: () => void, ms: number): () => void {
-		const id = setTimeout(fn, ms);
-		cancelTimer = () => clearTimeout(id);
-		return () => clearTimeout(id);
-	}
-
 	function errMsg(e: unknown, fallback: string): string {
 		return e instanceof ApiError && e.body.message ? e.body.message : fallback;
-	}
-
-	function reset(): void {
-		cancelTimer?.();
-		cancelTimer = null;
-		flow = null;
-		panel = null;
-		loginFlow.id = null;
-		ds = 'idle';
-		dcode = null;
-		method = null;
-		androidUrl = '';
-		paste = '';
-		androidMsg = '';
-		androidDone = false;
-		cookies = '';
-		kickMsg = '';
-		kickSaved = null;
-		saving = false;
 	}
 
 	async function openFlow(kind: Platform, existing?: string): Promise<void> {
@@ -152,132 +105,21 @@
 		menu = null;
 		addError = '';
 		if (panel) await closePanel();
-		if (kind === 'twitch') {
-			// Twitch asks for the method first; the TV path creates the account on pick.
-			panel = { kind, id: existing ?? '', isNew: existing === undefined };
-			loginFlow.id = existing ?? null;
-			return;
-		}
-		busy = true;
-		try {
-			let id = existing;
-			if (!id) {
-				const created = await api.addAccount(kind);
-				id = created.id;
-			}
-			panel = { kind, id, isNew: existing === undefined };
-			loginFlow.id = id;
-		} catch (e) {
-			addError = errMsg(e, t('accounts.add_failed'));
-		} finally {
-			busy = false;
-		}
-	}
-
-	async function chooseTV(): Promise<void> {
-		const p = panel;
-		if (!p || busy) return;
-		busy = true;
-		try {
-			if (!p.id) {
-				const created = await api.addAccount('twitch');
-				p.id = created.id;
-				loginFlow.id = created.id;
-			}
-			method = 'tv';
-			const f = createDeviceFlow({ api, accountId: p.id, schedule, isNew: p.isNew });
-			f.onChange(() => {
-				ds = f.state;
-				dcode = f.code;
-			});
-			flow = f;
-			await f.start();
-		} catch (e) {
-			addError = errMsg(e, t('accounts.add_failed'));
-			reset();
-		} finally {
-			busy = false;
-		}
-	}
-
-	async function chooseAndroid(): Promise<void> {
-		method = 'android';
-		androidMsg = '';
-		try {
-			androidUrl = (await api.twitchAndroidUrl()).login_url;
-		} catch {
-			androidMsg = t('accounts.android_failed');
-		}
-	}
-
-	async function submitAndroid(): Promise<void> {
-		const p = panel;
-		if (!p || saving) return;
-		androidMsg = '';
-		if (!hasAndroidToken(paste)) {
-			androidMsg = t('accounts.android_no_token');
-			return;
-		}
-		saving = true;
-		try {
-			await api.twitchAndroidLogin(paste.trim(), p.isNew ? undefined : p.id);
-			paste = '';
-			androidDone = true;
-		} catch (e) {
-			androidMsg = t(androidErrorKey(e instanceof ApiError ? e.code : undefined));
-		} finally {
-			saving = false;
-		}
+		panel = { kind, id: existing ?? '', isNew: existing === undefined };
 	}
 
 	async function closePanel(): Promise<void> {
-		const p = panel;
-		const f = flow;
 		try {
-			if (p?.kind === 'twitch' && f) await f.cancel();
-			else if (p?.kind === 'kick' && p.isNew && !kickSaved) await api.removeAccount(p.id);
+			await flowEl?.cancel();
 		} catch {
 			addError = t('accounts.remove_failed');
 		}
-		reset();
+		panel = null;
 	}
 
 	async function finish(): Promise<void> {
-		reset();
+		panel = null;
 		await live.refetchAll().catch(() => {});
-	}
-
-	async function saveKick(): Promise<void> {
-		if (!panel || saving) return;
-		saving = true;
-		kickMsg = '';
-		try {
-			const r = await api.kickSession(panel.id, cookies);
-			cookies = '';
-			if (r.verified) {
-				kickSaved = 'ok';
-			} else {
-				kickSaved = 'unverified';
-				kickMsg = t('accounts.kick_unverified');
-			}
-		} catch (e) {
-			kickMsg = errMsg(e, t('accounts.kick_failed'));
-		} finally {
-			saving = false;
-		}
-	}
-
-	async function onFile(e: Event & { currentTarget: HTMLInputElement }): Promise<void> {
-		const input = e.currentTarget;
-		const file = input.files?.[0];
-		if (!file) return;
-		kickMsg = '';
-		try {
-			cookies = await file.text();
-		} catch {
-			kickMsg = t('accounts.file_failed');
-		}
-		input.value = '';
 	}
 
 	function startRename(a: Account): void {
@@ -357,14 +199,6 @@
 		}
 	});
 
-	onDestroy(() => {
-		flow?.dispose();
-		cancelTimer?.();
-		loginFlow.id = null;
-		// Leaving mid-flow drops the half-made account.
-		const p = panel;
-		if (p?.isNew && p.id && !kickSaved && ds !== 'done') api.removeAccount(p.id).catch(() => {});
-	});
 </script>
 
 <svelte:window
@@ -379,105 +213,21 @@
 
 {#snippet flowPanel()}
 	{#if panel}
-		<div class="card-body flow" aria-live="polite">
-			<div class="card-title">
-				<PlatformMark platform={panel.kind} />
-				<b>{t(panel.kind === 'twitch' ? 'accounts.twitch' : 'accounts.kick')}</b>
-			</div>
-			{#if panel.kind === 'twitch' && method === null}
-				<div class="inline wrap">
-					<button type="button" class="btn primary" disabled={busy} onclick={chooseAndroid}>{t('accounts.method_android')}</button>
-					<button type="button" class="btn" disabled={busy} onclick={chooseTV}>{t('accounts.method_tv')}</button>
-					<button type="button" class="btn" onclick={closePanel}>{t('accounts.cancel')}</button>
-				</div>
-			{:else if panel.kind === 'twitch' && method === 'android'}
-				{#if androidDone}
-					<p class="feedback">{t('accounts.device_done')}</p>
-					<div class="inline"><button type="button" class="btn" onclick={finish}>{t('accounts.done')}</button></div>
-				{:else}
-					<ol class="steps">
-						<li>
-							<span>{t('accounts.android_step1')}</span>
-							{#if androidUrl}
-								<a class="btn" href={androidUrl} target="_blank" rel="noopener noreferrer">{t('accounts.android_open')}</a>
-							{/if}
-						</li>
-						<li><span class="go">{t('accounts.android_step2')}</span></li>
-					</ol>
-					<div class="field">
-						<label for="twitch-paste">{t('accounts.android_paste_label')}</label>
-						<input
-							class="inp"
-							id="twitch-paste"
-							type="text"
-							spellcheck="false"
-							autocomplete="off"
-							bind:value={paste}
-							onkeydown={(e) => {
-								if (e.key === 'Enter') void submitAndroid();
-							}}
-						/>
-					</div>
-					<div class="inline wrap">
-						<button type="button" class="btn primary" disabled={saving || paste.trim() === ''} onclick={submitAndroid}>
-							{saving ? t('accounts.saving') : t('accounts.android_submit')}
-						</button>
-						<button type="button" class="btn" onclick={closePanel}>{t('accounts.cancel')}</button>
-					</div>
-					{#if androidMsg}<small class="bad" role="alert">{androidMsg}</small>{/if}
-				{/if}
-			{:else if panel.kind === 'twitch'}
-				{#if ds === 'code' && dcode}
-					<p class="go">{t('accounts.device_go', { url: dcode.verification_url })}</p>
-					<div class="code">{dcode.user_code}</div>
-					<CopyCommand command={dcode.user_code} />
-					<small class="wait">{t('accounts.device_waiting')}</small>
-				{:else if ds === 'done'}
-					<p class="feedback">{t('accounts.device_done')}</p>
-				{:else if ds === 'expired'}
-					<p class="bad">{t('accounts.device_expired')}</p>
-				{:else if ds === 'error'}
-					<p class="bad">{t('accounts.device_error')}</p>
-				{/if}
-				<div class="inline wrap">
-					{#if ds === 'done'}
-						<button type="button" class="btn" onclick={finish}>{t('accounts.done')}</button>
-					{:else}
-						{#if ds === 'expired' || ds === 'error'}
-							<button type="button" class="btn primary" onclick={() => flow?.start()}>{t('accounts.new_code')}</button>
-						{/if}
-						<button type="button" class="btn" onclick={closePanel}>{t('accounts.cancel')}</button>
-					{/if}
-				</div>
-			{:else if kickSaved === 'ok'}
-				<p class="feedback">{t('accounts.device_done')}</p>
-				<div class="inline"><button type="button" class="btn" onclick={finish}>{t('accounts.done')}</button></div>
-			{:else}
-				<div class="field">
-					<label for="kick-cookies">{t('accounts.cookies_label')}</label>
-					<textarea
-						class="inp ta"
-						id="kick-cookies"
-						rows="5"
-						spellcheck="false"
-						autocomplete="off"
-						bind:value={cookies}
-					></textarea>
-					<small class="help">{t('accounts.cookies_help')}</small>
-				</div>
-				<div class="inline wrap">
-					<label class="btn file">
-						{t('accounts.cookies_file')}
-						<input type="file" accept=".txt,text/plain" onchange={onFile} />
-					</label>
-					<button type="button" class="btn primary" disabled={saving || cookies.trim() === ''} onclick={saveKick}>
-						{saving ? t('accounts.saving') : t('accounts.save')}
-					</button>
-					<button type="button" class="btn" onclick={closePanel}>{kickSaved ? t('accounts.close') : t('accounts.cancel')}</button>
-				</div>
-				{#if kickMsg}<small class="bad" role="alert">{kickMsg}</small>{/if}
-			{/if}
-		</div>
+		{#key panel}
+			<AccountFlow
+				bind:this={flowEl}
+				bind:id={panel.id}
+				bind:busy
+				kind={panel.kind}
+				existing={panel.isNew ? undefined : panel.id}
+				onclose={() => (panel = null)}
+				ondone={finish}
+				onfail={(msg) => {
+					addError = msg;
+					panel = null;
+				}}
+			/>
+		{/key}
 	{/if}
 {/snippet}
 
@@ -877,65 +627,9 @@
 	.acct.problem .who small:not(.bad) {
 		color: color-mix(in srgb, var(--red) 55%, var(--text));
 	}
-	.flow + .row,
-	.row + .flow {
+	.panel :global(.flow + .row),
+	.panel :global(.row + .flow) {
 		border-top: 1px solid var(--border-soft);
-	}
-	.go {
-		margin: 0;
-		font-size: 13px;
-		overflow-wrap: anywhere;
-	}
-	.code {
-		font: 600 28px/1.1 var(--mono);
-		letter-spacing: 0.12em;
-		overflow-wrap: anywhere;
-	}
-	.wait {
-		color: var(--t2);
-		font-size: 12.5px;
-	}
-	.help {
-		color: var(--t2);
-		font-size: 12px;
-	}
-	.ta {
-		height: auto;
-		padding: 8px 10px;
-		resize: vertical;
-		white-space: pre;
-		overflow: auto;
-	}
-	.file {
-		position: relative;
-		overflow: hidden;
-	}
-	.file input {
-		position: absolute;
-		inset: 0;
-		opacity: 0;
-		cursor: pointer;
-		font-size: 0;
-	}
-	.file:focus-within {
-		outline: 2px solid var(--accent);
-		outline-offset: 2px;
-	}
-	.feedback {
-		margin: 0;
-	}
-	.steps {
-		margin: 0;
-		padding-left: 20px;
-		display: grid;
-		gap: 8px;
-		font-size: 13px;
-	}
-	.steps li {
-		overflow-wrap: anywhere;
-	}
-	.steps li .btn {
-		margin-left: 8px;
 	}
 
 	@media (max-width: 720px) {

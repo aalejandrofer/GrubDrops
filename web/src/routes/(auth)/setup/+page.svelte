@@ -5,11 +5,11 @@
 	import { ApiError, Unreachable } from '$lib/api/client';
 	import { retryUnreachable } from '$lib/retry';
 	import { t } from '$lib/i18n/index.svelte';
-	import '../auth.css';
 
 	let password = $state('');
 	let confirm = $state('');
 	let error = $state('');
+	let short = $state(false);
 	let busy = $state(false);
 	let down = $state(false);
 	const shown = $derived(error || (down ? t('auth.unreachable') : ''));
@@ -28,10 +28,8 @@
 		e.preventDefault();
 		if (busy) return;
 		error = '';
-		if (Array.from(password).length < 8) {
-			error = t('auth.too_short');
-			return;
-		}
+		short = Array.from(password).length < 8;
+		if (short) return;
 		if (password !== confirm) {
 			error = t('auth.mismatch');
 			return;
@@ -40,7 +38,7 @@
 		try {
 			await api.setup(password, confirm);
 			await session.load();
-			await goto('/');
+			await goto('/welcome');
 		} catch (err) {
 			if (err instanceof Unreachable) error = t('auth.unreachable');
 			else if (err instanceof ApiError && err.body.message) error = err.body.message;
@@ -52,12 +50,34 @@
 </script>
 
 <h1>{t('auth.setup_title')}</h1>
+<p class="lead">{t('auth.setup_lead')}</p>
 <form onsubmit={submit} novalidate>
 	<label for="pw">{t('auth.password')}</label>
 	<!-- svelte-ignore a11y_autofocus -->
-	<input id="pw" type="password" autocomplete="new-password" autofocus bind:value={password} />
+	<input
+		id="pw"
+		type="password"
+		autocomplete="new-password"
+		autofocus
+		readonly={busy}
+		bind:value={password}
+		aria-invalid={short || undefined}
+		aria-describedby="pw-hint"
+		oninput={() => (short = false)}
+	/>
+	<p class="hint" class:err={short} id="pw-hint" role={short ? 'alert' : undefined}>{t('auth.too_short')}</p>
 	<label for="pw2">{t('auth.confirm')}</label>
-	<input id="pw2" type="password" autocomplete="new-password" bind:value={confirm} />
-	{#if shown}<p class="err" role="alert">{shown}</p>{/if}
-	<button type="submit" class="primary" disabled={busy}>{t('auth.setup_submit')}</button>
+	<input
+		id="pw2"
+		type="password"
+		autocomplete="new-password"
+		readonly={busy}
+		bind:value={confirm}
+		aria-invalid={error === t('auth.mismatch') || undefined}
+		aria-describedby={shown ? 'pw-err' : undefined}
+	/>
+	{#if shown}<p class="err" id="pw-err" role="alert">{shown}</p>{/if}
+	<button type="submit" class="b primary" disabled={busy}>
+		{#if busy}<span class="spin" aria-hidden="true"></span>{t('auth.setup_busy')}{:else}{t('auth.setup_submit')}{/if}
+	</button>
 </form>
