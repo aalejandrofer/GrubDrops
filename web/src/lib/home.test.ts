@@ -7,7 +7,7 @@ import mining from '$lib/fixtures/overview.mining.json';
 import nothing from '$lib/fixtures/overview.nothing_live.json';
 import many from '$lib/fixtures/runners.many.json';
 import runnersMining from '$lib/fixtures/runners.mining.json';
-import { foldRows, gameCards, groupClaims, homeView, normName, visibleCards, type GameCard } from './home';
+import { foldRows, gameCards, groupClaims, homeView, fitCount, normName, visibleCards, type GameCard } from './home';
 
 const G = () => structuredClone(games.games) as Game[];
 const R = () => structuredClone(runnersMining) as Runner[];
@@ -268,5 +268,22 @@ describe('visibleCards', () => {
 		const r = visibleCards(cards);
 		expect(r.shown.map((c) => c.rank)).toEqual([4, 5, 1, 2, 3]);
 		expect(r.hidden).toBe(0);
+	});
+});
+
+describe('fitCount', () => {
+	const h = [200, 200, 100, 100, 100];
+	it('counts cards whose heights and gaps fit', () => {
+		expect(fitCount(h, 10, 519, 2)).toBe(2);
+		expect(fitCount(h, 10, 520, 2)).toBe(3);
+		expect(fitCount(h, 10, 740, 2)).toBe(5);
+	});
+	it('keeps the minimum when nothing fits', () => {
+		expect(fitCount(h, 10, 50, 2)).toBe(2);
+		expect(fitCount(h, 10, 0, 2)).toBe(2);
+	});
+	it('caps at the card count', () => {
+		expect(fitCount([100], 10, 9999, 2)).toBe(1);
+		expect(fitCount([], 10, 9999, 2)).toBe(0);
 	});
 });

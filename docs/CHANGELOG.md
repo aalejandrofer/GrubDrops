@@ -36,6 +36,7 @@ All notable changes to GrubDrops.
 - **Shared locales.** The web app reads `internal/i18n/locales`, and `npm run check` fails on missing, unused or mismatched keys.
 
 ### Changed
+- **Home game cards fill the left column.** On wide screens Home shows as many game cards as fit down to the bottom of the right column (Up next and Claimed), instead of a fixed 7, with at least 2. The narrow single-column layout keeps 7.
 - **Light mode.** The light theme is one step darker: an off-white background instead of pure white, with darker surfaces, borders and text colors to match (GRUB-22).
 - **Scan cadence.** A watching account now rescans campaigns every 12 hours instead of every 15 minutes. Use Scan now on Games for a sooner one.
 - **Health log colors.** Each log line is tinted by its type: red for errors, amber for warnings, green for claims. Normal lines use the main text color instead of grey.

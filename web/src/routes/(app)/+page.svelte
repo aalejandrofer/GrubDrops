@@ -5,7 +5,7 @@
 	import PageHead from '$lib/components/PageHead.svelte';
 	import UpNext from '$lib/components/UpNext.svelte';
 	import { clock, formatInt, relTime, shortDate } from '$lib/format';
-	import { gameCards, groupClaims, homeView, visibleCards } from '$lib/home';
+	import { gameCards, groupClaims, homeView, visibleCards, fitCount } from '$lib/home';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive, getNet } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
@@ -38,7 +38,65 @@
 	const nextScan = $derived(live.games?.next_scan_at ?? o?.status.next_scan_at ?? null);
 	const pausedIds = $derived(new Set(live.accounts.filter((a) => !a.enabled).map((a) => a.id)));
 	const cards = $derived(gameCards(live.games?.games ?? [], live.runners, pausedIds));
-	const vis = $derived(visibleCards(cards));
+	// Wide layout: render every card, measure them, show as many as fit beside
+	// the right column. Cards past the fit stay in the DOM, out of flow, so
+	// their heights stay measurable. Narrow layout: fixed cap.
+	const MAX_NARROW = 7;
+	const CARD_GAP = 12;
+	const MORE_LINE = 30;
+	let cardsEl = $state<HTMLElement | null>(null);
+	let asideEl = $state<HTMLElement | null>(null);
+	let fit = $state<number | null>(null);
+	const ordered = $derived(visibleCards(cards, Infinity).shown);
+	const shownCount = $derived(Math.min(ordered.length, fit ?? MAX_NARROW));
+	const hiddenCount = $derived(cards.length - shownCount);
+	const listed = $derived(fit === null ? ordered.slice(0, shownCount) : ordered);
+
+	$effect(() => {
+		if (!cardsEl || !asideEl) return;
+		const list = cardsEl;
+		const side = asideEl;
+		const mq = window.matchMedia('(max-width: 960px)');
+		let raf = 0;
+		const measure = () => {
+			raf = 0;
+			if (mq.matches) {
+				fit = null;
+				return;
+			}
+			const arts = [...list.querySelectorAll<HTMLElement>(':scope > article.game')];
+			if (arts.length === 0) return;
+			const avail = side.offsetHeight - arts[0].offsetTop;
+			const heights = arts.map((a) => a.offsetHeight);
+			let n = fitCount(heights, CARD_GAP, avail, 2);
+			if (n < heights.length) n = fitCount(heights, CARD_GAP, avail - MORE_LINE, 2);
+			fit = n;
+		};
+		const schedule = () => {
+			if (!raf) raf = requestAnimationFrame(measure);
+		};
+		const ro = new ResizeObserver(schedule);
+		const watch = () => {
+			ro.disconnect();
+			ro.observe(side);
+			ro.observe(list);
+			list.querySelectorAll(':scope > article.game').forEach((a) => ro.observe(a));
+		};
+		const mo = new MutationObserver(() => {
+			watch();
+			schedule();
+		});
+		mo.observe(list, { childList: true });
+		mq.addEventListener('change', schedule);
+		watch();
+		measure();
+		return () => {
+			ro.disconnect();
+			mo.disconnect();
+			mq.removeEventListener('change', schedule);
+			if (raf) cancelAnimationFrame(raf);
+		};
+	});
 	const groups = $derived(groupClaims(live.recent, now, prefs.zone));
 	const stamp = $derived(
 		live.updatedAt === null
@@ -135,26 +193,27 @@
 		</div>
 
 		<div class="layout">
-			<div class="cards">
+			<div class="cards" bind:this={cardsEl}>
 				<div class="cards-h">
 					<h2>{t('home.games_title')} <span class="cnt">{cards.length}</span></h2>
 					<a href="/games" class="edit"><Icon name="list" />{t('home.edit_games')}</a>
 				</div>
-				{#each vis.shown as card (card.game.id)}
+				{#each listed as card, i (card.game.id)}
 					<GameCard
 						{card}
+						over={i >= shownCount}
 						{lastScan}
 						{nextScan}
 						{now}
 						readyAccounts={mode === 'nothing_live' ? o.status.accounts_total - (o.status.accounts_paused ?? 0) : null}
 					/>
 				{/each}
-				{#if vis.hidden > 0}
-					<a class="more-games" href="/games">{tn('home.more_games', vis.hidden)}</a>
+				{#if hiddenCount > 0}
+					<a class="more-games" href="/games">{tn('home.more_games', hiddenCount)}</a>
 				{/if}
 			</div>
 
-			<aside>
+			<aside bind:this={asideEl}>
 				<UpNext />
 				<section class="sec" aria-label={t('home.claimed')}>
 					<div class="sec-h">
@@ -270,6 +329,9 @@
 		grid-template-columns: minmax(0, 1fr) 320px;
 		gap: 24px;
 		align-items: start;
+	}
+	.cards {
+		position: relative;
 	}
 	.cards-h {
 		display: flex;

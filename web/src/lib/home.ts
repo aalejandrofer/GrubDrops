@@ -112,6 +112,27 @@ export function visibleCards(
   return { shown, hidden: cards.length - shown.length };
 }
 
+/**
+ * How many cards fit in `available` px when stacked with `gap` between them.
+ * Never fewer than `min` (or the card count, if lower).
+ */
+export function fitCount(
+  cardHeights: number[],
+  gap: number,
+  available: number,
+  min: number,
+): number {
+  let used = 0;
+  let n = 0;
+  for (const h of cardHeights) {
+    const next = used + h + (n > 0 ? gap : 0);
+    if (next > available) break;
+    used = next;
+    n++;
+  }
+  return Math.min(cardHeights.length, Math.max(n, min));
+}
+
 export function foldRows(
   rows: AccountRow[],
   limit = 3,
