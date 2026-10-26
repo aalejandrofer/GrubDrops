@@ -18,6 +18,7 @@ import (
 
 	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
 	"github.com/aalejandrofer/grubdrops/internal/collect"
+	"github.com/aalejandrofer/grubdrops/internal/discover"
 	mlog "github.com/aalejandrofer/grubdrops/internal/log"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/store"
@@ -50,6 +51,9 @@ type Deps struct {
 	Chosen       *store.ChosenGames
 	Board        *collect.Board
 	GamesChanged func() // nil-safe; must return at once, the reload runs in the background
+
+	// Discover lists every current campaign; nil serves 503.
+	Discover *discover.Service
 
 	// Accounts and logins.
 	Sessions       *store.SessionStore
@@ -136,6 +140,7 @@ func (s *server) routesProtected(r chi.Router) {
 	s.routesEvents(r)
 	s.routesOverview(r)
 	s.routesGames(r)
+	s.routesDiscover(r)
 	s.routesClaims(r)
 	s.routesAccounts(r)
 	s.routesSettings(r)

@@ -263,6 +263,7 @@ Pages:
 |------|------|
 | **Home** | What each account is mining, the up-next queue, recent claims. |
 | **Games** | Your chosen games, added by name, in a priority order you drag. |
+| **Discover** | Every current Twitch and Kick campaign, grouped by game, with rewards, end dates and an Add to games button. Twitch needs an Android-login account. |
 | **Rewards** | Claimed drops across accounts, with filters. |
 | **Settings** | General, Accounts, Notifications, Updates and Health. |
 
