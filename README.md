@@ -266,6 +266,14 @@ internal/web            embedded SPA build (dist/)
 internal/store          SQLite (sqlc + goose), age-encrypted sessions
 ```
 
+## Development
+
+```bash
+npm --prefix web ci && npm --prefix web run build   # SPA into internal/web/dist
+web/scripts/dev-miner.sh                            # local miner on a temp DB
+GRUB_DEV_API=http://127.0.0.1:18080 npm --prefix web run dev
+```
+
 ## Credits
 
 Stands on the projects that cracked the hard parts first:

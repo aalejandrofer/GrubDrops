@@ -1,4 +1,13 @@
 # syntax=docker/dockerfile:1
+FROM --platform=$BUILDPLATFORM node:25-alpine AS web
+WORKDIR /src/web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+COPY internal/i18n/locales/ /src/internal/i18n/locales/
+COPY assets/img/ /src/assets/img/
+RUN npm run build
+
 FROM golang:1.26-alpine AS build
 WORKDIR /src
 RUN apk add --no-cache git ca-certificates
@@ -9,6 +18,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
 COPY . .
+COPY --from=web /src/internal/web/dist ./internal/web/dist
 
 # Release tag, injected into the binary so Settings shows the running version.
 # release.yml passes VERSION=${github.ref_name}; left empty for plain builds

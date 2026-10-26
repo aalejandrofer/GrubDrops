@@ -33,9 +33,24 @@ GRUB_MASTER_KEY=$(go run ./cmd/miner keygen) \
   go run ./cmd/miner
 ```
 
-`/` serves a placeholder until the SPA lands. Create the admin with
-`POST /api/setup` (CSRF token from `GET /api/session`). Only `GRUB_MASTER_KEY`
-is required; see the README "Configuration" table for the rest (`GRUB_*` prefix).
+Build the SPA into `internal/web/dist` (Go serves a 503 "UI not built" page
+without it):
+
+```bash
+npm --prefix web ci && npm --prefix web run build
+```
+
+UI dev loop (Vite proxies `/api` and `/auth` to the miner):
+
+```bash
+web/scripts/dev-miner.sh          # temp DB miner on :18080, prints GRUB_DEV_DIR
+GRUB_DEV_DIR=<dir> web/scripts/dev-seed.sh   # admin plus sample games and accounts
+GRUB_DEV_API=http://127.0.0.1:18080 npm --prefix web run dev
+```
+
+Create the admin with `POST /api/setup` (CSRF token from `GET /api/session`)
+when not seeding. Only `GRUB_MASTER_KEY` is required; see the README
+"Configuration" table for the rest (`GRUB_*` prefix).
 
 ## Layout
 
