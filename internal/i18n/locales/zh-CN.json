@@ -353,5 +353,8 @@
   "games.view_label": "视图",
   "home.upnext_more.one": "再显示 {n} 个",
   "home.upnext_more.other": "再显示 {n} 个",
-  "home.upnext_less": "收起"
+  "home.upnext_less": "收起",
+  "health.show_all.one": "显示全部 {n} 条",
+  "health.show_all.other": "显示全部 {n} 条",
+  "health.show_less": "收起"
 }

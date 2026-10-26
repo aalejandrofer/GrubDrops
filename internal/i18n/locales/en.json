@@ -353,5 +353,8 @@
   "games.view_label": "View",
   "home.upnext_more.one": "Show {n} more",
   "home.upnext_more.other": "Show {n} more",
-  "home.upnext_less": "Show less"
+  "home.upnext_less": "Show less",
+  "health.show_all.one": "Show all {n}",
+  "health.show_all.other": "Show all {n}",
+  "health.show_less": "Show less"
 }

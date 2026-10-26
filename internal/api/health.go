@@ -123,10 +123,15 @@ func (s *server) getHealth(w http.ResponseWriter, r *http.Request) {
 	if s.d.Ring != nil {
 		lines = s.d.Ring.Snapshot()
 	}
-	counts := map[string]int{"all": len(lines), "problems": 0, "claims": 0}
+	counts := map[string]int{"all": 0, "problems": 0, "claims": 0}
 	events := []healthEvent{}
 	for i := len(lines) - 1; i >= 0; i-- { // newest first
 		l := lines[i]
+		// DEBUG lines stay in the full log download only.
+		if l.Level == "DEBUG" {
+			continue
+		}
+		counts["all"]++
 		problem, claim := isProblem(l), isClaim(l)
 		if problem {
 			counts["problems"]++

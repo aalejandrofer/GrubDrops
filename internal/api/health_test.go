@@ -121,6 +121,30 @@ func TestHealth_EventsCappedAt50(t *testing.T) {
 	assert.Equal(t, 80, got.Counts["all"])
 }
 
+func TestHealth_DebugHiddenFromEventsKeptInLog(t *testing.T) {
+	ring := mlog.NewRing(10)
+	ring.PushEvent(mlog.KindClaim, "INFO", "claimed it", nil)
+	ring.PushEvent(mlog.KindError, "DEBUG", "debug noise", nil)
+	ring.PushEvent(mlog.KindState, "INFO", "mining", nil)
+	e := newHealthEnv(t, func(d *Deps) { d.Ring = ring })
+
+	for _, f := range []string{"all", "problems", "claims"} {
+		_, b := e.do("GET", "/api/health?filter="+f, "", nil)
+		var got struct {
+			Events []healthEvent  `json:"events"`
+			Counts map[string]int `json:"counts"`
+		}
+		require.NoError(t, json.Unmarshal(b, &got))
+		for _, ev := range got.Events {
+			assert.NotEqual(t, "debug noise", ev.Msg, f)
+		}
+		assert.Equal(t, map[string]int{"all": 2, "problems": 0, "claims": 1}, got.Counts, f)
+	}
+
+	_, b := e.do("GET", "/api/health/log", "", nil)
+	assert.Contains(t, string(b), "DEBUG [error] debug noise")
+}
+
 func TestHealth_LogDownload(t *testing.T) {
 	e := newHealthEnv(t, func(d *Deps) { d.Ring = testRing() })
 	resp, b := e.do("GET", "/api/health/log", "", nil)

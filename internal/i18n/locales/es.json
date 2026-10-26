@@ -353,5 +353,8 @@
   "games.view_label": "Vista",
   "home.upnext_more.one": "Mostrar {n} más",
   "home.upnext_more.other": "Mostrar {n} más",
-  "home.upnext_less": "Mostrar menos"
+  "home.upnext_less": "Mostrar menos",
+  "health.show_all.one": "Mostrar los {n}",
+  "health.show_all.other": "Mostrar los {n}",
+  "health.show_less": "Mostrar menos"
 }

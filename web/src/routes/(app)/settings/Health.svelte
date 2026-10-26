@@ -20,6 +20,7 @@
 		{ id: 'kick', key: 'accounts.kick' }
 	];
 	const MAX_EVENTS = 50;
+	const FOLDED_EVENTS = 10;
 	const CANARY_REFETCH_MS = 5000;
 
 	const live = getLive();
@@ -29,6 +30,7 @@
 	let events = $state<HealthEvent[]>([]);
 	let counts = $state({ all: 0, problems: 0, claims: 0 });
 	let loadFailed = $state(false);
+	let expanded = $state(false);
 	let canaryBusy = $state(false);
 	let canaryFailed = $state(false);
 	let canaryNoResult = $state(false);
@@ -61,6 +63,7 @@
 	function pick(f: Filter): void {
 		if (f === filter) return;
 		filter = f;
+		expanded = false;
 		void load(f);
 	}
 
@@ -110,7 +113,7 @@
 		untrack(() => {
 			if (!head || head === lastHead) return;
 			lastHead = head;
-			if (!h) return;
+			if (!h || head.level === 'DEBUG') return;
 			counts = {
 				all: counts.all + 1,
 				problems: counts.problems + (isProblem(head) ? 1 : 0),
@@ -120,6 +123,7 @@
 		});
 	});
 
+	const shownEvents = $derived(expanded ? events : events.slice(0, FOLDED_EVENTS));
 	const canaryOf = (p: Platform) => h?.canary.find((c) => c.platform === p);
 	const sidecars = $derived(h?.kick_sidecars.running.length ?? 0);
 	const minerLine = $derived(
@@ -184,7 +188,7 @@
 				<p class="empty">{t('health.empty')}</p>
 			{:else}
 				<ol class="log">
-					{#each events as e, i (`${e.at}-${i}`)}
+					{#each shownEvents as e, i (`${e.at}-${i}`)}
 						<li class={levelClass(e)}>
 							<time>{e.at ? clock(e.at, prefs.zone, prefs.fmt) : ''}</time>
 							<span class="lv {levelClass(e)}"></span>
@@ -193,6 +197,11 @@
 						</li>
 					{/each}
 				</ol>
+				{#if events.length > FOLDED_EVENTS}
+					<button type="button" class="more" aria-expanded={expanded} onclick={() => (expanded = !expanded)}
+						>{expanded ? t('health.show_less') : tn('health.show_all', events.length)}</button
+					>
+				{/if}
 			{/if}
 			<div class="log-foot">
 				<span>{tn('health.foot', events.length)}</span>
@@ -344,6 +353,22 @@
 		border-top: 1px solid var(--border-soft);
 		color: var(--t2);
 		font-size: 13px;
+	}
+	.more {
+		display: block;
+		width: 100%;
+		padding: 8px 16px;
+		font-size: 12px;
+		color: var(--t2);
+		text-align: left;
+		background: none;
+		border: 0;
+		border-top: 1px solid var(--border-soft);
+		cursor: pointer;
+	}
+	.more:hover {
+		color: var(--text);
+		background: var(--surface-2);
 	}
 	.log-foot {
 		display: flex;
