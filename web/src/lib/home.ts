@@ -63,12 +63,14 @@ export function gameCards(g: Game[], r: Runner[], paused: ReadonlySet<string> = 
 /**
  * At most max cards for Home. Cards that are mining or queued come first, in
  * rank order, then the rest in rank order, so a low-priority game that is
- * mining is not hidden behind idle top games. Each card keeps its real rank.
+ * mining is not hidden behind idle top games. Each card keeps its real rank;
+ * the first two shown are large.
  */
 export function visibleCards(cards: GameCard[], max = 7): { shown: GameCard[]; hidden: number } {
 	const active = (c: GameCard) => c.rows.some((r) => !r.muted && r.runner.current !== null) || c.queued.length > 0;
 	const ordered = cards.filter(active).concat(cards.filter((c) => !active(c)));
-	const shown = ordered.slice(0, max);
+	// Size follows display position; the rank on each card stays the real priority.
+	const shown = ordered.slice(0, max).map((c, i) => ({ ...c, size: i < 2 ? ('lg' as const) : ('sm' as const) }));
 	return { shown, hidden: cards.length - shown.length };
 }
 

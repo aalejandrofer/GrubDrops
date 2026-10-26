@@ -239,6 +239,11 @@ describe('visibleCards', () => {
 		expect(r.shown.map((c) => c.rank)).toEqual([1, 2, 3, 4, 5, 6, 7]);
 		expect(r.hidden).toBe(3);
 	});
+	it('sizes by display position, keeps rank', () => {
+		const r = visibleCards(mk(4, [4]));
+		expect(r.shown.map((c) => c.rank)).toEqual([4, 1, 2, 3]);
+		expect(r.shown.map((c) => c.size)).toEqual(['lg', 'lg', 'sm', 'sm']);
+	});
 	it('keeps a mining low-priority game and lists it first', () => {
 		const r = visibleCards(mk(10, [9]));
 		expect(r.shown.map((c) => c.rank)).toEqual([9, 1, 2, 3, 4, 5, 6]);

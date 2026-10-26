@@ -2,6 +2,7 @@
 	import { etaShort, formatInt } from '$lib/format';
 	import { foldRows, type AccountRow, type GameCard } from '$lib/home';
 	import { t, tn } from '$lib/i18n/index.svelte';
+	import { foldQueue } from '$lib/upnext';
 	import { scanStamp } from '$lib/scan';
 	import BoxArt from './BoxArt.svelte';
 	import PlatformMark from './PlatformMark.svelte';
@@ -37,6 +38,7 @@
 			.filter(Boolean)
 			.join(' · ')
 	);
+	const queuedFold = $derived(foldQueue(card.queued, false, 3));
 	const showRows = $derived(game.state === 'mining' && card.rows.length > 0);
 
 	function pct(r: AccountRow): string {
@@ -110,9 +112,12 @@
 				<li class="q-h">
 					{card.queuedBy ? t('home.waiting_head', { account: card.queuedBy }) : t('home.waiting_head_any')}
 				</li>
-				{#each card.queued as q (q.benefit_id)}
+				{#each queuedFold.rows as q (q.benefit_id)}
 					<li><span>{q.benefit_name}</span><span>{t('home.queued_min', { n: formatInt(q.required_minutes) })}</span></li>
 				{/each}
+				{#if queuedFold.more > 0}
+					<li class="q-more">{tn('home.more_in_upnext', queuedFold.more, { game: game.name })}</li>
+				{/if}
 			</ul>
 		{:else if game.state === 'waiting'}
 			<p class="idle-l">
@@ -364,6 +369,10 @@
 		color: var(--t3);
 		font: 12px var(--mono);
 		white-space: nowrap;
+	}
+	.queued .q-more {
+		color: var(--t3);
+		font-size: 12px;
 	}
 	.queued .q-h {
 		color: var(--t2);
