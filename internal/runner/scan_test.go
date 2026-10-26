@@ -325,10 +325,19 @@ func TestSnapshot_NextScanAt_Sleeping(t *testing.T) {
 	r.mu.Lock()
 	last := r.lastScanTry
 	r.mu.Unlock()
-	if got := r.Snapshot().NextScanAt; !got.Equal(last.Add(recheckInterval)) {
-		t.Fatalf("fallback NextScanAt=%v want %v", got, last.Add(recheckInterval))
+	if got := r.Snapshot().NextScanAt; !got.Equal(last.Add(12 * time.Hour)) {
+		t.Fatalf("fallback NextScanAt=%v want %v", got, last.Add(12*time.Hour))
 	}
-	dl := time.Now().Add(recheckInterval)
+	r.mu.Lock()
+	r.state = StateAwaitingConnect
+	r.mu.Unlock()
+	if got := r.Snapshot().NextScanAt; !got.Equal(last.Add(recheckInterval)) {
+		t.Fatalf("awaiting connect NextScanAt=%v want %v", got, last.Add(recheckInterval))
+	}
+	r.mu.Lock()
+	r.state = StateSleeping
+	r.mu.Unlock()
+	dl := time.Now().Add(idleRecheck)
 	r.mu.Lock()
 	r.nextRecheck = dl
 	r.mu.Unlock()

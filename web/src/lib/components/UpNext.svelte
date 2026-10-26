@@ -29,6 +29,11 @@
 				null
 			)
 	);
+	// The server's next scan time wins: an idle runner waits 12 h, not the 5 min fallback.
+	const nextScanAt = $derived(live.overview?.status.next_scan_at ?? null);
+	const emptyMin = $derived(
+		nextScanAt ? Math.max(0, Math.ceil((Date.parse(nextScanAt) - now) / 60000)) : nextScanMin(lastScan, now)
+	);
 	const perm = $derived(t('upnext.permanent', { games: '\u0000' }).split('\u0000'));
 
 	function runner(id: string): Runner | undefined {
@@ -111,7 +116,7 @@
 	<div class="panel-h"><h2>{t('upnext.title')}</h2><span class="n">{total}</span></div>
 	{#if qs.length === 0}
 		<p class="empty">
-			{lastScan ? tn('upnext.empty', nextScanMin(lastScan, now)) : t('upnext.empty_plain')}
+			{lastScan ? tn('upnext.empty', emptyMin) : t('upnext.empty_plain')}
 		</p>
 	{:else}
 		<div class="hint">{t('upnext.hint')}</div>

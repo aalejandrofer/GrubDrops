@@ -36,6 +36,7 @@ All notable changes to GrubDrops.
 - Home lists games that are mining or queued first, then the rest, each in priority order. Cards keep their real rank number.
 - Up next on Home shows 5 drops per account, with Show more / Show less for the rest.
 - The Health event log shows 10 events, with Show all for the rest of the last 50. DEBUG lines are left out of the list and its counts; Download full log still has them.
+- With nothing live, a runner scans again after 12 hours instead of 5 minutes. Changing the chosen games or an account still rescans at once; awaiting a channel connect still rechecks every 5 minutes. The empty Up next line counts down to the server's next scan time.
 
 ### Fixed
 

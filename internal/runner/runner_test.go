@@ -279,9 +279,9 @@ func TestRunner_RunBacksOffAndRecovers(t *testing.T) {
 }
 
 func TestRunner_IdleKeepsStateDuringWait(t *testing.T) {
-	old := recheckInterval
-	recheckInterval = 150 * time.Millisecond
-	t.Cleanup(func() { recheckInterval = old })
+	old := idleRecheck
+	idleRecheck = 150 * time.Millisecond
+	t.Cleanup(func() { idleRecheck = old })
 
 	f := platformtest.NewFake() // no campaigns -> sleeping
 	var mu sync.Mutex
@@ -323,8 +323,20 @@ func TestRunner_IdleKeepsStateDuringWait(t *testing.T) {
 	if len(evs) < 2 || evs[0].s != StateSleeping || evs[1].s != StatePicking {
 		t.Fatalf("events=%v", evs)
 	}
-	if d := evs[1].t.Sub(evs[0].t); d < recheckInterval {
-		t.Fatalf("picking set after %v, want >= %v", d, recheckInterval)
+	if d := evs[1].t.Sub(evs[0].t); d < idleRecheck {
+		t.Fatalf("picking set after %v, want >= %v", d, idleRecheck)
+	}
+}
+
+func TestIdleWait(t *testing.T) {
+	if idleRecheck != 12*time.Hour || recheckInterval != 5*time.Minute {
+		t.Fatalf("idleRecheck=%v recheckInterval=%v", idleRecheck, recheckInterval)
+	}
+	if got := idleWait(StateSleeping); got != idleRecheck {
+		t.Fatalf("sleeping wait=%v", got)
+	}
+	if got := idleWait(StateAwaitingConnect); got != recheckInterval {
+		t.Fatalf("awaiting connect wait=%v", got)
 	}
 }
 

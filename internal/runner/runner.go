@@ -18,9 +18,14 @@ var (
 	errStop = errors.New("stopped; needs user action") // Run returns nil on it
 )
 
-// Safeguard values carried over from 1.x. recheckInterval, stepErrBackoff
-// and rescanEvery are vars so tests can shrink them.
+// Safeguard values carried over from 1.x. idleRecheck, recheckInterval,
+// stepErrBackoff and rescanEvery are vars so tests can shrink them.
 var (
+	// idleRecheck is the wait while sleeping with nothing live. A games or
+	// account change rebuilds the runner, which scans at once.
+	idleRecheck = 12 * time.Hour
+	// recheckInterval is the wait in every other idle state, such as
+	// awaiting a channel connect.
 	recheckInterval = 5 * time.Minute
 	stepErrBackoff  = 5 * time.Second
 	// rescanEvery is how often a watching runner rebuilds the plan.
@@ -49,7 +54,7 @@ type Runner struct {
 	lastPollAt  time.Time
 	lastScanAt  time.Time
 	lastScanTry time.Time     // last scan attempt, failed or not; paces rescans
-	nextRecheck time.Time     // deadline of the armed recheckInterval timer; zero = none
+	nextRecheck time.Time     // deadline of the armed idle wait timer; zero = none
 	lastBeatAt  time.Time     // when the current watch last beaconed; zero = not yet
 	wake        chan struct{} // signalled on every state change, cap 1
 	tramp       *trampoline   // PubSub forwarder for this account; nil = none
@@ -154,7 +159,7 @@ func (r *Runner) Snapshot() Snapshot {
 		if !r.nextRecheck.IsZero() {
 			s.NextScanAt = r.nextRecheck
 		} else if !r.lastScanTry.IsZero() {
-			s.NextScanAt = r.lastScanTry.Add(recheckInterval)
+			s.NextScanAt = r.lastScanTry.Add(idleWait(r.state))
 		}
 	default:
 		if !r.lastScanTry.IsZero() {
@@ -223,6 +228,14 @@ func (r *Runner) step(ctx context.Context) error {
 		return errStop
 	}
 	return errIdle
+}
+
+// idleWait is how long Run waits after errIdle in state s.
+func idleWait(s State) time.Duration {
+	if s == StateSleeping {
+		return idleRecheck
+	}
+	return recheckInterval
 }
 
 func (r *Runner) clearSkip(id string) {
@@ -465,9 +478,10 @@ func (r *Runner) Run(ctx context.Context) error {
 			return nil
 		case errors.Is(err, errIdle):
 			backoff = 0
-			timer := time.NewTimer(recheckInterval)
+			wait := idleWait(before)
+			timer := time.NewTimer(wait)
 			r.mu.Lock()
-			r.nextRecheck = time.Now().Add(recheckInterval)
+			r.nextRecheck = time.Now().Add(wait)
 			r.mu.Unlock()
 			select {
 			case <-ctx.Done():

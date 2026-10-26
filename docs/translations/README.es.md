@@ -185,7 +185,8 @@ para cambiar qué se mina primero. Cada cambio recarga los runners en segundo pl
   Un barrido periódico elimina los contenedores de las cuentas eliminadas.
 - **Runner:** cada cuenta tiene un runner. Escanea las campañas y el inventario de la cuenta,
   pide una cola al planificador, mira el primer drop y lo reclama al terminar. Reconstruye
-  el plan cada 15 minutos mientras mira.
+  el plan cada 15 minutos mientras mira. Sin nada en directo vuelve a escanear a las
+  12 horas, o al momento si cambian los juegos elegidos o una cuenta.
 
 ## Lógica de prioridad
 
