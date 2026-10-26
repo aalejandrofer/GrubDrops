@@ -293,3 +293,23 @@ func TestRunner_ClaimLogReadFailureIsScanError(t *testing.T) {
 		t.Fatal(r.State())
 	}
 }
+
+func TestSnapshot_NextScanAt(t *testing.T) {
+	f := platformtest.NewFake()
+	f.Campaigns = []platform.Campaign{camp("c1", "Rust", "d1")}
+	f.Streams["c1"] = []platform.Stream{{Channel: "a", ChannelID: "ida", ViewerCount: 10}}
+	r := newRunner(f, nil)
+	if got := r.Snapshot().NextScanAt; !got.IsZero() {
+		t.Fatalf("before any scan: %v", got)
+	}
+	steps(t, r, 2)
+	r.mu.Lock()
+	last := r.lastScanTry
+	r.mu.Unlock()
+	if last.IsZero() {
+		t.Fatal("no scan happened")
+	}
+	if got := r.Snapshot().NextScanAt; !got.Equal(last.Add(rescanEvery)) {
+		t.Fatalf("NextScanAt=%v want %v", got, last.Add(rescanEvery))
+	}
+}

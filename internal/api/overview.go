@@ -1,12 +1,15 @@
 package api
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/aalejandrofer/grubdrops/internal/runner"
+	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
 func (s *server) routesOverview(r chi.Router) {
@@ -38,6 +41,46 @@ type overviewProblem struct {
 	AccountName string `json:"account_name"`
 }
 
+// earliestNextScan is the soonest NextScanAt among snapshots of accounts that
+// are not paused. Zero when there is none.
+func earliestNextScan(snaps []runner.Snapshot, paused map[string]bool) time.Time {
+	var next time.Time
+	for _, sn := range snaps {
+		if paused[sn.AccountID] || sn.NextScanAt.IsZero() {
+			continue
+		}
+		if next.IsZero() || sn.NextScanAt.Before(next) {
+			next = sn.NextScanAt
+		}
+	}
+	return next
+}
+
+// pausedAccounts returns the IDs of accounts with enabled = 0.
+func pausedAccounts(accts []gen.Account) map[string]bool {
+	paused := map[string]bool{}
+	for _, a := range accts {
+		if a.Enabled == 0 {
+			paused[a.ID] = true
+		}
+	}
+	return paused
+}
+
+// signedOut reports whether the account has no stored session. A failed
+// lookup counts as signed in.
+func (s *server) signedOut(ctx context.Context, id string) bool {
+	if s.d.Sessions == nil {
+		return false
+	}
+	_, ok, err := s.d.Sessions.Get(ctx, id)
+	if err != nil {
+		slog.Warn("overview: session lookup failed", "kind", "error", "account", id, "err", err)
+		return false
+	}
+	return !ok
+}
+
 func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	accts, err := s.d.Q.ListAllAccounts(ctx)
@@ -46,19 +89,21 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	names := make(map[string]string, len(accts))
-	paused := map[string]bool{}
+	signedOutIDs := map[string]bool{}
 	for _, a := range accts {
 		names[a.ID] = a.DisplayName
-		if a.Enabled == 0 {
-			paused[a.ID] = true
+		if s.signedOut(ctx, a.ID) {
+			signedOutIDs[a.ID] = true
 		}
 	}
+	paused := pausedAccounts(accts)
 
 	snaps := s.d.Pool.Snapshots()
 	// ready counts healthy accounts that are not paused.
 	mining, healthy, ready, anyWork := 0, 0, 0, false
 	var lastScan time.Time
 	problems := []overviewProblem{}
+	flagged := map[string]bool{}
 	for _, sn := range snaps {
 		if _, ok := names[sn.AccountID]; !ok {
 			continue
@@ -67,7 +112,8 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 		case runner.StateWatching, runner.StateClaiming:
 			mining++
 		}
-		if sn.State == runner.StateNeedsLogin {
+		if sn.State == runner.StateNeedsLogin || signedOutIDs[sn.AccountID] {
+			flagged[sn.AccountID] = true
 			problems = append(problems, overviewProblem{Kind: "needs_login", AccountID: sn.AccountID, AccountName: names[sn.AccountID]})
 		} else {
 			healthy++
@@ -80,6 +126,12 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 		}
 		if sn.LastScanAt.After(lastScan) {
 			lastScan = sn.LastScanAt
+		}
+	}
+	// Signed-out accounts without a snapshot (none yet) still need a login.
+	for _, a := range accts {
+		if signedOutIDs[a.ID] && !flagged[a.ID] {
+			problems = append(problems, overviewProblem{Kind: "needs_login", AccountID: a.ID, AccountName: a.DisplayName})
 		}
 	}
 	scans, err := s.d.Scans.List(ctx)
@@ -142,6 +194,7 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 			"state": state, "accounts_total": len(accts), "accounts_mining": mining,
 			"accounts_paused": len(paused),
 			"last_scan_at":    rfc3339(lastScan),
+			"next_scan_at":    rfc3339(earliestNextScan(snaps, paused)),
 		},
 		"problems": problems,
 		"kpis": map[string]any{

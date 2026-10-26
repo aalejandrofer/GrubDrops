@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/aalejandrofer/grubdrops/internal/plan"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/runner"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
@@ -97,6 +98,9 @@ func newResEnv(t *testing.T, mut func(*Deps)) *resEnv {
 		Scans:   store.NewAccountScans(q),
 		Chosen:  store.NewChosenGames(db, q),
 	}
+	cr, err := store.NewCryptor(testAgeKey)
+	require.NoError(t, err)
+	d.Sessions = store.NewSessionStore(db, q, cr)
 	if mut != nil {
 		mut(&d)
 	}
@@ -109,6 +113,9 @@ func newResEnv(t *testing.T, mut func(*Deps)) *resEnv {
 	}
 	require.NoError(t, q.UpsertGame(ctx, gen.UpsertGameParams{ID: "g1", Name: "Game", Slug: "game"}))
 	require.NoError(t, d.Chosen.Set(ctx, []string{"g1"}))
+	for _, id := range []string{"a1", "b2"} {
+		require.NoError(t, d.Sessions.Put(ctx, id, platform.Session{AccessToken: "x", ExpiresAt: time.Now().Add(time.Hour)}))
+	}
 	s := newServer(d)
 	s.routesOverview(s.protected)
 	srv := httptest.NewServer(s.handler())
@@ -237,4 +244,46 @@ func TestOverview_LastScanFromStore(t *testing.T) {
 	at := time.Date(2026, 10, 24, 8, 0, 0, 0, time.UTC)
 	require.NoError(t, e.s.d.Scans.Put(context.Background(), store.AccountScan{AccountID: "a1", ScannedAt: at}))
 	assert.Equal(t, "2026-10-24T08:00:00Z", e.overview()["status"].(map[string]any)["last_scan_at"])
+}
+
+func TestOverview_PausedSignedOutIsProblem(t *testing.T) {
+	e := newResEnv(t, nil)
+	_, err := e.db.Exec("UPDATE accounts SET enabled = 0 WHERE id = 'b2'")
+	require.NoError(t, err)
+	_, err = e.db.Exec("DELETE FROM sessions WHERE account_id = 'b2'")
+	require.NoError(t, err)
+	e.pool.snaps = []runner.Snapshot{{AccountID: "a1", State: runner.StateSleeping}, {AccountID: "b2", State: runner.StateIdle}}
+	m := e.overview()
+	assert.Equal(t, []any{map[string]any{"kind": "needs_login", "account_id": "b2", "account_name": "Bob"}}, m["problems"])
+	assert.EqualValues(t, 1, m["kpis"].(map[string]any)["accounts_healthy"])
+}
+
+func TestOverview_PausedWithSessionNoProblem(t *testing.T) {
+	e := newResEnv(t, nil)
+	_, err := e.db.Exec("UPDATE accounts SET enabled = 0 WHERE id = 'b2'")
+	require.NoError(t, err)
+	e.pool.snaps = []runner.Snapshot{{AccountID: "a1", State: runner.StateSleeping}, {AccountID: "b2", State: runner.StateIdle}}
+	assert.Equal(t, []any{}, e.overview()["problems"])
+}
+
+func TestOverview_SignedOutNeedsLoginNotDuplicated(t *testing.T) {
+	e := newResEnv(t, nil)
+	_, err := e.db.Exec("DELETE FROM sessions WHERE account_id = 'b2'")
+	require.NoError(t, err)
+	e.pool.snaps = []runner.Snapshot{{AccountID: "a1", State: runner.StateSleeping}, {AccountID: "b2", State: runner.StateNeedsLogin}}
+	assert.Len(t, e.overview()["problems"], 1)
+}
+
+func TestOverview_NextScanAt(t *testing.T) {
+	e := newResEnv(t, nil)
+	t0 := time.Date(2026, 10, 25, 10, 0, 0, 0, time.UTC)
+	_, err := e.db.Exec("UPDATE accounts SET enabled = 0 WHERE id = 'b2'")
+	require.NoError(t, err)
+	e.pool.snaps = []runner.Snapshot{
+		{AccountID: "a1", State: runner.StateSleeping, NextScanAt: t0.Add(5 * time.Minute)},
+		{AccountID: "b2", State: runner.StateSleeping, NextScanAt: t0.Add(time.Minute)},
+	}
+	assert.Equal(t, "2026-10-25T10:05:00Z", e.overview()["status"].(map[string]any)["next_scan_at"])
+	e.pool.snaps = nil
+	assert.Nil(t, e.overview()["status"].(map[string]any)["next_scan_at"])
 }

@@ -37,6 +37,7 @@ type gameJSON struct {
 type gamesJSON struct {
 	Games      []gameJSON `json:"games"`
 	LastScanAt *string    `json:"last_scan_at"`
+	NextScanAt *string    `json:"next_scan_at"`
 }
 
 type gameHitJSON struct {
@@ -83,8 +84,15 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 		statuses = s.d.Board.Games(games)
 	}
 	mining := map[int]bool{}
+	var next time.Time
 	if s.d.Pool != nil {
-		for _, snap := range s.d.Pool.Snapshots() {
+		snaps := s.d.Pool.Snapshots()
+		if s.d.Q != nil {
+			if accts, err := s.d.Q.ListAllAccounts(r.Context()); err == nil {
+				next = earliestNextScan(snaps, pausedAccounts(accts))
+			}
+		}
+		for _, snap := range snaps {
 			if snap.Current == nil {
 				continue
 			}
@@ -122,6 +130,7 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 		out.Games[i] = g
 	}
 	out.LastScanAt = rfc3339(last)
+	out.NextScanAt = rfc3339(next)
 	return out, nil
 }
 

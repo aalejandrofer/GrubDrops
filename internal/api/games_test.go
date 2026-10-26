@@ -256,3 +256,17 @@ func TestGames_Search(t *testing.T) {
 	require.NoError(t, json.Unmarshal(b, &hits))
 	assert.Len(t, hits, 10)
 }
+
+func TestGames_NextScanAt(t *testing.T) {
+	t0 := time.Date(2026, 10, 25, 10, 0, 0, 0, time.UTC)
+	g := newGamesEnv(t,
+		runner.Snapshot{AccountID: "a1", NextScanAt: t0.Add(5 * time.Minute)},
+		runner.Snapshot{AccountID: "a2", NextScanAt: t0.Add(2 * time.Minute)},
+	)
+	resp, b := g.do("GET", "/api/games", "", nil)
+	require.Equal(t, 200, resp.StatusCode)
+	var got gamesJSON
+	require.NoError(t, json.Unmarshal(b, &got))
+	require.NotNil(t, got.NextScanAt)
+	assert.Equal(t, "2026-10-25T10:02:00Z", *got.NextScanAt)
+}

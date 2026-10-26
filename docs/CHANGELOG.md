@@ -49,6 +49,7 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- Paused accounts that are signed out now show as needing login. The overview and games APIs also report the next scan time (`next_scan_at`).
 - Box art shows for newer games such as Marvel Rivals and Delta Force.
 - v2 Home lists a runner on its game card when the game matched by slug, not only by name.
 - v2 header no longer shows a needs-login chip for the account whose login is open in Settings.

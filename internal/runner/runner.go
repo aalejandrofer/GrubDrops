@@ -146,6 +146,9 @@ func (r *Runner) Snapshot() Snapshot {
 		LastScanAt:     r.lastScanAt,
 		Blocked:        append([]plan.Blocked(nil), r.blocked...),
 	}
+	if !r.lastScanTry.IsZero() {
+		s.NextScanAt = r.lastScanTry.Add(rescanEvery)
+	}
 	var rest []plan.Target
 	if r.current != nil {
 		c := *r.current
