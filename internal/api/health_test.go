@@ -290,3 +290,18 @@ func TestLogEventJSON_AppliesAllowlist(t *testing.T) {
 	assert.Equal(t, 200, utf8.RuneCountInString(got.Fields["err"]))
 	assert.Equal(t, strings.Repeat("é", 200), got.Fields["err"])
 }
+
+func TestHealth_CanarySkipped(t *testing.T) {
+	e := newHealthEnv(t, nil)
+	require.NoError(t, e.s.d.Q.UpsertSettingString(context.Background(), gen.UpsertSettingStringParams{
+		Key: "canary:twitch", Value: []byte(`{"ok":false,"skipped":true,"detail":"","checked_at":"2026-10-25T12:00:00Z"}`),
+	}))
+	_, b := e.do("GET", "/api/health", "", nil)
+	var got struct {
+		Canary []map[string]any `json:"canary"`
+	}
+	require.NoError(t, json.Unmarshal(b, &got))
+	require.Len(t, got.Canary, 1)
+	assert.Equal(t, true, got.Canary[0]["skipped"])
+	assert.Equal(t, "twitch", got.Canary[0]["platform"])
+}

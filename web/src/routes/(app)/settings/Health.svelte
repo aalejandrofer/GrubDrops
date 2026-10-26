@@ -3,6 +3,7 @@
 	import { api } from '$lib/app';
 	import type { Health, HealthEvent, Platform } from '$lib/api/types';
 	import { clock, relTime, uptime } from '$lib/format';
+	import { runNowState } from '$lib/canary';
 	import { eventText, isProblem, kindLabel } from '$lib/health';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
@@ -30,6 +31,7 @@
 	let loadFailed = $state(false);
 	let canaryBusy = $state(false);
 	let canaryFailed = $state(false);
+	let canaryNoResult = $state(false);
 	let now = $state(Date.now());
 	let seq = 0;
 	let lastHead: HealthEvent | undefined;
@@ -63,8 +65,10 @@
 	}
 
 	async function runCanary(): Promise<void> {
+		const clickedAt = Date.now();
 		canaryBusy = true;
 		canaryFailed = false;
+		canaryNoResult = false;
 		try {
 			await api.runCanary();
 		} catch {
@@ -72,10 +76,21 @@
 			canaryBusy = false;
 			return;
 		}
-		canaryBusy = false;
-		if (destroyed) return;
+		poll(clickedAt);
+	}
+
+	/** Refetch health every 5 s until a canary is newer than the click or the wait runs out. */
+	function poll(clickedAt: number): void {
 		clearTimeout(refetchTimer);
-		refetchTimer = setTimeout(() => void load(filter), CANARY_REFETCH_MS);
+		refetchTimer = setTimeout(async () => {
+			if (destroyed) return;
+			await load(filter);
+			if (destroyed) return;
+			const state = runNowState(clickedAt, h?.canary ?? [], Date.now());
+			if (state === 'running') return poll(clickedAt);
+			canaryNoResult = state === 'no_result';
+			canaryBusy = false;
+		}, CANARY_REFETCH_MS);
 	}
 
 	onMount(() => {
@@ -132,8 +147,9 @@
 				<div class="lbl">
 					<b>{t('health.canary')}</b>
 					{#if canaryFailed}<small class="bad" role="alert">{t('health.run_failed')}</small>{/if}
+					{#if canaryNoResult}<small role="status">{t('health.canary_no_result')}</small>{/if}
 				</div>
-				<button type="button" class="btn" disabled={canaryBusy} onclick={runCanary}>{t('health.run_now')}</button>
+				<button type="button" class="btn" disabled={canaryBusy} onclick={runCanary}>{canaryBusy ? t('health.canary_running') : t('health.run_now')}</button>
 			</div>
 			{#each PLATFORMS as p (p.id)}
 				{@const c = canaryOf(p.id)}
@@ -142,6 +158,8 @@
 						<b>{t(p.key)}</b>
 						{#if !c || (c.ok && !c.checked_at)}
 							<small>{t('health.canary_none')}</small>
+						{:else if c.skipped}
+							<small>{t('health.canary_skipped', { platform: t(p.key) })}</small>
 						{:else if c.ok}
 							<small class="good">{t('health.canary_ok', { rel: relTime(c.checked_at, now) })}</small>
 						{:else}

@@ -49,6 +49,7 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- The health canary says when it skipped for lack of a signed-in account, and Run now shows progress and a result or timeout message.
 - Home shows a message when the miner is unreachable on first load.
 - Paused signed-out accounts offer "Log in again" next to Resume, and Home counts only signed-out accounts when deciding all are signed out.
 - Scan stamp shows when the next scan runs.

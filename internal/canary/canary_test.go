@@ -127,7 +127,7 @@ func TestRunner_TwitchRuns_KickSkippedWhenNoChannel(t *testing.T) {
 }
 
 // TestRunner_SkipsWhenNoSession verifies that a platform with no available
-// session is skipped (probe not called, nothing persisted).
+// session is skipped (probe not called, skip result persisted).
 func TestRunner_SkipsWhenNoSession(t *testing.T) {
 	ctx := context.Background()
 	q := openTestDB(t)
@@ -150,11 +150,11 @@ func TestRunner_SkipsWhenNoSession(t *testing.T) {
 	assert.Equal(t, 0, twitchProbe.calls, "twitch probe should be skipped when no session")
 	assert.Equal(t, 0, kickProbe.calls, "kick probe should be skipped when no session")
 
-	_, twOK, _ := canary.LoadResult(ctx, q, "twitch")
-	assert.False(t, twOK, "no twitch result when no session")
+	tw, twOK, _ := canary.LoadResult(ctx, q, "twitch")
+	assert.True(t, twOK && tw.Skipped, "twitch skip result when no session")
 
-	_, kkOK, _ := canary.LoadResult(ctx, q, "kick")
-	assert.False(t, kkOK, "no kick result when no session")
+	kk, kkOK, _ := canary.LoadResult(ctx, q, "kick")
+	assert.True(t, kkOK && kk.Skipped, "kick skip result when no session")
 }
 
 // TestRunner_BothRun verifies that when both channels and sessions are present,
@@ -379,4 +379,52 @@ func TestNotify_FiresBeforeSave(t *testing.T) {
 		assert.Equal(t, "twitch", call.fields["platform"])
 		assert.Equal(t, "boom", call.fields["detail"])
 	}
+}
+
+func noSession(_ context.Context, _ string) (platform.Session, bool, error) {
+	return platform.Session{}, false, nil
+}
+
+// TestRunOnce_NoSessionSavesSkip: a configured channel with no enabled session
+// saves a skip result and sends no notification.
+func TestRunOnce_NoSessionSavesSkip(t *testing.T) {
+	ctx := context.Background()
+	q := openTestDB(t)
+	spy := &spyNotifier{}
+	probe := &fakeProbe{}
+	r := canary.NewRunner(q, noSession, probe, &fakeProbe{}, canary.RunnerSettings{TwitchChannel: "chan"}, spy)
+
+	require.NoError(t, r.RunOnce(ctx))
+
+	got, ok, err := canary.LoadResult(ctx, q, "twitch")
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.True(t, got.Skipped)
+	assert.False(t, got.OK)
+	assert.Empty(t, got.Detail)
+	assert.False(t, got.CheckedAt.IsZero())
+	assert.Equal(t, 0, spy.count())
+	assert.Equal(t, 0, probe.calls)
+	_, kickOK, _ := canary.LoadResult(ctx, q, "kick")
+	assert.False(t, kickOK, "no channel: nothing saved")
+}
+
+// TestRunOnce_SkipThenFailNotifiesAsFirst: a saved skip counts as no previous result.
+func TestRunOnce_SkipThenFailNotifiesAsFirst(t *testing.T) {
+	ctx := context.Background()
+	q := openTestDB(t)
+	spy := &spyNotifier{}
+	settings := canary.RunnerSettings{TwitchChannel: "chan"}
+
+	skip := canary.NewRunner(q, noSession, &fakeProbe{}, &fakeProbe{}, settings, spy)
+	require.NoError(t, skip.RunOnce(ctx))
+	require.Equal(t, 0, spy.count())
+
+	probe := &fakeProbe{result: canary.Result{OK: false, Detail: "beacon timeout"}}
+	fail := canary.NewRunner(q, alwaysSession, probe, &fakeProbe{}, settings, spy)
+	require.NoError(t, fail.RunOnce(ctx))
+	assert.Equal(t, 1, spy.count())
+
+	got, _, _ := canary.LoadResult(ctx, q, "twitch")
+	assert.False(t, got.Skipped, "a real result replaces the skip")
 }

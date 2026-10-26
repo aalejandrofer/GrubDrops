@@ -195,6 +195,7 @@ export interface HealthEvent {
 export interface Canary {
 	platform: Platform;
 	ok: boolean;
+	skipped: boolean;
 	detail: string;
 	checked_at: string | null;
 }

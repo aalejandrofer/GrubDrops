@@ -100,7 +100,7 @@ func NewRunnerWithSettingsReader(
 
 // RunOnce reads current settings, then for each platform:
 //   - skips if the configured channel is empty, OR
-//   - skips if no enabled session is available for that platform,
+//   - saves a skip result (no notification) if no enabled session is available,
 //   - otherwise runs the probe and persists the result via SaveResult.
 func (r *Runner) RunOnce(ctx context.Context) error {
 	settings := r.settingsReader(ctx)
@@ -124,12 +124,18 @@ func (r *Runner) runProbe(ctx context.Context, plat, channel string, p probe) {
 	}
 	if !ok {
 		r.log.Debug("canary: skipping platform (no enabled session)", "platform", plat)
+		if err := SaveResult(ctx, r.q, plat, Result{Skipped: true}); err != nil {
+			r.log.Warn("canary: persist skip failed", "platform", plat, "err", err)
+		}
 		return
 	}
 
 	// Load previous result BEFORE running the new probe so we can detect
 	// an OK→fail transition (or first-ever fail) for notifications.
 	prev, hasPrev, _ := LoadResult(ctx, r.q, plat)
+	if hasPrev && prev.Skipped {
+		hasPrev = false // a skip is no previous result
+	}
 
 	result := p.Run(ctx, sess, channel)
 

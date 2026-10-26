@@ -90,6 +90,7 @@ func LogEventJSON(l mlog.LogLine, accountName string) any {
 type canaryOut struct {
 	Platform  string  `json:"platform"`
 	OK        bool    `json:"ok"`
+	Skipped   bool    `json:"skipped"`
 	Detail    string  `json:"detail"`
 	CheckedAt *string `json:"checked_at"`
 }
@@ -154,7 +155,7 @@ func (s *server) getHealth(w http.ResponseWriter, r *http.Request) {
 	cans := []canaryOut{}
 	for _, p := range []string{"twitch", "kick"} {
 		if res, ok, err := canary.LoadResult(ctx, s.d.Q, p); err == nil && ok {
-			cans = append(cans, canaryOut{Platform: p, OK: res.OK, Detail: res.Detail, CheckedAt: rfc3339(res.CheckedAt)})
+			cans = append(cans, canaryOut{Platform: p, OK: res.OK, Skipped: res.Skipped, Detail: res.Detail, CheckedAt: rfc3339(res.CheckedAt)})
 		}
 	}
 

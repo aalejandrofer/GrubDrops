@@ -14,12 +14,14 @@
 		{
 			"platform": "twitch",
 			"ok": true,
+			"skipped": false,
 			"detail": "beacon credited",
 			"checked_at": "2026-10-25T11:30:00Z"
 		},
 		{
 			"platform": "kick",
 			"ok": false,
+			"skipped": false,
 			"detail": "websocket closed",
 			"checked_at": "2026-10-25T11:30:00Z"
 		}
