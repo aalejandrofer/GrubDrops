@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <img src="../screenshots/console.png" width="900" alt="GrubDrops console: watch-time stats, per-account mining across Twitch and Kick, and a live event feed">
+  <img src="../screenshots/console.png" width="900" alt="GrubDrops Home page: what each account is mining across Twitch and Kick, with the up-next queue and recent events">
 </p>
 
 ---
@@ -30,14 +30,11 @@ GrubDrops 会替你观看合适的 Twitch 与 Kick 直播，累积观看时长�
 
 ## 功能特性
 
-- 🎯 **由你选择游戏**，并在可拖动排序的优先级列表中排列。列表之外的内容一律不挖矿。
-- 🟣🟢 **Twitch 与 Kick 一并支持**，每个平台多个账户，全都在同一个页面上。
-- ✅ **它会检查游戏**，让你永远不会把观看时长浪费在错误的直播上。
-- 🔗 **它了解账户关联**（Krafton、Embark 等），并提供按账户的"我已关联"手动覆盖选项。
-- 🖥️ **实时控制台**：累计统计、当前挖矿、掉宝目录、领取历史。
-- 🔔 **Discord 通知**，可按事件类型逐项开关。
-- 🧪 **Kick 优先无浏览器**：默认先通过 WebSocket 观看，无需 Chrome 或 Docker；若 WebSocket 停止累积，则回退到 Chrome 边车。
-- 🔒 **你的凭据始终属于你**：Twitch 使用官方的设备码登录，Kick 使用你导出的会话。不会向 GrubDrops 发送任何密码。
+- 🟣🟢 **Twitch 与 Kick 并行**：多个账户，一个面板。
+- 🎯 **设置后无需管理**：选好游戏，它会发现、观看、累积时长并替你领取。
+- 🔒 **自托管且私密**：一个容器，你的账户，你的数据。
+- ⚡ **两个平台都可靠**：登录、关联、Kick 播放这些麻烦事由它处理。
+- 🛠️ **可无人值守运行**：Discord 提醒、更新检查、多语言、代理和 SSO。
 
 ## 快速上手
 
@@ -49,12 +46,12 @@ GrubDrops 会替你观看合适的 Twitch 与 Kick 直播，累积观看时长�
 | | Twitch | Kick |
 |---|---|---|
 | **登录** | 设备码（`twitch.tv/activate`） | `cookies.txt` 导出 |
-| **观看方式** | 直连 HTTP — 无需浏览器 | Chrome **边车容器**（真实 IVS 播放） |
-| **Docker** | 可选 | **必需** — 挖矿器通过 docker socket 启动边车容器 |
-| **从源码运行，无需 Docker** | ✅ 普通的 `go build` 二进制即可 | ❌ 边车容器需要 Docker |
+| **观看方式** | 直连 HTTP — 无需浏览器 | WebSocket；Chrome **边车容器**回退（IVS 播放） |
+| **Docker** | 可选 | **强烈推荐** — 没有它 WebSocket 也能工作，但 Chrome IVS 回退需要 docker socket |
+| **从源码运行，无需 Docker** | ✅ 普通的 `go build` 二进制即可 | ⚠️ WebSocket 可用；Chrome 回退需要 Docker |
 | **CPU 架构** | 任意 — `amd64` + `arm64` | `amd64` + `arm64`（arm64 资源占用高 —— 见说明） |
 
-Twitch 走直连 HTTP，所以一个普通的 Go 二进制文件在任何地方都能挖它 —— 包括树莓派（Raspberry Pi），无需 Docker。**Kick 的观看时长需要一个真实的播放器**，因此挖矿器会通过 docker socket 运行一个 Chrome/Chromium 边车容器 —— 这就使得 **Kick 必须依赖 Docker**。
+Twitch 走直连 HTTP，所以一个普通的 Go 二进制文件在任何地方都能挖它，无需 Docker。Kick 默认通过 WebSocket 无浏览器挖矿；可靠的 Chrome IVS 回退以边车容器形式通过 docker socket 运行，因此 **Kick 强烈推荐使用 Docker**。
 
 > **树莓派 / ARM：** 两个镜像都发布了 `arm64` 版本；边车容器在 arm64 上使用 Debian Chromium（保留解码 Kick IVS 流所需的 H.264/AAC 编解码器）。可用，但很重 —— 每个边车约 4 GB 内存，所以低内存的树莓派只能同时跑几个 Kick 账户。
 >
@@ -215,7 +212,6 @@ GrubDrops 只挖你选择的游戏。全新安装在你至少添加一个游戏�
 | `GRUB_KICK_SIDECAR_PORT` | `9090` | 边车容器的 gRPC 端口。 |
 | `GRUB_BROWSER_URL` | 无 | 固定的边车地址（旧版常驻模式）。 |
 | `GRUB_BROWSER_URLS` | 无 | 逗号分隔的常驻边车容器池（每个 Kick 账户一个 Chrome）。 |
-| `GRUB_DISCOVERY_INTERVAL` | `60m` | 目录扫描节奏（例如 `30m`、`2h`）；也可在 Settings 中编辑。 |
 | `GRUB_AUTHCHECK_INTERVAL` | `12h` | 认证健康检查的扫描节奏。 |
 | `GRUB_DISCORD_WEBHOOK` | 无 | 可选的全局 Discord webhook。 |
 | `GRUB_SECURE_COOKIES` | `0` | 安全会话 cookie + CSRF 同源方案。通过纯 HTTP（`http://pi:8080`）访问时保持 `0`；仅当通过 HTTPS 访问时（直接访问，或位于设置 `X-Forwarded-Proto: https` 的 TLS 终结代理之后）才设为 `1`。见下方说明。 |

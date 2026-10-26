@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <img src="../screenshots/console.png" width="900" alt="GrubDrops console: watch-time stats, per-account mining across Twitch and Kick, and a live event feed">
+  <img src="../screenshots/console.png" width="900" alt="GrubDrops Home page: what each account is mining across Twitch and Kick, with the up-next queue and recent events">
 </p>
 
 ---
@@ -31,14 +31,11 @@ imagen de Docker y lo guarda todo en un único archivo SQLite.
 
 ## Características
 
-- 🎯 **Tú eliges los juegos**, en una lista de prioridad que ordenas arrastrando. Nada fuera de ella se mina.
-- 🟣🟢 **Twitch y Kick juntos**, varias cuentas en cada uno, todo en una misma página.
-- ✅ **Comprueba el juego** para que nunca gastes tiempo de visualización en el stream equivocado.
-- 🔗 **Conoce los enlaces de cuenta** (Krafton, Embark, …) con una anulación manual por cuenta del tipo "ya lo he enlazado".
-- 🖥️ **Una consola en vivo**: estadísticas totales, minado actual, catálogo de drops, historial de reclamos.
-- 🔔 **Notificaciones de Discord**, activables por tipo de evento.
-- 🧪 **Kick sin navegador primero**: por defecto observa por WebSocket, sin Chrome ni Docker, y recurre al sidecar de Chrome si el WebSocket deja de acumular.
-- 🔒 **Tus credenciales siguen siendo tuyas**: Twitch usa el inicio de sesión oficial por código de dispositivo, Kick usa una sesión que tú exportas. No se envía ninguna contraseña a GrubDrops.
+- 🟣🟢 **Twitch y Kick juntos**: varias cuentas, un solo panel.
+- 🎯 **Configura y olvida**: eliges tus juegos; descubre, mira, acumula el tiempo y reclama por ti.
+- 🔒 **Autoalojado y privado**: un contenedor, tus cuentas, tus datos.
+- ⚡ **Fiable en ambas plataformas**: se ocupa de las partes incómodas (inicios de sesión, enlaces, reproducción de Kick) para que tú no tengas que hacerlo.
+- 🛠️ **Hecho para funcionar sin supervisión**: alertas de Discord, comprobación de actualizaciones, varios idiomas, proxy y SSO.
 
 ## Primeros pasos
 
@@ -50,12 +47,12 @@ Lo que necesites depende de qué plataforma estés minando:
 | | Twitch | Kick |
 |---|---|---|
 | **Inicio de sesión** | código de dispositivo (`twitch.tv/activate`) | exportación de `cookies.txt` |
-| **Cómo mira** | HTTP directo — sin navegador | **sidecar** de Chrome (reproducción IVS real) |
-| **Docker** | opcional | **obligatorio** — el minero genera el sidecar a través del socket de Docker |
-| **Ejecutar desde el código fuente, sin Docker** | ✅ basta un binario `go build` normal | ❌ necesita Docker para el sidecar |
+| **Cómo mira** | HTTP directo — sin navegador | WebSocket; respaldo con **sidecar** de Chrome (reproducción IVS) |
+| **Docker** | opcional | **muy recomendado** — el WebSocket funciona sin él, pero el respaldo IVS de Chrome necesita el socket de Docker |
+| **Ejecutar desde el código fuente, sin Docker** | ✅ basta un binario `go build` normal | ⚠️ el WebSocket funciona; el respaldo de Chrome necesita Docker |
 | **Arquitectura de CPU** | cualquiera — `amd64` + `arm64` | `amd64` + `arm64` (arm64 consume mucho — ver nota) |
 
-Twitch funciona sobre HTTP directo, así que un binario de Go normal lo mina en cualquier sitio —Raspberry Pi incluida, sin Docker. **El tiempo de visualización de Kick necesita un reproductor real**, así que el minero ejecuta un sidecar de Chrome/Chromium a través del socket de Docker, lo que hace que **Docker sea obligatorio para Kick**.
+Twitch funciona sobre HTTP directo, así que un binario de Go normal lo mina en cualquier sitio, sin Docker. Kick mina sin navegador por WebSocket por defecto; el respaldo fiable de Chrome IVS se ejecuta como sidecar a través del socket de Docker, así que **Docker es muy recomendable para Kick**.
 
 > **Raspberry Pi / ARM:** ambas imágenes se publican para `arm64`; en arm64 el sidecar usa Chromium de Debian (conserva los códecs H.264/AAC que decodifican el stream IVS de Kick). Funciona, pero es pesado —~4 GB de RAM por sidecar, así que una Pi con poca RAM solo gestiona un par de cuentas de Kick.
 >
@@ -223,7 +220,6 @@ valor por defecto mostrado.
 | `GRUB_KICK_SIDECAR_PORT` | `9090` | Puerto gRPC del sidecar. |
 | `GRUB_BROWSER_URL` | ninguna | Dirección fija del sidecar (modo heredado siempre activo). |
 | `GRUB_BROWSER_URLS` | ninguna | Conjunto de sidecars siempre activos separados por comas (un Chrome por cuenta de Kick). |
-| `GRUB_DISCOVERY_INTERVAL` | `60m` | Cadencia de barrido del catálogo (p. ej. `30m`, `2h`); también editable en Settings. |
 | `GRUB_AUTHCHECK_INTERVAL` | `12h` | Cadencia del barrido de salud de autenticación. |
 | `GRUB_DISCORD_WEBHOOK` | ninguna | Webhook global opcional de Discord. |
 | `GRUB_SECURE_COOKIES` | `0` | Cookies de sesión seguras + esquema CSRF de mismo origen. Déjala en `0` para HTTP plano (`http://pi:8080`); ponla en `1` solo cuando se acceda por HTTPS (directamente o detrás de un proxy que termina TLS y que establece `X-Forwarded-Proto: https`). Ver nota más abajo. |
