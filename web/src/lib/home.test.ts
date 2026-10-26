@@ -7,7 +7,7 @@ import mining from '$lib/fixtures/overview.mining.json';
 import nothing from '$lib/fixtures/overview.nothing_live.json';
 import many from '$lib/fixtures/runners.many.json';
 import runnersMining from '$lib/fixtures/runners.mining.json';
-import { foldRows, gameCards, groupClaims, homeView, normName } from './home';
+import { foldRows, gameCards, groupClaims, homeView, normName, visibleCards, type GameCard } from './home';
 
 const G = () => structuredClone(games.games) as Game[];
 const R = () => structuredClone(runnersMining) as Runner[];
@@ -213,5 +213,35 @@ describe('homeView signed out count', () => {
 			{ kind: 'needs_login', account_id: 'a1', account_name: 'a1' }
 		];
 		expect(homeView({ ...base, overview: o })).not.toBe('signed_out');
+	});
+});
+
+describe('visibleCards', () => {
+	const mk = (n: number, active: number[] = []): GameCard[] =>
+		Array.from({ length: n }, (_, i) => ({
+			game: { id: String(i + 1) } as unknown as Game,
+			rank: i + 1,
+			size: 'sm' as const,
+			rows: active.includes(i + 1)
+				? [{ runner: { current: { game: 'x' } } as Runner, progress: 0, muted: false, paused: false }]
+				: [],
+			queued: [],
+			queuedBy: null,
+			moreInUpNext: 0
+		}));
+	it('shows all when within the cap', () => {
+		const r = visibleCards(mk(7));
+		expect(r.shown.length).toBe(7);
+		expect(r.hidden).toBe(0);
+	});
+	it('takes the first 7 by rank when idle', () => {
+		const r = visibleCards(mk(10));
+		expect(r.shown.map((c) => c.rank)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+		expect(r.hidden).toBe(3);
+	});
+	it('keeps a mining low-priority game and sorts by rank', () => {
+		const r = visibleCards(mk(10, [9]));
+		expect(r.shown.map((c) => c.rank)).toEqual([1, 2, 3, 4, 5, 6, 9]);
+		expect(r.hidden).toBe(3);
 	});
 });

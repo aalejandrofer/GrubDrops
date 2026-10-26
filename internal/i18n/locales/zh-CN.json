@@ -340,5 +340,10 @@
   "health.msg.sidecar_stop": "Kick 辅助容器空闲，正在停止",
   "health.msg.canary_done": "金丝雀检测已完成",
   "health.msg.canary_failed": "金丝雀检测运行失败：{err}",
-  "health.kind.heartbeat": "心跳"
+  "health.kind.heartbeat": "心跳",
+  "home.more_games.one": "另有 {n} 个游戏在追踪",
+  "home.more_games.other": "另有 {n} 个游戏在追踪",
+  "games.view_cards": "卡片",
+  "games.view_list": "列表",
+  "games.view_label": "视图"
 }

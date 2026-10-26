@@ -5,7 +5,7 @@
 	import PageHead from '$lib/components/PageHead.svelte';
 	import UpNext from '$lib/components/UpNext.svelte';
 	import { clock, formatInt, relTime, shortDate } from '$lib/format';
-	import { gameCards, groupClaims, homeView } from '$lib/home';
+	import { gameCards, groupClaims, homeView, visibleCards } from '$lib/home';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive, getNet } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
@@ -38,6 +38,7 @@
 	const nextScan = $derived(live.games?.next_scan_at ?? o?.status.next_scan_at ?? null);
 	const pausedIds = $derived(new Set(live.accounts.filter((a) => !a.enabled).map((a) => a.id)));
 	const cards = $derived(gameCards(live.games?.games ?? [], live.runners, pausedIds));
+	const vis = $derived(visibleCards(cards));
 	const groups = $derived(groupClaims(live.recent, now, prefs.zone));
 	const stamp = $derived(
 		live.updatedAt === null
@@ -139,7 +140,7 @@
 					<h2>{t('home.games_title')} <span class="cnt">{cards.length}</span></h2>
 					<a href="/games" class="edit"><Icon name="list" />{t('home.edit_games')}</a>
 				</div>
-				{#each cards as card (card.game.id)}
+				{#each vis.shown as card (card.game.id)}
 					<GameCard
 						{card}
 						{lastScan}
@@ -148,6 +149,9 @@
 						readyAccounts={mode === 'nothing_live' ? o.status.accounts_total - (o.status.accounts_paused ?? 0) : null}
 					/>
 				{/each}
+				{#if vis.hidden > 0}
+					<a class="more-games" href="/games">{tn('home.more_games', vis.hidden)}</a>
+				{/if}
 			</div>
 
 			<aside>
@@ -289,6 +293,15 @@
 		background: var(--surface-3);
 		border-radius: 10px;
 		padding: 0 6px;
+	}
+	.more-games {
+		display: block;
+		padding: 6px 2px;
+		font-size: 12.5px;
+		color: var(--t3);
+	}
+	.more-games:hover {
+		color: var(--text);
 	}
 	.edit {
 		color: var(--t2);

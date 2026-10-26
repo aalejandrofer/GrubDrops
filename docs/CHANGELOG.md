@@ -6,6 +6,8 @@ All notable changes to GrubDrops.
 
 ### Added
 
+- **Home shows at most 7 games.** Games that are mining or queued stay visible; a link to Games shows how many more are tracked.
+- **Compact list view on Games.** A Cards/List toggle shows one dense row per game with the same reordering; the choice is kept per browser.
 - **New web app.** A SvelteKit single-page app in `web/` is built by npm, the Docker image and CI, and embedded in the binary. A "UI not built" page shows when the build is missing; `index.html` is never cached and hashed assets are immutable.
 - **Home** with KPIs, ranked game cards with per-account progress, Up next, recent claims, and first-run, nothing-live, offline and many-account states.
 - **Up next** has one queue per account. Reorder by button or drag for this session, or Reset to Games order.

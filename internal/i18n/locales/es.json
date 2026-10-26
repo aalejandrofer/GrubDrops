@@ -340,5 +340,10 @@
   "health.msg.sidecar_stop": "Sidecar de Kick inactivo, deteniendo",
   "health.msg.canary_done": "Comprobación canary terminada",
   "health.msg.canary_failed": "Ejecución canary fallida: {err}",
-  "health.kind.heartbeat": "Latido"
+  "health.kind.heartbeat": "Latido",
+  "home.more_games.one": "{n} juego más en seguimiento",
+  "home.more_games.other": "{n} juegos más en seguimiento",
+  "games.view_cards": "Tarjetas",
+  "games.view_list": "Lista",
+  "games.view_label": "Vista"
 }

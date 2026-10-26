@@ -35,6 +35,23 @@
 	let flash: ReturnType<typeof setTimeout> | undefined;
 	let seq = 0;
 
+	type View = 'cards' | 'list';
+	const VIEW_KEY = 'grub.games.view';
+	let view = $state<View>('cards');
+	try {
+		if (localStorage.getItem(VIEW_KEY) === 'list') view = 'list';
+	} catch {
+		/* storage blocked: keep the default */
+	}
+	function setView(v: View): void {
+		view = v;
+		try {
+			localStorage.setItem(VIEW_KEY, v);
+		} catch {
+			/* storage blocked: the choice lasts for this visit */
+		}
+	}
+
 	const games = $derived(live.games?.games ?? []);
 	const lastScan = $derived(live.games?.last_scan_at ?? null);
 	const nextText = $derived(
@@ -226,35 +243,27 @@
 	<div class="list-head">
 		<h2>{t('games.list_title')}</h2>
 		<p>{t('games.list_hint')}</p>
+		<div class="seg" role="group" aria-label={t('games.view_label')}>
+			<button type="button" aria-pressed={view === 'cards'} onclick={() => setView('cards')}>{t('games.view_cards')}</button>
+			<button type="button" aria-pressed={view === 'list'} onclick={() => setView('list')}>{t('games.view_list')}</button>
+		</div>
 	</div>
 	{#if failed}<p class="err" role="alert">{t('games.save_failed')}</p>{/if}
 
 	{#if live.games && games.length === 0}
 		<p class="empty">{t('games.empty')}</p>
 	{/if}
-	<div class="list">
+	<div class="list" class:compact={view === 'list'}>
 		{#each rows as g, i (g.id)}
-			<article class="game" class:moved={moved === g.id} class:dragging={drag?.id === g.id}>
-				<div class="grip">
-					<button type="button" aria-label={t('games.move_up')} title={t('games.move_up')} disabled={i === 0 || saving} onclick={() => commit(moveGame(games, i, i - 1), g.id)}>
-						<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
-					</button>
-					<span
-						class="h"
-						title={t('games.drag')}
-						onpointerdown={(e) => down(e, g.id, i)}
-						onpointermove={move}
-						onpointerup={up}
-						onpointercancel={() => (drag = null)}
-						onlostpointercapture={() => (drag = null)}
-						role="presentation"
-					>
-						<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3" /></svg>
-					</span>
-					<button type="button" aria-label={t('games.move_down')} title={t('games.move_down')} disabled={i === rows.length - 1 || saving} onclick={() => commit(moveGame(games, i, i + 1), g.id)}>
-						<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-					</button>
+			{#if view === 'list'}
+				<div class="game row" class:moved={moved === g.id} class:dragging={drag?.id === g.id}>
+					<span class="rk">{String(i + 1).padStart(2, '0')}</span>
+					{@render grip(g, i)}
+					<span class="rname">{g.name}</span>
 				</div>
+			{:else}
+			<article class="game" class:moved={moved === g.id} class:dragging={drag?.id === g.id}>
+				{@render grip(g, i)}
 				<div class="artw">
 					<BoxArt src={g.box_art_url} name={g.name} size="lg" />
 					<span class="rank">{String(i + 1).padStart(2, '0')}</span>
@@ -288,9 +297,33 @@
 					{/if}
 				</div>
 			</article>
+			{/if}
 		{/each}
 	</div>
 </PageHead>
+
+	{#snippet grip(g: Game, i: number)}
+			<div class="grip">
+				<button type="button" aria-label={t('games.move_up')} title={t('games.move_up')} disabled={i === 0 || saving} onclick={() => commit(moveGame(games, i, i - 1), g.id)}>
+					<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
+				</button>
+				<span
+					class="h"
+					title={t('games.drag')}
+					onpointerdown={(e) => down(e, g.id, i)}
+					onpointermove={move}
+					onpointerup={up}
+					onpointercancel={() => (drag = null)}
+					onlostpointercapture={() => (drag = null)}
+					role="presentation"
+				>
+					<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3" /></svg>
+				</span>
+				<button type="button" aria-label={t('games.move_down')} title={t('games.move_down')} disabled={i === rows.length - 1 || saving} onclick={() => commit(moveGame(games, i, i + 1), g.id)}>
+					<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+				</button>
+			</div>
+	{/snippet}
 
 <style>
 	.i {
@@ -440,6 +473,56 @@
 		margin: 0;
 		color: var(--t2);
 		font-size: 12.5px;
+	}
+	.seg {
+		display: inline-flex;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		overflow: hidden;
+		margin-left: auto;
+	}
+	.seg button {
+		font: inherit;
+		font-size: 12.5px;
+		padding: 4px 12px;
+		border: 0;
+		background: var(--surface);
+		color: var(--t2);
+		cursor: pointer;
+	}
+	.seg button + button {
+		border-left: 1px solid var(--border);
+	}
+	.seg button[aria-pressed='true'] {
+		background: var(--accent-soft);
+		color: var(--accent);
+	}
+	.list.compact .game + .game {
+		margin-top: 4px;
+	}
+	.game.row {
+		grid-template-columns: 40px auto minmax(0, 1fr);
+		align-items: center;
+		height: 38px;
+		border-radius: 8px;
+	}
+	.row .rk {
+		text-align: center;
+		font: 500 12px/1 var(--mono);
+		color: var(--t3);
+	}
+	.row .grip {
+		flex-direction: row;
+		border-right: 0;
+		gap: 0;
+	}
+	.row .rname {
+		padding: 0 12px;
+		font-size: 14px;
+		font-weight: 500;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 	.game {
 		display: grid;

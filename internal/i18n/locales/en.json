@@ -340,5 +340,10 @@
   "health.msg.sidecar_stop": "Kick sidecar idle, stopping",
   "health.msg.canary_done": "Canary check finished",
   "health.msg.canary_failed": "Canary run failed: {err}",
-  "health.kind.heartbeat": "Heartbeat"
+  "health.kind.heartbeat": "Heartbeat",
+  "home.more_games.one": "{n} more game tracked",
+  "home.more_games.other": "{n} more games tracked",
+  "games.view_cards": "Cards",
+  "games.view_list": "List",
+  "games.view_label": "View"
 }
