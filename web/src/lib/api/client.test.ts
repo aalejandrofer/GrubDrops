@@ -31,6 +31,7 @@ describe('client', () => {
 		await api.addGame('Rust');
 		await api.setGames(['a']);
 		await api.renameAccount('a1', 'x');
+		await api.setAccountOrder(['a1']);
 		await api.removeAccount('a1');
 		expect(hdr(calls[0], 'X-CSRF-Token')).toBeUndefined();
 		for (const c of calls.slice(1)) expect(hdr(c, 'X-CSRF-Token')).toBe('tok');

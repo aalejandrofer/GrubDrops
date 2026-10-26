@@ -71,7 +71,7 @@ func (q *Queries) DeleteAccountSession(ctx context.Context, accountID string) er
 }
 
 const listAllAccounts = `-- name: ListAllAccounts :many
-SELECT id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url, custom_name FROM accounts ORDER BY created_at ASC
+SELECT id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url, custom_name, sort_order FROM accounts ORDER BY sort_order ASC, created_at ASC
 `
 
 func (q *Queries) ListAllAccounts(ctx context.Context) ([]Account, error) {
@@ -95,6 +95,7 @@ func (q *Queries) ListAllAccounts(ctx context.Context) ([]Account, error) {
 			&i.UpdatedAt,
 			&i.AvatarUrl,
 			&i.CustomName,
+			&i.SortOrder,
 		); err != nil {
 			return nil, err
 		}
@@ -107,6 +108,20 @@ func (q *Queries) ListAllAccounts(ctx context.Context) ([]Account, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setAccountSortOrder = `-- name: SetAccountSortOrder :exec
+UPDATE accounts SET sort_order = ? WHERE id = ?
+`
+
+type SetAccountSortOrderParams struct {
+	SortOrder int64  `json:"sort_order"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) SetAccountSortOrder(ctx context.Context, arg SetAccountSortOrderParams) error {
+	_, err := q.db.ExecContext(ctx, setAccountSortOrder, arg.SortOrder, arg.ID)
+	return err
 }
 
 const updateAccountAvatar = `-- name: UpdateAccountAvatar :exec

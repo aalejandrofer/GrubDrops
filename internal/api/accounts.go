@@ -23,6 +23,7 @@ import (
 func (s *server) routesAccounts(r chi.Router) {
 	r.Get("/accounts", s.listAccounts)
 	r.Post("/accounts", s.createAccount)
+	r.Put("/accounts/order", s.putAccountsOrder)
 	r.Patch("/accounts/{id}", s.renameAccount)
 	r.Delete("/accounts/{id}", s.deleteAccount)
 	r.Put("/accounts/{id}/enabled", s.setAccountEnabled)
@@ -169,6 +170,60 @@ func (s *server) renameAccount(w http.ResponseWriter, r *http.Request) {
 		s.d.AccountRenamed(id, store.AccountName(acc))
 	}
 	// Not accountChanged: a rename must not reload the runner, only tell clients.
+	if s.d.Hub != nil {
+		s.d.Hub.Publish(Event{Name: EventAccounts, Data: struct{}{}})
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// putAccountsOrder sets the display order of every account. ids must list each
+// account exactly once; anything unknown, repeated or missing is a 400. Runners
+// are not reloaded: mining stays parallel, the order only shapes lists.
+func (s *server) putAccountsOrder(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		IDs []string `json:"ids"`
+	}
+	if !readJSON(w, r, &body) {
+		return
+	}
+	ctx := r.Context()
+	accts, err := s.d.Q.ListAllAccounts(ctx)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	if body.IDs == nil || len(body.IDs) != len(accts) {
+		writeErr(w, http.StatusBadRequest, "bad_request")
+		return
+	}
+	known := make(map[string]bool, len(accts))
+	for _, a := range accts {
+		known[a.ID] = true
+	}
+	for _, id := range body.IDs {
+		if !known[id] {
+			writeErr(w, http.StatusBadRequest, "bad_request")
+			return
+		}
+		delete(known, id) // a repeat finds it gone
+	}
+	tx, err := s.d.DB.BeginTx(ctx, nil)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op once Commit succeeds
+	qtx := s.d.Q.WithTx(tx)
+	for i, id := range body.IDs {
+		if err := qtx.SetAccountSortOrder(ctx, gen.SetAccountSortOrderParams{SortOrder: int64(i + 1), ID: id}); err != nil {
+			writeErr(w, http.StatusInternalServerError, "internal")
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
 	if s.d.Hub != nil {
 		s.d.Hub.Publish(Event{Name: EventAccounts, Data: struct{}{}})
 	}

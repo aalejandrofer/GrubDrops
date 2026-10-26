@@ -197,6 +197,36 @@ export function renameRequest(a: Pick<Account, 'name' | 'platform_name'>, input:
 	return { kind: 'send', name };
 }
 
+export interface AccountOrderIO {
+	get(): Account[];
+	set(accounts: Account[]): void;
+	setOrder(ids: string[]): Promise<void>;
+	fetchAccounts(): Promise<Account[]>;
+}
+
+/**
+ * Apply a new account order locally, save the full id list, then take the server's list.
+ * On failure the server list wins; if that fetch also fails, the previous list is restored.
+ * Returns true when the save succeeded.
+ */
+export async function commitAccountOrder(io: AccountOrderIO, next: Account[]): Promise<boolean> {
+	const before = io.get();
+	if (next.length === before.length && next.every((a, i) => a.id === before[i].id)) return true;
+	io.set(next);
+	let ok = true;
+	try {
+		await io.setOrder(next.map((a) => a.id));
+	} catch {
+		ok = false;
+	}
+	try {
+		io.set(await io.fetchAccounts());
+	} catch {
+		if (!ok) io.set(before);
+	}
+	return ok;
+}
+
 export function initials(name: string): string {
 	const parts = name.split(/[\s_\-.]+/).filter(Boolean);
 	const s = parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0, 2);

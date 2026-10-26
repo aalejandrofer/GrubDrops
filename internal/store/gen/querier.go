@@ -110,6 +110,7 @@ type Querier interface {
 	RemoveAccountGame(ctx context.Context, arg RemoveAccountGameParams) error
 	RemoveForceChannel(ctx context.Context, arg RemoveForceChannelParams) error
 	SetAccountEnabled(ctx context.Context, arg SetAccountEnabledParams) error
+	SetAccountSortOrder(ctx context.Context, arg SetAccountSortOrderParams) error
 	SetGameTwitchID(ctx context.Context, arg SetGameTwitchIDParams) error
 	SumAllWatchMinutes(ctx context.Context) (int64, error)
 	// Lifetime watch minutes: sum of per-benefit progress. Persistent, so it
