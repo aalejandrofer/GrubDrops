@@ -24,6 +24,15 @@ type gameCampaignJSON struct {
 	EndsAt   *string `json:"ends_at"`
 }
 
+// needsLinkJSON is an account that must link an external account before the
+// game's drops can be claimed. URL is http(s) or "".
+type needsLinkJSON struct {
+	AccountID   string `json:"account_id"`
+	AccountName string `json:"account_name"`
+	Platform    string `json:"platform"`
+	URL         string `json:"url"`
+}
+
 type gameJSON struct {
 	ID        string             `json:"id"`
 	Name      string             `json:"name"`
@@ -32,6 +41,7 @@ type gameJSON struct {
 	BoxArtURL string             `json:"box_art_url"`
 	State     string             `json:"state"`
 	Campaigns []gameCampaignJSON `json:"campaigns"`
+	NeedsLink []needsLinkJSON    `json:"needs_link"`
 }
 
 type gamesJSON struct {
@@ -86,12 +96,21 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 	}
 	mining := map[int]bool{}
 	var next time.Time
+	var accts []gen.Account
+	acctsOK := false
+	if s.d.Q != nil {
+		if a, err := s.d.Q.ListAllAccounts(r.Context()); err == nil {
+			accts, acctsOK = a, true
+		}
+	}
+	names := make(map[string]string, len(accts))
+	for _, a := range accts {
+		names[a.ID] = a.DisplayName
+	}
 	if s.d.Pool != nil {
 		snaps := s.d.Pool.Snapshots()
-		if s.d.Q != nil {
-			if accts, err := s.d.Q.ListAllAccounts(r.Context()); err == nil {
-				next = earliestNextScan(snaps, pausedAccounts(accts))
-			}
+		if acctsOK {
+			next = earliestNextScan(snaps, pausedAccounts(accts))
 		}
 		for _, snap := range snaps {
 			if snap.Current == nil {
@@ -108,7 +127,7 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 		g := gameJSON{
 			ID: c.ID, Name: c.Name, Slug: c.Slug, Priority: i + 1,
 			BoxArtURL: boxArtURL(c.Name, c.TwitchGameID), State: "no_campaign",
-			Campaigns: []gameCampaignJSON{},
+			Campaigns: []gameCampaignJSON{}, NeedsLink: []needsLinkJSON{},
 		}
 		if i < len(statuses) {
 			for _, cs := range statuses[i].Campaigns {
@@ -117,6 +136,17 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 					EndsAt: rfc3339(cs.EndsAt),
 				}
 				g.Campaigns = append(g.Campaigns, cj)
+			}
+			// Accounts no longer in the store are dropped.
+			for _, n := range statuses[i].NeedsLink {
+				name, ok := names[n.AccountID]
+				if !ok {
+					continue
+				}
+				g.NeedsLink = append(g.NeedsLink, needsLinkJSON{
+					AccountID: n.AccountID, AccountName: name, Platform: n.Platform,
+					URL: collect.SafeLinkURL(n.URL),
+				})
 			}
 			if statuses[i].LastScanAt.After(last) {
 				last = statuses[i].LastScanAt

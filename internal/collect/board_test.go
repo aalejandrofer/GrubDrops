@@ -99,6 +99,57 @@ func TestBoard_SkipsRewardAndUpcoming(t *testing.T) {
 	}
 }
 
+func TestBoard_NeedsLink(t *testing.T) {
+	b := NewBoard()
+	now := time.Now()
+	tw1 := camp("t1", "twitch", "Rust", oct31, 1)
+	tw1.AccountLinkURL = "javascript:alert(1)"
+	tw2 := camp("t2", "twitch", "Rust", oct31, 1)
+	tw2.AccountLinkURL = "https://www.twitch.tv/drops/link"
+	s1 := scan("a2", "twitch", now, tw1, tw2)
+	s1.Result = plan.Result{Blocked: []plan.Blocked{
+		{Target: plan.Target{Campaign: tw1}, Reason: plan.ReasonNotLinked},
+		{Target: plan.Target{Campaign: tw2}, Reason: plan.ReasonNotLinked},
+		{Target: plan.Target{Campaign: tw2}, Reason: plan.ReasonSkipped},
+	}}
+	b.Observe(s1)
+	k := camp("k1", "kick", "Rust", oct31, 1)
+	k.ClaimNeedsLink = true
+	k.AccountLinkURL = "https://auth.riotgames.com/authorize?x=1"
+	ok := camp("k2", "kick", "Overwatch", oct31, 1)
+	ok.AccountLinkURL = "https://example.com/link"
+	b.Observe(scan("a1", "kick", now, k, ok))
+
+	got := b.Games([]plan.Game{rust, overwatch})
+	want := []LinkNeed{
+		{AccountID: "a1", Platform: "kick", URL: "https://auth.riotgames.com/authorize?x=1"},
+		{AccountID: "a2", Platform: "twitch", URL: "https://www.twitch.tv/drops/link"},
+	}
+	if len(got[0].NeedsLink) != 2 || got[0].NeedsLink[0] != want[0] || got[0].NeedsLink[1] != want[1] {
+		t.Fatalf("rust needs link %+v", got[0].NeedsLink)
+	}
+	if len(got[1].NeedsLink) != 0 {
+		t.Fatalf("overwatch needs link %+v", got[1].NeedsLink)
+	}
+}
+
+func TestSafeLinkURL(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://a.b/c":       "https://a.b/c",
+		"http://a.b":          "http://a.b",
+		" https://a.b ":       "https://a.b",
+		"javascript:alert(1)": "",
+		"//a.b/c":             "",
+		"/drops":              "",
+		"ftp://a.b":           "",
+		"":                    "",
+	} {
+		if got := SafeLinkURL(in); got != want {
+			t.Errorf("SafeLinkURL(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestBoard_Forget(t *testing.T) {
 	b := NewBoard()
 	b.Observe(scan("a1", "twitch", time.Now(), camp("c1", "twitch", "Rust", oct31, 1)))

@@ -34,6 +34,22 @@ export function campaignLine(c: Campaign, zone: string): string {
 	return tn('games.drops', c.drops, { date: shortDate(c.ends_at, zone) });
 }
 
+/** The URL when it is absolute http or https, else ''. */
+export function linkHref(url: string | null | undefined): string {
+	if (!url) return '';
+	try {
+		const u = new URL(url);
+		return u.protocol === 'https:' || u.protocol === 'http:' ? url : '';
+	} catch {
+		return '';
+	}
+}
+
+/** Distinct names of accounts that must link to claim the game's drops, in server order. */
+export function linkNames(g: Pick<Game, 'needs_link'>): string[] {
+	return [...new Set((g.needs_link ?? []).map((n) => n.account_name))];
+}
+
 export interface GamesIO {
 	get(): Game[];
 	set(games: Game[]): void;

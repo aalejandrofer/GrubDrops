@@ -5,6 +5,7 @@ All notable changes to GrubDrops.
 ## [Unreleased]
 
 ### Added
+- **Account link warnings.** A chosen game whose drops an account can't claim until it links the publisher's account (Riot, Steam, ...) shows the account on Games with a Link account button, and a warning line on its Home card. Twitch uses the campaign's link state; Kick flags a campaign after it rejects a claim with a connect URL. Only http(s) link URLs are shown. `GET /api/games` gains `needs_link`.
 - **Shift+click to move to the end.** On Games, Shift+click on Move up sends the game to the top and on Move down to the bottom. A plain click still moves one step.
 - **Rename accounts.** Settings > Accounts has Rename in each row's menu. The custom name shows everywhere the account is named (Home, Rewards, Health, notifications) and survives logins; an empty name resets to the platform name. Max 40 characters. Stored in a new `accounts.custom_name` column (migration 0019), so two accounts with the same platform name can be told apart.
 - **Twitch Android login.** Adding a Twitch account offers Android login (recommended) next to the TV code. Sign in to Twitch in a new tab, then copy the whole URL of the Twitch homepage it lands on and paste it in. Android tokens see the drops dashboard, so campaign discovery is complete; TV tokens get null from ViewerDropsDashboard and DropCampaignDetails. Adding the same Twitch user again updates its session.

@@ -690,3 +690,41 @@ func TestKickClaim_MapsConnectURLToNeedsLinkError(t *testing.T) {
 	require.Error(t, err2)
 	assert.False(t, errors.Is(err2, ErrClaimNeedsLink))
 }
+
+// TestKickBackend_LinkRejectionFlagsCampaign proves a link-required claim
+// rejection marks that campaign ClaimNeedsLink for the same account only,
+// keeps it mineable, and fills a missing AccountLinkURL from the connect_url.
+func TestKickBackend_LinkRejectionFlagsCampaign(t *testing.T) {
+	f := &fakeDoer{resp: map[string]fakeResp{
+		"https://web.kick.com/api/v1/drops/progress": {200, `{"data":[
+			{"id":"camp1","rewards":[
+				{"id":"needs-link","name":"Riot Icon","progress":1,"claimed":false,"required_units":120}
+			]}
+		],"message":"Success"}`},
+		"https://web.kick.com/api/v1/drops/claim": {400, `{"data":{"connect_url":"https://auth.riotgames.com/authorize?client_id=x"}}`},
+		"https://web.kick.com/api/v1/drops/campaigns": {200, `{"data":[
+			{"id":"camp1","game":"VALORANT","name":"Valo Drops","status":"active",
+			 "rewards":[{"id":"needs-link","name":"Riot Icon","required_minutes":120}]}
+		]}`},
+	}}
+	b := withFake(f)
+	camps, err := b.ListActiveCampaigns(context.Background(), sess("acc1"))
+	require.NoError(t, err)
+	require.Len(t, camps, 1)
+	assert.False(t, camps[0].ClaimNeedsLink, "no rejection seen yet")
+
+	_, err = b.SweepCompletedClaims(context.Background(), sess("acc1"))
+	require.NoError(t, err)
+
+	camps, err = b.ListActiveCampaigns(context.Background(), sess("acc1"))
+	require.NoError(t, err)
+	require.Len(t, camps, 1)
+	assert.True(t, camps[0].ClaimNeedsLink)
+	assert.True(t, camps[0].AccountLinked, "flag must not block mining")
+	assert.Equal(t, "https://auth.riotgames.com/authorize?client_id=x", camps[0].AccountLinkURL)
+
+	other, err := b.ListActiveCampaigns(context.Background(), sess("acc2"))
+	require.NoError(t, err)
+	require.Len(t, other, 1)
+	assert.False(t, other[0].ClaimNeedsLink, "another account is not flagged")
+}

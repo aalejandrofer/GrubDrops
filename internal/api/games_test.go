@@ -278,6 +278,42 @@ func TestGames_Search(t *testing.T) {
 	assert.Len(t, hits, 10)
 }
 
+func TestGames_NeedsLink(t *testing.T) {
+	g := newGamesEnv(t)
+	ctx := context.Background()
+	_, err := g.q.CreateAccount(ctx, gen.CreateAccountParams{
+		ID: "a1", Platform: "kick", DisplayName: "kicker", Status: "active", FingerprintJson: "{}", Enabled: 1,
+	})
+	require.NoError(t, err)
+	ids := g.seed("VALORANT")
+	require.NoError(t, g.chosen.Set(ctx, ids))
+	c := platform.Campaign{
+		ID: "k1", Platform: "kick", Game: "VALORANT", Name: "Valo", Status: "active",
+		Benefits:      []platform.DropBenefit{{ID: "b1", RequiredMinutes: 60}},
+		AccountLinked: true, ClaimNeedsLink: true, AccountLinkURL: "https://auth.riotgames.com/authorize?x=1",
+	}
+	g.board.Observe(runner.Scan{AccountID: "a1", Platform: "kick", At: time.Now(), Campaigns: []platform.Campaign{c}})
+	// A deleted account's scan is not listed.
+	g.board.Observe(runner.Scan{AccountID: "gone", Platform: "kick", At: time.Now(), Campaigns: []platform.Campaign{c}})
+
+	resp, b := g.do("GET", "/api/games", "", nil)
+	require.Equal(t, 200, resp.StatusCode)
+	var got gamesJSON
+	require.NoError(t, json.Unmarshal(b, &got))
+	require.Len(t, got.Games, 1)
+	assert.Equal(t, []needsLinkJSON{{
+		AccountID: "a1", AccountName: "kicker", Platform: "kick", URL: "https://auth.riotgames.com/authorize?x=1",
+	}}, got.Games[0].NeedsLink)
+}
+
+func TestGames_NeedsLinkEmptyArray(t *testing.T) {
+	g := newGamesEnv(t)
+	ids := g.seed("Rust")
+	require.NoError(t, g.chosen.Set(context.Background(), ids))
+	_, b := g.do("GET", "/api/games", "", nil)
+	assert.Contains(t, string(b), `"needs_link":[]`)
+}
+
 func TestGames_NextScanAt(t *testing.T) {
 	t0 := time.Date(2026, 10, 25, 10, 0, 0, 0, time.UTC)
 	g := newGamesEnv(t,

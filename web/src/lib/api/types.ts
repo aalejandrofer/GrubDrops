@@ -94,6 +94,15 @@ export interface Campaign {
 	ends_at: string | null;
 }
 
+/** An account that must link an external account before the game's drops can be claimed. */
+export interface NeedsLink {
+	account_id: string;
+	account_name: string;
+	platform: Platform;
+	/** http(s) link page, '' when unknown. */
+	url: string;
+}
+
 export interface Game {
 	id: string;
 	name: string;
@@ -102,6 +111,7 @@ export interface Game {
 	box_art_url: string;
 	state: GameState;
 	campaigns: Campaign[];
+	needs_link: NeedsLink[];
 }
 
 export interface GamesResp {
