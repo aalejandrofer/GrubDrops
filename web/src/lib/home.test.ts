@@ -239,9 +239,16 @@ describe('visibleCards', () => {
 		expect(r.shown.map((c) => c.rank)).toEqual([1, 2, 3, 4, 5, 6, 7]);
 		expect(r.hidden).toBe(3);
 	});
-	it('keeps a mining low-priority game and sorts by rank', () => {
+	it('keeps a mining low-priority game and lists it first', () => {
 		const r = visibleCards(mk(10, [9]));
-		expect(r.shown.map((c) => c.rank)).toEqual([1, 2, 3, 4, 5, 6, 9]);
+		expect(r.shown.map((c) => c.rank)).toEqual([9, 1, 2, 3, 4, 5, 6]);
 		expect(r.hidden).toBe(3);
+	});
+	it('active cards come before idle ones within the cap', () => {
+		const cards = mk(5, [4]);
+		cards[4].queued = [{ benefit_id: 'b' } as unknown as GameCard['queued'][number]];
+		const r = visibleCards(cards);
+		expect(r.shown.map((c) => c.rank)).toEqual([4, 5, 1, 2, 3]);
+		expect(r.hidden).toBe(0);
 	});
 });

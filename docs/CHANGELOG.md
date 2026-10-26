@@ -33,6 +33,7 @@ All notable changes to GrubDrops.
 - A campaign with no live stream moves on to the next queued campaign without rescanning, and every pick retries campaigns that had no live stream earlier.
 - Swept rewards are recorded in the claim log under their planned game.
 - README, translations, DESIGN.md, the site and AGENTS.md describe the SvelteKit UI, chosen games, the planner, the runner and the new login flows. A source build says to build the UI before `go build`.
+- Home lists games that are mining or queued first, then the rest, each in priority order. Cards keep their real rank number.
 
 ### Fixed
 
