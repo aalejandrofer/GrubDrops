@@ -4,7 +4,8 @@
 		"accounts_total": 3,
 		"accounts_mining": 0,
 		"accounts_paused": 0,
-		"last_scan_at": "2026-10-25T11:58:00Z"
+		"last_scan_at": "2026-10-25T11:58:00Z",
+		"next_scan_at": null
 	},
 	"problems": [],
 	"kpis": {

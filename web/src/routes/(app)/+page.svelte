@@ -35,6 +35,7 @@
 		mode === 'healthy' || mode === 'nothing_live' || mode === 'signed_out' || mode === 'paused'
 	);
 	const lastScan = $derived(live.games?.last_scan_at ?? o?.status.last_scan_at ?? null);
+	const nextScan = $derived(live.games?.next_scan_at ?? o?.status.next_scan_at ?? null);
 	const pausedIds = $derived(new Set(live.accounts.filter((a) => !a.enabled).map((a) => a.id)));
 	const cards = $derived(gameCards(live.games?.games ?? [], live.runners, pausedIds));
 	const groups = $derived(groupClaims(live.recent, now, prefs.zone));
@@ -67,7 +68,12 @@
 
 <PageHead title={t('nav.home')} stamp={dashboard ? stamp : undefined}>
 	{#if mode === 'offline'}
-		<!-- the header shows the offline alert and the retry countdown -->
+		{#if !o}
+			<div class="empty err" role="alert">
+				<span>{t('home.offline')}</span>
+				<button type="button" class="btn" disabled={retrying} onclick={retry}>{t('rewards.retry')}</button>
+			</div>
+		{/if}
 	{:else if mode === 'loading'}
 		<p class="none">{t('home.loading')}</p>
 	{:else if mode === 'error'}
@@ -137,6 +143,7 @@
 					<GameCard
 						{card}
 						{lastScan}
+						{nextScan}
 						{now}
 						readyAccounts={mode === 'nothing_live' ? o.status.accounts_total - (o.status.accounts_paused ?? 0) : null}
 					/>

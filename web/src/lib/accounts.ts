@@ -120,6 +120,14 @@ export function accountStatus(a: Account, r: Runner | undefined): AccountStatus 
 	return 'idle';
 }
 
+/** Row buttons. A paused account without a session offers both: sign in, then resume. */
+export function rowActions(a: Account, r: Runner | undefined): ('login' | 'resume')[] {
+	const out: ('login' | 'resume')[] = [];
+	if (a.needs_login || r?.state === 'needs_login') out.push('login');
+	if (!a.enabled) out.push('resume');
+	return out;
+}
+
 const STATE_KEYS = {
 	idle: 'accounts.state.idle',
 	picking: 'accounts.state.picking',

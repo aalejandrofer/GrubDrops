@@ -4,7 +4,7 @@
 	import { api } from '$lib/app';
 	import { ApiError } from '$lib/api/client';
 	import type { Account, DeviceStart, Platform } from '$lib/api/types';
-	import { accountLine, accountStatus, createDeviceFlow, initials, type DeviceFlow, type DeviceState } from '$lib/accounts';
+	import { accountLine, accountStatus, createDeviceFlow, initials, rowActions, type DeviceFlow, type DeviceState } from '$lib/accounts';
 	import CopyCommand from '$lib/components/CopyCommand.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
@@ -325,6 +325,7 @@
 		{#each live.accounts.filter(shown) as a (a.id)}
 			{@const r = runnerOf(a.id)}
 			{@const st = accountStatus(a, r)}
+			{@const acts = rowActions(a, r)}
 			<div class="row acct" class:problem={st === 'signed_out'}>
 				<span class="av">
 					{#if a.avatar_url}<img src={a.avatar_url} alt={t('accounts.avatar', { name: a.name })} />{:else}{initials(a.name)}{/if}
@@ -352,11 +353,12 @@
 					{#if rowError[a.id]}<small class="bad" role="alert">{rowError[a.id]}</small>{/if}
 				</div>
 				<span class="st {st}">{t(STATUS_KEYS[st])}</span>
-				{#if st === 'signed_out'}
+				{#if acts.includes('login')}
 					<button type="button" class="btn primary fix" disabled={busy} onclick={() => openFlow(a.platform, a.id)}>
 						<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3" /></svg>{t('accounts.log_in_again')}
 					</button>
-				{:else if st === 'paused'}
+				{/if}
+				{#if acts.includes('resume')}
 					<button type="button" class="btn fix" onclick={() => setEnabled(a, true)}>{t('accounts.resume')}</button>
 				{/if}
 				<div class="menu-wrap">

@@ -11,6 +11,7 @@
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
+	import { scanStamp } from '$lib/scan';
 
 	const live = getLive();
 
@@ -36,6 +37,12 @@
 
 	const games = $derived(live.games?.games ?? []);
 	const lastScan = $derived(live.games?.last_scan_at ?? null);
+	const nextText = $derived(
+		scanStamp(lastScan, live.games?.next_scan_at ?? null, new Date(now))
+			.filter((x) => x.key !== 'home.last_scan')
+			.map((x) => t(x.key, x.vars))
+			.join(' ')
+	);
 	const rows = $derived(drag ? moveGame(games, drag.from, drag.to) : games);
 	const sugg = $derived(suggestions(hits, q));
 	const head = $derived(
@@ -277,7 +284,7 @@
 							{/each}
 						</ul>
 					{:else}
-						<p class="muted">{t('games.nothing_live', { rel: relTime(lastScan, now) })}</p>
+						<p class="muted">{t('games.nothing_live', { rel: relTime(lastScan, now) })}{#if nextText} {nextText}{/if}</p>
 					{/if}
 				</div>
 			</article>

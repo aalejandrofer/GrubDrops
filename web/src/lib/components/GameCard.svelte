@@ -1,16 +1,18 @@
 <script lang="ts">
-	import { etaShort, formatInt, relTime } from '$lib/format';
+	import { etaShort, formatInt } from '$lib/format';
 	import { foldRows, type AccountRow, type GameCard } from '$lib/home';
 	import { t, tn } from '$lib/i18n/index.svelte';
+	import { scanStamp } from '$lib/scan';
 	import BoxArt from './BoxArt.svelte';
 	import PlatformMark from './PlatformMark.svelte';
 
 	let {
 		card,
 		lastScan,
+		nextScan = null,
 		now,
 		readyAccounts = null
-	}: { card: GameCard; lastScan: string | null; now: number; readyAccounts?: number | null } = $props();
+	}: { card: GameCard; lastScan: string | null; nextScan?: string | null; now: number; readyAccounts?: number | null } = $props();
 
 	let open = $state(false);
 	const fold = $derived(foldRows(card.rows));
@@ -56,7 +58,7 @@
 			<h3 class="gname">{game.name}</h3>
 			<span class="state {game.state}">{stateText}</span>
 			{#if game.state === 'no_campaign'}
-				<span class="camp">{t('home.last_scan', { rel: relTime(lastScan, now) })}</span>
+				<span class="camp">{scanStamp(lastScan, nextScan, new Date(now)).map((x) => t(x.key, x.vars)).join(' · ')}</span>
 			{:else if camp}
 				<span class="camp">{camp}</span>
 			{/if}

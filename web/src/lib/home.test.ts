@@ -186,3 +186,30 @@ describe('groupClaims', () => {
 		expect(groupClaims(c, now, 'Asia/Tokyo').today).toHaveLength(0);
 	});
 });
+
+describe('homeView signed out count', () => {
+	const base = { games: G(), overviewFailed: false, gamesFailed: false, unreachable: false };
+	const o2 = () => {
+		const o = structuredClone(mining) as unknown as Overview;
+		o.status.accounts_total = 2;
+		o.status.accounts_paused = 0;
+		o.status.state = 'mining' as Overview['status']['state'];
+		return o;
+	};
+	it('another problem kind does not count as signed out', () => {
+		const o = o2();
+		o.problems = [
+			{ kind: 'needs_login', account_id: 'a1', account_name: 'a1' },
+			{ kind: 'other', account_id: 'a2', account_name: 'a2' }
+		] as unknown as Overview['problems'];
+		expect(homeView({ ...base, overview: o })).not.toBe('signed_out');
+	});
+	it('one account counts once however many problems it has', () => {
+		const o = o2();
+		o.problems = [
+			{ kind: 'needs_login', account_id: 'a1', account_name: 'a1' },
+			{ kind: 'needs_login', account_id: 'a1', account_name: 'a1' }
+		];
+		expect(homeView({ ...base, overview: o })).not.toBe('signed_out');
+	});
+});

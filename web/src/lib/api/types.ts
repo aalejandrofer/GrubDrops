@@ -25,6 +25,7 @@ export interface Overview {
 		accounts_mining: number;
 		accounts_paused: number;
 		last_scan_at: string | null;
+		next_scan_at: string | null;
 	};
 	problems: Problem[];
 	kpis: {
@@ -106,6 +107,7 @@ export interface Game {
 export interface GamesResp {
 	games: Game[];
 	last_scan_at: string | null;
+	next_scan_at: string | null;
 }
 
 export interface SearchHit {

@@ -4,7 +4,7 @@ import type { Account, DeviceStatus, Runner } from '$lib/api/types';
 import accountsFx from '$lib/fixtures/accounts.json';
 import runnersMining from '$lib/fixtures/runners.mining.json';
 import { prefs } from '$lib/prefs.svelte';
-import { MAX_POLL_FAILS, POLL_MS, accountLine, accountStatus, createDeviceFlow } from './accounts';
+import { MAX_POLL_FAILS, POLL_MS, accountLine, accountStatus, createDeviceFlow, rowActions } from './accounts';
 
 const ACC = (id: string) => structuredClone(accountsFx.find((a) => a.id === id)) as Account;
 const RUN = (id: string) => structuredClone(runnersMining.find((r) => r.account_id === id)) as Runner;
@@ -234,5 +234,21 @@ describe('accountStatus', () => {
 		const k = ACC('acc-kick');
 		k.enabled = false;
 		expect(accountStatus(k, undefined)).toBe('paused');
+	});
+});
+
+describe('rowActions', () => {
+	const acct = (p: Partial<Account>) => ({ ...(accountsFx[0] as Account), enabled: true, needs_login: false, ...p });
+	it('paused and signed out offers both', () => {
+		expect(rowActions(acct({ enabled: false, needs_login: true }), undefined)).toEqual(['login', 'resume']);
+	});
+	it('paused alone offers resume', () => {
+		expect(rowActions(acct({ enabled: false }), undefined)).toEqual(['resume']);
+	});
+	it('signed out alone offers login', () => {
+		expect(rowActions(acct({ needs_login: true }), undefined)).toEqual(['login']);
+	});
+	it('healthy offers nothing', () => {
+		expect(rowActions(acct({}), undefined)).toEqual([]);
 	});
 });
