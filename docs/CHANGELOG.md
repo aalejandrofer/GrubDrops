@@ -5,6 +5,7 @@ All notable changes to GrubDrops.
 ## [Unreleased]
 
 ### Added
+- **Log in again from the account menu.** Every account's ... menu has Log in again, not just signed-out ones, so a working account can switch its Twitch login from TV to Android or refresh its Kick cookies. The session is replaced on the same account.
 - **Telegram notifications.** Settings > Notifications takes a bot token and chat ID, with Send test and Change like Discord. The same events, toggles, daily summary and canary alerts go to Telegram (Bot API, HTML, drop image as a photo when there is one), and to both services when both are set. The token is never returned to the UI and is redacted from errors. A 429 waits `retry_after` (up to 10 s) and retries once. `GRUB_TELEGRAM_BOT_TOKEN` and `GRUB_TELEGRAM_CHAT_ID` are the env defaults. `POST /api/settings/notify-test` takes an optional `target` of `discord` or `telegram`.
 - **Account link warnings.** A chosen game whose drops an account can't claim until it links the publisher's account (Riot, Steam, ...) shows the account on Games with a Link account button, and a warning line on its Home card. Twitch uses the campaign's link state; Kick flags a campaign after it rejects a claim with a connect URL. Only http(s) link URLs are shown. `GET /api/games` gains `needs_link`.
 - **Shift+click to move to the end.** On Games, Shift+click on Move up sends the game to the top and on Move down to the bottom. A plain click still moves one step.

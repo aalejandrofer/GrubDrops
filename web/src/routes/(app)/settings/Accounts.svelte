@@ -519,6 +519,9 @@
 								</div>
 							{:else}
 								<button type="button" role="menuitem" onclick={() => startRename(a)}>{t('accounts.rename')}</button>
+								{#if !acts.includes('login')}
+									<button type="button" role="menuitem" disabled={busy} onclick={() => openFlow(a.platform, a.id)}>{t('accounts.log_in_again')}</button>
+								{/if}
 								<button type="button" role="menuitem" onclick={() => setEnabled(a, !a.enabled)}>
 									{t(a.enabled ? 'accounts.pause' : 'accounts.resume')}
 								</button>
