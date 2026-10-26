@@ -19,6 +19,7 @@ All notable changes to GrubDrops.
 - v2 JSON API: overview KPIs and the runner list, with a session-only up-next order (`/api/overview`, `/api/runners`).
 - v2 JSON API: chosen games with local search and box art (`/api/games`).
 - v2 JSON API: filtered, paged claim history (`/api/claims`).
+- v2 JSON API: accounts with rename and delete, Twitch TV device-code login, and Kick login from a cookies.txt export (`/api/accounts`).
 - v2 JSON API: settings with notification toggles, and an optional daily Discord summary at midnight in the configured timezone (`/api/settings`).
 - v2 JSON API: health events and log download, canary run-now, update check with release notes, and the Kick image proxy.
 

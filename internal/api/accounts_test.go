@@ -18,12 +18,12 @@ import (
 
 const testAgeKey = "AGE-SECRET-KEY-1DZCAXYWJM6M42NSX5GR4QWZZ2JXEYKJ9ZKWYFYSNU997775JJ6XSY85FK9"
 
-type fakePool struct{ snaps []runner.Snapshot }
+type snapPool struct{ snaps []runner.Snapshot }
 
-func (p fakePool) Snapshots() []runner.Snapshot   { return p.snaps }
-func (fakePool) SetOrder(string, []string)        {}
-func (fakePool) ResetOrder(string)                {}
-func (fakePool) OrderFunc(string) func() []string { return nil }
+func (p snapPool) Snapshots() []runner.Snapshot   { return p.snaps }
+func (snapPool) SetOrder(string, []string)        {}
+func (snapPool) ResetOrder(string)                {}
+func (snapPool) OrderFunc(string) func() []string { return nil }
 
 // calls records AccountChanged / AccountRemoved invocations.
 type calls struct {
@@ -96,7 +96,7 @@ func TestAccounts_ListStateAndNeedsLogin(t *testing.T) {
 	a := e.createAccount("twitch", "Alpha")
 	b := e.createAccount("kick", "Beta")
 	require.NoError(t, e.s.d.Sessions.Put(context.Background(), a, platform.Session{AccessToken: "x", ExpiresAt: time.Now().Add(time.Hour)}))
-	e.s.d.Pool = fakePool{snaps: []runner.Snapshot{{AccountID: a, State: runner.StateWatching}}}
+	e.s.d.Pool = snapPool{snaps: []runner.Snapshot{{AccountID: a, State: runner.StateWatching}}}
 
 	resp, body := e.do("GET", "/api/accounts", "", nil)
 	require.Equal(t, 200, resp.StatusCode)
@@ -115,7 +115,7 @@ func TestAccounts_ListStateAndNeedsLogin(t *testing.T) {
 	assert.Equal(t, "idle", lb.State)
 	assert.True(t, lb.NeedsLogin)
 
-	e.s.d.Pool = fakePool{snaps: []runner.Snapshot{{AccountID: a, State: runner.StateNeedsLogin}}}
+	e.s.d.Pool = snapPool{snaps: []runner.Snapshot{{AccountID: a, State: runner.StateNeedsLogin}}}
 	_, body = e.do("GET", "/api/accounts", "", nil)
 	unmarshal(t, body, &list)
 	for _, it := range list {

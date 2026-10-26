@@ -44,13 +44,12 @@ type accountJSON struct {
 	Auth       *accountAuthJSON `json:"auth"` // null until a check has run
 }
 
-// unixRFC3339 formats unix seconds as RFC 3339 UTC, nil for 0.
-func unixRFC3339(sec int64) *string {
+// checkedAt is nil when no check has run.
+func checkedAt(sec int64) *string {
 	if sec == 0 {
 		return nil
 	}
-	s := time.Unix(sec, 0).UTC().Format(time.RFC3339)
-	return &s
+	return rfc3339(time.Unix(sec, 0))
 }
 
 func genAccountID() string {
@@ -89,7 +88,7 @@ func (s *server) listAccounts(w http.ResponseWriter, r *http.Request) {
 			NeedsLogin: state == string(runner.StateNeedsLogin) || !hasSession,
 		}
 		if res, ok := authcheck.Load(ctx, s.d.Q, a.ID); ok {
-			item.Auth = &accountAuthJSON{OK: res.OK, Detail: res.Msg, CheckedAt: unixRFC3339(res.CheckedAt)}
+			item.Auth = &accountAuthJSON{OK: res.OK, Detail: res.Msg, CheckedAt: checkedAt(res.CheckedAt)}
 		}
 		out = append(out, item)
 	}
