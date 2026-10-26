@@ -7,8 +7,28 @@
  */
 export function placeholders(s) {
 	const out = [];
-	for (const m of s.matchAll(/\{[A-Za-z_][A-Za-z0-9_]*\}|%[sdvq%]/g)) out.push(m[0]);
+	for (const m of s.matchAll(/\{[A-Za-z_][A-Za-z0-9_]*\}|%[-+# 0-9.]*[a-zA-Z%]/g)) out.push(m[0]);
 	return out.sort();
+}
+
+/**
+ * @param {string} lang
+ * @returns {Set<string>}
+ */
+function pluralCategories(lang) {
+	return new Set(new Intl.PluralRules(lang).resolvedOptions().pluralCategories);
+}
+
+/**
+ * True when `key` is `<prefix>.<category>`, the locale has no such category and still has `<prefix>.other`.
+ * @param {string} key
+ * @param {Record<string, string>} msgs
+ * @param {Set<string>} cats
+ * @returns {boolean}
+ */
+function unneededPlural(key, msgs, cats) {
+	const m = /^(.+)\.(zero|one|two|few|many)$/.exec(key);
+	return !!m && !cats.has(m[2]) && `${m[1]}.other` in msgs;
 }
 
 /**
@@ -21,8 +41,11 @@ export function diffKeys(locales) {
 	const problems = [];
 	for (const [lang, msgs] of Object.entries(locales)) {
 		if (lang === 'en') continue;
+		const cats = pluralCategories(lang);
 		for (const k of Object.keys(base)) {
-			if (!(k in msgs)) problems.push(`${lang}: missing ${k}`);
+			if (!(k in msgs)) {
+				if (!unneededPlural(k, msgs, cats)) problems.push(`${lang}: missing ${k}`);
+			}
 			else if (placeholders(base[k]).join(' ') !== placeholders(msgs[k]).join(' '))
 				problems.push(`${lang}: ${k} placeholders`);
 		}

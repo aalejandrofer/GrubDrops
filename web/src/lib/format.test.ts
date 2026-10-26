@@ -71,3 +71,19 @@ test('nextScanMin', () => {
 	expect(nextScanMin(ago(400), now)).toBe(0);
 	expect(nextScanMin(null, now)).toBe(0);
 });
+
+test('dayBucket yesterday across a DST spring-forward', () => {
+	const zone = 'America/New_York';
+	const n = Date.parse('2026-03-09T12:00:00Z');
+	expect(dayBucket('2026-03-08T12:00:00Z', n, zone)).toBe('yesterday');
+	expect(dayBucket('2026-03-08T05:30:00Z', n, zone)).toBe('yesterday');
+	expect(dayBucket('2026-03-07T12:00:00Z', n, zone)).toBe('earlier');
+	// 00:30 EDT on 03-09: a fixed now-24h lands on 03-07 and would miss 01:00 EST on 03-08.
+	const early = Date.parse('2026-03-09T04:30:00Z');
+	expect(dayBucket('2026-03-08T06:00:00Z', early, zone)).toBe('yesterday');
+});
+
+test('unparseable iso is handled', () => {
+	expect(relTime('garbage', now)).toBe('never');
+	expect(uptime('garbage', now)).toBe('');
+});

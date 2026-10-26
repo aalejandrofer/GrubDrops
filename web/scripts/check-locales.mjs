@@ -24,12 +24,17 @@ export function loadLocales(dir) {
 	return out;
 }
 
+/** @param {string} p */
+function isNonProduction(p) {
+	return p.endsWith('.test.ts') || p.split('/').includes('fixtures');
+}
+
 /** Text to scan: every web/src ts and svelte file, plus the `i18n.T(...)` calls of Go files outside web/. */
 /** @param {string} root @returns {string[]} */
 export function loadSources(root) {
 	const out = [];
 	for (const p of walk(join(root, 'web', 'src')))
-		if (/\.(ts|svelte)$/.test(p)) out.push(readFileSync(p, 'utf8'));
+		if (/\.(ts|svelte)$/.test(p) && !isNonProduction(p)) out.push(readFileSync(p, 'utf8'));
 	for (const p of walk(root)) {
 		if (!p.endsWith('.go') || p.startsWith(join(root, 'web') + '/')) continue;
 		for (const m of readFileSync(p, 'utf8').matchAll(/i18n\.T\([^)]*\)/g)) out.push(m[0]);

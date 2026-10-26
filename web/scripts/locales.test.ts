@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
@@ -45,4 +46,29 @@ test('the real locales pass', () => {
 	problems.push(...unusedKeys(Object.keys(locales.en), refs).map((k) => `unused ${k}`));
 	expect(problems).toEqual([]);
 	expect(readFileSync(join(here, 'locales-lib.mjs'), 'utf8').length).toBeGreaterThan(0);
+});
+
+test('printf flags and widths are placeholders', () => {
+	expect(placeholders('%5.2f %-3d %x')).toEqual(['%-3d', '%5.2f', '%x']);
+});
+
+test('plural categories the locale lacks are not missing', () => {
+	const en = { 'n.one': '{n} item', 'n.other': '{n} items' };
+	expect(diffKeys({ en, 'zh-CN': { 'n.other': '{n} 项' } })).toEqual([]);
+	expect(diffKeys({ en, es: { 'n.other': '{n} elementos' } })).toContain('es: missing n.one');
+	expect(diffKeys({ en, 'zh-CN': { 'n.one': '{n} 项' } })).toContain('zh-CN: missing n.other');
+});
+
+test('keys referenced only from tests or fixtures are unused', () => {
+	const root = mkdtempSync(join(tmpdir(), 'locales-'));
+	const src = join(root, 'web', 'src');
+	mkdirSync(join(src, 'lib', 'fixtures'), { recursive: true });
+	writeFileSync(join(src, 'a.test.ts'), `t('only.test')`);
+	writeFileSync(join(src, 'lib', 'fixtures', 'f.ts'), `t('only.fixture')`);
+	writeFileSync(join(src, 'b.ts'), `t('used.key')`);
+	const refs = referencedKeys(loadSources(root));
+	expect(unusedKeys(['only.test', 'only.fixture', 'used.key'], refs)).toEqual([
+		'only.test',
+		'only.fixture'
+	]);
 });
