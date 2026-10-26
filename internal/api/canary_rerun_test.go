@@ -111,3 +111,62 @@ func TestCanary_KickSignInRerunsSkipped(t *testing.T) {
 	settle(t, e)
 	assert.EqualValues(t, 1, f.n.Load())
 }
+
+func TestCanary_ResumeDuringRunQueuesOneRerun(t *testing.T) {
+	e, _ := accountsEnv(t)
+	id := e.createAccount("twitch", "Alpha")
+	_, tok := e.session()
+	storeCanary(t, e, "twitch", canarySkipped)
+	resp, b := e.do("PUT", "/api/accounts/"+id+"/enabled", tok, map[string]bool{"enabled": false})
+	require.Equal(t, 204, resp.StatusCode, string(b))
+	settle(t, e)
+
+	var n atomic.Int32
+	started := make(chan struct{}, 8)
+	release := make(chan struct{})
+	e.s.d.RunCanary = func(context.Context) error {
+		if n.Add(1) == 1 {
+			started <- struct{}{}
+			<-release // the first run is in flight during the resume
+			return nil
+		}
+		started <- struct{}{}
+		return nil
+	}
+	require.True(t, e.s.startCanary())
+	<-started
+
+	resp, b = e.do("PUT", "/api/accounts/"+id+"/enabled", tok, map[string]bool{"enabled": true})
+	require.Equal(t, 204, resp.StatusCode, string(b))
+	assert.EqualValues(t, 1, n.Load(), "no second run while one is in flight")
+
+	close(release)
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("resume during a run did not queue a rerun")
+	}
+	settle(t, e)
+	time.Sleep(50 * time.Millisecond)
+	settle(t, e)
+	assert.EqualValues(t, 2, n.Load(), "exactly one rerun")
+	assert.False(t, e.s.canaryRerun.Load())
+}
+
+func TestCanary_RunNowDoesNotQueueRerun(t *testing.T) {
+	e, _ := accountsEnv(t)
+	var n atomic.Int32
+	release := make(chan struct{})
+	e.s.d.RunCanary = func(context.Context) error {
+		n.Add(1)
+		<-release
+		return nil
+	}
+	require.True(t, e.s.startCanary())
+	assert.False(t, e.s.startCanary(), "absorbed by the run in flight")
+	close(release)
+	settle(t, e)
+	time.Sleep(50 * time.Millisecond)
+	settle(t, e)
+	assert.EqualValues(t, 1, n.Load())
+}

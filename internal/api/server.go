@@ -85,6 +85,8 @@ type server struct {
 	protected chi.Router
 	// canaryRunning is set while a run-now canary is in flight.
 	canaryRunning atomic.Bool
+	// canaryRerun asks for one more canary run once the one in flight ends.
+	canaryRerun atomic.Bool
 	// twitch holds the in-flight Twitch device logins, account ID -> *twitchFlow.
 	twitch sync.Map
 }

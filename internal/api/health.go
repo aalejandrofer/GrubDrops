@@ -219,18 +219,25 @@ func (s *server) postHealthCanary(w http.ResponseWriter, _ *http.Request) {
 
 // startCanary starts one background canary run on the root context with
 // canaryRunTimeout. It returns false when no runner is wired or a run is
-// already in flight.
+// already in flight. A run that ends with canaryRerun set starts one more.
 func (s *server) startCanary() bool {
 	if s.d.RunCanary == nil || !s.canaryRunning.CompareAndSwap(false, true) {
 		return false
 	}
+	// This run reads the current accounts, so it serves any pending rerun.
+	s.canaryRerun.Store(false)
 	run := s.d.RunCanary
 	ctx, cancel := context.WithTimeout(s.rootCtx(), canaryRunTimeout)
 	go func() {
 		defer cancel()
-		defer s.canaryRunning.Store(false)
 		if err := run(ctx); err != nil {
 			slog.Warn("canary run-now failed", "err", err)
+		}
+		s.canaryRunning.Store(false)
+		// Swap after Store: a rerun asked for while this run was in flight
+		// set the flag before its own start failed, so it is seen here.
+		if s.canaryRerun.Swap(false) && s.rootCtx().Err() == nil {
+			s.startCanary()
 		}
 	}()
 	return true
@@ -238,11 +245,14 @@ func (s *server) startCanary() bool {
 
 // rerunSkippedCanary starts a canary run when the stored result for
 // platform says it skipped for lack of an active account. Called after an
-// account on that platform is resumed or signs in.
+// account on that platform is resumed or signs in. A run already in flight
+// may have read the accounts before the change, so the request waits for it
+// and then runs once more.
 func (s *server) rerunSkippedCanary(ctx context.Context, platform string) {
 	res, ok, err := canary.LoadResult(ctx, s.d.Q, platform)
 	if err != nil || !ok || !res.Skipped {
 		return
 	}
+	s.canaryRerun.Store(true)
 	s.startCanary()
 }
