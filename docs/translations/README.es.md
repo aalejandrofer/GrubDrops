@@ -10,7 +10,7 @@
   <img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white">
   <img alt="Twitch" src="https://img.shields.io/badge/Twitch-drops-9146FF?logo=twitch&logoColor=white">
   <img alt="Kick" src="https://img.shields.io/badge/Kick-drops-53FC18?logo=kick&logoColor=black">
-  <img alt="UI" src="https://img.shields.io/badge/UI-HTMX%20%2B%20Go%20templates-2c2c2c">
+  <img alt="UI" src="https://img.shields.io/badge/UI-SvelteKit%20SPA-2c2c2c">
   <img alt="Storage" src="https://img.shields.io/badge/DB-SQLite-003B57?logo=sqlite&logoColor=white">
   <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-Docker-2496ED?logo=docker&logoColor=white">
   <a href="https://github.com/aalejandrofer/grubdrops/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/aalejandrofer/grubdrops?logo=github&label=release"></a>
@@ -31,7 +31,7 @@ imagen de Docker y lo guarda todo en un único archivo SQLite.
 
 ## Características
 
-- 🎯 **Tú defines una lista blanca** (global o por cuenta). Nada fuera de ella se mina.
+- 🎯 **Tú eliges los juegos**, en una lista de prioridad que ordenas arrastrando. Nada fuera de ella se mina.
 - 🟣🟢 **Twitch y Kick juntos**, varias cuentas en cada uno, todo en una misma página.
 - ✅ **Comprueba el juego** para que nunca gastes tiempo de visualización en el stream equivocado.
 - 🔗 **Conoce los enlaces de cuenta** (Krafton, Embark, …) con una anulación manual por cuenta del tipo "ya lo he enlazado".
@@ -145,9 +145,9 @@ ajuste comentado) está en
 
 ## Añadir cuentas
 
-Ve a **Accounts** y añade una por plataforma.
+Ve a **Ajustes → Cuentas** y añade una por plataforma.
 
-**Twitch.** Haz clic en añadir y luego aprueba el código mostrado en `twitch.tv/activate`.
+**Twitch.** Haz clic en añadir y luego abre la URL de verificación que aparece e introduce el código.
 Ese es el flujo oficial de código de dispositivo; tu contraseña y tus cookies nunca tocan
 GrubDrops.
 
@@ -159,7 +159,7 @@ sesión existente de kick.com como un archivo `cookies.txt` exportado desde tu n
    para Chrome/Edge/Brave, o
    [cookies.txt](https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/) para Firefox.
 2. Inicia sesión en `kick.com`, haz clic en el icono de la extensión y haz **Export** del sitio actual.
-3. En GrubDrops, abre la página **Authorize** de la cuenta y sube (o pega) la exportación.
+3. En GrubDrops, abre **Ajustes → Cuentas**, añade una cuenta de Kick y sube (o pega) la exportación `cookies.txt` en formato Netscape.
 
 Los canales se descubren automáticamente a partir del juego de cada campaña, así que no hay nada más que
 configurar. Cuando la sesión caduque (el descubrimiento registra errores de Cloudflare o 401),
@@ -167,19 +167,13 @@ vuelve a exportarla y pégala de nuevo.
 
 ## Seleccionar qué minerar
 
-GrubDrops funciona con listas blancas: solo descubre y mina los juegos que selecciones, así que
-**una instalación nueva no mina nada hasta que añadas al menos un juego a la lista**. Hasta
-entonces `/drops` muestra un aviso que te dirige aquí, y las cuentas se quedan en estado de
-*"sin juegos todavía"* (no es un error).
+GrubDrops mina solo los juegos que eliges. Una instalación nueva no mina nada hasta
+que añades al menos un juego, y hasta entonces cada cuenta muestra el estado
+*sin juegos*, que no es un error.
 
-Puedes añadir juegos de cualquiera de las dos formas, por nombre, sin esperar a que aparezca
-una campaña:
-
-- **Global** (se aplica a todas las cuentas): **Prioridad → añadir por nombre**.
-- **Por cuenta** (anula la lista global): **Cuentas → elige una cuenta → añadir por nombre**.
-
-El descubrimiento empieza a rastrear ese juego en el siguiente ciclo y las campañas en vivo
-aparecen en `/drops`.
+Los juegos elegidos forman una única lista de prioridad global que comparten todas las cuentas.
+En **Juegos**, busca entre los juegos de las campañas en directo y añade uno. Arrastra la lista
+para cambiar qué se mina primero. Cada cambio recarga los runners en segundo plano.
 
 ## Cómo funciona
 
@@ -192,28 +186,25 @@ aparecen en `/drops`.
   detiene automáticamente ese contenedor a través del socket de Docker (descargando la imagen del sidecar según
   haga falta), de modo que Chrome solo se ejecuta mientras mira y tú no defines ningún servicio de sidecar.
   Un barrido periódico elimina los contenedores de las cuentas eliminadas.
-- **El descubrimiento (Discovery)** barre ambos catálogos hacia SQLite cada pocos minutos para que el
-  panel siempre refleje lo que está en directo.
+- **Runner:** cada cuenta tiene un runner. Escanea las campañas y el inventario de la cuenta,
+  pide una cola al planificador, mira el primer drop y lo reclama al terminar. Reconstruye
+  el plan cada 15 minutos mientras mira.
 
 ## Lógica de prioridad
 
-Cada cuenta mina una campaña a la vez. Cuando varias campañas en la lista blanca
-son elegibles, GrubDrops elige en este orden:
+El planificador ordena los drops de cada cuenta así:
 
 ```
-1. Campaign, by your priority mode (Settings):
-   ├─ ordered (default)  → your whitelist rank, top of the list first
-   ├─ ending_soonest     → soonest deadline first
-   └─ low_avbl_first     → fewest available channels first
-2. Tiebreak: closest to a claim (fewest watch-minutes remaining)
-3. Restricted (team) campaigns ahead of open ones (both platforms)
-4. Channel: a live stream confirmed on the campaign's game,
-   highest viewer count first (Twitch also probes for one
-   actually serving the target drop)
+1. Game rank in your chosen-games list, top first
+2. Restricted (team) campaigns ahead of open ones
+3. Closest to a claim (fewest watch minutes remaining)
+4. Within a campaign, the shortest drop first
 ```
 
-La lista blanca y la prioridad son por cuenta, recurriendo a la lista global como respaldo. Una
-campaña sin ningún stream en directo se omite, no se queda esperando.
+Los drops que no pueden avanzar van a una lista de bloqueados con el motivo: la cuenta no está
+enlazada, hay que reclamar antes un drop anterior, o el runner se rindió con él.
+Una campaña sin stream en directo se omite y pasa a la siguiente de la cola.
+Puedes reordenar la lista de próximos de una cuenta durante la sesión actual.
 
 ## Configuración
 
@@ -271,24 +262,42 @@ cuatro variables:
 
 ## Las páginas
 
-| Página | Qué hay en ella |
+La interfaz es una SPA estática de SvelteKit (código en `web/`) incrustada en el binario de Go.
+
+| Página | Qué muestra |
 |------|------|
-| **Console** (`/`) | Estadísticas totales, minado por cuenta, feed de eventos en vivo. |
-| **Drops** (`/drops`) | Campañas pasadas / actuales / próximas, artículos, chips de conexión, lista blanca con un clic. |
-| **History** (`/history`) | Registro de reclamos de todas las cuentas. |
-| **Settings** (`/settings`) | Lista de prioridad, intervalos, Discord, nivel de log, contraseña. |
-| **Accounts** | Añadir cuentas, listas blancas por cuenta, reautenticación, salud de autenticación. |
+| **Inicio** | Qué mina cada cuenta, la cola de próximos y los eventos recientes. |
+| **Juegos** | Tus juegos elegidos, buscados entre las campañas en directo, en un orden de prioridad que arrastras. |
+| **Recompensas** | Drops reclamados de todas las cuentas, con filtros. |
+| **Ajustes** | General, Cuentas, Notificaciones, Actualizaciones y Salud. |
+
+El inicio de sesión y la configuración inicial son páginas aparte. Las cadenas que envía Go
+(notificaciones) usan `i18n.T`; la interfaz lee los mismos archivos de idioma de
+`internal/i18n/locales` con `t()`.
 
 ## Arquitectura
 
 ```
 cmd/miner               main daemon
+cmd/browser-sidecar     chromedp sidecar binary (Kick IVS playback)
 internal/platform/...   per-platform backends (twitch, kick)
-internal/watcher        per-account state machine (watch, mine, claim)
+internal/plan           pure planner: picks what each account mines next
+internal/runner         per-account runner (watch, mine, claim) and the pool
+internal/collect        runner hooks into the store (claims, minutes, scans)
 internal/dockerctl      on-demand sidecar start/stop over the docker socket
-internal/discovery      catalog scraper
-internal/api + web      HTMX UI and handlers
+internal/api            JSON API + SSE for the SPA
+internal/web            embedded SPA build (dist/)
 internal/store          SQLite (sqlc + goose), age-encrypted sessions
+web/                    SvelteKit SPA source
+```
+
+## Desarrollo
+
+```bash
+npm --prefix web ci && npm --prefix web run build   # SPA into internal/web/dist
+web/scripts/dev-miner.sh                            # local miner on a temp DB
+GRUB_DEV_DIR=<dir> web/scripts/dev-seed.sh          # admin, sample games and accounts
+GRUB_DEV_API=http://127.0.0.1:18080 npm --prefix web run dev
 ```
 
 ## Créditos

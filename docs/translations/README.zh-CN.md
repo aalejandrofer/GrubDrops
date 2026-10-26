@@ -10,7 +10,7 @@
   <img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white">
   <img alt="Twitch" src="https://img.shields.io/badge/Twitch-drops-9146FF?logo=twitch&logoColor=white">
   <img alt="Kick" src="https://img.shields.io/badge/Kick-drops-53FC18?logo=kick&logoColor=black">
-  <img alt="UI" src="https://img.shields.io/badge/UI-HTMX%20%2B%20Go%20templates-2c2c2c">
+  <img alt="UI" src="https://img.shields.io/badge/UI-SvelteKit%20SPA-2c2c2c">
   <img alt="Storage" src="https://img.shields.io/badge/DB-SQLite-003B57?logo=sqlite&logoColor=white">
   <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-Docker-2496ED?logo=docker&logoColor=white">
   <a href="https://github.com/aalejandrofer/GrubDrops/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/aalejandrofer/GrubDrops?logo=github&label=release"></a>
@@ -30,7 +30,7 @@ GrubDrops 会替你观看合适的 Twitch 与 Kick 直播，累积观看时长�
 
 ## 功能特性
 
-- 🎯 **由你设定白名单**（全局或按账户）。白名单之外的内容一律不挖矿。
+- 🎯 **由你选择游戏**，并在可拖动排序的优先级列表中排列。列表之外的内容一律不挖矿。
 - 🟣🟢 **Twitch 与 Kick 一并支持**，每个平台多个账户，全都在同一个页面上。
 - ✅ **它会检查游戏**，让你永远不会把观看时长浪费在错误的直播上。
 - 🔗 **它了解账户关联**（Krafton、Embark 等），并提供按账户的"我已关联"手动覆盖选项。
@@ -142,9 +142,9 @@ GRUB_MASTER_KEY="$(docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen
 
 ## 添加账户
 
-进入 **Accounts**，为每个平台各添加一个账户。
+进入 **设置 → 账户**，为每个平台各添加一个账户。
 
-**Twitch。** 点击添加，然后在 `twitch.tv/activate` 处批准显示的代码。
+**Twitch。** 点击添加，然后打开显示的验证网址并输入代码。
 这就是官方的设备码流程；你的密码和 cookies 永远不会接触到
 GrubDrops。
 
@@ -156,7 +156,7 @@ kick.com 会话以从浏览器导出的 `cookies.txt` 文件形式交给 GrubDro
    或者
    Firefox 用 [cookies.txt](https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/)。
 2. 在 `kick.com` 登录，点击扩展图标，**Export** 当前站点。
-3. 在 GrubDrops 中，打开该账户的 **Authorize** 页面并上传（或粘贴）导出的内容。
+3. 在 GrubDrops 中，打开 **设置 → 账户**，添加一个 Kick 账户，并上传（或粘贴）导出的 Netscape 格式 `cookies.txt`。
 
 频道会根据每个活动的游戏自动发现，所以无需再做其它
 配置。当会话失效时（发现流程会记录 Cloudflare 或 401
@@ -164,16 +164,11 @@ kick.com 会话以从浏览器导出的 `cookies.txt` 文件形式交给 GrubDro
 
 ## 选择要挖矿的内容
 
-GrubDrops 由白名单驱动：它只会发现并挖取你主动加入的游戏，所以
-**全新安装在你把至少一个游戏加入白名单之前不会挖任何东西**。在那之前，`/drops`
-会显示一条指向这里的提示，账户则停留在“尚无游戏”状态（这不是错误）。
+GrubDrops 只挖你选择的游戏。全新安装在你至少添加一个游戏之前不会挖任何东西，
+在那之前每个账户都显示“尚无游戏”状态，这不是错误。
 
-两种方式都可以添加游戏，直接按名称添加，不需要等某个活动先出现：
-
-- **全局**（对所有账户生效）：**优先级 → 按名称添加**。
-- **按账户**（覆盖全局列表）：**账户 → 选择一个账户 → 按名称添加**。
-
-发现流程会在下一个周期开始抓取该游戏，进行中的活动随后出现在 `/drops`。
+所选游戏构成一个全局优先级列表，所有账户共用。在 **游戏** 页面，从当前活动中搜索游戏并添加。
+拖动列表即可改变挖矿顺序。每次更改都会在后台重新加载 runner。
 
 ## 工作原理
 
@@ -185,28 +180,23 @@ GrubDrops 由白名单驱动：它只会发现并挖取你主动加入的游戏�
   Chrome 边车容器中来播放 IVS 流。挖矿器会通过 docker socket 自动创建、启动并
   停止该容器（按需拉取边车镜像），所以 Chrome 仅在观看时运行，而你
   无需定义任何边车服务。一个周期性的清扫任务会移除已删除账户的容器。
-- **发现（Discovery）** 每隔几分钟把两个平台的目录都扫入 SQLite，使
-  仪表盘始终反映当前正在直播的内容。
+- **Runner：** 每个账户一个 runner。它扫描账户的活动与库存，向规划器索取队列，
+  观看排在最前的掉宝并在完成后领取。观看期间每 15 分钟重建一次计划。
 
 ## 优先级逻辑
 
-每个账户一次只挖一个活动。当有多个白名单内的活动
-符合条件时，GrubDrops 会按以下顺序挑选：
+规划器按如下方式为每个账户的掉宝排序：
 
 ```
-1. Campaign, by your priority mode (Settings):
-   ├─ ordered (default)  → your whitelist rank, top of the list first
-   ├─ ending_soonest     → soonest deadline first
-   └─ low_avbl_first     → fewest available channels first
-2. Tiebreak: closest to a claim (fewest watch-minutes remaining)
-3. Restricted (team) campaigns ahead of open ones (both platforms)
-4. Channel: a live stream confirmed on the campaign's game,
-   highest viewer count first (Twitch also probes for one
-   actually serving the target drop)
+1. Game rank in your chosen-games list, top first
+2. Restricted (team) campaigns ahead of open ones
+3. Closest to a claim (fewest watch minutes remaining)
+4. Within a campaign, the shortest drop first
 ```
 
-白名单与优先级是按账户设置的，并在缺省时回退到全局列表。一个
-没有任何直播的活动会被跳过，而不是空等。
+无法推进的掉宝会进入阻塞列表并注明原因：账户未关联、需要先领取前一个掉宝，
+或 runner 已放弃。没有任何直播的活动会被跳过，转而处理队列中的下一个。
+你可以在当前会话内重新排列某个账户的待挖列表。
 
 ## 配置
 
@@ -264,24 +254,41 @@ GrubDrops 由白名单驱动：它只会发现并挖取你主动加入的游戏�
 
 ## 各个页面
 
+界面是一个 SvelteKit 静态 SPA（源码在 `web/`），嵌入在 Go 二进制文件中。
+
 | 页面 | 上面有什么 |
 |------|------|
-| **Console**（`/`） | 累计统计、按账户挖矿、实时事件流。 |
-| **Drops**（`/drops`） | 过去 / 当前 / 即将到来的活动、物品、关联标签、一键加入白名单。 |
-| **History**（`/history`） | 跨所有账户的领取日志。 |
-| **Settings**（`/settings`） | 优先级列表、时间间隔、Discord、日志级别、密码。 |
-| **Accounts** | 添加账户、按账户的白名单、重新认证、认证健康状态。 |
+| **主页** | 每个账户正在挖什么、待挖队列、最近事件。 |
+| **游戏** | 你所选的游戏，从当前活动中搜索，按你拖动的优先级排序。 |
+| **奖励** | 所有账户已领取的掉宝，可筛选。 |
+| **设置** | 常规、账户、通知、更新和健康状态。 |
+
+登录和首次设置是独立的页面。Go 发送的字符串（通知）使用 `i18n.T`；界面通过 `t()`
+读取 `internal/i18n/locales` 中的同一批语言文件。
 
 ## 架构
 
 ```
 cmd/miner               main daemon
+cmd/browser-sidecar     chromedp sidecar binary (Kick IVS playback)
 internal/platform/...   per-platform backends (twitch, kick)
-internal/watcher        per-account state machine (watch, mine, claim)
+internal/plan           pure planner: picks what each account mines next
+internal/runner         per-account runner (watch, mine, claim) and the pool
+internal/collect        runner hooks into the store (claims, minutes, scans)
 internal/dockerctl      on-demand sidecar start/stop over the docker socket
-internal/discovery      catalog scraper
-internal/api + web      HTMX UI and handlers
+internal/api            JSON API + SSE for the SPA
+internal/web            embedded SPA build (dist/)
 internal/store          SQLite (sqlc + goose), age-encrypted sessions
+web/                    SvelteKit SPA source
+```
+
+## 开发
+
+```bash
+npm --prefix web ci && npm --prefix web run build   # SPA into internal/web/dist
+web/scripts/dev-miner.sh                            # local miner on a temp DB
+GRUB_DEV_DIR=<dir> web/scripts/dev-seed.sh          # admin, sample games and accounts
+GRUB_DEV_API=http://127.0.0.1:18080 npm --prefix web run dev
 ```
 
 ## 致谢

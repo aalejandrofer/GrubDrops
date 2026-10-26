@@ -66,7 +66,8 @@ internal/dockerctl      on-demand sidecar start/stop over the docker socket
 internal/api            JSON API + SSE (`/api/events`) for the SPA
 internal/web            embedded SPA build in dist/ (go:embed)
 internal/store          SQLite (sqlc + goose), age-encrypted sessions
-internal/i18n           locale JSON for Go-sent strings (notifications)
+internal/i18n           locale JSON: Go-sent strings and the Svelte UI
+web/                    SvelteKit SPA source (pages in src/routes, components in src/lib)
 proto/                  buf config + gRPC defs for the sidecar — core, not dead code
 ```
 
@@ -101,7 +102,10 @@ proto/                  buf config + gRPC defs for the sidecar — core, not dea
 
 - User-facing strings Go sends go through `internal/i18n` (`i18n.T(lang, key)`).
   Add the key to **every** locale file under
-  `internal/i18n/locales/` — the locales must keep equal key sets.
+  `internal/i18n/locales/` — the locales must keep equal key sets
+  (`TestLocaleParity`).
+- The Svelte UI reads the same files through `t()`/`tn()`.
+  `npm --prefix web run check` fails on unused or unequal keys.
 
 ## Releasing
 

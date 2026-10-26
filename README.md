@@ -1,6 +1,6 @@
 > [!WARNING]
 > **Drop discovery is limited.** 
-Twitch no longer lists campaigns for new logins, so GrubDrops only finds drops for games on your whitelist.
+Twitch no longer lists campaigns for new logins, so GrubDrops only mines the games you choose.
 
 > [!CAUTION]
 > **GrubDrops is currently not working as expected. Critical Auth Issues**
@@ -26,11 +26,11 @@ Twitch no longer lists campaigns for new logins, so GrubDrops only finds drops f
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/console.png" width="900" alt="GrubDrops console: watch-time stats, per-account mining across Twitch and Kick, and a live event feed">
+  <img src="docs/screenshots/console.png" width="900" alt="GrubDrops Home page: what each account is mining across Twitch and Kick, with the up-next queue and recent events">
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/drops-whitelist.png" width="900" alt="GrubDrops drops catalog with one-click whitelisting, alongside the per-account game whitelist and priority list">
+  <img src="docs/screenshots/drops-whitelist.png" width="900" alt="GrubDrops Games page: chosen games in a drag-to-reorder priority list, with search to add more">
 </p>
 
 ---
@@ -139,9 +139,9 @@ Open **http://localhost:8080** and create the admin login.
 
 ## Adding accounts
 
-Go to **Accounts** and add one per platform.
+Go to **Settings → Accounts** and add one per platform.
 
-**Twitch.** Click add, then approve the code shown at `twitch.tv/activate`.
+**Twitch.** Click add, open the verification URL shown and enter the code.
 That's the official device-code flow; your password and cookies never touch
 GrubDrops.
 
@@ -153,7 +153,7 @@ kick.com session as a `cookies.txt` file exported from your browser:
    for Chrome/Edge/Brave, or
    [cookies.txt](https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/) for Firefox.
 2. Sign in at `kick.com`, click the extension icon, **Export** the current site.
-3. In GrubDrops, open the account's **Authorize** page and upload (or paste) the export.
+3. In GrubDrops, open **Settings → Accounts**, add a Kick account and upload (or paste) the Netscape-format `cookies.txt` export.
 
 Channels auto-discover from each campaign's game, so there's nothing else to
 configure. When the session goes stale (discovery logs Cloudflare or 401
@@ -165,8 +165,8 @@ GrubDrops mines only the games you choose. A fresh install mines nothing until
 you add at least one game, and until then every account shows a *no games*
 state, which is not an error.
 
-The chosen games form one global priority list that every account shares. Add
-a game by name; it does not need a live campaign first. Reorder the list to
+The chosen games form one global priority list that every account shares. On
+**Games**, search the games from live campaigns and add one. Drag the list to
 change what mines first. Each change reloads the runners in the background.
 
 ## How it works
@@ -248,8 +248,20 @@ the first four are set:
 
 The UI is a SvelteKit static SPA embedded in the binary; the Go side serves a
 JSON API under `/api` and live updates as server-sent events on `/api/events`.
-On the `rebuild/v2` branch `/` serves a placeholder page until the SvelteKit
-app lands.
+The source is in `web/`; `npm --prefix web run build` writes it to
+`internal/web/dist`, which Go embeds.
+
+Pages:
+
+| Page | What it shows |
+|------|------|
+| **Home** | What each account is mining, the up-next queue, recent events. |
+| **Games** | Your chosen games, searched from live campaigns, in a priority order you drag. |
+| **Rewards** | Claimed drops across accounts, with filters. |
+| **Settings** | General, Accounts, Notifications, Updates and Health. |
+
+Login and first-run setup are separate pages. Go strings (notifications) use
+`i18n.T`; the UI reads the same locale files in `internal/i18n/locales` with `t()`.
 
 ## Architecture
 

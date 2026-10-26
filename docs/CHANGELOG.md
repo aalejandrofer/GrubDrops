@@ -35,6 +35,7 @@ All notable changes to GrubDrops.
 - v2 Settings: language, time format, theme and timezone, Discord and notification toggles, update check and command, sign out.
 - v2 Settings accounts: add Twitch with a device code or Kick with cookies.txt, log in again, rename and remove.
 - v2 Settings health: miner, sidecar, scan and canary status, filtered live event log in your language, full log download.
+- v2 docs: README, translations, DESIGN.md, site and AGENTS.md describe the SvelteKit UI, chosen games and the new login flows.
 
 ### Changed
 
