@@ -15,8 +15,17 @@
 		lastScan,
 		nextScan = null,
 		now,
-		readyAccounts = null
-	}: { card: GameCard; lastScan: string | null; nextScan?: string | null; now: number; readyAccounts?: number | null } = $props();
+		readyAccounts = null,
+		over = false
+	}: {
+		card: GameCard;
+		lastScan: string | null;
+		nextScan?: string | null;
+		now: number;
+		readyAccounts?: number | null;
+		/** Past what fits: laid out off the flow so it can still be measured. */
+		over?: boolean;
+	} = $props();
 
 	let open = $state(false);
 	const fold = $derived(foldRows(card.rows));
@@ -54,7 +63,7 @@
 	}
 </script>
 
-<article class="game p{card.pos <= 2 ? card.pos : 3}">
+<article class="game p{card.pos <= 2 ? card.pos : 3}" class:over aria-hidden={over || undefined} inert={over}>
 	<div class="artw">
 		<BoxArt src={game.box_art_url} name={game.name} size={card.size} />
 	</div>
@@ -145,6 +154,13 @@
 		border-radius: 10px;
 		background: var(--surface);
 		overflow: hidden;
+	}
+	.game.over {
+		position: absolute;
+		left: 0;
+		right: 0;
+		visibility: hidden;
+		pointer-events: none;
 	}
 	:global(.game + .game) {
 		margin-top: 10px;
