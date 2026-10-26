@@ -461,7 +461,17 @@ Task 1 runs first. Tasks 2 and 3 run next: Task 3 depends only on `json.go`, whi
 - Build the SvelteKit app against this contract into `internal/web/dist`, replacing the placeholder.
 - Localise health event messages (the API returns raw `msg` and `kind`).
 - Move the locale JSON so Go and Svelte share one set.
+- `internal/web/dist/index.html` is tracked, so a Vite build into `dist` shows up as git changes. Decide how build output is handled.
+- Rewrite the remaining 1.x UI text in `README.md` (line 3, the screenshot alt text, the Kick "Authorize" step), the Spanish and Chinese READMEs, `docs/DESIGN.md:24` and `docs/index.html:102`.
+- Drop the 1.x keys in the locale JSON once the SPA's key set is known.
+- `POST /api/logout` is public: an unauthenticated logout is a CSRF-gated no-op that returns 204.
+- Clients upsert `claim` SSE events on `account_id` + `benefit_id`; a reward code re-sends the same claim.
+- No v2 setter exists for proxy, canary channels and interval, Kick watch mode or notify avatar; stored values still apply. Nothing writes `link_override:` keys, which the roster still reads.
 
 ## Left for plan 5
 
-- Seed `chosen_games`, `claim_log` and `watch_minutes` from 1.x data; boot a real 1.x DB copy and confirm every account mines with no re-login.
+- Seed `chosen_games`, `claim_log` and `watch_minutes` from 1.x data; boot a real 1.x DB copy and confirm every account mines with no re-login. Until then 1.x accounts boot with no games, so do not tag before this lands.
+- Drop the unused 1.x tables and queries (`account_games`, `account_channels`, force channels, `campaigns`, `benefits`, `accounts.webhook_url`) and Kick `ActiveWatchPath`.
+- Run `docker build -f deploy/Dockerfile.miner .`; it was not run during plan 3.
+- Open minors: the games add path is not transactional, so a concurrent POST can lose an append; the account listing decrypts every session to test has-session; the daily summary skips missed days; the canary run-now goroutine is not joined on shutdown.
+- The Twitch integrity-token log line is tracked as GRUB-20.
