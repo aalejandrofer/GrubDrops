@@ -33,7 +33,7 @@ All notable changes to GrubDrops.
 ### Fixed
 
 - Twitch integrity tokens and raw responses no longer appear in logs. The integrity line records only the expiry and bad-bot flag, and gql and PubSub lines drop the response body (GRUB-20).
-- The health canary says when it skipped for lack of a signed-in account, and Run now shows progress and a result or timeout message.
+- The health canary says when it skipped because no account was signed in and unpaused, and tells you to sign in or resume one. Run now shows progress and a result or timeout message.
 - Box art shows for newer games such as Marvel Rivals and Delta Force.
 - The overview and games APIs report the next scan time (`next_scan_at`), and the scan stamp shows it.
 - Paused signed-out accounts show as needing login and offer "Log in again" next to Resume. Home counts only signed-out accounts when deciding all are signed out, and the header chip skips the account whose login is open in Settings.
