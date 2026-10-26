@@ -28,3 +28,5 @@ Decisions made while building v2 on `rebuild/v2` without check-ins. Each entry g
 - **Settings General gains a Timezone row and a "Sign out" button.** `GET /api/settings` gains `zone_effective` so the browser can show the server's zone.
 - **Plan 4 tasks run one at a time,** with no parallel worktrees, to avoid locale-file merge conflicts.
 - **Live accounts:** page checks use fixture data. The final walk also logs in Jandro's Kick account on the local miner from the cookies he supplied. The new version has no Twitch cookie login, so Twitch is tested through fixtures and the device-code screen only.
+- **v2's collection migration is `0017`, not `0016`.** The 1.x `feat/pipeline-v2` build already used version 16 on staging and prod, so goose skipped v2's tables. `0017` uses `IF NOT EXISTS`, so DBs that ran the old v2 `0016` upgrade cleanly.
+- **Accounts keep the 1.x `enabled` flag as Pause/Resume.** A disabled account shows "Paused" with "Resume mining". The upgrade never flips the flag, so staging does not start mining on sessions it shares with prod.
