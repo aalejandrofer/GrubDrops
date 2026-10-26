@@ -157,6 +157,24 @@ func TestRunners_MineNow(t *testing.T) {
 	assert.Equal(t, []string{"a1/n1"}, e.pool.mineNow)
 }
 
+// Mine next acts on the account in the URL only, so two accounts with queues
+// each start their own first Up next drop.
+func TestRunners_MineNextPerAccount(t *testing.T) {
+	e := newResEnv(t, nil)
+	e.pool.snaps = []runner.Snapshot{
+		{AccountID: "a1", Platform: "twitch", State: runner.StateWatching, UpNext: []plan.Target{tgt("G", "n1", 0)}},
+		{AccountID: "b2", Platform: "kick", State: runner.StateWatching, UpNext: []plan.Target{tgt("H", "k1", 0)}},
+	}
+	_, tok := e.session()
+	resp, b := e.do("POST", "/api/runners/b2/mine-now", tok, nil)
+	assert.Equal(t, 202, resp.StatusCode)
+	assert.JSONEq(t, `{"benefit_id":"k1"}`, string(b))
+	assert.Equal(t, []string{"b2/k1"}, e.pool.mineNow)
+	resp, _ = e.do("POST", "/api/runners/a1/mine-now", tok, nil)
+	assert.Equal(t, 202, resp.StatusCode)
+	assert.Equal(t, []string{"b2/k1", "a1/n1"}, e.pool.mineNow)
+}
+
 func TestAccounts_RecheckLinks(t *testing.T) {
 	e := newResEnv(t, nil)
 	e.s.routesAccounts(e.s.protected)

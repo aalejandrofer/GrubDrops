@@ -4,14 +4,15 @@
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { reorder } from '$lib/drag';
-	import { afterLabel, anyCustom, commitMove, foldQueue, moveItem, queues } from '$lib/upnext';
+	import { afterLabel, anyCustom, commitMineNow, commitMove, foldQueue, moveItem, queues } from '$lib/upnext';
 	import type { Runner } from '$lib/api/types';
-	import MineNow from './MineNow.svelte';
 	import PlatformMark from './PlatformMark.svelte';
 
 	const live = getLive();
 	let failed = $state(false);
-	let mineFailed = $state(false);
+	// Per-account Mine next state.
+	let mineBusy = $state<Record<string, boolean>>({});
+	let mineFailed = $state<Record<string, boolean>>({});
 	let drag = $state<{ id: string; from: number; to: number } | null>(null);
 	// Accounts whose queue shows every row; not persisted.
 	let open = $state<Record<string, boolean>>({});
@@ -81,6 +82,33 @@
 		return drag && drag.id === id ? moveItem(items, drag.from, drag.to) : items;
 	}
 
+	async function mineNext(id: string): Promise<void> {
+		if (mineBusy[id]) return;
+		mineBusy[id] = true;
+		mineFailed[id] = false;
+		const ok = await commitMineNow(
+			{
+				get: () => live.runners,
+				set: (r) => (live.runners = r),
+				mineNow: (aid) => api.mineNow(aid),
+				fetchRunners: () => api.runners()
+			},
+			id
+		);
+		mineBusy[id] = false;
+		mineFailed[id] = !ok;
+	}
+
+	// Why Mine next is unavailable for this account, or null when it can run.
+	function mineWhy(q: { canMine: boolean }, r: Runner | undefined): string | null {
+		if (!q.canMine) {
+			if (r?.state === 'needs_login') return t('home.signed_out_row');
+			if (r?.state === 'no_games') return t('home.no_games');
+			return t('home.idle_row');
+		}
+		return null;
+	}
+
 	function dragOpts(id: string) {
 		return {
 			onStart: (from: number) => (drag = { id, from, to: from }),
@@ -98,7 +126,7 @@
 
 <section class="panel">
 	<div class="panel-h">
-		<h2>{t('upnext.title')}</h2><span class="n">{total}</span><MineNow onresult={(ok) => (mineFailed = !ok)} />
+		<h2>{t('upnext.title')}</h2><span class="n">{total}</span>
 	</div>
 	{#if qs.length === 0}
 		<p class="empty">
@@ -111,9 +139,21 @@
 		{@const r = runner(q.accountId)}
 		{@const full = shown(q.accountId, q.items)}
 		{@const fold = foldQueue(full, open[q.accountId] === true)}
-		{#if qs.length > 1}
-			<div class="acct"><PlatformMark platform={q.platform} size="sm" /><span class="pf-name {q.platform}">{q.accountName}</span></div>
-		{/if}
+		{@const why = mineWhy(q, r)}
+		<div class="acct">
+			{#if qs.length > 1}<PlatformMark platform={q.platform} size="sm" /><span class="pf-name {q.platform}">{q.accountName}</span>{/if}
+			<button
+				class="mine"
+				type="button"
+				disabled={mineBusy[q.accountId] || why !== null}
+				aria-busy={mineBusy[q.accountId] === true}
+				title={why ?? t('upnext.mine_next_title', { drop: q.items[0].benefit_name })}
+				onclick={() => mineNext(q.accountId)}
+			>
+				{t('upnext.mine_next')}
+			</button>
+		</div>
+		{#if mineFailed[q.accountId]}<p class="err" role="alert">{t('upnext.mine_next_failed')}</p>{/if}
 		<ol class="queue" use:reorder={dragOpts(q.accountId)}>
 			{#each fold.rows as item, i (item.benefit_id)}
 				{@const after = r ? afterLabel({ ...r, up_next: full }, i) : null}
@@ -164,7 +204,6 @@
 		{/if}
 	{/each}
 	{#if failed}<p class="err" role="alert">{t('upnext.save_failed')}</p>{/if}
-	{#if mineFailed}<p class="err" role="alert">{t('upnext.mine_now_failed')}</p>{/if}
 	<div class="panel-f">
 		<span>{perm[0]}<a href="/games" class="link">{t('nav.games')}</a>{perm[1] ?? ''}</span>
 		{#if custom}<button class="reset" type="button" onclick={reset}>{t('upnext.reset')}</button>{/if}
@@ -338,6 +377,7 @@
 	.link:hover {
 		color: var(--accent);
 	}
+	.mine,
 	.reset {
 		margin-left: auto;
 		font-size: 12px;
@@ -349,6 +389,14 @@
 		white-space: nowrap;
 		cursor: pointer;
 	}
+	.mine:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.mine[aria-busy='true'] {
+		cursor: progress;
+	}
+	.mine:hover:not(:disabled),
 	.reset:hover {
 		color: var(--text);
 		border-color: var(--t2);
