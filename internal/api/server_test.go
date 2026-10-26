@@ -1,0 +1,113 @@
+package api
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/cookiejar"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"testing"
+	"testing/fstest"
+	"time"
+
+	"github.com/alexedwards/scs/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/aalejandrofer/grubdrops/internal/store"
+	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+)
+
+type env struct {
+	t   *testing.T
+	srv *httptest.Server
+	cl  *http.Client
+	s   *server
+}
+
+func newEnv(t *testing.T) *env {
+	t.Helper()
+	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "t.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	sm := scs.New()
+	sm.Store = NewKVSessionStore(db)
+	sm.Lifetime = time.Hour
+	s := newServer(Deps{
+		DB: db, Q: gen.New(db), Session: sm, Version: "test",
+		SPA: fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}},
+	})
+	s.protected.Get("/overview", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"ok": "1"}) })
+	srv := httptest.NewServer(s.handler())
+	t.Cleanup(srv.Close)
+	jar, _ := cookiejar.New(nil)
+	return &env{t: t, srv: srv, cl: &http.Client{Jar: jar}, s: s}
+}
+
+func (e *env) do(method, path, csrf string, body any) (*http.Response, []byte) {
+	e.t.Helper()
+	var rd io.Reader
+	if body != nil {
+		b, _ := json.Marshal(body)
+		rd = bytes.NewReader(b)
+	}
+	req, err := http.NewRequest(method, e.srv.URL+path, rd)
+	require.NoError(e.t, err)
+	if csrf != "" {
+		req.Header.Set("X-CSRF-Token", csrf)
+	}
+	resp, err := e.cl.Do(req)
+	require.NoError(e.t, err)
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return resp, b
+}
+
+func (e *env) session() (map[string]any, string) {
+	e.t.Helper()
+	resp, b := e.do("GET", "/api/session", "", nil)
+	require.Equal(e.t, 200, resp.StatusCode)
+	var m map[string]any
+	require.NoError(e.t, json.Unmarshal(b, &m))
+	tok, _ := m["csrf_token"].(string)
+	return m, tok
+}
+
+func TestSPA_Fallback(t *testing.T) {
+	e := newEnv(t)
+	resp, b := e.do("GET", "/games", "", nil)
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Contains(t, string(b), "spa")
+	resp, b = e.do("GET", "/", "", nil)
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Contains(t, string(b), "spa")
+
+	resp, b = e.do("GET", "/api/nope", "", nil)
+	assert.Equal(t, 404, resp.StatusCode)
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	assert.JSONEq(t, `{"error":"not_found"}`, string(b))
+
+	resp, _ = e.do("GET", "/healthz", "", nil)
+	assert.Equal(t, 200, resp.StatusCode)
+}
+
+func TestReadJSON_TooLarge(t *testing.T) {
+	big := `{"password":"` + strings.Repeat("a", 2<<20) + `"}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/x", strings.NewReader(big))
+	var v struct {
+		Password string `json:"password"`
+	}
+	assert.False(t, readJSON(w, r, &v))
+	assert.Equal(t, 400, w.Code)
+	assert.JSONEq(t, `{"error":"bad_request"}`, w.Body.String())
+
+	w = httptest.NewRecorder()
+	r = httptest.NewRequest("POST", "/x", strings.NewReader(`{"nope":1}`))
+	assert.False(t, readJSON(w, r, &v))
+	assert.Equal(t, 400, w.Code)
+}
