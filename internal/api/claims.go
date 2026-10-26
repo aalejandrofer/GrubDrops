@@ -68,7 +68,7 @@ func queryInt(r *http.Request, key string, def int) (int, bool) {
 func claimQuery(v string) string {
 	v = strings.TrimSpace(v)
 	if r := []rune(v); len(r) > claimsMaxQuery {
-		v = string(r[:claimsMaxQuery])
+		v = strings.TrimSpace(string(r[:claimsMaxQuery]))
 	}
 	return v
 }

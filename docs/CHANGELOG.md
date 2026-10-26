@@ -6,6 +6,8 @@ All notable changes to GrubDrops.
 
 ### Added
 
+- **Up next on Rewards.** A read-only Up next section lists each account's queued drops (5 per account, with Show more), replacing the "more drops queued" line.
+- **Home game card queue.** A waiting game's card lists at most 3 queued drops and counts the rest.
 - **Rewards search.** A search box filters claim history by reward, campaign or game on the server, so it covers every claim, not just the loaded ones.
 - **Rewards pagination.** Previous / Next with page and range counts replace Load more; page size is 20, 50 or 100 and is kept per browser.
 - **Home shows at most 7 games.** Games that are mining or queued stay visible; a link to Games shows how many more are tracked.
@@ -40,6 +42,8 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- Home cards are large by display position, so a mining game shown first is large. The rank on the card is unchanged.
+- Rewards search skips the reload when the text is unchanged, uses 16px text on phones so iOS does not zoom, and trims spaces after the 100 character cut.
 - Twitch integrity tokens and raw responses no longer appear in logs. The integrity line records only the expiry and bad-bot flag, and gql and PubSub lines drop the response body (GRUB-20).
 - The health canary says when it skipped because no account was signed in and unpaused, and tells you to sign in or resume one. Run now shows progress and a result or timeout message.
 - Box art shows for newer games such as Marvel Rivals and Delta Force.

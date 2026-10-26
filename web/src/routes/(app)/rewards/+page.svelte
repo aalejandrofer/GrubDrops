@@ -8,9 +8,10 @@
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { claimStamp, etaShort, formatInt, relTime } from '$lib/format';
 	import { t, tn } from '$lib/i18n/index.svelte';
+	import { foldQueue, queues } from '$lib/upnext';
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
-	import { inProgress, pageCount, pageQuery, pageRange, PAGE_SIZES, queuedCount, readPageSize, validPageSize, writePageSize } from '$lib/rewards';
+	import { inProgress, pageCount, pageQuery, pageRange, PAGE_SIZES, readPageSize, validPageSize, writePageSize } from '$lib/rewards';
 
 	const live = getLive();
 
@@ -40,7 +41,10 @@
 	const pages = $derived(pageCount(total, size));
 	const range = $derived(pageRange(page, size, total));
 	const progress = $derived(inProgress(live.runners));
-	const queued = $derived(queuedCount(live.runners));
+	const qs = $derived(queues(live.runners));
+	const queuedTotal = $derived(qs.reduce((n, x) => n + x.items.length, 0));
+	// Accounts whose queue shows every row; not persisted.
+	let openQ = $state<Record<string, boolean>>({});
 	const kpi = $derived(live.overview?.kpis);
 	const head = $derived(
 		kpi ? t('rewards.head', { today: formatInt(kpi.claimed_today), total: formatInt(kpi.claimed_all_time) }) : undefined
@@ -94,6 +98,7 @@
 	function onSearch(): void {
 		clearTimeout(timer);
 		timer = setTimeout(() => {
+			if (search.trim() === q) return;
 			q = search.trim();
 			page = 1;
 			void load();
@@ -181,11 +186,46 @@
 						</div>
 					</div>
 				{/each}
-				{#if queued > 0}
-					<div class="more-q">
-						<span>{tn('rewards.queued', queued)}</span><a href="/" class="link">{t('rewards.see_up_next')}</a>
-					</div>
-				{/if}
+			</div>
+		</section>
+	{/if}
+
+	{#if queuedTotal > 0}
+		<section class="sec" aria-label={t('upnext.title')}>
+			<div class="sec-h">
+				<h2>
+					<svg viewBox="0 0 16 16" fill="none" stroke="var(--t2)" stroke-width="1.6" aria-hidden="true"
+						><circle cx="8" cy="8" r="6" /><path d="M8 4.8V8l2.2 1.4" stroke-linecap="round" stroke-linejoin="round" /></svg
+					>{t('upnext.title')} <span class="n">{queuedTotal}</span>
+				</h2>
+			</div>
+			<div class="panel">
+				{#each qs as q (q.accountId)}
+					{@const fold = foldQueue(q.items, openQ[q.accountId] === true)}
+					{#each fold.rows as item (item.benefit_id)}
+						<div class="qrow">
+							<span class="img"><BoxArt src={item.image_url || null} name={item.benefit_name} size="sm" /></span>
+							<div class="what">
+								<div class="t">{item.benefit_name}</div>
+								<div class="c">
+									<span>{item.game} · {item.campaign_name}</span>
+									<span class="acct"><PlatformMark platform={q.platform} size="sm" />{q.accountName}</span>
+								</div>
+							</div>
+							<span class="req">{t('home.queued_min', { n: formatInt(item.required_minutes) })}</span>
+						</div>
+					{/each}
+					{#if fold.more > 0}
+						<button
+							type="button"
+							class="more-q"
+							aria-expanded={openQ[q.accountId] === true}
+							onclick={() => (openQ[q.accountId] = !openQ[q.accountId])}
+						>
+							{openQ[q.accountId] ? t('home.upnext_less') : tn('home.upnext_more', fold.more)}
+						</button>
+					{/if}
+				{/each}
 			</div>
 		</section>
 	{/if}
@@ -386,17 +426,9 @@
 		cursor: default;
 	}
 	.btn:focus-visible,
-	.chip:focus-visible,
-	.link:focus-visible {
+	.chip:focus-visible {
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
-	}
-	.link {
-		color: var(--t2);
-		font-size: 12px;
-	}
-	.link:hover {
-		color: var(--accent);
 	}
 
 	.prog {
@@ -440,14 +472,51 @@
 		color: var(--t3);
 		font-weight: 400;
 	}
-	.more-q {
+	.qrow {
+		display: grid;
+		grid-template-columns: 32px minmax(0, 1fr) auto;
+		gap: 12px;
+		align-items: center;
+		padding: 10px 14px;
+	}
+	.qrow .t {
+		font-size: 13px;
+		font-weight: 500;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.qrow .c {
+		font-size: 12px;
+		color: var(--t2);
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		gap: 8px;
+		margin-top: 3px;
+		flex-wrap: wrap;
+	}
+	.qrow .req {
+		font: 12px var(--mono);
+		color: var(--t3);
+		white-space: nowrap;
+	}
+	.more-q {
+		display: block;
+		width: 100%;
 		padding: 8px 14px;
 		font-size: 12px;
 		color: var(--t2);
+		text-align: left;
 		background: var(--surface-2);
+		border: 0;
+		cursor: pointer;
+	}
+	.more-q:hover {
+		color: var(--text);
+	}
+	.more-q:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: -2px;
 	}
 
 	.filters {
@@ -619,6 +688,9 @@
 	}
 
 	@media (max-width: 720px) {
+		.search {
+			font-size: 16px;
+		}
 		.prog {
 			grid-template-columns: minmax(0, 1fr) auto;
 			grid-template-areas: 'what eta' 'bar bar';

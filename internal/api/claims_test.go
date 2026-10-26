@@ -132,4 +132,5 @@ func TestClaims_Query(t *testing.T) {
 	total, _ = get("q=" + url.QueryEscape(strings.Repeat("x", 500)))
 	require.Equal(t, 0, total)
 	require.Equal(t, strings.Repeat("é", 100), claimQuery(" "+strings.Repeat("é", 150)))
+	require.Equal(t, strings.Repeat("a", 99), claimQuery(strings.Repeat("a", 99)+" b"))
 }

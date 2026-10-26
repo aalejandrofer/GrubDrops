@@ -19,10 +19,6 @@ export function inProgress(r: Runner[]): InProgress[] {
 	return out.sort((a, b) => b.pct - a.pct);
 }
 
-export function queuedCount(r: Runner[]): number {
-	return r.reduce((n, x) => n + x.up_next.length, 0);
-}
-
 export function pageQuery(q: ClaimsQuery, page: number, size: number): ClaimsQuery {
 	return { ...q, limit: size, offset: (Math.max(1, page) - 1) * size };
 }

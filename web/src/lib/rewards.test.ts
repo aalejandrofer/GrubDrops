@@ -1,13 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Runner } from '$lib/api/types';
 import runnersMining from '$lib/fixtures/runners.mining.json';
-import { afterEach, vi } from 'vitest';
 import {
 	inProgress,
 	pageCount,
 	pageQuery,
 	pageRange,
-	queuedCount,
 	readPageSize,
 	validPageSize,
 	writePageSize
@@ -23,12 +21,6 @@ describe('inProgress', () => {
 	});
 	it('left minutes', () => {
 		expect(inProgress(R())[0].left).toBe(18);
-	});
-});
-
-describe('queuedCount', () => {
-	it('sums up_next', () => {
-		expect(queuedCount(R())).toBe(4);
 	});
 });
 
