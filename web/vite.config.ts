@@ -17,7 +17,10 @@ export default defineConfig({
 		})
 	],
 	resolve: {
-		alias: { $locales: fileURLToPath(new URL('../internal/i18n/locales', import.meta.url)) }
+		alias: {
+			$lib: fileURLToPath(new URL('./src/lib', import.meta.url)),
+			$locales: fileURLToPath(new URL('../internal/i18n/locales', import.meta.url))
+		}
 	},
 	server: {
 		proxy: devProxy(process.env.GRUB_DEV_API ?? 'http://localhost:8080'),
