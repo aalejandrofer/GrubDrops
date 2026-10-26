@@ -30,3 +30,13 @@ Decisions made while building v2 on `rebuild/v2` without check-ins. Each entry g
 - **Live accounts:** page checks use fixture data. The final walk also logs in Jandro's Kick account on the local miner from the cookies he supplied. The new version has no Twitch cookie login, so Twitch is tested through fixtures and the device-code screen only.
 - **v2's collection migration is `0017`, not `0016`.** The 1.x `feat/pipeline-v2` build already used version 16 on staging and prod, so goose skipped v2's tables. `0017` uses `IF NOT EXISTS`, so DBs that ran the old v2 `0016` upgrade cleanly.
 - **Accounts keep the 1.x `enabled` flag as Pause/Resume.** A disabled account shows "Paused" with "Resume mining". The upgrade never flips the flag, so staging does not start mining on sessions it shares with prod.
+
+## Plan 5: import, box art, health, logs
+
+- **The 1.x import runs once, on first v2 boot,** guarded by kv `v2.legacy_import_done`. It fills `chosen_games` only if empty: the global list by rank, then per-account games, unioned by best rank then name. Claims go to `claim_log` with source `1.x`. Total minutes per account land in `watch_minutes` under day `''`. Verified on a copy of the staging pre-v2 DB: 29 games, 821 claims, 4 minute rows. A second boot does not re-import.
+- **Box art uses the Twitch game ID** (`ttv-boxart/<id>-144x192.jpg`, migration 0018 `games.twitch_game_id`). Name URLs return a placeholder for some games (Marvel Rivals, Delta Force). Games without an ID fall back to the name URL until the first Twitch scan.
+- **A stable health event code was dropped.** No consumer, so YAGNI.
+- **The canary with no enabled session saves a skipped result and sends no notification.** A skip does not count as a previous result. The copy tells the user to sign in or resume an account.
+- **Run now decides "done" by a change in the server's `checked_at`** versus a snapshot taken before the click, never by comparing with the browser clock. It polls every 5 s and times out after 90 s of browser elapsed time.
+- **The Twitch client logs no integrity token and no raw gql or PubSub response bodies** (GRUB-20). Follow-up: the browser sidecar (`internal/auth/browser/sidecar/twitch.go`) still logs truncated gql bodies.
+- **Staging accounts were not resumed during testing,** because they may share sessions with prod. Box art by ID and the next-scan stamp were verified by unit tests only.

@@ -6,82 +6,58 @@ All notable changes to GrubDrops.
 
 ### Added
 
-- 1.x upgrade carries over chosen games (global list, then per-account games), claim history and total minutes watched.
-- v2 web app scaffold in web/ (SvelteKit static SPA), built into internal/web/dist by npm, the Docker image and CI (rebuild/v2).
-- v2 SPA serving: a "UI not built" page when the build is missing, no-cache index.html, immutable hashed assets, and 404 for missing assets (rebuild/v2).
-- v2 planner (`internal/plan`) and per-account runner + pool (`internal/runner`), replacing the watcher and scheduler.
-- v2 collection tables (migration 0017) and a one-time `<db>.pre-v2` backup written by `store.Open` before an existing database migrates.
-- v2 store wrappers for the claim log, drop states, watch minutes, account scans, chosen games and skips.
-- v2 planner: inventory progress overrides a stale claim log entry, and `plan.Result` lists claimed drops of chosen active campaigns.
-- v2 `collect` package: per-drop states and inventory-found claims derived from runner scans, and a per-game board that merges every account's latest scan.
-- v2 runner: `OnScan`, `OnProgress` and `OnBeat` hooks, the scan split out of pick, a plan rescan every 15 minutes while watching, and claim log writes that carry the whole target.
-- v2 runner: a campaign with no live stream moves on to the next queued campaign without rescanning, and swept rewards are recorded in the claim log under their planned game.
-- v2 `collect.Collector`: persists drop states, found claims, scan times and watch minutes from the runner hooks, and serves as the runner claim log.
-- v2 JSON API core: session, setup, login and CSRF under /api, 401 JSON for expired sessions, and the embedded SPA fallback (rebuild/v2).
-- v2 live updates over Server-Sent Events at /api/events (runner, claim, games, accounts, log).
-- v2 JSON API: overview KPIs and the runner list, with a session-only up-next order (`/api/overview`, `/api/runners`).
-- v2 JSON API: chosen games with local search and box art (`/api/games`).
-- v2 JSON API: filtered, paged claim history (`/api/claims`).
-- v2 JSON API: accounts with rename and delete, Twitch TV device-code login, and Kick login from a cookies.txt export (`/api/accounts`).
-- v2 JSON API: settings with notification toggles, and an optional daily Discord summary at midnight in the configured timezone (`/api/settings`).
-- v2 JSON API: health events and log download, canary run-now, update check with release notes, and the Kick image proxy.
-- v2 roster builder (`cmd/miner`): builds the per-account runners wired to the collector and the SSE hub, with claim events and per-account reload.
-- v2 shared locales: the SvelteKit app reads internal/i18n/locales, 1.x-only keys are gone, and npm run check fails on missing, unused or mismatched keys.
-- v2 web data layer: typed API client with CSRF, 401 and offline handling, and one SSE store that upserts runners and claims and refetches on reconnect.
-- v2 web shell: top bar, status header with problem and offline chips, version popover, login with SSO and first-run setup.
-- v2 Home: KPIs, ranked game cards with per-account progress, Up next, recent claims, and first-run, nothing-live, offline and many-account states.
-- v2 Up next: one queue per account, reorder by button or drag for this session, Reset to Games order.
-- v2 Games page: search or type a game to add it, reorder priority by button or drag, remove with confirm.
-- v2 Rewards page: drops in progress with time left, claim history filtered by game or account, 10 at a time.
-- v2 Settings: language, time format, theme and timezone, Discord and notification toggles, update check and command, sign out.
-- v2 Settings accounts: add Twitch with a device code or Kick with cookies.txt, log in again, rename and remove.
-- v2 Settings health: miner, sidecar, scan and canary status, filtered live event log in your language, full log download.
-- v2 docs: README, translations, DESIGN.md, site and AGENTS.md describe the SvelteKit UI, chosen games and the new login flows.
-- v2 UI verified end to end in a browser; README screenshots show the new pages.
-- v2 pause and resume mining per account: `PUT /api/accounts/{id}/enabled`, a Paused status on Settings → Accounts, and a Home notice when every account is paused. Accounts paused in 1.x stay paused and can now be resumed.
+- **New web app.** A SvelteKit single-page app in `web/` is built by npm, the Docker image and CI, and embedded in the binary. A "UI not built" page shows when the build is missing; `index.html` is never cached and hashed assets are immutable.
+- **Home** with KPIs, ranked game cards with per-account progress, Up next, recent claims, and first-run, nothing-live, offline and many-account states.
+- **Up next** has one queue per account. Reorder by button or drag for this session, or Reset to Games order.
+- **Games** page: search or type a game to add it, reorder priority by button or drag, remove with confirm. Search runs locally and shows box art.
+- **Rewards** page: drops in progress with time left, and claim history filtered by game or account, 10 at a time.
+- **Settings:** language, time format, theme and timezone, Discord and notification toggles, update check and command, sign out. Accounts: add Twitch with a device code or Kick with cookies.txt, log in again, rename and remove. Health: miner, sidecar, scan and canary status, a filtered live event log in your language, and a full log download.
+- **Pause and resume mining per account** (`PUT /api/accounts/{id}/enabled`), with a Paused status in Settings and a Home notice when every account is paused. Accounts paused in 1.x stay paused and can now be resumed.
+- **Planner and runner.** `internal/plan` and `internal/runner` replace the watcher and scheduler: one runner per account, a global chosen-games list, inventory progress that overrides a stale claim log entry, a plan rescan every 15 minutes while watching, and claimed drops of chosen active campaigns in the plan result.
+- **Collection store.** Migration 0017 adds claim log, drop state, watch minute, account scan, chosen game and skip tables, with the `collect` package filling them from runner scans, progress and claims. A one-time `<db>.pre-v2` backup is written before an existing database migrates.
+- **1.x upgrade** carries over chosen games (global list, then per-account games), claim history and total minutes watched.
+- **JSON API and live updates.** Session, setup, login and CSRF under `/api`; overview, runners, games, claims, accounts, settings, health, update check and the Kick image proxy; Server-Sent Events at `/api/events` for runner, claim, games, accounts and log.
+- **Daily Discord summary** at midnight in the configured timezone.
+- **Shared locales.** The web app reads `internal/i18n/locales`, and `npm run check` fails on missing, unused or mismatched keys.
 
 ### Changed
 
-- v2 pool restarts a panicked runner from its builder after one minute.
-- The miner runs the v2 planner, runner and collector, and serves the JSON API; the web UI is a placeholder until the SvelteKit app lands (rebuild/v2).
-- `GET /api/events` streams every ring log line as a `log` event, and open streams end when the miner shuts down instead of holding shutdown for 5 s.
-- Adding or reordering chosen games returns at once. The runners reload in the background, one reload at a time with repeated changes folded together, and a `games` event fires when the reload finishes.
+- The miner runs the v2 planner, runner and collector and serves the JSON API and the embedded SPA.
+- The pool restarts a panicked runner from its builder after one minute.
+- `GET /api/events` streams every ring log line as a `log` event, and open streams end at shutdown instead of holding it for 5 s.
+- Adding or reordering chosen games returns at once. Runners reload in the background, one reload at a time with repeated changes folded together, and a `games` event fires when the reload finishes.
+- A campaign with no live stream moves on to the next queued campaign without rescanning, and every pick retries campaigns that had no live stream earlier.
+- Swept rewards are recorded in the claim log under their planned game.
+- README, translations, DESIGN.md, the site and AGENTS.md describe the SvelteKit UI, chosen games, the planner, the runner and the new login flows. A source build says to build the UI before `go build`.
 
 ### Fixed
 
-- Twitch integrity tokens and raw responses no longer appear in logs. The integrity log line records only the expiry and bad-bot flag, and gql and PubSub log lines drop the response body (GRUB-20).
+- Twitch integrity tokens and raw responses no longer appear in logs. The integrity line records only the expiry and bad-bot flag, and gql and PubSub lines drop the response body (GRUB-20).
 - The health canary says when it skipped for lack of a signed-in account, and Run now shows progress and a result or timeout message.
-- Home shows a message when the miner is unreachable on first load.
-- Paused signed-out accounts offer "Log in again" next to Resume, and Home counts only signed-out accounts when deciding all are signed out.
-- Scan stamp shows when the next scan runs.
-- Paused accounts that are signed out now show as needing login. The overview and games APIs also report the next scan time (`next_scan_at`).
 - Box art shows for newer games such as Marvel Rivals and Delta Force.
-- v2 Home lists a runner on its game card when the game matched by slug, not only by name.
-- v2 header no longer shows a needs-login chip for the account whose login is open in Settings.
-- v2 dates and clocks render in UTC when the saved timezone is one the browser rejects, such as "Local", instead of failing.
-- v2 version popover links the release notes only over https, like Settings → Updates.
-- v2 Games search no longer highlights the wrong letters in names that change length when lowercased.
-- v2 first-run setup says a game is already added, with its priority, instead of a generic failure.
-- v2 `POST /api/games` returned 500 for games a migration seeded under another id (Apex Legends, Marvel Rivals); it now reuses the existing row by slug (rebuild/v2).
-- v2 store: the pre-v2 backup is written to a `.tmp` file and renamed, so a failed or interrupted backup is retried on the next boot instead of leaving a partial `.pre-v2`.
-- v2 runner: a swept reward is recorded only when its title resolves to one drop, looking in the current campaign, then the current game, then the rest of the plan. An ambiguous title records nothing, so it cannot hide another drop.
-- v2 runner: a reward code is stored against the drop just claimed, within 10 minutes, and never against the next drop the runner moved on to. Each claim takes one code.
-- v2 runner: every pick retries campaigns that had no live stream earlier, so the top game mines first again after another drop is claimed.
-- v2 miner: progress notifications fire again (start, 50% and 100%) when turned on in Settings.
-- v2 miner: `log` SSE events take the account name from memory, so logging never waits on the database.
-- v2 miner: shutdown waits for the background loops before closing the Twitch backends and the database, including after an HTTP listen failure.
-- v2 JSON API: Kick avatars on runners, the overview and SSE `runner` events go through the Kick image proxy, so they load in the browser.
-- v2 JSON API: every time field is an RFC 3339 UTC string, and an unset time is `null` instead of `0001-01-01T00:00:00Z` (games, health, update).
-- v2 Home first run: the setup lead reads "Three steps." without the dropped filler line.
-- v2 Settings accounts: a Twitch device status the UI does not know ends the flow with the error line instead of a blank panel; the `device.json` fixture carries `status: pending`.
-- v2 Settings: no empty bordered strip under Accounts when there are no accounts, and the Health "Last scan" dot stays grey until a scan has run.
-- v2 top bar: with an update available the version reads `{current} → {latest} available` as in r4, shortened to the latest version under 720 px.
-- v2 Games: search suggestions highlight the typed match as in r4.
-- v2 store: the collection migration is now 0017 and safe to re-run. Databases at version 16 from the 1.x pipeline-v2 build skipped it, so Games search and Home failed on missing tables.
-- v2 UI: release notes with two equal lines, or a Twitch and a Kick campaign with the same id, no longer crash the page on a duplicate list key.
-- v2 SSO: a failed OIDC sign-in redirects to `/login?login_error=oidc`, so the login page shows the SSO error instead of a plain form.
-- v2 Home is never blank: a failed load shows "Couldn't load Home." with Retry, no chosen games shows "No games chosen." with a link to Games, and all accounts signed out says so with a link to Settings → Accounts.
-- v2 Settings: the Discord webhook field is no longer a password input, so browsers stop autofilling the admin password into it and sending it on load. The webhook saves only on Save or Enter, and a URL that is not a Discord webhook shows an inline message instead of being sent. Language and timezone save only on a real change.
+- The overview and games APIs report the next scan time (`next_scan_at`), and the scan stamp shows it.
+- Paused signed-out accounts show as needing login and offer "Log in again" next to Resume. Home counts only signed-out accounts when deciding all are signed out, and the header chip skips the account whose login is open in Settings.
+- Home is never blank: an unreachable miner, a failed load, no chosen games and all accounts signed out each show a message with a way forward.
+- Home lists a runner on its game card when the game matched by slug, not only by name.
+- Dates and clocks render in UTC when the saved timezone is one the browser rejects, such as "Local".
+- The version popover links release notes only over https, and shows `{current} → {latest} available` when an update exists.
+- Games search highlights the right letters in names that change length when lowercased, and suggestions highlight the typed match.
+- First-run setup says a game is already added, with its priority, instead of a generic failure.
+- `POST /api/games` returned 500 for games a migration seeded under another id (Apex Legends, Marvel Rivals); it now reuses the existing row by slug.
+- The pre-v2 backup is written to a `.tmp` file and renamed, so an interrupted backup is retried on the next boot.
+- The collection migration is 0017 and safe to re-run. Databases at version 16 from the 1.x pipeline-v2 build skipped it, so Games search and Home failed on missing tables.
+- A swept reward is recorded only when its title resolves to one drop, looking in the current campaign, then the current game, then the rest of the plan. An ambiguous title records nothing.
+- A reward code is stored against the drop just claimed, within 10 minutes, never against the next drop. Each claim takes one code.
+- Progress notifications fire again (start, 50% and 100%) when turned on in Settings.
+- `log` events take the account name from memory, so logging never waits on the database.
+- Shutdown waits for background loops before closing the Twitch backends and the database, including after an HTTP listen failure.
+- Kick avatars on runners, the overview and `runner` events go through the Kick image proxy, so they load in the browser.
+- Every API time field is an RFC 3339 UTC string, and an unset time is `null` instead of `0001-01-01T00:00:00Z`.
+- Release notes with two equal lines, or a Twitch and a Kick campaign with the same id, no longer crash the page on a duplicate list key.
+- A failed OIDC sign-in redirects to `/login?login_error=oidc`, so the login page shows the SSO error.
+- A Twitch device status the UI does not know ends the flow with the error line instead of a blank panel.
+- Settings shows no empty strip under Accounts when there are none, and the Health "Last scan" dot stays grey until a scan has run.
+- The Discord webhook field is no longer a password input, so browsers stop autofilling the admin password into it. It saves only on Save or Enter, a URL that is not a Discord webhook shows an inline message, and language and timezone save only on a real change.
 
 ### Removed
 
@@ -89,12 +65,6 @@ All notable changes to GrubDrops.
 - The `GRUB_DISCOVERY_INTERVAL` env var, which only drove the removed catalog scraper.
 - Settings with no v2 reader: tick interval, discovery interval, progress notify step, priority mode, log level and log retention. Their stored values are ignored.
 - Per-account Discord webhooks; every notification goes to the global webhook.
-
-### Docs
-
-- v2 README: a source build says to build the UI before `go build`, since a binary without it serves only the "UI not built" page; the Home row lists recent claims.
-- Added a warning that GrubDrops is currently not working as expected.
-- README describes the v2 global chosen-games list, the planner and the runner.
 
 ## [1.4.2] — 2026-09-28
 
