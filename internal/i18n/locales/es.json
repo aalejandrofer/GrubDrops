@@ -271,6 +271,8 @@
   "accounts.remove_yes": "Eliminar",
   "accounts.cancel": "Cancelar",
   "accounts.rename_label": "Renombrar {name}",
+  "accounts.rename": "Renombrar",
+  "accounts.rename_too_long": "Máximo 40 caracteres.",
   "accounts.rename_failed": "No se pudo renombrar.",
   "accounts.remove_failed": "No se pudo eliminar.",
   "accounts.add_failed": "No se pudo añadir la cuenta.",

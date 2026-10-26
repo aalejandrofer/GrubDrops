@@ -33,3 +33,6 @@ UPDATE accounts SET webhook_url = ?, updated_at = ? WHERE id = ?;
 
 -- name: UpdateAccountAvatar :exec
 UPDATE accounts SET avatar_url = ?, updated_at = ? WHERE id = ?;
+
+-- name: UpdateAccountCustomName :exec
+UPDATE accounts SET custom_name = ?, updated_at = ? WHERE id = ?;

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
@@ -115,7 +116,7 @@ func (c *Checker) CheckAll(ctx context.Context) {
 		return
 	}
 	for _, a := range accs {
-		c.checkOne(ctx, a.ID, a.Platform, a.DisplayName)
+		c.checkOne(ctx, a.ID, a.Platform, store.AccountName(a))
 	}
 }
 

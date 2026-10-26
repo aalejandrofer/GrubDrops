@@ -13,6 +13,7 @@ import (
 
 	"github.com/aalejandrofer/grubdrops/internal/canary"
 	mlog "github.com/aalejandrofer/grubdrops/internal/log"
+	"github.com/aalejandrofer/grubdrops/internal/store"
 )
 
 // maxHealthEvents caps the events returned after the filter.
@@ -115,7 +116,7 @@ func (s *server) getHealth(w http.ResponseWriter, r *http.Request) {
 	names := map[string]string{}
 	if accts, err := s.d.Q.ListAllAccounts(ctx); err == nil {
 		for _, a := range accts {
-			names[a.ID] = a.DisplayName
+			names[a.ID] = store.AccountName(a)
 		}
 	}
 

@@ -80,7 +80,7 @@ func (n *accountNames) remove(id string) {
 func (n *accountNames) replace(accts []gen.Account) {
 	m := make(map[string]string, len(accts))
 	for _, a := range accts {
-		m[a.ID] = a.DisplayName
+		m[a.ID] = store.AccountName(a)
 	}
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -117,7 +117,7 @@ func (ro *roster) publishClaim(ctx context.Context, accountID, benefitID string)
 	}
 	var name string
 	if a, err := ro.q.GetAccount(ctx, accountID); err == nil {
-		name = a.DisplayName
+		name = store.AccountName(a)
 	}
 	ro.hub.Publish(api.Event{Name: api.EventClaim, Data: api.ClaimJSON(e, name)})
 }
@@ -204,7 +204,7 @@ const progressNotifyStepPct = 50
 func (ro *roster) runnerConfig(ctx context.Context, a gen.Account, b platform.Backend, sess platform.Session, games []plan.Game) runner.Config {
 	order := ro.pool.OrderFunc(a.ID)
 	return runner.Config{
-		AccountID: a.ID, AccountLabel: a.DisplayName, Platform: a.Platform,
+		AccountID: a.ID, AccountLabel: store.AccountName(a), Platform: a.Platform,
 		Backend: b, Session: sess,
 		Games:       games,
 		ForceLinked: linkOverrideSet(ctx, ro.q),
@@ -279,7 +279,7 @@ func (ro *roster) reloadAccount(id string) {
 		ro.log().Error("reload account: read row failed", "kind", "error", "account", id, "err", err)
 		return
 	}
-	ro.names.set(a.ID, a.DisplayName)
+	ro.names.set(a.ID, store.AccountName(a))
 	ro.pool.ReloadAccount(id, ro.builder(a))
 }
 

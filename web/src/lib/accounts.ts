@@ -184,6 +184,19 @@ export function accountLine(
 	return r ? t(STATE_KEYS[r.state]) : t('accounts.state.idle');
 }
 
+/** Longest custom account name, in characters. The API rejects longer. */
+export const NAME_MAX = 40;
+
+export type RenameRequest = { kind: 'send'; name: string } | { kind: 'skip' } | { kind: 'too_long' };
+
+/** What saving the rename input does. An empty name resets to the platform name. */
+export function renameRequest(a: Pick<Account, 'name' | 'platform_name'>, input: string): RenameRequest {
+	const name = input.trim();
+	if ([...name].length > NAME_MAX) return { kind: 'too_long' };
+	if (name === a.name || (name === '' && a.name === a.platform_name)) return { kind: 'skip' };
+	return { kind: 'send', name };
+}
+
 export function initials(name: string): string {
 	const parts = name.split(/[\s_\-.]+/).filter(Boolean);
 	const s = parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0, 2);

@@ -4,7 +4,7 @@ import type { Account, DeviceStatus, Runner } from '$lib/api/types';
 import accountsFx from '$lib/fixtures/accounts.json';
 import runnersMining from '$lib/fixtures/runners.mining.json';
 import { prefs } from '$lib/prefs.svelte';
-import { MAX_POLL_FAILS, POLL_MS, accountLine, accountStatus, createDeviceFlow, rowActions } from './accounts';
+import { MAX_POLL_FAILS, POLL_MS, accountLine, accountStatus, createDeviceFlow, renameRequest, rowActions } from './accounts';
 
 const ACC = (id: string) => structuredClone(accountsFx.find((a) => a.id === id)) as Account;
 const RUN = (id: string) => structuredClone(runnersMining.find((r) => r.account_id === id)) as Runner;
@@ -250,5 +250,25 @@ describe('rowActions', () => {
 	});
 	it('healthy offers nothing', () => {
 		expect(rowActions(acct({}), undefined)).toEqual([]);
+	});
+});
+
+describe('renameRequest', () => {
+	const a = { name: 'Main', platform_name: 'Phluses' };
+	it('sends the trimmed name', () => {
+		expect(renameRequest(a, '  Alt ')).toEqual({ kind: 'send', name: 'Alt' });
+	});
+	it('skips an unchanged name', () => {
+		expect(renameRequest(a, ' Main ')).toEqual({ kind: 'skip' });
+	});
+	it('sends empty to reset to the platform name', () => {
+		expect(renameRequest(a, '   ')).toEqual({ kind: 'send', name: '' });
+	});
+	it('skips a reset when no custom name is set', () => {
+		expect(renameRequest({ name: 'Phluses', platform_name: 'Phluses' }, '')).toEqual({ kind: 'skip' });
+	});
+	it('rejects more than 40 characters', () => {
+		expect(renameRequest(a, 'x'.repeat(41))).toEqual({ kind: 'too_long' });
+		expect(renameRequest(a, 'é'.repeat(40))).toEqual({ kind: 'send', name: 'é'.repeat(40) });
 	});
 });
