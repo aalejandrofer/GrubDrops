@@ -64,6 +64,7 @@ All notable changes to GrubDrops.
 - v2 Games: search suggestions highlight the typed match as in r4.
 - v2 store: the collection migration is now 0017 and safe to re-run. Databases at version 16 from the 1.x pipeline-v2 build skipped it, so Games search and Home failed on missing tables.
 - v2 UI: release notes with two equal lines, or a Twitch and a Kick campaign with the same id, no longer crash the page on a duplicate list key.
+- v2 SSO: a failed OIDC sign-in redirects to `/login?login_error=oidc`, so the login page shows the SSO error instead of a plain form.
 
 ### Removed
 

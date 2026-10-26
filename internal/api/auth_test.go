@@ -161,7 +161,7 @@ func TestOIDC_CallbackStateMismatch(t *testing.T) {
 	require.NoError(t, err)
 	resp.Body.Close()
 	assert.Equal(t, http.StatusSeeOther, resp.StatusCode)
-	assert.Equal(t, "/?login_error=oidc", resp.Header.Get("Location"))
+	assert.Equal(t, "/login?login_error=oidc", resp.Header.Get("Location"))
 }
 
 func TestSetup_AdminLookupErrorFailsClosed(t *testing.T) {

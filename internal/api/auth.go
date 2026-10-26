@@ -273,7 +273,7 @@ func (s *server) routesOIDC(r chi.Router) {
 		})
 		fail := func(reason string, err error) {
 			slog.Warn("oidc callback failed", "reason", reason, "err", err)
-			http.Redirect(w, r, "/?login_error=oidc", http.StatusSeeOther)
+			http.Redirect(w, r, "/login?login_error=oidc", http.StatusSeeOther)
 		}
 		cookie, err := r.Cookie(oidcStateCookie)
 		queryState := r.URL.Query().Get("state")

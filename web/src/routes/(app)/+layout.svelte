@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { onDestroy, setContext } from 'svelte';
 	import { api, session } from '$lib/app';
-		import type { UpdateInfo } from '$lib/api/types';
+	import type { UpdateInfo } from '$lib/api/types';
 	import TopBar from '$lib/components/TopBar.svelte';
 	import { LIVE_KEY, NET_KEY } from '$lib/live-context';
 	import { retryUnreachable } from '$lib/retry';
