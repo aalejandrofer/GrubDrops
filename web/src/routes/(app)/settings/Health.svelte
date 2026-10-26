@@ -125,7 +125,7 @@
 		<div class="panel stats">
 			<div><small class="ok">{t('health.miner')}</small><b>{minerLine}</b></div>
 			<div><small class={sidecars > 0 ? 'ok' : ''}>{t('health.sidecar')}</small><b>{tn('health.sidecars', sidecars)}</b></div>
-			<div><small class="ok">{t('health.last_scan')}</small><b>{relTime(h.last_scan_at, now)}</b></div>
+			<div><small class={h.last_scan_at ? 'ok' : ''}>{t('health.last_scan')}</small><b>{relTime(h.last_scan_at, now)}</b></div>
 		</div>
 		<div class="panel canary">
 			<div class="row">

@@ -304,7 +304,7 @@
 		</div>
 	</div>
 	{#if addError}<p class="bad top" role="alert">{addError}</p>{/if}
-	<div class="panel" id="acct-list">
+	<div class="panel" id="acct-list" class:none={!panel?.isNew && live.accounts.filter(shown).length === 0}>
 		{#if panel?.isNew}{@render flowPanel()}{/if}
 		{#each live.accounts.filter(shown) as a (a.id)}
 			{@const r = runnerOf(a.id)}
@@ -375,6 +375,9 @@
 </section>
 
 <style>
+	.panel.none {
+		display: none;
+	}
 	.top {
 		margin: 0 0 10px;
 		font-size: 12.5px;
