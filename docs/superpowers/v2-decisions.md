@@ -40,3 +40,14 @@ Decisions made while building v2 on `rebuild/v2` without check-ins. Each entry g
 - **Run now decides "done" by a change in the server's `checked_at`** versus a snapshot taken before the click, never by comparing with the browser clock. It polls every 5 s and times out after 90 s of browser elapsed time.
 - **The Twitch client logs no integrity token and no raw gql or PubSub response bodies** (GRUB-20). Follow-up: the browser sidecar (`internal/auth/browser/sidecar/twitch.go`) still logs truncated gql bodies.
 - **Staging accounts were not resumed during testing,** because they may share sessions with prod. Box art by ID and the next-scan stamp were verified by unit tests only.
+
+## Post-plan UI feedback (2026-10-26)
+
+- **Home shows at most 7 game cards.** Active games (mining or waiting, with queued drops) come first, so a lower-priority game that is mining is never hidden. Games with no campaign follow, in priority order. Under the cards, "N more games tracked" links to Games.
+- **Games has a Cards / List toggle.** The list view shows only the rank, a grip, the up and down buttons, and the name, so 30 games fit on about one screen. The choice is saved per browser in `grub.games.view`.
+- **Rewards search runs on the server** (`q` on `GET /api/claims`), matching reward, campaign or game. sqlc rejects `LIKE ... ESCAPE`, so the query uses `like(pattern, col, '!')` and Go escapes the pattern. The 20/50/100 pager replaces "Load more". Page size is saved per browser in `grub.rewards.page_size`.
+- **Up next shows 5 items per account,** and each account expands on its own.
+- **The Health event list shows 10 rows and expands.** DEBUG lines are left out of the UI feed and its counts, but the full-log download keeps them.
+- **The idle recheck is 12 h,** at Jandro's request. "Nothing live" means few scans, and a campaign that starts while idle can wait up to 12 h. The rebuild while watching stays at 15 min, and the Twitch beacon tick is unchanged.
+- **The canary re-runs when an account is resumed or signs in** while the stored result is "skipped". Otherwise Health kept saying "Skipped" for up to the 6 h canary interval.
+- **The "Failing:" canary with an empty detail** came from a browser tab that still ran an older SPA bundle. The API returned `skipped: true`, and a fresh load shows "Skipped". There was no server fault.
