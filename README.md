@@ -26,11 +26,11 @@ Twitch no longer lists campaigns for new logins, so GrubDrops only mines the gam
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/console.png" width="900" alt="GrubDrops Home page: what each account is mining across Twitch and Kick, with the up-next queue and recent events">
+  <img src="docs/screenshots/home.png" width="900" alt="GrubDrops Home page: what each account is mining across Twitch and Kick, with the up-next queue and recent claims">
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/drops-whitelist.png" width="900" alt="GrubDrops Games page: chosen games in a drag-to-reorder priority list, with search to add more">
+  <img src="docs/screenshots/games.png" width="900" alt="GrubDrops Games page: chosen games in a priority list you reorder, with search to add more">
 </p>
 
 ---

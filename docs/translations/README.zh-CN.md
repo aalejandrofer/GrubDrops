@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <img src="../screenshots/console.png" width="900" alt="GrubDrops Home page: what each account is mining across Twitch and Kick, with the up-next queue and recent events">
+  <img src="../screenshots/home.png" width="900" alt="GrubDrops Home page: what each account is mining across Twitch and Kick, with the up-next queue and recent claims">
 </p>
 
 ---
