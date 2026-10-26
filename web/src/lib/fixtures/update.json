@@ -1,0 +1,13 @@
+{
+	"current": "v2.0.0",
+	"latest": "v2.1.0",
+	"update_available": true,
+	"checked_at": "2026-10-25T11:00:00Z",
+	"notes": [
+		"Added a drops inventory page.",
+		"Fixed Kick reconnects."
+	],
+	"notes_url": "https://github.com/aalejandrofer/grubdrops/releases/tag/v2.1.0",
+	"command": "docker compose pull && docker compose up -d",
+	"auto": true
+}

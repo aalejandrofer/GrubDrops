@@ -1,0 +1,122 @@
+[
+	{
+		"account_id": "acc-hjune",
+		"account_name": "hJune",
+		"platform": "twitch",
+		"avatar_url": "",
+		"state": "watching",
+		"current": {
+			"game": "Rust",
+			"platform": "twitch",
+			"campaign_id": "camp-rust",
+			"campaign_name": "Rust Drops",
+			"benefit_id": "ben-rust-1",
+			"benefit_name": "Rust Reward 1",
+			"image_url": "",
+			"required_minutes": 60,
+			"minutes": 42,
+			"ends_at": "2026-11-02T18:00:00Z"
+		},
+		"channel": "seed_streamer",
+		"viewer_count": 1280,
+		"minutes": 42,
+		"started_at": "2026-10-25T11:00:00Z",
+		"last_scan_at": "2026-10-25T11:58:00Z",
+		"up_next": [
+			{
+				"game": "Rust",
+				"platform": "twitch",
+				"campaign_id": "camp-rust",
+				"campaign_name": "Rust Drops",
+				"benefit_id": "ben-rust-2",
+				"benefit_name": "Rust Reward 2",
+				"image_url": "",
+				"required_minutes": 120,
+				"minutes": 0,
+				"ends_at": "2026-11-02T18:00:00Z"
+			},
+			{
+				"game": "Marvel Rivals",
+				"platform": "twitch",
+				"campaign_id": "camp-marvel-rivals",
+				"campaign_name": "Marvel Rivals Drops",
+				"benefit_id": "ben-marvel-rivals-1",
+				"benefit_name": "Marvel Rivals Reward 1",
+				"image_url": "",
+				"required_minutes": 60,
+				"minutes": 0,
+				"ends_at": "2026-11-02T18:00:00Z"
+			}
+		],
+		"blocked": [],
+		"order_custom": false
+	},
+	{
+		"account_id": "acc-alt",
+		"account_name": "grub_alt",
+		"platform": "twitch",
+		"avatar_url": "",
+		"state": "watching",
+		"current": {
+			"game": "Rust",
+			"platform": "twitch",
+			"campaign_id": "camp-rust",
+			"campaign_name": "Rust Drops",
+			"benefit_id": "ben-rust-1",
+			"benefit_name": "Rust Reward 1",
+			"image_url": "",
+			"required_minutes": 60,
+			"minutes": 18,
+			"ends_at": "2026-11-02T18:00:00Z"
+		},
+		"channel": "seed_streamer",
+		"viewer_count": 1280,
+		"minutes": 18,
+		"started_at": "2026-10-25T11:00:00Z",
+		"last_scan_at": "2026-10-25T11:58:00Z",
+		"up_next": [
+			{
+				"game": "Rust",
+				"platform": "twitch",
+				"campaign_id": "camp-rust",
+				"campaign_name": "Rust Drops",
+				"benefit_id": "ben-rust-2",
+				"benefit_name": "Rust Reward 2",
+				"image_url": "",
+				"required_minutes": 120,
+				"minutes": 0,
+				"ends_at": "2026-11-02T18:00:00Z"
+			},
+			{
+				"game": "Apex Legends",
+				"platform": "twitch",
+				"campaign_id": "camp-apex-legends",
+				"campaign_name": "Apex Legends Drops",
+				"benefit_id": "ben-apex-legends-1",
+				"benefit_name": "Apex Legends Reward 1",
+				"image_url": "",
+				"required_minutes": 90,
+				"minutes": 0,
+				"ends_at": "2026-11-02T18:00:00Z"
+			}
+		],
+		"blocked": [],
+		"order_custom": false
+	},
+	{
+		"account_id": "acc-kick",
+		"account_name": "kick_main",
+		"platform": "kick",
+		"avatar_url": "",
+		"state": "needs_login",
+		"current": null,
+		"channel": "",
+		"viewer_count": 0,
+		"minutes": 0,
+		"started_at": null,
+		"last_scan_at": null,
+		"up_next": [],
+		"blocked": [],
+		"order_custom": false
+	}
+]

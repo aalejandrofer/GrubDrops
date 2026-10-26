@@ -1,0 +1,155 @@
+{
+	"total": 27,
+	"items": [
+		{
+			"account_id": "acc-hjune",
+			"account_name": "hJune",
+			"platform": "twitch",
+			"game": "Rust",
+			"campaign_name": "Rust Drops",
+			"benefit_id": "ben-0",
+			"benefit_name": "Rust Reward 1",
+			"image_url": "",
+			"code": "SEED-CODE-1000",
+			"source": "reconcile",
+			"claimed_at": "2026-10-25T09:30:00Z"
+		},
+		{
+			"account_id": "acc-alt",
+			"account_name": "grub_alt",
+			"platform": "twitch",
+			"game": "Marvel Rivals",
+			"campaign_name": "Marvel Rivals Drops",
+			"benefit_id": "ben-1",
+			"benefit_name": "Marvel Rivals Reward 2",
+			"image_url": "",
+			"code": "",
+			"source": "runner",
+			"claimed_at": "2026-10-25T08:10:00Z"
+		},
+		{
+			"account_id": "acc-kick",
+			"account_name": "kick_main",
+			"platform": "kick",
+			"game": "Apex Legends",
+			"campaign_name": "Apex Legends Drops",
+			"benefit_id": "ben-2",
+			"benefit_name": "Apex Legends Reward 3",
+			"image_url": "",
+			"code": "",
+			"source": "reconcile",
+			"claimed_at": "2026-10-25T01:05:00Z"
+		},
+		{
+			"account_id": "acc-hjune",
+			"account_name": "hJune",
+			"platform": "twitch",
+			"game": "Delta Force",
+			"campaign_name": "Delta Force Drops",
+			"benefit_id": "ben-3",
+			"benefit_name": "Delta Force Reward 4",
+			"image_url": "",
+			"code": "",
+			"source": "runner",
+			"claimed_at": "2026-10-24T20:45:00Z"
+		},
+		{
+			"account_id": "acc-alt",
+			"account_name": "grub_alt",
+			"platform": "twitch",
+			"game": "Rust",
+			"campaign_name": "Rust Drops",
+			"benefit_id": "ben-4",
+			"benefit_name": "Rust Reward 5",
+			"image_url": "",
+			"code": "",
+			"source": "reconcile",
+			"claimed_at": "2026-10-24T14:00:00Z"
+		},
+		{
+			"account_id": "acc-kick",
+			"account_name": "kick_main",
+			"platform": "kick",
+			"game": "Marvel Rivals",
+			"campaign_name": "Marvel Rivals Drops",
+			"benefit_id": "ben-5",
+			"benefit_name": "Marvel Rivals Reward 6",
+			"image_url": "",
+			"code": "SEED-CODE-1005",
+			"source": "runner",
+			"claimed_at": "2026-10-22T19:20:00Z"
+		},
+		{
+			"account_id": "acc-hjune",
+			"account_name": "hJune",
+			"platform": "twitch",
+			"game": "Apex Legends",
+			"campaign_name": "Apex Legends Drops",
+			"benefit_id": "ben-6",
+			"benefit_name": "Apex Legends Reward 7",
+			"image_url": "",
+			"code": "",
+			"source": "reconcile",
+			"claimed_at": "2026-10-20T10:00:00Z"
+		},
+		{
+			"account_id": "acc-alt",
+			"account_name": "grub_alt",
+			"platform": "twitch",
+			"game": "Delta Force",
+			"campaign_name": "Delta Force Drops",
+			"benefit_id": "ben-7",
+			"benefit_name": "Delta Force Reward 8",
+			"image_url": "",
+			"code": "",
+			"source": "runner",
+			"claimed_at": "2026-10-18T22:15:00Z"
+		},
+		{
+			"account_id": "acc-kick",
+			"account_name": "kick_main",
+			"platform": "kick",
+			"game": "Rust",
+			"campaign_name": "Rust Drops",
+			"benefit_id": "ben-8",
+			"benefit_name": "Rust Reward 9",
+			"image_url": "",
+			"code": "",
+			"source": "reconcile",
+			"claimed_at": "2026-10-15T12:30:00Z"
+		},
+		{
+			"account_id": "acc-hjune",
+			"account_name": "hJune",
+			"platform": "twitch",
+			"game": "Marvel Rivals",
+			"campaign_name": "Marvel Rivals Drops",
+			"benefit_id": "ben-9",
+			"benefit_name": "Marvel Rivals Reward 10",
+			"image_url": "",
+			"code": "",
+			"source": "runner",
+			"claimed_at": "2026-10-10T08:00:00Z"
+		}
+	],
+	"games": [
+		"Rust",
+		"Marvel Rivals",
+		"Apex Legends",
+		"Delta Force"
+	],
+	"accounts": [
+		{
+			"id": "acc-hjune",
+			"name": "hJune"
+		},
+		{
+			"id": "acc-alt",
+			"name": "grub_alt"
+		},
+		{
+			"id": "acc-kick",
+			"name": "kick_main"
+		}
+	]
+}
