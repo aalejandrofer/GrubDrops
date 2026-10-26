@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -84,6 +85,8 @@ type server struct {
 	protected chi.Router
 	// canaryRunning is set while a run-now canary is in flight.
 	canaryRunning atomic.Bool
+	// twitch holds the in-flight Twitch device logins, account ID -> *twitchFlow.
+	twitch sync.Map
 }
 
 func newServer(d Deps) *server {
