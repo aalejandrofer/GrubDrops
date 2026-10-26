@@ -256,6 +256,12 @@ describe('visibleCards', () => {
 		expect(r.shown.map((c) => c.rank)).toEqual([9, 1, 2, 3, 4, 5, 6]);
 		expect(r.hidden).toBe(3);
 	});
+	it('lists a mining game above a higher-ranked waiting game', () => {
+		const c = mk(3, [3]);
+		c[0].game = { id: '1', state: 'waiting' } as unknown as Game;
+		c[2].game = { id: '3', state: 'mining' } as unknown as Game;
+		expect(visibleCards(c).shown.map((x) => x.rank)).toEqual([3, 1, 2]);
+	});
 	it('active cards come before idle ones within the cap', () => {
 		const cards = mk(5, [4]);
 		cards[4].queued = [{ benefit_id: 'b' } as unknown as GameCard['queued'][number]];

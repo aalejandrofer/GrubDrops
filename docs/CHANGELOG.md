@@ -49,6 +49,7 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- **Home order.** A game that is mining is listed above games that are only waiting, whatever their priority.
 - Home cards are large by display position, so a mining game shown first is large. The rank on the card is unchanged.
 - Rewards search skips the reload when the text is unchanged, uses 16px text on phones so iOS does not zoom, and trims spaces after the 100 character cut.
 - Twitch integrity tokens and raw responses no longer appear in logs. The integrity line records only the expiry and bad-bot flag, and gql and PubSub lines drop the response body (GRUB-20).

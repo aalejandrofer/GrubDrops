@@ -85,21 +85,23 @@ export function gameCards(
 }
 
 /**
- * At most max cards for Home. Cards that are mining, waiting or queued come first, in
- * rank order, then the rest in rank order, so a low-priority game that is
- * mining is not hidden behind idle top games. Layout follows the display
+ * At most max cards for Home. Mining cards come first, then waiting or queued
+ * ones, then the rest, each group in rank order, so a game that is mining is
+ * never listed under one that only waits. Layout follows the display
  * position: the first two shown are large.
  */
 export function visibleCards(
   cards: GameCard[],
   max = 7,
 ): { shown: GameCard[]; hidden: number } {
-  const active = (c: GameCard) =>
+  const tier = (c: GameCard) =>
     c.game.state === "mining" ||
-    c.game.state === "waiting" ||
-    c.rows.some((r) => !r.muted && r.runner.current !== null) ||
-    c.queued.length > 0;
-  const ordered = cards.filter(active).concat(cards.filter((c) => !active(c)));
+    c.rows.some((r) => !r.muted && r.runner.current !== null)
+      ? 0
+      : c.game.state === "waiting" || c.queued.length > 0
+        ? 1
+        : 2;
+  const ordered = [0, 1, 2].flatMap((n) => cards.filter((c) => tier(c) === n));
   const shown = ordered
     .slice(0, max)
     .map((c, i) => ({
