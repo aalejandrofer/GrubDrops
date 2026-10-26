@@ -11,5 +11,15 @@ export function applyPrefs(s: Settings): void {
 	setLang(s.language);
 	if (typeof document !== 'undefined') document.documentElement.dataset.theme = s.theme;
 	prefs.fmt = s.time_format;
-	prefs.zone = s.timezone || s.zone_effective || prefs.zone;
+	prefs.zone = usableZone(s.timezone || s.zone_effective || prefs.zone);
+}
+
+/** Go accepts zones Intl rejects, such as "Local". Those fall back to UTC so dates still render. */
+export function usableZone(z: string): string {
+	try {
+		new Intl.DateTimeFormat('en', { timeZone: z });
+		return z;
+	} catch {
+		return 'UTC';
+	}
 }

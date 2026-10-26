@@ -1,5 +1,6 @@
 import { beforeEach, expect, test } from 'vitest';
 import {
+	httpsOnly,
 	claimStamp,
 	clock,
 	dayBucket,
@@ -86,4 +87,11 @@ test('dayBucket yesterday across a DST spring-forward', () => {
 test('unparseable iso is handled', () => {
 	expect(relTime('garbage', now)).toBe('never');
 	expect(uptime('garbage', now)).toBe('');
+});
+
+test('httpsOnly keeps https links only', () => {
+	expect(httpsOnly('https://github.com/x/releases/tag/v2')).toBe('https://github.com/x/releases/tag/v2');
+	expect(httpsOnly('javascript:alert(1)')).toBe('');
+	expect(httpsOnly('http://x')).toBe('');
+	expect(httpsOnly(undefined)).toBe('');
 });

@@ -1,14 +1,13 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import { api } from '$lib/app';
-	import { ApiError } from '$lib/api/client';
 	import type { Game, SearchHit } from '$lib/api/types';
 	import BoxArt from '$lib/components/BoxArt.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHead from '$lib/components/PageHead.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { relTime } from '$lib/format';
-	import { campaignLine, commitGames, matchParts, moveGame, suggestions, withoutId } from '$lib/games';
+	import { campaignLine, commitGames, dupePriority, matchParts, moveGame, suggestions, withoutId } from '$lib/games';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
@@ -84,11 +83,8 @@
 			hits = [];
 			seq++;
 		} catch (e) {
-			if (e instanceof ApiError && e.status === 409 && typeof e.body.priority === 'number') {
-				dupe = e.body.priority;
-			} else {
-				failed = true;
-			}
+			dupe = dupePriority(e);
+			failed = dupe === null;
 		} finally {
 			busy = null;
 		}

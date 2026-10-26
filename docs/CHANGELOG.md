@@ -50,6 +50,10 @@ All notable changes to GrubDrops.
 
 - v2 Home lists a runner on its game card when the game matched by slug, not only by name.
 - v2 header no longer shows a needs-login chip for the account whose login is open in Settings.
+- v2 dates and clocks render in UTC when the saved timezone is one the browser rejects, such as "Local", instead of failing.
+- v2 version popover links the release notes only over https, like Settings → Updates.
+- v2 Games search no longer highlights the wrong letters in names that change length when lowercased.
+- v2 first-run setup says a game is already added, with its priority, instead of a generic failure.
 - v2 `POST /api/games` returned 500 for games a migration seeded under another id (Apex Legends, Marvel Rivals); it now reuses the existing row by slug (rebuild/v2).
 - v2 store: the pre-v2 backup is written to a `.tmp` file and renamed, so a failed or interrupted backup is retried on the next boot instead of leaving a partial `.pre-v2`.
 - v2 runner: a swept reward is recorded only when its title resolves to one drop, looking in the current campaign, then the current game, then the rest of the plan. An ambiguous title records nothing, so it cannot hide another drop.

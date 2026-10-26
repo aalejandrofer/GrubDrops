@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Game, SearchHit } from '$lib/api/types';
 import { setLang } from '$lib/i18n/index.svelte';
-import { campaignLine, commitGames, matchParts, moveGame, suggestions, withoutId } from './games';
+import { ApiError } from '$lib/api/client';
+import { campaignLine, commitGames, dupePriority, matchParts, moveGame, suggestions, withoutId } from './games';
 
 beforeEach(() => setLang('en'));
 
@@ -101,5 +102,19 @@ describe('matchParts', () => {
 	it('no match or empty query leaves the name whole', () => {
 		expect(matchParts('Rust', 'tarkov')).toEqual({ pre: 'Rust', hit: '', post: '' });
 		expect(matchParts('Rust', '  ')).toEqual({ pre: 'Rust', hit: '', post: '' });
+	});
+	it('no highlight when lowercasing changes the length', () => {
+		expect(matchParts('İstanbul Rust', 'rust')).toEqual({ pre: 'İstanbul Rust', hit: '', post: '' });
+	});
+});
+
+describe('dupePriority', () => {
+	it('reads the priority from a 409', () => {
+		expect(dupePriority(new ApiError(409, { error: 'exists', priority: 2 }))).toBe(2);
+	});
+	it('other failures are null', () => {
+		expect(dupePriority(new ApiError(500, { error: 'internal' }))).toBeNull();
+		expect(dupePriority(new ApiError(409, { error: 'exists' }))).toBeNull();
+		expect(dupePriority(new Error('net'))).toBeNull();
 	});
 });

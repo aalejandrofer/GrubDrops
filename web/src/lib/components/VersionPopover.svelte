@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { UpdateInfo } from '$lib/api/types';
+	import { httpsOnly } from '$lib/format';
 	import { t } from '$lib/i18n/index.svelte';
 	import CopyCommand from './CopyCommand.svelte';
 	import Icon from './Icon.svelte';
@@ -10,6 +11,7 @@
 	let pop: HTMLDivElement | undefined = $state();
 
 	const hasUpdate = $derived(update?.update_available === true);
+	const notesUrl = $derived(httpsOnly(update?.notes_url));
 	const command = $derived(update?.command || 'docker compose pull && docker compose up -d');
 
 	function close(refocus: boolean): void {
@@ -53,14 +55,14 @@
 				</ul>
 			{/if}
 			<div class="cmdrow"><CopyCommand {command} /></div>
-			{#if update.notes_url}<a class="more" href={update.notes_url} target="_blank" rel="noopener noreferrer"
+			{#if notesUrl}<a class="more" href={notesUrl} target="_blank" rel="noopener noreferrer"
 					>{t('version.full_notes')}</a
 				>{/if}
 		{:else}
 			<h3>
 				<span class="ok"><Icon name="check-circle" /></span>{t('version.latest', { v: current || 'dev' })}
 			</h3>
-			{#if update?.notes_url}<a class="more" href={update.notes_url} target="_blank" rel="noopener noreferrer"
+			{#if notesUrl}<a class="more" href={notesUrl} target="_blank" rel="noopener noreferrer"
 					>{t('version.notes')}</a
 				>{/if}
 		{/if}

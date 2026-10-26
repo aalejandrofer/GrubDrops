@@ -3,7 +3,7 @@
 	import { api } from '$lib/app';
 	import type { Settings, SettingsPatch, UpdateInfo } from '$lib/api/types';
 	import CopyCommand from '$lib/components/CopyCommand.svelte';
-	import { relTime } from '$lib/format';
+	import { httpsOnly, relTime } from '$lib/format';
 	import { t } from '$lib/i18n/index.svelte';
 
 	let {
@@ -49,7 +49,7 @@
 			: t('settings.latest')
 	);
 	const hasNew = $derived(u?.update_available === true);
-	const notesUrl = $derived(u?.notes_url.startsWith('https://') ? u.notes_url : '');
+	const notesUrl = $derived(httpsOnly(u?.notes_url));
 </script>
 
 <section class="set" id="updates" aria-labelledby="h-upd">

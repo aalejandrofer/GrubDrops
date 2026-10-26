@@ -1,3 +1,4 @@
+import { ApiError } from '$lib/api/client';
 import type { Campaign, Game, SearchHit } from '$lib/api/types';
 import { shortDate } from '$lib/format';
 import { normName } from '$lib/home';
@@ -21,7 +22,9 @@ export function suggestions(hits: SearchHit[], q: string): Suggestion[] {
 /** Splits a name around the first case-insensitive match of the trimmed query, for highlighting. */
 export function matchParts(name: string, q: string): { pre: string; hit: string; post: string } {
 	const needle = q.trim().toLowerCase();
-	const i = needle ? name.toLowerCase().indexOf(needle) : -1;
+	const lower = name.toLowerCase();
+	// Lowercasing can change the length (e.g. "İ"); the offsets would then be wrong.
+	const i = needle && lower.length === name.length ? lower.indexOf(needle) : -1;
 	if (i < 0) return { pre: name, hit: '', post: '' };
 	return { pre: name.slice(0, i), hit: name.slice(i, i + needle.length), post: name.slice(i + needle.length) };
 }
@@ -63,4 +66,9 @@ export async function commitGames(io: GamesIO, next: Game[]): Promise<boolean> {
 
 export function moveGame(games: Game[], from: number, to: number): Game[] {
 	return moveItem(games, from, to);
+}
+
+/** The existing priority when an add failed because the game is already chosen, else null. */
+export function dupePriority(e: unknown): number | null {
+	return e instanceof ApiError && e.status === 409 && typeof e.body.priority === 'number' ? e.body.priority : null;
 }

@@ -4,6 +4,7 @@
 	import type { SearchHit } from '$lib/api/types';
 	import { tn, t } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
+	import { dupePriority } from '$lib/games';
 	import { normName } from '$lib/home';
 	import PlatformMark from './PlatformMark.svelte';
 
@@ -11,6 +12,7 @@
 	let q = $state('');
 	let hits = $state<SearchHit[]>([]);
 	let failed = $state(false);
+	let dupe = $state<number | null>(null);
 	let searchFailed = $state(false);
 	let busy = $state<string | null>(null);
 	let timer: ReturnType<typeof setTimeout> | undefined;
@@ -49,6 +51,7 @@
 	async function add(name: string): Promise<void> {
 		busy = name;
 		failed = false;
+		dupe = null;
 		try {
 			await api.addGame(name);
 			q = '';
@@ -59,8 +62,9 @@
 			} catch {
 				/* the games event refetches */
 			}
-		} catch {
-			failed = true;
+		} catch (e) {
+			dupe = dupePriority(e);
+			failed = dupe === null;
 		} finally {
 			busy = null;
 		}
@@ -133,6 +137,7 @@
 							</ul>
 						{/if}
 						{#if failed}<p class="err" role="alert">{t('home.add_failed')}</p>{/if}
+						{#if dupe !== null}<p class="note" role="status">{t('games.already', { n: dupe })}</p>{/if}
 						{#if searchFailed}<p class="err" role="alert">{t('home.search_failed')}</p>{/if}
 					</div>
 				</div>
@@ -373,6 +378,10 @@
 	}
 	.err {
 		color: var(--red);
+		font-size: 12px;
+	}
+	.note {
+		color: var(--t2);
 		font-size: 12px;
 	}
 	.panel {

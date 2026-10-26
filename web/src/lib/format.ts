@@ -85,3 +85,8 @@ export function nextScanMin(lastScanIso: string | null, now: number, everySec = 
 	const left = Date.parse(lastScanIso) + everySec * 1000 - now;
 	return Math.max(0, Math.ceil(left / 60000));
 }
+
+/** The URL when it is https, else ''. Links from outside data render only then. */
+export function httpsOnly(url: string | null | undefined): string {
+	return url?.startsWith('https://') ? url : '';
+}
