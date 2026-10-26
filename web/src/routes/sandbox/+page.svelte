@@ -16,7 +16,9 @@
 			created: '2026-10-26',
 			title: 'Light mode, three darker options',
 			desc: 'Light theme is too bright. Three token sets (dimmed off-white, warm paper, cool grey-blue) on a slice of the real UI, with AA contrast checks.',
-			tags: ['theme', 'light mode', 'GRUB-22', 'for approval']
+			tags: ['theme', 'light mode', 'GRUB-22'],
+			done: true,
+			chosen: 'V1 Dimmed off-white, now the light theme in app.css'
 		}
 	];
 </script>
