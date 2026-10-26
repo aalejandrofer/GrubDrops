@@ -9,7 +9,7 @@ All notable changes to GrubDrops.
 - v2 web app scaffold in web/ (SvelteKit static SPA), built into internal/web/dist by npm, the Docker image and CI (rebuild/v2).
 - v2 SPA serving: a "UI not built" page when the build is missing, no-cache index.html, immutable hashed assets, and 404 for missing assets (rebuild/v2).
 - v2 planner (`internal/plan`) and per-account runner + pool (`internal/runner`), replacing the watcher and scheduler.
-- v2 collection tables (migration 0016) and a one-time `<db>.pre-v2` backup written by `store.Open` before an existing database migrates.
+- v2 collection tables (migration 0017) and a one-time `<db>.pre-v2` backup written by `store.Open` before an existing database migrates.
 - v2 store wrappers for the claim log, drop states, watch minutes, account scans, chosen games and skips.
 - v2 planner: inventory progress overrides a stale claim log entry, and `plan.Result` lists claimed drops of chosen active campaigns.
 - v2 `collect` package: per-drop states and inventory-found claims derived from runner scans, and a per-game board that merges every account's latest scan.
@@ -62,6 +62,7 @@ All notable changes to GrubDrops.
 - v2 Settings: no empty bordered strip under Accounts when there are no accounts, and the Health "Last scan" dot stays grey until a scan has run.
 - v2 top bar: with an update available the version reads `{current} → {latest} available` as in r4, shortened to the latest version under 720 px.
 - v2 Games: search suggestions highlight the typed match as in r4.
+- v2 store: the collection migration is now 0017 and safe to re-run. Databases at version 16 from the 1.x pipeline-v2 build skipped it, so Games search and Home failed on missing tables.
 
 ### Removed
 

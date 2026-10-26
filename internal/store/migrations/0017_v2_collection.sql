@@ -2,11 +2,11 @@
 -- +goose StatementBegin
 -- v2 collection tables. claim_log and watch_minutes carry no account FK on
 -- purpose: history outlives a removed account. Times are Unix seconds.
-CREATE TABLE chosen_games (
+CREATE TABLE IF NOT EXISTS chosen_games (
     game_id TEXT PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,
     rank    INTEGER NOT NULL
 );
-CREATE TABLE claim_log (
+CREATE TABLE IF NOT EXISTS claim_log (
     account_id    TEXT NOT NULL,
     benefit_id    TEXT NOT NULL,
     platform      TEXT NOT NULL,
@@ -20,8 +20,8 @@ CREATE TABLE claim_log (
     claimed_at    INTEGER NOT NULL,
     PRIMARY KEY (account_id, benefit_id)
 );
-CREATE INDEX idx_claim_log_claimed_at ON claim_log(claimed_at);
-CREATE TABLE drop_states (
+CREATE INDEX IF NOT EXISTS idx_claim_log_claimed_at ON claim_log(claimed_at);
+CREATE TABLE IF NOT EXISTS drop_states (
     account_id       TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     benefit_id       TEXT NOT NULL,
     platform         TEXT NOT NULL,
@@ -38,13 +38,13 @@ CREATE TABLE drop_states (
     updated_at       INTEGER NOT NULL,
     PRIMARY KEY (account_id, benefit_id)
 );
-CREATE TABLE watch_minutes (
+CREATE TABLE IF NOT EXISTS watch_minutes (
     account_id TEXT NOT NULL,
     day        TEXT NOT NULL,
     minutes    INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (account_id, day)
 );
-CREATE TABLE account_scans (
+CREATE TABLE IF NOT EXISTS account_scans (
     account_id    TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
     scanned_at    INTEGER NOT NULL DEFAULT 0,
     reconciled_at INTEGER NOT NULL DEFAULT 0,

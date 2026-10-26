@@ -17,8 +17,10 @@ import (
 var migrationsFS embed.FS
 
 // firstV2Migration is the first migration of the v2 schema. A database below
-// it gets a one-time copy before the v2 tables are added.
-const firstV2Migration = 16
+// it gets a one-time copy before the v2 tables are added. It is 17, not 16:
+// the 1.x branch feat/pipeline-v2 shipped its own 0016, so deployed databases
+// can sit at 16 without any v2 table.
+const firstV2Migration = 17
 
 func Open(ctx context.Context, path string) (*sql.DB, error) {
 	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)&_pragma=busy_timeout(5000)", path)

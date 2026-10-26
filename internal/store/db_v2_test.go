@@ -80,7 +80,7 @@ func TestOpen_BacksUpBeforeV2(t *testing.T) {
 	require.Equal(t, 1, count(t, bk, "accounts"))
 
 	require.NoError(t, db.QueryRow(`SELECT max(version_id) FROM goose_db_version`).Scan(&v))
-	require.Equal(t, 16, v)
+	require.Equal(t, 17, v)
 	require.Equal(t, 0, count(t, db, "claim_log"))
 }
 
@@ -127,7 +127,7 @@ func TestOpen_FreshDBNoBackup(t *testing.T) {
 	require.True(t, os.IsNotExist(err))
 }
 
-func TestMigration0016_OldTablesUntouched(t *testing.T) {
+func TestMigration0017_OldTablesUntouched(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "m.db")
 	want := seedV15(t, path)
 	db, err := Open(context.Background(), path)
