@@ -37,6 +37,7 @@ All notable changes to GrubDrops.
 - **Shared locales.** The web app reads `internal/i18n/locales`, and `npm run check` fails on missing, unused or mismatched keys.
 
 ### Changed
+- **README rewritten for v2, new screenshots.** The README is shorter and covers Android login, Discover, per-account Up next and the first-run wizard. The Spanish and Chinese versions match it. `docs/screenshots` has new v2 shots of Home, Discover, Games and Rewards made with sample data; the old settings shot is removed.
 - **Mine now is now Mine next, per account.** On Home, each account's Up next header has its own Mine next button instead of one in the panel header. It starts that account's first Up next drop. It is disabled with a tooltip when the account is signed out, has no games or is idle, and a failure shows under that account. Rewards now shows the same Up next panel as Home, so its queue can be reordered by drag or move buttons and has the same Mine next buttons.
 - **Top bar order.** Home, Discover, Games, Rewards, Settings.
 - **Home game cards fill the left column.** On wide screens Home shows as many game cards as fit down to the bottom of the right column (Up next and Claimed), instead of a fixed 7, with at least 2. The narrow single-column layout keeps 7.
