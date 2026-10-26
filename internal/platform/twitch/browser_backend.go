@@ -206,6 +206,10 @@ func (b *BrowserBackend) LoginViaBrowser(_ context.Context, _ platform.BrowserRP
 }
 
 func (b *BrowserBackend) RefreshSession(ctx context.Context, s platform.Session) (platform.Session, error) {
+	if s.RefreshToken == "" && s.ClientID == ClientAndroid {
+		// Same token, new expiry: the sidecar's installed cookie stays valid.
+		return b.authFlow.revalidate(ctx, s)
+	}
 	if s.RefreshToken == "" {
 		// Cookie-based sessions have no refresh token; just return as-is.
 		// Watcher will hit a 401 from /gql which surfaces re-auth.

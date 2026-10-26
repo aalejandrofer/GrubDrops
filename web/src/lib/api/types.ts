@@ -227,6 +227,12 @@ export interface DeviceStart {
 	expires_at: string;
 }
 
+export interface AndroidLogin {
+	id: string;
+	login: string;
+	created: boolean;
+}
+
 export interface DeviceStatus {
 	status: 'pending' | 'done' | 'expired' | 'error';
 }

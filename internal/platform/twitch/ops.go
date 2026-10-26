@@ -15,6 +15,7 @@ const (
 	gqlEndpoint   = "https://gql.twitch.tv/gql"
 	deviceAuthURL = "https://id.twitch.tv/oauth2/device"
 	tokenURL      = "https://id.twitch.tv/oauth2/token"
+	validateURL   = "https://id.twitch.tv/oauth2/validate"
 )
 
 // Operation identifies a persisted GraphQL operation.

@@ -27,6 +27,8 @@ func (s *server) routesAccounts(r chi.Router) {
 	r.Post("/accounts/{id}/twitch/device", s.twitchDeviceStart)
 	r.Get("/accounts/{id}/twitch/device", s.twitchDeviceStatus)
 	r.Post("/accounts/{id}/kick/session", s.kickSession)
+	r.Get("/login/twitch/android", s.twitchAndroidURL)
+	r.Post("/login/twitch/android", s.twitchAndroidLogin)
 }
 
 type accountAuthJSON struct {

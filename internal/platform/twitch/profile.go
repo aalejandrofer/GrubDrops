@@ -5,6 +5,11 @@ package twitch
 // (#48, DevilXD #1165); the TV client still accepts it.
 const ClientTV = "tv"
 
+// ClientAndroid marks a session minted by the Twitch Android app client
+// through the implicit-grant paste login. It has no refresh token. GQL
+// requests use the Android profile, same as legacy "" sessions.
+const ClientAndroid = "android"
+
 type clientProfile struct {
 	ID        string
 	UserAgent string
@@ -19,7 +24,8 @@ var (
 )
 
 // profileFor maps a persisted Session.ClientID to its request profile.
-// Empty/unknown = legacy Android, so pre-#48 sessions are untouched.
+// ClientAndroid, empty and unknown map to Android, so pre-#48 sessions
+// are untouched.
 func profileFor(id string) clientProfile {
 	if id == ClientTV {
 		return profileTV

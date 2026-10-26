@@ -110,7 +110,27 @@ export function createDeviceFlow(deps: DeviceFlowDeps): DeviceFlow {
 	return flow;
 }
 
-export type AccountStatus = 'paused' | 'mining' | 'signed_out' | 'idle';
+/** Twitch sign-in method: Android paste login or the TV device code. */
+export type TwitchMethod = 'android' | 'tv';
+
+/** True when the pasted text holds a token: the #access_token= redirect URL or a bare token. The server validates it. */
+export function hasAndroidToken(text: string): boolean {
+	const v = text.trim();
+	return /(?:^|[#&?])access_token=\w+/.test(v) || /^\w{20,64}$/.test(v);
+}
+
+const ANDROID_ERRORS = new Map([
+	['android_no_token', 'accounts.android_no_token'],
+	['android_wrong_client', 'accounts.android_wrong_client'],
+	['android_invalid_token', 'accounts.android_invalid_token']
+]);
+
+/** i18n key for an Android login error code from the API. */
+export function androidErrorKey(code: string | undefined): string {
+	return (code && ANDROID_ERRORS.get(code)) || 'accounts.android_failed';
+}
+
+export type AccountStatus ='paused' | 'mining' | 'signed_out' | 'idle';
 
 /** Signed out wins, then paused: a paused account without a session still needs a login. */
 export function accountStatus(a: Account, r: Runner | undefined): AccountStatus {

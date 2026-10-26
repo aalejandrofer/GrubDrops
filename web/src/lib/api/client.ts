@@ -1,5 +1,6 @@
 import type {
 	Account,
+	AndroidLogin,
 	ApiErrorBody,
 	ClaimsQuery,
 	ClaimsResp,
@@ -69,6 +70,9 @@ export interface Api {
 	setAccountEnabled(id: string, enabled: boolean): Promise<void>;
 	twitchStart(id: string): Promise<DeviceStart>;
 	twitchStatus(id: string): Promise<DeviceStatus>;
+	twitchAndroidUrl(): Promise<{ login_url: string }>;
+	/** accountId signs that account in again; without it the server matches or creates the account. */
+	twitchAndroidLogin(url: string, accountId?: string): Promise<AndroidLogin>;
 	kickSession(id: string, cookiesTxt: string): Promise<{ verified: boolean }>;
 	settings(): Promise<Settings>;
 	saveSettings(p: SettingsPatch): Promise<Settings>;
@@ -196,6 +200,9 @@ export function createClient(opts: ClientOpts): Api {
 			send('PUT', `/api/accounts/${enc(id)}/enabled`, { enabled }) as Promise<void>,
 		twitchStart: (id) => post(`/api/accounts/${enc(id)}/twitch/device`),
 		twitchStatus: (id) => get(`/api/accounts/${enc(id)}/twitch/device`),
+		twitchAndroidUrl: () => get('/api/login/twitch/android'),
+		twitchAndroidLogin: (url, accountId) =>
+			post('/api/login/twitch/android', accountId ? { url, account_id: accountId } : { url }),
 		kickSession: (id, cookiesTxt) =>
 			post(`/api/accounts/${enc(id)}/kick/session`, { cookies_txt: cookiesTxt, channels: [] }),
 		settings: () => get('/api/settings'),

@@ -53,3 +53,9 @@ Decisions made while building v2 on `rebuild/v2` without check-ins. Each entry g
 - **The "Failing:" canary with an empty detail** came from a browser tab that still ran an older SPA bundle. The API returned `skipped: true`, and a fresh load shows "Skipped". There was no server fault.
 - **The rebuild while watching is now 12 h too,** at Jandro's request ("evry 12hrs is good"). A Scan now button on Games forces a rescan of every account at once. The 5 min recheck while campaigns are queued but no stream is live stays, since it waits for a stream to go live. A campaign that starts mid-watch can wait up to 12 h unless Scan now is pressed.
 - **Mine now writes the session order** (chosen drop, then the drop it replaced, then the rest of Up next), so the switch survives later rescans and Reset to Games order undoes it. The HTTP handler only sets a flag; the Run goroutine stops the watch and re-picks, and a claim in flight finishes first.
+
+## Twitch Android login (2026-10-26)
+
+- **Android login is a paste flow, not a sidecar-driven browser.** The user signs in on twitch.tv in their own browser with the Android client id and pastes the `#access_token=` address back. The browser sidecar has no interactive login UI, and 2FA, captchas and email codes need the user's own browser. The paste flow also works with no sidecar running.
+- **The token is checked at `id.twitch.tv/oauth2/validate`** and rejected unless its `client_id` is the Android client. The response gives the user id and login. The user id is kept inside the encrypted session, so adding the same Twitch user again updates its account instead of making a second one.
+- **Android paste sessions have no refresh token.** Refresh re-validates the token and pushes `ExpiresAt` forward. A 401 from validate marks the account signed out. Sessions marked `android` skip the "no refresh token" idle in session load.

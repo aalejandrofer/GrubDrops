@@ -4,7 +4,18 @@
 	import { api } from '$lib/app';
 	import { ApiError } from '$lib/api/client';
 	import type { Account, DeviceStart, Platform } from '$lib/api/types';
-	import { accountLine, accountStatus, createDeviceFlow, initials, rowActions, type DeviceFlow, type DeviceState } from '$lib/accounts';
+	import {
+		accountLine,
+		accountStatus,
+		androidErrorKey,
+		createDeviceFlow,
+		hasAndroidToken,
+		initials,
+		rowActions,
+		type DeviceFlow,
+		type DeviceState,
+		type TwitchMethod
+	} from '$lib/accounts';
 	import CopyCommand from '$lib/components/CopyCommand.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
@@ -41,6 +52,12 @@
 	let flow: DeviceFlow | null = null;
 	let cancelTimer: (() => void) | null = null;
 
+	let method = $state<TwitchMethod | null>(null);
+	let androidUrl = $state('');
+	let paste = $state('');
+	let androidMsg = $state('');
+	let androidDone = $state(false);
+
 	let cookies = $state('');
 	let saving = $state(false);
 	let kickMsg = $state('');
@@ -67,6 +84,11 @@
 		loginFlow.id = null;
 		ds = 'idle';
 		dcode = null;
+		method = null;
+		androidUrl = '';
+		paste = '';
+		androidMsg = '';
+		androidDone = false;
 		cookies = '';
 		kickMsg = '';
 		kickSaved = null;
@@ -78,6 +100,12 @@
 		menu = null;
 		addError = '';
 		if (panel) await closePanel();
+		if (kind === 'twitch') {
+			// Twitch asks for the method first; the TV path creates the account on pick.
+			panel = { kind, id: existing ?? '', isNew: existing === undefined };
+			loginFlow.id = existing ?? null;
+			return;
+		}
 		busy = true;
 		try {
 			let id = existing;
@@ -87,19 +115,66 @@
 			}
 			panel = { kind, id, isNew: existing === undefined };
 			loginFlow.id = id;
-			if (kind === 'twitch') {
-				const f = createDeviceFlow({ api, accountId: id, schedule, isNew: existing === undefined });
-				f.onChange(() => {
-					ds = f.state;
-					dcode = f.code;
-				});
-				flow = f;
-				await f.start();
-			}
 		} catch (e) {
 			addError = errMsg(e, t('accounts.add_failed'));
 		} finally {
 			busy = false;
+		}
+	}
+
+	async function chooseTV(): Promise<void> {
+		const p = panel;
+		if (!p || busy) return;
+		busy = true;
+		try {
+			if (!p.id) {
+				const created = await api.addAccount('twitch');
+				p.id = created.id;
+				loginFlow.id = created.id;
+			}
+			method = 'tv';
+			const f = createDeviceFlow({ api, accountId: p.id, schedule, isNew: p.isNew });
+			f.onChange(() => {
+				ds = f.state;
+				dcode = f.code;
+			});
+			flow = f;
+			await f.start();
+		} catch (e) {
+			addError = errMsg(e, t('accounts.add_failed'));
+			reset();
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function chooseAndroid(): Promise<void> {
+		method = 'android';
+		androidMsg = '';
+		try {
+			androidUrl = (await api.twitchAndroidUrl()).login_url;
+		} catch {
+			androidMsg = t('accounts.android_failed');
+		}
+	}
+
+	async function submitAndroid(): Promise<void> {
+		const p = panel;
+		if (!p || saving) return;
+		androidMsg = '';
+		if (!hasAndroidToken(paste)) {
+			androidMsg = t('accounts.android_no_token');
+			return;
+		}
+		saving = true;
+		try {
+			await api.twitchAndroidLogin(paste.trim(), p.isNew ? undefined : p.id);
+			paste = '';
+			androidDone = true;
+		} catch (e) {
+			androidMsg = t(androidErrorKey(e instanceof ApiError ? e.code : undefined));
+		} finally {
+			saving = false;
 		}
 	}
 
@@ -224,7 +299,7 @@
 		loginFlow.id = null;
 		// Leaving mid-flow drops the half-made account.
 		const p = panel;
-		if (p?.isNew && !kickSaved && ds !== 'done') api.removeAccount(p.id).catch(() => {});
+		if (p?.isNew && p.id && !kickSaved && ds !== 'done') api.removeAccount(p.id).catch(() => {});
 	});
 </script>
 
@@ -245,7 +320,49 @@
 				<PlatformMark platform={panel.kind} />
 				<b>{t(panel.kind === 'twitch' ? 'accounts.twitch' : 'accounts.kick')}</b>
 			</div>
-			{#if panel.kind === 'twitch'}
+			{#if panel.kind === 'twitch' && method === null}
+				<div class="inline wrap">
+					<button type="button" class="btn primary" disabled={busy} onclick={chooseAndroid}>{t('accounts.method_android')}</button>
+					<button type="button" class="btn" disabled={busy} onclick={chooseTV}>{t('accounts.method_tv')}</button>
+					<button type="button" class="btn" onclick={closePanel}>{t('accounts.cancel')}</button>
+				</div>
+			{:else if panel.kind === 'twitch' && method === 'android'}
+				{#if androidDone}
+					<p class="feedback">{t('accounts.device_done')}</p>
+					<div class="inline"><button type="button" class="btn" onclick={finish}>{t('accounts.done')}</button></div>
+				{:else}
+					<ol class="steps">
+						<li>
+							<span>{t('accounts.android_step1')}</span>
+							{#if androidUrl}
+								<a class="btn" href={androidUrl} target="_blank" rel="noopener noreferrer">{t('accounts.android_open')}</a>
+							{/if}
+						</li>
+						<li><span class="go">{t('accounts.android_step2')}</span></li>
+					</ol>
+					<div class="field">
+						<label for="twitch-paste">{t('accounts.android_paste_label')}</label>
+						<input
+							class="inp"
+							id="twitch-paste"
+							type="text"
+							spellcheck="false"
+							autocomplete="off"
+							bind:value={paste}
+							onkeydown={(e) => {
+								if (e.key === 'Enter') void submitAndroid();
+							}}
+						/>
+					</div>
+					<div class="inline wrap">
+						<button type="button" class="btn primary" disabled={saving || paste.trim() === ''} onclick={submitAndroid}>
+							{saving ? t('accounts.saving') : t('accounts.android_submit')}
+						</button>
+						<button type="button" class="btn" onclick={closePanel}>{t('accounts.cancel')}</button>
+					</div>
+					{#if androidMsg}<small class="bad" role="alert">{androidMsg}</small>{/if}
+				{/if}
+			{:else if panel.kind === 'twitch'}
 				{#if ds === 'code' && dcode}
 					<p class="go">{t('accounts.device_go', { url: dcode.verification_url })}</p>
 					<div class="code">{dcode.user_code}</div>
@@ -663,6 +780,19 @@
 	}
 	.feedback {
 		margin: 0;
+	}
+	.steps {
+		margin: 0;
+		padding-left: 20px;
+		display: grid;
+		gap: 8px;
+		font-size: 13px;
+	}
+	.steps li {
+		overflow-wrap: anywhere;
+	}
+	.steps li .btn {
+		margin-left: 8px;
 	}
 
 	@media (max-width: 720px) {

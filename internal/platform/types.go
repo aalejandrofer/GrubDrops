@@ -16,6 +16,10 @@ type Session struct {
 	// Twitch accepts GQL reads under a mismatched Client-Id but silently
 	// credits zero watch-minutes.
 	ClientID string `json:"client_id,omitempty"`
+	// UserID is the platform user ID the token belongs to, when the login
+	// flow learned it (Twitch Android paste login). Used to match a
+	// re-added user to its existing account.
+	UserID string `json:"user_id,omitempty"`
 	// Games is the account's whitelisted game names, plumbed at use time
 	// (like GameFilter). TV sessions can't see the drops dashboard, so
 	// channel-first discovery needs the names to know which game

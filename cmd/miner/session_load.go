@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform/twitch"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
@@ -94,7 +95,9 @@ func acquireSession(ctx context.Context, deps sessionDeps, a gen.Account, now ti
 		return sess, "", nil
 	}
 
-	if sess.RefreshToken == "" {
+	// Android paste-login sessions never carry a refresh token: their
+	// RefreshSession re-validates the token instead, so let it run.
+	if sess.RefreshToken == "" && sess.ClientID != twitch.ClientAndroid {
 		deps.logger.Warn("session expired and no refresh token, will idle",
 			"account", a.ID, "platform", a.Platform)
 		return platform.Session{}, idleReasonNeedsAuth, nil
