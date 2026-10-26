@@ -21,7 +21,7 @@ import (
 )
 
 // TestRun_BootsAndServesAPI boots the whole miner against a temp DB, checks
-// the JSON API and the placeholder SPA answer, then cancels and expects a
+// the JSON API and the SPA or its not-built page answer, then cancels and expects a
 // clean shutdown inside 10 s.
 func TestRun_BootsAndServesAPI(t *testing.T) {
 	prevZone := setProcessZone
