@@ -7,7 +7,7 @@
 	import PageHead from '$lib/components/PageHead.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { relTime } from '$lib/format';
-	import { campaignLine, commitGames, dupePriority, matchParts, moveGame, moveTarget, suggestions, withoutId } from '$lib/games';
+	import { campaignLine, commitGames, dupePriority, linkHref, matchParts, moveGame, moveTarget, suggestions, withoutId } from '$lib/games';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
@@ -323,6 +323,20 @@
 						</ul>
 					{:else}
 						<p class="muted">{t('games.nothing_live', { rel: relTime(lastScan, now) })}{#if nextText} · {nextText}{/if}</p>
+					{/if}
+					{#if g.needs_link?.length}
+						<ul class="links">
+							{#each g.needs_link as n (n.account_id)}
+								{@const href = linkHref(n.url)}
+								<li>
+									<Icon name="alert" size={14} />
+									<span>{t('games.needs_link', { account: n.account_name })}</span>
+									{#if href}
+										<a {href} target="_blank" rel="noopener noreferrer">{t('games.link_account')}</a>
+									{/if}
+								</li>
+							{/each}
+						</ul>
 					{/if}
 				</div>
 			</article>
@@ -788,6 +802,29 @@
 		color: var(--t3);
 		font: 12px var(--mono);
 		white-space: nowrap;
+	}
+	.links {
+		margin: 10px 0 0;
+		padding: 0;
+		list-style: none;
+		display: grid;
+		gap: 6px;
+	}
+	.links li {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 4px 8px;
+		color: var(--amber);
+		font-size: 13px;
+	}
+	.links a {
+		color: var(--accent);
+		font-weight: 500;
+	}
+	.links a:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
 	}
 	.muted {
 		color: var(--t2);

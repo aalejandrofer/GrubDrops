@@ -61,7 +61,11 @@ type Backend struct {
 	// manually, so otherwise it re-attempts (and logs) every poll forever.
 	// In-memory only: a restart re-learns it on the first sweep (one log
 	// line), which is fine.
-	needsLink        map[string]bool
+	needsLink map[string]bool
+	// linkCampaigns maps accountID + ":" + campaignID to the connect_url of a
+	// link-required claim rejection, so ListActiveCampaigns can flag the
+	// campaign as ClaimNeedsLink for that account. In-memory like needsLink.
+	linkCampaigns    map[string]string
 	channelsByAcc    map[string][]string
 	campaignChannels map[string][]kickChannel // campaignID -> eligible channels (slug+id)
 	categoryChannels map[string][]kickChannel // game/category -> union of participating channels across campaigns
@@ -128,6 +132,7 @@ func New(c *browser.Client, ctl dockerctl.Controller, template string, port int,
 		sidecarPort:      port,
 		wsFailed:         map[string]bool{},
 		needsLink:        map[string]bool{},
+		linkCampaigns:    map[string]string{},
 		handleByAcc:      map[string]string{},
 		channelsByAcc:    map[string][]string{},
 		campaignChannels: map[string][]kickChannel{},
@@ -442,6 +447,14 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 		camp.AccountLinked = true
 		camp.AccountLinkChecked = true
 		camp.AccountLinkURL = c.ConnectURL
+		b.mu.Lock()
+		if u, ok := b.linkCampaigns[s.AccountID+":"+c.ID]; ok {
+			camp.ClaimNeedsLink = true
+			if camp.AccountLinkURL == "" {
+				camp.AccountLinkURL = u
+			}
+		}
+		b.mu.Unlock()
 		// Parse RFC3339 start/end so the /drops past|current|upcoming tabs work.
 		if t, err := time.Parse(time.RFC3339, c.StartsAt); err == nil {
 			camp.StartsAt = t.UTC()
@@ -853,6 +866,7 @@ func (b *Backend) SweepCompletedClaims(ctx context.Context, s platform.Session) 
 			if errors.As(err, &linkErr) {
 				b.mu.Lock()
 				b.needsLink[linkKey] = true
+				b.linkCampaigns[s.AccountID+":"+r.CampaignID] = linkErr.ConnectURL
 				b.mu.Unlock()
 				slog.Info("kick sweep: reward needs account link; skipping until linked",
 					"kind", "claim", "account", s.AccountID, "reward", r.RewardID,

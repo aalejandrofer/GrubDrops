@@ -67,6 +67,10 @@ type Campaign struct {
 	// operator should visit to make AccountLinked true. Empty if not
 	// provided by the platform.
 	AccountLinkURL string
+	// ClaimNeedsLink is true when the platform rejected a claim for this
+	// account until an external account is linked (Kick connect_url). The
+	// planner ignores it; the Games page shows it.
+	ClaimNeedsLink bool
 	// Kind distinguishes "drop" (watch-time mining required) from
 	// "reward" (one-click claim from /drops/inventory once the account
 	// is linked — e.g. Minecraft Builder Cape). Empty defaults to

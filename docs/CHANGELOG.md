@@ -5,6 +5,7 @@ All notable changes to GrubDrops.
 ## [Unreleased]
 
 ### Added
+- **Account link warnings.** A chosen game whose drops an account can't claim until it links the publisher's account (Riot, Steam, ...) shows the account on Games with a Link account button, and a warning line on its Home card. Twitch uses the campaign's link state; Kick flags a campaign after it rejects a claim with a connect URL. Only http(s) link URLs are shown. `GET /api/games` gains `needs_link`.
 - **Shift+click to move to the end.** On Games, Shift+click on Move up sends the game to the top and on Move down to the bottom. A plain click still moves one step.
 - **Twitch Android login.** Adding a Twitch account offers Android login (recommended) next to the TV code. Sign in to Twitch in a new tab, then copy the whole URL of the Twitch homepage it lands on and paste it in. Android tokens see the drops dashboard, so campaign discovery is complete; TV tokens get null from ViewerDropsDashboard and DropCampaignDetails. Adding the same Twitch user again updates its session.
 - **Mine now.** Each Up next row on Home and Rewards has a Mine now button. It stops the account's current drop and starts the chosen one at once; the stopped drop goes back to the top of Up next. Signed-out and paused accounts don't show it.

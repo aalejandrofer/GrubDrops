@@ -4,7 +4,9 @@
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { foldQueue } from '$lib/upnext';
 	import { scanStamp } from '$lib/scan';
+	import { linkNames } from '$lib/games';
 	import BoxArt from './BoxArt.svelte';
+	import Icon from './Icon.svelte';
 	import PlatformMark from './PlatformMark.svelte';
 
 	let {
@@ -20,6 +22,7 @@
 	const folded = $derived(card.rows.length > 3);
 	const list = $derived(folded && !open ? fold.shown : card.rows);
 	const game = $derived(card.game);
+	const unlinked = $derived(linkNames(game));
 	const camp = $derived(
 		card.rows.find((r) => r.runner.current)?.runner.current?.campaign_name ?? game.campaigns[0]?.name ?? ''
 	);
@@ -64,6 +67,10 @@
 				<span class="camp">{camp}</span>
 			{/if}
 		</div>
+
+		{#if unlinked.length > 0}
+			<p class="link-l"><Icon name="alert" size={13} />{t('home.needs_link', { accounts: unlinked.join(', ') })}</p>
+		{/if}
 
 		{#if readyAccounts !== null && card.pos === 1}
 			<p class="idle-l">{tn('home.ready_all', readyAccounts)}</p>
@@ -367,6 +374,14 @@
 	}
 	.queued .q-h {
 		color: var(--t2);
+		font-size: 12px;
+	}
+	.link-l {
+		margin: 8px 0 0;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		color: var(--amber);
 		font-size: 12px;
 	}
 	.idle-l {

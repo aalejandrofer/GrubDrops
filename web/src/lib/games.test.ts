@@ -2,7 +2,18 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { Game, SearchHit } from '$lib/api/types';
 import { setLang } from '$lib/i18n/index.svelte';
 import { ApiError } from '$lib/api/client';
-import { campaignLine, commitGames, dupePriority, matchParts, moveGame, moveTarget, suggestions, withoutId } from './games';
+import {
+	campaignLine,
+	commitGames,
+	dupePriority,
+	linkHref,
+	linkNames,
+	matchParts,
+	moveGame,
+	moveTarget,
+	suggestions,
+	withoutId
+} from './games';
 
 beforeEach(() => setLang('en'));
 
@@ -14,7 +25,32 @@ const game = (id: string): Game => ({
 	priority: 1,
 	box_art_url: '',
 	state: 'no_campaign',
-	campaigns: []
+	campaigns: [],
+	needs_link: []
+});
+
+describe('linkHref', () => {
+	it('keeps http and https URLs only', () => {
+		expect(linkHref('https://auth.riotgames.com/authorize?x=1')).toBe('https://auth.riotgames.com/authorize?x=1');
+		expect(linkHref('http://example.com/link')).toBe('http://example.com/link');
+		expect(linkHref('javascript:alert(1)')).toBe('');
+		expect(linkHref('/drops')).toBe('');
+		expect(linkHref('')).toBe('');
+		expect(linkHref(null)).toBe('');
+	});
+});
+
+describe('linkNames', () => {
+	it('lists distinct account names in order', () => {
+		const g = game('valo');
+		g.needs_link = [
+			{ account_id: 'a1', account_name: 'kicker', platform: 'kick', url: '' },
+			{ account_id: 'a2', account_name: 'twitchy', platform: 'twitch', url: '' },
+			{ account_id: 'a3', account_name: 'kicker', platform: 'twitch', url: '' }
+		];
+		expect(linkNames(g)).toEqual(['kicker', 'twitchy']);
+		expect(linkNames(game('x'))).toEqual([]);
+	});
 });
 
 describe('withoutId', () => {
