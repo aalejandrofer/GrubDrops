@@ -63,3 +63,15 @@ func TestKickCookiesFromNetscape_GarbageAndCRLF(t *testing.T) {
 		t.Errorf("CRLF parse: got %+v", f)
 	}
 }
+
+func TestKickCookiesFromNetscape_BOM(t *testing.T) {
+	f, err := kickCookiesFromNetscape("\ufeff" + cookiesTxtOK)
+	if err != nil || f.KickSession != "sess-val" {
+		t.Fatalf("BOM-prefixed export: f=%+v err=%v", f, err)
+	}
+	// BOM directly before a cookie row (no header comment).
+	f, err = kickCookiesFromNetscape("\ufeff.kick.com\tTRUE\t/\tTRUE\t1\tkick_session\ts\n.kick.com\tTRUE\t/\tTRUE\t1\tsession_token\tt\n")
+	if err != nil || f.KickSession != "s" {
+		t.Fatalf("BOM before first row: f=%+v err=%v", f, err)
+	}
+}

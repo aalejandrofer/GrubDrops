@@ -13,6 +13,7 @@ import (
 func kickCookiesFromNetscape(raw string) (kickCookieForm, error) {
 	var f kickCookieForm
 	sawKick := false
+	raw = strings.TrimPrefix(raw, "\ufeff")
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimRight(line, "\r")
 		if line == "" || (strings.HasPrefix(line, "#") && !strings.HasPrefix(line, "#HttpOnly_")) {
@@ -39,7 +40,7 @@ func kickCookiesFromNetscape(raw string) (kickCookieForm, error) {
 		}
 	}
 	if !sawKick {
-		return kickCookieForm{}, fmt.Errorf("no kick.com cookies found — export cookies.txt while on kick.com")
+		return kickCookieForm{}, fmt.Errorf("no kick.com cookies found, export cookies.txt while on kick.com")
 	}
 	var missing []string
 	if f.KickSession == "" {
@@ -49,7 +50,7 @@ func kickCookiesFromNetscape(raw string) (kickCookieForm, error) {
 		missing = append(missing, "session_token")
 	}
 	if len(missing) > 0 {
-		return kickCookieForm{}, fmt.Errorf("missing required cookie(s): %s — make sure you're signed in to kick.com before exporting", strings.Join(missing, ", "))
+		return kickCookieForm{}, fmt.Errorf("missing required cookie(s): %s. Make sure you're signed in to kick.com before exporting", strings.Join(missing, ", "))
 	}
 	return f, nil
 }

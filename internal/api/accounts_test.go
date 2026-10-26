@@ -158,7 +158,7 @@ func TestAccounts_Rename(t *testing.T) {
 	a, err := e.s.d.Q.GetAccount(context.Background(), id)
 	require.NoError(t, err)
 	assert.Equal(t, "New", a.DisplayName)
-	assert.Equal(t, []string{id, id}, c.changedList())
+	assert.Equal(t, []string{id}, c.changedList(), "rename must not fire AccountChanged")
 
 	resp, _ = e.do("PATCH", "/api/accounts/"+id, tok, map[string]string{"name": " "})
 	assert.Equal(t, 400, resp.StatusCode)
@@ -177,4 +177,31 @@ func jsonField(t *testing.T, b []byte, key string) string {
 func unmarshal(t *testing.T, b []byte, v any) {
 	t.Helper()
 	require.NoError(t, json.Unmarshal(b, v), string(b))
+}
+
+func TestAccounts_ListAuthCheckedAtRFC3339(t *testing.T) {
+	e, _ := accountsEnv(t)
+	id := e.createAccount("twitch", "A")
+	e.createAccount("kick", "B")
+	_, err := e.s.d.DB.Exec(`INSERT INTO kv (key, value) VALUES (?, ?)`, "authcheck:"+id, []byte(`{"ok":true,"checked_at":1700000000,"msg":"fine"}`))
+	require.NoError(t, err)
+	_, body := e.do("GET", "/api/accounts", "", nil)
+	var list []struct {
+		ID   string `json:"id"`
+		Auth *struct {
+			OK        bool    `json:"ok"`
+			Detail    string  `json:"detail"`
+			CheckedAt *string `json:"checked_at"`
+		} `json:"auth"`
+	}
+	unmarshal(t, body, &list)
+	for _, it := range list {
+		if it.ID != id {
+			assert.Nil(t, it.Auth)
+			continue
+		}
+		require.NotNil(t, it.Auth)
+		assert.Equal(t, "2023-11-14T22:13:20Z", *it.Auth.CheckedAt)
+		assert.Equal(t, "fine", it.Auth.Detail)
+	}
 }

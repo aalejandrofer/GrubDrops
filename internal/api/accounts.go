@@ -29,9 +29,9 @@ func (s *server) routesAccounts(r chi.Router) {
 }
 
 type accountAuthJSON struct {
-	OK        bool   `json:"ok"`
-	Detail    string `json:"detail"`
-	CheckedAt int64  `json:"checked_at"`
+	OK        bool    `json:"ok"`
+	Detail    string  `json:"detail"`
+	CheckedAt *string `json:"checked_at"` // RFC 3339, null when unknown
 }
 
 type accountJSON struct {
@@ -42,6 +42,15 @@ type accountJSON struct {
 	State      string           `json:"state"`
 	NeedsLogin bool             `json:"needs_login"`
 	Auth       *accountAuthJSON `json:"auth"` // null until a check has run
+}
+
+// unixRFC3339 formats unix seconds as RFC 3339 UTC, nil for 0.
+func unixRFC3339(sec int64) *string {
+	if sec == 0 {
+		return nil
+	}
+	s := time.Unix(sec, 0).UTC().Format(time.RFC3339)
+	return &s
 }
 
 func genAccountID() string {
@@ -80,7 +89,7 @@ func (s *server) listAccounts(w http.ResponseWriter, r *http.Request) {
 			NeedsLogin: state == string(runner.StateNeedsLogin) || !hasSession,
 		}
 		if res, ok := authcheck.Load(ctx, s.d.Q, a.ID); ok {
-			item.Auth = &accountAuthJSON{OK: res.OK, Detail: res.Msg, CheckedAt: res.CheckedAt}
+			item.Auth = &accountAuthJSON{OK: res.OK, Detail: res.Msg, CheckedAt: unixRFC3339(res.CheckedAt)}
 		}
 		out = append(out, item)
 	}
@@ -145,7 +154,6 @@ func (s *server) renameAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
 	}
-	s.accountChanged(id)
 	w.WriteHeader(http.StatusNoContent)
 }
 

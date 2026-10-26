@@ -19,6 +19,7 @@ type twitchFlow struct {
 	mu        sync.Mutex
 	status    string
 	challenge platform.DeviceChallenge
+	ctx       context.Context
 	cancel    context.CancelFunc
 }
 
@@ -59,10 +60,11 @@ func (s *server) twitchDeviceStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// A new start supersedes the old flow so a stale device_code stops polling.
-	s.cancelTwitchFlow(id)
 	ctx, cancel := context.WithCancel(s.rootCtx())
-	fl := &twitchFlow{status: "pending", challenge: ch, cancel: cancel}
-	s.twitch.Store(id, fl)
+	fl := &twitchFlow{status: "pending", challenge: ch, ctx: ctx, cancel: cancel}
+	if old, loaded := s.twitch.Swap(id, fl); loaded {
+		old.(*twitchFlow).cancel()
+	}
 	go s.pollTwitch(ctx, id, backend, fl)
 	writeJSON(w, http.StatusOK, map[string]string{
 		"verification_url": ch.VerificationURL,
@@ -81,6 +83,7 @@ func (s *server) twitchDeviceStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) pollTwitch(ctx context.Context, id string, backend platform.Backend, fl *twitchFlow) {
+	defer fl.cancel()
 	interval := fl.challenge.Interval
 	if interval <= 0 {
 		interval = 5 * time.Second
@@ -106,9 +109,15 @@ func (s *server) pollTwitch(ctx context.Context, id string, backend platform.Bac
 			fl.set("error")
 			return
 		}
+		if ctx.Err() != nil { // superseded or account deleted: store nothing
+			return
+		}
 		if err := s.d.Sessions.Put(ctx, id, sess); err != nil {
 			slog.Error("persist twitch session failed", "kind", "error", "account", id, "err", err)
 			fl.set("error")
+			return
+		}
+		if ctx.Err() != nil {
 			return
 		}
 		slog.Info("twitch device-code authorized", "kind", "auth", "account", id, "platform", "twitch")

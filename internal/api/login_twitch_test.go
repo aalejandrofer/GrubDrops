@@ -105,6 +105,8 @@ func TestTwitchDevice_RestartCancelsOld(t *testing.T) {
 	e.do("POST", "/api/accounts/"+id+"/twitch/device", tok, nil)
 	v2, _ := e.s.twitch.Load(id)
 	assert.NotSame(t, old, v2.(*twitchFlow))
+	assert.Error(t, old.ctx.Err(), "superseded flow must be cancelled")
+	assert.NoError(t, v2.(*twitchFlow).ctx.Err())
 	// Cancelling the superseded flow's context means a second cancel is a no-op
 	// and the delete below cancels the live one, so no goroutine outlives the test.
 	e.do("DELETE", "/api/accounts/"+id, tok, nil)
