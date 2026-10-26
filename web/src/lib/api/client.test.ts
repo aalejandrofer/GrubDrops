@@ -117,9 +117,11 @@ describe('client', () => {
 		await api.claims({ game: 'Rust', account: 'a1', limit: 10, offset: 10 });
 		await api.claims({ game: '', limit: 10 });
 		await api.claims({});
+		await api.claims({ game: 'Rust', limit: 10, offset: 0 });
 		expect(calls[0].url).toBe('/api/claims?game=Rust&account=a1&limit=10&offset=10');
 		expect(calls[1].url).toBe('/api/claims?limit=10');
 		expect(calls[2].url).toBe('/api/claims');
+		expect(calls[3].url).toBe('/api/claims?game=Rust&limit=10&offset=0');
 	});
 
 	it('session authed true re-arms the 401 callback', async () => {

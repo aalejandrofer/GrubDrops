@@ -9,7 +9,7 @@ export function inProgress(r: Runner[]): InProgress[] {
 	const out: InProgress[] = [];
 	for (const runner of r) {
 		const target = runner.current;
-		if (!target) continue;
+		if (!target || runner.state === 'needs_login') continue;
 		const req = target.required_minutes;
 		const pct = req > 0 ? Math.min(100, Math.round((target.minutes / req) * 100)) : 0;
 		out.push({ target, runner, pct, left: Math.max(0, req - target.minutes) });

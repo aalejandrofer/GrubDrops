@@ -152,7 +152,7 @@
   "rewards.head": "{today} today · {total} all time",
   "rewards.in_progress": "In progress",
   "rewards.min_of": "{m} / {req} min",
-  "rewards.eta": "~{min} min",
+  "rewards.eta": "~{eta}",
   "rewards.eta_on": "on {account}",
   "rewards.queued.one": "{n} more drop queued",
   "rewards.queued.other": "{n} more drops queued",
@@ -170,5 +170,6 @@
   "rewards.load_more": "Load more",
   "rewards.empty": "No drops claimed yet.",
   "rewards.empty_filtered": "No claims match these filters.",
-  "rewards.failed": "Couldn't load claims."
+  "rewards.failed": "Couldn't load claims.",
+  "rewards.retry": "Retry"
 }

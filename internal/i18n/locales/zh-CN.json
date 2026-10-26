@@ -152,7 +152,7 @@
   "rewards.head": "今日 {today} · 累计 {total}",
   "rewards.in_progress": "进行中",
   "rewards.min_of": "{m} / {req} 分钟",
-  "rewards.eta": "约 {min} 分钟",
+  "rewards.eta": "约 {eta}",
   "rewards.eta_on": "账号 {account}",
   "rewards.queued.one": "还有 {n} 个掉落在队列中",
   "rewards.queued.other": "还有 {n} 个掉落在队列中",
@@ -170,5 +170,6 @@
   "rewards.load_more": "加载更多",
   "rewards.empty": "尚未领取任何掉落。",
   "rewards.empty_filtered": "没有符合筛选条件的领取记录。",
-  "rewards.failed": "无法加载领取记录。"
+  "rewards.failed": "无法加载领取记录。",
+  "rewards.retry": "重试"
 }

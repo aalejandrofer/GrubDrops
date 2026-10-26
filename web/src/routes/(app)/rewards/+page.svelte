@@ -6,7 +6,7 @@
 	import CopyCommand from '$lib/components/CopyCommand.svelte';
 	import PageHead from '$lib/components/PageHead.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
-	import { claimStamp, formatInt, relTime } from '$lib/format';
+	import { claimStamp, etaShort, formatInt, relTime } from '$lib/format';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
@@ -50,7 +50,10 @@
 		if (append) {
 			const have = new Set(items.map(key));
 			items = [...items, ...r.items.filter((c) => !have.has(key(c)))];
-		} else items = r.items;
+		} else {
+			const seen = new Set<string>();
+			items = r.items.filter((c) => !seen.has(key(c)) && seen.add(key(c)));
+		}
 		total = r.total;
 		games = r.games;
 		accts = r.accounts;
@@ -68,6 +71,10 @@
 			loaded = true;
 		} catch {
 			if (mine !== seq) return;
+			if (!append) {
+				items = [];
+				total = 0;
+			}
 			failed = true;
 		} finally {
 			if (mine === seq) busy = false;
@@ -138,7 +145,7 @@
 							<div class="bar"><i style="width:{p.pct}%"></i></div>
 						</div>
 						<div class="eta">
-							{t('rewards.eta', { min: p.left })}<span
+							{t('rewards.eta', { eta: etaShort(p.left) })}<span
 								>{t('rewards.eta_on', { account: p.runner.account_name })}</span
 							>
 						</div>
@@ -214,11 +221,14 @@
 						<span class="tm">{claimStamp(c.claimed_at, now, prefs.zone, prefs.fmt)}</span>
 					</div>
 				{/each}
-			{:else if loaded && !busy}
+			{:else if loaded && !busy && !failed}
 				<div class="empty">{anyFilter ? t('rewards.empty_filtered') : t('rewards.empty')}</div>
 			{/if}
 			{#if failed}
-				<div class="empty err" role="status">{t('rewards.failed')}</div>
+				<div class="empty err" role="status">
+					{t('rewards.failed')}
+					<button type="button" class="btn" disabled={busy} onclick={() => load(items.length > 0)}>{t('rewards.retry')}</button>
+				</div>
 			{/if}
 			{#if items.length > 0}
 				<div class="hist-foot">

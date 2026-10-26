@@ -152,7 +152,7 @@
   "rewards.head": "{today} hoy · {total} en total",
   "rewards.in_progress": "En curso",
   "rewards.min_of": "{m} / {req} min",
-  "rewards.eta": "~{min} min",
+  "rewards.eta": "~{eta}",
   "rewards.eta_on": "en {account}",
   "rewards.queued.one": "{n} drop más en cola",
   "rewards.queued.other": "{n} drops más en cola",
@@ -170,5 +170,6 @@
   "rewards.load_more": "Cargar más",
   "rewards.empty": "Aún no se ha reclamado ningún drop.",
   "rewards.empty_filtered": "Ninguna reclamación coincide con estos filtros.",
-  "rewards.failed": "No se pudieron cargar las reclamaciones."
+  "rewards.failed": "No se pudieron cargar las reclamaciones.",
+  "rewards.retry": "Reintentar"
 }
