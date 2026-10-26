@@ -8,14 +8,14 @@
 	import CopyCommand from './CopyCommand.svelte';
 	import Icon from './Icon.svelte';
 
-	let { title, stamp, children }: { title: string; stamp?: string; children?: Snippet } = $props();
+	let { title, stamp, status, children }: { title: string; stamp?: string; status?: string; children?: Snippet } = $props();
 	const live = getLive();
 	const net = getNet();
 	const down = $derived(live.unreachable || net.down);
 	const retryIn = $derived(live.unreachable ? live.retryIn : net.retryIn);
 
 	const tone = $derived(headerTone(live.overview, down));
-	const text = $derived(statusText(live.overview, down));
+	const text = $derived(status && !down ? status : statusText(live.overview, down));
 	const chip = $derived(problemChip(live.overview));
 	const last = $derived(
 		live.updatedAt === null

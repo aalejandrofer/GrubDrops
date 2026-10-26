@@ -1,6 +1,656 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
+	import { api } from '$lib/app';
+	import { ApiError } from '$lib/api/client';
+	import type { Game, SearchHit } from '$lib/api/types';
+	import BoxArt from '$lib/components/BoxArt.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import PageHead from '$lib/components/PageHead.svelte';
-	import { t } from '$lib/i18n/index.svelte';
+	import PlatformMark from '$lib/components/PlatformMark.svelte';
+	import { relTime } from '$lib/format';
+	import { campaignLine, commitGames, moveGame, removeGame, suggestions } from '$lib/games';
+	import { t, tn } from '$lib/i18n/index.svelte';
+	import { getLive } from '$lib/live-context';
+	import { prefs } from '$lib/prefs.svelte';
+
+	const live = getLive();
+
+	let now = $state(Date.now());
+	$effect(() => {
+		const id = setInterval(() => (now = Date.now()), 5000);
+		return () => clearInterval(id);
+	});
+
+	let q = $state('');
+	let hits = $state<SearchHit[]>([]);
+	let searchFailed = $state(false);
+	let failed = $state(false);
+	let dupe = $state<number | null>(null);
+	let busy = $state<string | null>(null);
+	let confirming = $state<string | null>(null);
+	let moved = $state<string | null>(null);
+	let drag = $state<{ id: string; from: number; to: number } | null>(null);
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	let flash: ReturnType<typeof setTimeout> | undefined;
+	let seq = 0;
+
+	const games = $derived(live.games?.games ?? []);
+	const lastScan = $derived(live.games?.last_scan_at ?? null);
+	const rows = $derived(drag ? moveGame(games, drag.from, drag.to) : games);
+	const sugg = $derived(suggestions(hits, q));
+	const head = $derived(
+		live.games ? tn('games.head', games.length, { rel: relTime(lastScan, now) }) : undefined
+	);
+
+	function onInput(): void {
+		clearTimeout(timer);
+		searchFailed = false;
+		dupe = null;
+		const text = q.trim();
+		const mine = ++seq;
+		if (!text) {
+			hits = [];
+			return;
+		}
+		timer = setTimeout(async () => {
+			try {
+				const r = await api.searchGames(text);
+				if (mine === seq) hits = r;
+			} catch {
+				if (mine === seq) {
+					hits = [];
+					searchFailed = true;
+				}
+			}
+		}, 200);
+	}
+
+	async function reload(): Promise<void> {
+		try {
+			live.games = await api.games();
+		} catch {
+			/* the games event refetches */
+		}
+	}
+
+	async function add(name: string): Promise<void> {
+		busy = name;
+		failed = false;
+		dupe = null;
+		try {
+			await api.addGame(name);
+			q = '';
+			hits = [];
+			seq++;
+		} catch (e) {
+			if (e instanceof ApiError && e.status === 409 && typeof e.body.priority === 'number') {
+				dupe = e.body.priority;
+			} else {
+				failed = true;
+			}
+		} finally {
+			busy = null;
+		}
+		await reload();
+	}
+
+	async function commit(next: Game[], id?: string): Promise<void> {
+		failed = false;
+		confirming = null;
+		const ok = await commitGames(
+			{
+				get: () => live.games?.games ?? [],
+				set: (g) => {
+					if (live.games) live.games = { ...live.games, games: g.map((x, i) => ({ ...x, priority: i + 1 })) };
+				},
+				setGames: (ids) => api.setGames(ids),
+				fetchGames: async () => (await api.games()).games
+			},
+			next
+		);
+		if (!ok) failed = true;
+		if (ok && id) {
+			moved = id;
+			clearTimeout(flash);
+			flash = setTimeout(() => (moved = null), 600);
+		}
+	}
+
+	function down(e: PointerEvent, id: string, from: number): void {
+		if (e.button !== 0) return;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+		drag = { id, from, to: from };
+	}
+
+	function move(e: PointerEvent): void {
+		if (!drag) return;
+		const list = (e.currentTarget as HTMLElement).closest('.list');
+		if (!list) return;
+		const els = Array.from(list.children);
+		const y = e.clientY;
+		let to = drag.to;
+		els.forEach((el, i) => {
+			const b = el.getBoundingClientRect();
+			if (y >= b.top && y <= b.bottom) to = i;
+		});
+		if (y < els[0].getBoundingClientRect().top) to = 0;
+		if (y > els[els.length - 1].getBoundingClientRect().bottom) to = els.length - 1;
+		drag.to = to;
+	}
+
+	function up(): void {
+		if (!drag) return;
+		const d = drag;
+		drag = null;
+		void commit(moveGame(games, d.from, d.to), d.id);
+	}
+
+	function stateText(g: Game): string {
+		return g.state === 'mining'
+			? t('home.state_mining')
+			: g.state === 'waiting'
+				? t('home.state_waiting')
+				: t('home.state_none');
+	}
+
+	onDestroy(() => {
+		clearTimeout(timer);
+		clearTimeout(flash);
+	});
 </script>
 
-<PageHead title={t('nav.games')} />
+<PageHead title={t('nav.games')} stamp={t('games.stamp')} status={head}>
+	<section class="add" aria-label={t('games.add_label')}>
+		<label class="search">
+			<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+			<input
+				type="search"
+				bind:value={q}
+				oninput={onInput}
+				placeholder={t('games.add_ph')}
+				aria-label={t('games.add_label')}
+				autocomplete="off"
+			/>
+		</label>
+		{#if sugg.length > 0}
+			<ul class="sugg">
+				{#each sugg as s (s.kind === 'hit' ? `h:${s.hit.id}` : 'add')}
+					<li>
+						{#if s.kind === 'hit'}
+							<span class="thumb" aria-hidden="true">{Array.from(s.hit.name)[0]?.toUpperCase() ?? '?'}</span>
+							<span class="nm">
+								<b>{s.hit.name}</b>
+								{#if s.hit.chosen && s.hit.priority !== null}
+									<small>{t('games.already', { n: s.hit.priority })}</small>
+								{/if}
+							</span>
+							<button
+								type="button"
+								class="add-btn"
+								disabled={s.hit.chosen || busy !== null}
+								onclick={() => add(s.hit.name)}>{s.hit.chosen ? t('games.added') : t('games.add')}</button
+							>
+						{:else}
+							<span class="thumb" aria-hidden="true">+</span>
+							<span class="nm"><b>{t('games.add_named', { name: s.name })}</b></span>
+							<button type="button" class="add-btn" disabled={busy !== null} onclick={() => add(s.name)}>{t('games.add')}</button>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		{/if}
+		{#if dupe !== null}<p class="note" role="status">{t('games.already', { n: dupe })}</p>{/if}
+		{#if searchFailed}<p class="err" role="alert">{t('home.search_failed')}</p>{/if}
+		<p class="hint">
+			<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>{t('games.scan_hint')}
+		</p>
+	</section>
+
+	<div class="list-head">
+		<h2>{t('games.list_title')}</h2>
+		<p>{t('games.list_hint')}</p>
+	</div>
+	{#if failed}<p class="err" role="alert">{t('games.save_failed')}</p>{/if}
+
+	{#if live.games && games.length === 0}
+		<p class="empty">{t('games.empty')}</p>
+	{/if}
+	<div class="list">
+		{#each rows as g, i (g.id)}
+			<article class="game" class:moved={moved === g.id} class:dragging={drag?.id === g.id}>
+				<div class="grip">
+					<button type="button" aria-label={t('games.move_up')} title={t('games.move_up')} disabled={i === 0} onclick={() => commit(moveGame(games, i, i - 1), g.id)}>
+						<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
+					</button>
+					<span
+						class="h"
+						title={t('games.drag')}
+						onpointerdown={(e) => down(e, g.id, i)}
+						onpointermove={move}
+						onpointerup={up}
+						onpointercancel={() => (drag = null)}
+						role="presentation"
+					>
+						<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3" /></svg>
+					</span>
+					<button type="button" aria-label={t('games.move_down')} title={t('games.move_down')} disabled={i === rows.length - 1} onclick={() => commit(moveGame(games, i, i + 1), g.id)}>
+						<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+					</button>
+				</div>
+				<div class="artw">
+					<BoxArt src={g.box_art_url} name={g.name} size="lg" />
+					<span class="rank">{String(i + 1).padStart(2, '0')}</span>
+				</div>
+				<div class="body">
+					<div class="status">
+						<h3 class="gname">{g.name}</h3>
+						<span class="state {g.state}">{stateText(g)}</span>
+						{#if confirming === g.id}
+							<span class="conf">
+								<span>{t('games.remove_confirm', { game: g.name })}</span>
+								<button type="button" class="danger" onclick={() => commit(removeGame(games, g.id))}>{t('games.remove')}</button>
+								<button type="button" class="plain" onclick={() => (confirming = null)}>{t('games.cancel')}</button>
+							</span>
+						{:else}
+							<button type="button" class="rm" onclick={() => (confirming = g.id)}>
+								<Icon name="x" size={14} />{t('games.remove')}
+							</button>
+						{/if}
+					</div>
+					{#if g.campaigns.length > 0}
+						<ul class="camps">
+							{#each g.campaigns as c (c.id)}
+								<li>
+									<PlatformMark platform={c.platform} /><span>{c.name}</span><small>{campaignLine(c, prefs.zone)}</small>
+								</li>
+							{/each}
+						</ul>
+					{:else}
+						<p class="muted">{t('games.nothing_live', { rel: relTime(lastScan, now) })}</p>
+					{/if}
+				</div>
+			</article>
+		{/each}
+	</div>
+</PageHead>
+
+<style>
+	.i {
+		width: 14px;
+		height: 14px;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.8;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		flex: none;
+	}
+	.add {
+		position: relative;
+		margin-bottom: 28px;
+	}
+	.search {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		height: 42px;
+		padding: 0 14px;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		background: var(--surface);
+		color: var(--t3);
+	}
+	.search:focus-within {
+		border-color: var(--accent);
+		box-shadow: 0 0 0 3px var(--accent-soft);
+	}
+	.search input {
+		flex: 1;
+		min-width: 0;
+		background: none;
+		border: 0;
+		outline: 0;
+		color: var(--text);
+		font: inherit;
+	}
+	.search input::placeholder {
+		color: var(--t3);
+	}
+	.sugg {
+		margin: 6px 0 0;
+		padding: 4px;
+		list-style: none;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		background: var(--surface-2);
+	}
+	.sugg li {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 8px 10px;
+		border-radius: 6px;
+	}
+	.sugg li:hover {
+		background: var(--surface-3);
+	}
+	.thumb {
+		width: 28px;
+		height: 37px;
+		border-radius: 4px;
+		flex: none;
+		display: grid;
+		place-items: center;
+		background: var(--art-bg);
+		color: var(--t2);
+		font: 600 12px var(--font);
+	}
+	.nm {
+		flex: 1;
+		min-width: 0;
+	}
+	.nm b {
+		font-weight: 500;
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.nm small {
+		color: var(--t3);
+		font-size: 12px;
+	}
+	.add-btn {
+		font-size: 12.5px;
+		font-weight: 500;
+		padding: 4px 10px;
+		border-radius: 6px;
+		border: 1px solid var(--border);
+		background: var(--surface);
+		color: var(--text);
+		cursor: pointer;
+	}
+	.add-btn:hover:not(:disabled) {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+	.add-btn:disabled {
+		color: var(--t2);
+		background: none;
+		border-color: transparent;
+		cursor: default;
+	}
+	.hint {
+		margin: 8px 2px 0;
+		color: var(--t3);
+		font-size: 12px;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.note {
+		margin: 8px 2px 0;
+		font-size: 12.5px;
+		color: var(--t2);
+	}
+	.err {
+		margin: 0 0 10px;
+		font-size: 12px;
+		color: var(--red);
+	}
+	.add .err {
+		margin: 8px 2px 0;
+	}
+	.list-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 12px;
+		flex-wrap: wrap;
+		margin-bottom: 10px;
+	}
+	.list-head h2 {
+		margin: 0;
+		font-size: 13px;
+		font-weight: 600;
+	}
+	.list-head p {
+		margin: 0;
+		color: var(--t2);
+		font-size: 12.5px;
+	}
+	.game {
+		display: grid;
+		grid-template-columns: 36px 116px minmax(0, 1fr);
+		border: 1px solid var(--border-soft);
+		border-radius: 10px;
+		background: var(--surface);
+		overflow: hidden;
+		transition: border-color 0.15s;
+	}
+	.game + .game {
+		margin-top: 10px;
+	}
+	.game.moved {
+		border-color: var(--accent);
+	}
+	.game.dragging {
+		opacity: 0.6;
+		border-color: var(--accent);
+	}
+	.grip {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 2px;
+		border-right: 1px solid var(--border-soft);
+		color: var(--t3);
+	}
+	.h {
+		cursor: grab;
+		padding: 2px 0;
+		touch-action: none;
+		display: grid;
+	}
+	.grip button {
+		width: 26px;
+		height: 22px;
+		display: grid;
+		place-items: center;
+		border: 0;
+		background: none;
+		border-radius: 4px;
+		color: var(--t2);
+		cursor: pointer;
+	}
+	.grip button:hover:not(:disabled) {
+		background: var(--surface-3);
+		color: var(--text);
+	}
+	.grip button:disabled {
+		opacity: 0.3;
+		cursor: default;
+	}
+	.artw {
+		position: relative;
+		overflow: hidden;
+		isolation: isolate;
+		display: grid;
+		min-height: 112px;
+	}
+	.artw::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: 45%;
+		z-index: 1;
+		background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.6));
+		pointer-events: none;
+	}
+	.rank {
+		position: absolute;
+		left: 8px;
+		bottom: 6px;
+		z-index: 2;
+		font: 500 12px/1 var(--mono);
+		color: rgba(255, 255, 255, 0.9);
+	}
+	.artw :global(.art) {
+		min-height: 112px;
+	}
+	.body {
+		padding: 14px 18px;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		gap: 10px;
+	}
+	.status {
+		display: flex;
+		align-items: center;
+		gap: 6px 8px;
+		flex-wrap: wrap;
+	}
+	.gname {
+		margin: 0 4px 0 0;
+		font-size: 15px;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 0;
+	}
+	.state {
+		font-size: 12px;
+		font-weight: 500;
+		padding: 2px 8px;
+		border-radius: 10px;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		white-space: nowrap;
+	}
+	.state::before {
+		content: '';
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: currentColor;
+	}
+	.state.mining {
+		color: var(--green);
+		background: var(--green-soft);
+	}
+	.state.waiting {
+		color: #b48cf8;
+		background: var(--accent-soft);
+	}
+	.state.no_campaign {
+		color: var(--t2);
+		background: var(--surface-3);
+	}
+	.rm {
+		margin-left: auto;
+		color: var(--t3);
+		font-size: 12px;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		background: none;
+		border: 0;
+		padding: 2px 4px;
+		border-radius: 4px;
+		cursor: pointer;
+	}
+	.rm:hover {
+		color: var(--red);
+	}
+	.conf {
+		margin-left: auto;
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 12px;
+		color: var(--text);
+		flex-wrap: wrap;
+	}
+	.conf button {
+		font-size: 12px;
+		border-radius: 6px;
+		padding: 2px 8px;
+		border: 1px solid var(--border);
+		background: none;
+		color: var(--t2);
+		cursor: pointer;
+	}
+	.conf .danger {
+		color: var(--red);
+		border-color: color-mix(in srgb, var(--red) 45%, transparent);
+	}
+	.conf button:hover {
+		color: var(--text);
+		border-color: var(--t2);
+	}
+	.camps {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		display: grid;
+		gap: 6px;
+	}
+	.camps li {
+		display: grid;
+		grid-template-columns: 14px 1fr auto;
+		gap: 10px;
+		align-items: center;
+		font-size: 13px;
+	}
+	.camps li span:nth-child(2) {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.camps li small {
+		color: var(--t3);
+		font: 12px var(--mono);
+		white-space: nowrap;
+	}
+	.muted {
+		color: var(--t2);
+		font-size: 13px;
+		margin: 0;
+	}
+	.empty {
+		padding: 28px 16px;
+		text-align: center;
+		color: var(--t3);
+		font-size: 13px;
+		border: 1px dashed var(--border);
+		border-radius: 10px;
+		margin: 0;
+	}
+	@media (max-width: 720px) {
+		.game {
+			grid-template-columns: 36px 64px minmax(0, 1fr);
+		}
+		.artw,
+		.artw :global(.art) {
+			min-height: 0;
+		}
+		.body {
+			padding: 12px 14px;
+		}
+		.camps li {
+			grid-template-columns: 14px 1fr;
+		}
+		.camps li small {
+			grid-column: 2;
+			margin-top: -4px;
+		}
+	}
+</style>
