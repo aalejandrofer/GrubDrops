@@ -72,7 +72,7 @@ func RunnerJSON(s runner.Snapshot, a gen.Account, custom bool) runnerDTO {
 	up := s.UpNext
 	d := runnerDTO{
 		AccountID: s.AccountID, AccountName: a.DisplayName, Platform: s.Platform,
-		AvatarURL: a.AvatarUrl, State: string(s.State), Channel: s.Channel,
+		AvatarURL: avatarSrc(a.Platform, a.AvatarUrl), State: string(s.State), Channel: s.Channel,
 		ViewerCount: s.ViewerCount, Minutes: s.MinutesWatched,
 		StartedAt: rfc3339(s.StartedAt), LastScanAt: rfc3339(s.LastScanAt),
 		UpNext: make([]targetDTO, 0, len(up)), Blocked: make([]blockedDTO, 0, len(s.Blocked)),

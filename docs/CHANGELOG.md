@@ -39,6 +39,7 @@ All notable changes to GrubDrops.
 - v2 miner: progress notifications fire again (start, 50% and 100%) when turned on in Settings.
 - v2 miner: `log` SSE events take the account name from memory, so logging never waits on the database.
 - v2 miner: shutdown waits for the background loops before closing the Twitch backends and the database, including after an HTTP listen failure.
+- v2 JSON API: Kick avatars on runners, the overview and SSE `runner` events go through the Kick image proxy, so they load in the browser.
 
 ### Removed
 

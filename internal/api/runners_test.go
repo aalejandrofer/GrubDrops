@@ -10,6 +10,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/plan"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/runner"
+	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
 func tgt(game, bid string, mins int) plan.Target {
@@ -80,6 +81,14 @@ func TestRunners_NullsAndEmptyLists(t *testing.T) {
 	assert.Nil(t, r["started_at"])
 	assert.Equal(t, []any{}, r["up_next"])
 	assert.Equal(t, []any{}, r["blocked"])
+}
+
+func TestRunnerJSON_KickAvatarProxied(t *testing.T) {
+	sn := runner.Snapshot{AccountID: "k1", Platform: "kick", State: runner.StateIdle}
+	d := RunnerJSON(sn, gen.Account{ID: "k1", Platform: "kick", AvatarUrl: "https://files.kick.com/a.png"}, false)
+	assert.Equal(t, "/api/img/kick?u=https%3A%2F%2Ffiles.kick.com%2Fa.png", d.AvatarURL)
+	d = RunnerJSON(runner.Snapshot{AccountID: "t1", Platform: "twitch"}, gen.Account{ID: "t1", Platform: "twitch", AvatarUrl: "https://static-cdn.jtvnw.net/a.png"}, false)
+	assert.Equal(t, "https://static-cdn.jtvnw.net/a.png", d.AvatarURL)
 }
 
 func TestRunners_OrderUnknownIDsIgnored(t *testing.T) {
