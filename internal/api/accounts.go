@@ -153,6 +153,9 @@ func (s *server) renameAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
 	}
+	if s.d.AccountRenamed != nil {
+		s.d.AccountRenamed(id, name)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

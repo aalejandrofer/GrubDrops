@@ -56,8 +56,9 @@ type Deps struct {
 	Registry       *platform.Registry
 	RootCtx        context.Context
 	Registrar      KickChannelRegistrar
-	AccountChanged func(id string) // nil-safe
-	AccountRemoved func(id string) // nil-safe
+	AccountChanged func(id string)       // nil-safe
+	AccountRemoved func(id string)       // nil-safe
+	AccountRenamed func(id, name string) // nil-safe; must not block
 
 	// Settings and notifications.
 	Settings         *store.Settings

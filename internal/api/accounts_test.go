@@ -151,10 +151,13 @@ func TestAccounts_DeleteStopsAndKeepsHistory(t *testing.T) {
 
 func TestAccounts_Rename(t *testing.T) {
 	e, c := accountsEnv(t)
+	renamed := map[string]string{}
+	e.s.d.AccountRenamed = func(id, name string) { renamed[id] = name }
 	id := e.createAccount("kick", "Old")
 	_, tok := e.session()
-	resp, _ := e.do("PATCH", "/api/accounts/"+id, tok, map[string]string{"name": "New"})
+	resp, _ := e.do("PATCH", "/api/accounts/"+id, tok, map[string]string{"name": " New "})
 	require.Equal(t, 204, resp.StatusCode)
+	assert.Equal(t, map[string]string{id: "New"}, renamed)
 	a, err := e.s.d.Q.GetAccount(context.Background(), id)
 	require.NoError(t, err)
 	assert.Equal(t, "New", a.DisplayName)

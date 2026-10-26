@@ -550,6 +550,8 @@ func run(ctx context.Context) error {
 			ro.accountRemoved(id)
 			closeTwitchBackend(id)
 		},
+		// Rename fires no reload; only the log name cache follows it.
+		AccountRenamed: ro.names.set,
 
 		Settings:         settingsStore,
 		Notifier:         notifier,
