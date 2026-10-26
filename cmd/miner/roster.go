@@ -252,13 +252,3 @@ func linkOverrideSet(ctx context.Context, q *gen.Queries) map[string]bool {
 	}
 	return set
 }
-
-// loadLinkOverrides returns a membership predicate over linkOverrideSet, nil
-// when there are no overrides — the gate just stays on.
-func loadLinkOverrides(ctx context.Context, q *gen.Queries) func(campaignID string) bool {
-	set := linkOverrideSet(ctx, q)
-	if len(set) == 0 {
-		return nil
-	}
-	return func(campaignID string) bool { return set[campaignID] }
-}

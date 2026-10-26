@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 
-	pb "github.com/aalejandrofer/grubdrops/internal/auth/browser/gen/browser/v1"
 	"github.com/aalejandrofer/grubdrops/internal/runner"
 )
 
@@ -20,11 +19,6 @@ var _ RunnerPool = (*runner.Pool)(nil)
 // Notifier sends one notification event.
 type Notifier interface {
 	Notify(ctx context.Context, event string, fields map[string]any) error
-}
-
-// KickBrowserClient verifies a Kick session through the browser sidecar.
-type KickBrowserClient interface {
-	Authenticate(ctx context.Context, s *pb.KickSession) (*pb.AuthenticateResponse, error)
 }
 
 // KickChannelRegistrar stores the channels picked at Kick login.

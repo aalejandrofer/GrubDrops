@@ -94,3 +94,16 @@ func TestNewRingFromEnv_FallsBackOnGarbage(t *testing.T) {
 	rb := NewRingFromEnv(7)
 	assert.Equal(t, 7, rb.size)
 }
+
+func TestRing_SetHookSeesEveryPush(t *testing.T) {
+	r := NewRing(2)
+	var got []string
+	r.SetHook(func(l LogLine) { got = append(got, l.Msg) })
+	r.Push(LogLine{Msg: "a"})
+	r.PushEvent(KindClaim, "", "b", nil)
+	r.SetHook(nil)
+	r.Push(LogLine{Msg: "c"})
+	if len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Fatalf("hook saw %v, want [a b]", got)
+	}
+}

@@ -3,10 +3,10 @@ package main
 import (
 	"cmp"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,27 +19,27 @@ import (
 	"filippo.io/age"
 	"github.com/alexedwards/scs/v2"
 
+	"github.com/aalejandrofer/grubdrops/internal/api"
 	"github.com/aalejandrofer/grubdrops/internal/auth/browser"
 	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
 	"github.com/aalejandrofer/grubdrops/internal/authcheck"
 	"github.com/aalejandrofer/grubdrops/internal/canary"
+	"github.com/aalejandrofer/grubdrops/internal/collect"
 	"github.com/aalejandrofer/grubdrops/internal/config"
-	"github.com/aalejandrofer/grubdrops/internal/discovery"
 	"github.com/aalejandrofer/grubdrops/internal/dockerctl"
 	"github.com/aalejandrofer/grubdrops/internal/i18n"
-	"github.com/aalejandrofer/grubdrops/internal/legacyapi"
 	mlog "github.com/aalejandrofer/grubdrops/internal/log"
 	"github.com/aalejandrofer/grubdrops/internal/netutil"
 	"github.com/aalejandrofer/grubdrops/internal/notify"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/platform/kick"
 	"github.com/aalejandrofer/grubdrops/internal/platform/twitch"
-	"github.com/aalejandrofer/grubdrops/internal/scheduler"
+	"github.com/aalejandrofer/grubdrops/internal/runner"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/summary"
 	"github.com/aalejandrofer/grubdrops/internal/timeutil"
 	"github.com/aalejandrofer/grubdrops/internal/update"
-	"github.com/aalejandrofer/grubdrops/internal/watcher"
 	"github.com/aalejandrofer/grubdrops/internal/web"
 )
 
@@ -64,7 +64,10 @@ func main() {
 		fmt.Println(key)
 		return
 	}
-	if err := run(); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	err := run(ctx)
+	stop()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "fatal:", err)
 		os.Exit(1)
 	}
@@ -80,7 +83,9 @@ func generateMasterKey() (string, error) {
 	return id.String(), nil
 }
 
-func run() error {
+// run boots the miner and blocks until ctx ends, then shuts down. ctx is the
+// root context: runners, background loops and open SSE streams end with it.
+func run(ctx context.Context) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -91,9 +96,6 @@ func run() error {
 	slog.SetDefault(logger)
 	startTime := time.Now()
 	logger.Info("miner starting", "log_level", cfg.LogLevel, "http_addr", cfg.HTTPAddr, "db_path", cfg.DBPath, "browser_url", cfg.BrowserURL, "secure_cookies", cfg.SecureCookies)
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	db, err := store.Open(ctx, cfg.DBPath)
 	if err != nil {
@@ -114,13 +116,8 @@ func run() error {
 		return fmt.Errorf("load i18n: %w", err)
 	}
 
-	tmplSet, err := web.Templates()
-	if err != nil {
-		return fmt.Errorf("load templates: %w", err)
-	}
-
 	sm := scs.New()
-	sm.Store = legacyapi.NewKVSessionStore(db)
+	sm.Store = api.NewKVSessionStore(db)
 	sm.Lifetime = 12 * time.Hour
 	sm.Cookie.HttpOnly = true
 	sm.Cookie.SameSite = http.SameSiteStrictMode
@@ -252,6 +249,7 @@ func run() error {
 	} else {
 		twitchBackend = twitch.New()
 	}
+	defer twitchBackend.Close()
 	if twitchBrowserEnabled && browserClient != nil {
 		// proxyTransport is nil when no proxy is configured; the browser
 		// backend then dials the Spade beacon direct, same as before.
@@ -271,11 +269,9 @@ func run() error {
 	}
 
 	buildNotifier := func() notify.Notifier {
-		// Build the per-kind filter from the saved toggles every time so
-		// toggling CLAIMS/PROGRESS/AUTH/ERRORS on /settings + Save actually
-		// takes effect (previously the filter was hardcoded all-true, so
-		// PROGRESS fired regardless of the checkbox). State events are
-		// never sent to Discord (too noisy).
+		// Build the per-kind filter from the saved toggles every time so a
+		// settings save takes effect. State events are never sent to Discord
+		// (too noisy).
 		claim, progress, auth, errs, canaryOn := settingsStore.NotifyKinds(ctx)
 		dailySummary, _ := settingsStore.NotifyDailySummary(ctx)
 		filter := &notify.VerbosityFilter{Allow: map[string]bool{
@@ -327,35 +323,34 @@ func run() error {
 
 	notifier := &indirectNotifier{mu: &notifierMu, ptr: &currentNotifier}
 
-	sched := scheduler.New(scheduler.Options{Notifier: notifier})
-
-	// Persister writes every whitelisted campaign the watcher discovers
-	// into the campaigns table so the /drops page can render past +
-	// current + upcoming tabs. Shared by every watcher.
-	campaignPersister := store.NewCampaignPersister(q)
-	// ClaimRecorder persists a claims row after each successful
-	// Backend.Claim. Without it InsertClaim has no production caller
-	// and the /drops Past + /history views stay empty.
-	claimRecorder := store.NewClaimRecorder(q)
+	// Effective display timezone: the in-app setting wins over the TZ env var,
+	// falling back to UTC. Held in a live-swappable Zone so a Settings change
+	// applies without a restart.
+	tzSetting, _ := settingsStore.Timezone(ctx)
+	displayLoc := timeutil.Resolve(tzSetting, os.Getenv("TZ"))
+	displayZone := timeutil.NewZone(displayLoc)
+	cfg.Location = displayLoc
+	// Set process-wide timezone so any residual time.Local-based formatting
+	// matches the display zone at boot.
+	time.Local = displayLoc
 
 	// Per-account direct-Twitch backends. The direct twitch.Backend holds
 	// per-account state (auth, userID/userLogin caches, its own PubSub
 	// socket), so sharing ONE instance across accounts races their tokens
 	// and caches together (audit P0). Give each Twitch account its own
-	// instance, cached across Reloads so we don't leak a PubSub goroutine
-	// per reload. Kick + the browser BrowserBackend are already
+	// instance, cached across rebuilds so we don't leak a PubSub goroutine
+	// per rebuild. Kick + the browser BrowserBackend are already
 	// multi-account-aware (per-account maps), so they keep using the
-	// shared registry instance. The registry's twitch instance stays in
-	// use by the discovery scraper + dashboard channel counters only.
+	// shared registry instance.
 	browserActive := twitchBrowserEnabled && browserClient != nil
 	twitchBackends := map[string]*twitch.Backend{}
 	var twitchBackendsMu sync.Mutex
-	backendFor := func(a gen.Account) (platform.Backend, bool) {
+	backendFor := func(a gen.Account) (platform.Backend, error) {
 		if a.Platform == "twitch" && !browserActive {
 			twitchBackendsMu.Lock()
 			defer twitchBackendsMu.Unlock()
 			if bk, ok := twitchBackends[a.ID]; ok {
-				return bk, true
+				return bk, nil
 			}
 			var bk *twitch.Backend
 			if proxyTransport != nil {
@@ -370,181 +365,61 @@ func run() error {
 				bk = twitch.New()
 			}
 			twitchBackends[a.ID] = bk
-			return bk, true
+			return bk, nil
 		}
-		return registry.Get(a.Platform)
-	}
-
-	build := func(a gen.Account) (scheduler.Entry, error) {
-		b, ok := backendFor(a)
+		b, ok := registry.Get(a.Platform)
 		if !ok {
-			return scheduler.Entry{}, fmt.Errorf("no backend for platform %q", a.Platform)
+			return nil, fmt.Errorf("no backend for platform %q", a.Platform)
 		}
-
-		var sess platform.Session
-		{
-			// verify is a last-resort fallback for when every refresh
-			// attempt fails: it's only consulted if the backend exposes
-			// the cheap AuthChecker probe (Twitch does; a backend that
-			// doesn't gets nil and keeps the old idle-on-refresh-failure
-			// behaviour). See acquireSession's refresh-failure branch.
-			var verify func(ctx context.Context, s platform.Session) error
-			if ac, ok := b.(platform.AuthChecker); ok {
-				verify = ac.VerifyAuth
-			}
-			deps := sessionDeps{
-				get:     sessions.Get,
-				refresh: b.RefreshSession,
-				put:     sessions.Put,
-				logger:  logger,
-				backoff: sessionRetryBackoff,
-				verify:  verify,
-			}
-			s, idleReason, err := acquireSession(ctx, deps, a, time.Now())
-			if err != nil {
-				return scheduler.Entry{}, fmt.Errorf("load session: %w", err)
-			}
-			if idleReason != "" {
-				return scheduler.NewEntry(a.ID, nopRunner{reason: idleReason}), nil
-			}
-			sess = s
-		}
-
-		// Re-register Kick channels from the persisted session blob so
-		// the in-memory channelsByAcc map survives daemon restarts. The
-		// browser login handler also calls this, but boot-time reload
-		// is required because the map is purely in-memory.
-		if a.Platform == "kick" && kickBackend != nil {
-			// Map the account to its username-derived sidecar so StartWatch
-			// can start the right container on demand. Runs every Reload, so
-			// a freshly-added account is registered without a daemon restart.
-			kickBackend.RegisterSidecar(a.ID, a.DisplayName)
-			if chs := decodeKickChannels(sess); len(chs) > 0 {
-				kickBackend.RegisterChannels(a.ID, chs)
-				logger.Info("kick channels restored from session", "account", a.ID, "channels", chs)
-			}
-		}
-
-		allow, rank, names, err := loadAccountWhitelist(ctx, q, a.ID)
-		if err != nil {
-			logger.Warn("load account whitelist failed; mining nothing until fixed",
-				"account", a.ID, "err", err)
-			return scheduler.NewEntry(a.ID, nopRunner{}), nil
-		}
-		allowChannel, err := loadAccountChannels(ctx, q, a.ID)
-		if err != nil {
-			return scheduler.Entry{}, err
-		}
-		if !hasAnyGame(allow) {
-			logger.Info("account has empty game whitelist, idle until games are picked",
-				"account", a.ID)
-			// Authed but nothing to mine yet — surface as "no_games", NOT
-			// the misleading "session expired" auth banner.
-			return scheduler.NewEntry(a.ID, nopRunner{reason: "no_games"}), nil
-		}
-
-		// PriorityMode is a global setting — read once per build (i.e.
-		// per Reload). Watcher snapshots the value for the lifetime of
-		// the entry; the next Reload picks up changes.
-		priorityModeVal, priorityModeErr := settingsStore.PriorityMode(ctx)
-		priorityMode := settingOr(logger, priorityModeVal, priorityModeErr, store.PriorityModeOrdered, "priority_mode")
-
-		// Runtime cadence + progress-notify granularity — read per build (per
-		// Reload) so saving on /settings + reloading takes effect.
-		tickSecVal, tickSecErr := settingsStore.TickIntervalSec(ctx)
-		tickSec := settingOr(logger, tickSecVal, tickSecErr, 60, "tick_interval_sec")
-		progressStepVal, progressStepErr := settingsStore.ProgressNotifyStepPct(ctx)
-		progressStep := settingOr(logger, progressStepVal, progressStepErr, 25, "notify_progress_step_pct")
-
-		// Manual "I've linked it" overrides — campaign ids the user asserted
-		// are account-linked. Loaded per build (per Reload) so toggling +
-		// reloading takes effect. See ForceLinked in watcher.Config.
-		forceLinked := loadLinkOverrides(ctx, q)
-		forceCollected := loadCollectOverrides(ctx, q)
-		persistedSkips, skipRecorder, skipClearer := loadSkipOverrides(ctx, q)
-
-		acctLabel := a.DisplayName
-		w := watcher.New(watcher.Config{
-			AccountID: a.ID, AccountLabel: acctLabel, Platform: a.Platform,
-			Backend: b, Session: sess,
-			Notifier: notifier, TickInterval: time.Duration(tickSec) * time.Second,
-			// LOCKED to 60s, not user-tunable: the watch-ping beacon cadence is
-			// derived from HeartbeatInterval, and Twitch credits exactly 1 minute
-			// per beacon — any value >60s under-credits Twitch watch-time (120s =>
-			// 0.5 min/real-min, measured 2026-06-12). See watcher.heartbeatEveryTicks.
-			HeartbeatInterval:     60 * time.Second,
-			ProgressNotifyStepPct: progressStep,
-			AllowGame:             allow, GameRank: rank,
-			Games:          names,
-			AllowChannel:   allowChannel,
-			PriorityMode:   priorityMode,
-			Persister:      campaignPersister,
-			ClaimRecorder:  claimRecorder,
-			ForceLinked:    forceLinked,
-			ForceCollected: forceCollected,
-			PersistedSkips: persistedSkips,
-			SkipRecorder:   skipRecorder,
-			SkipClearer:    skipClearer,
-			ForceWatcher:   forceWatchStore{q: q},
-		})
-		return scheduler.NewEntry(a.ID, w), nil
+		return b, nil
 	}
-
-	loadAndStart := func(parent context.Context) error {
-		accs, err := q.ListEnabledAccounts(parent)
-		if err != nil {
-			return err
-		}
-		// Collect active account IDs for cleanup
-		activeIDs := make(map[string]bool, len(accs))
-		for _, a := range accs {
-			activeIDs[a.ID] = true
-		}
-		// Clean up backends for deleted accounts
+	closeTwitchBackend := func(id string) {
 		twitchBackendsMu.Lock()
-		for id, bk := range twitchBackends {
-			if !activeIDs[id] {
-				bk.Close()
-				delete(twitchBackends, id)
-				logger.Info("closed twitch backend for removed account", "account", id)
-			}
+		defer twitchBackendsMu.Unlock()
+		if bk, ok := twitchBackends[id]; ok {
+			bk.Close()
+			delete(twitchBackends, id)
+			logger.Info("closed twitch backend", "account", id)
 		}
-		twitchBackendsMu.Unlock()
-		builders := make([]scheduler.EntryBuilder, 0, len(accs))
-		for _, a := range accs {
-			a := a
-			builders = append(builders, func() scheduler.Entry {
-				e, err := build(a)
-				if err != nil {
-					logger.Error("account skipped", "account", a.ID, "err", err)
-					return scheduler.NewEntry(a.ID, nopRunner{})
-				}
-				return e
-			})
-		}
-		return sched.Reload(parent, builders)
 	}
 
-	// reloadAccount restarts a SINGLE account's watcher (targeted account
-	// edit) without touching the rest of the roster.
-	reloadAccount := func(parent context.Context, accountID string) {
-		acc, err := q.GetAccount(parent, accountID)
-		if err != nil {
-			logger.Warn("reloadAccount: account not found", "account", accountID, "err", err)
-			return
-		}
-		sched.ReloadAccount(parent, accountID, func() scheduler.Entry {
-			e, err := build(acc)
-			if err != nil {
-				logger.Error("account skipped on targeted reload", "account", accountID, "err", err)
-				return scheduler.NewEntry(accountID, nopRunner{})
-			}
-			return e
-		})
-	}
+	pool := runner.NewPool(notifier)
+	collector := collect.New(db, q)
+	collector.Loc = displayZone.Location
+	hub := api.NewHub()
+	go hub.Run(ctx)
 
-	if err := loadAndStart(ctx); err != nil {
-		return fmt.Errorf("initial scheduler boot: %w", err)
+	ro := newRoster(roster{
+		ctx:        ctx,
+		q:          q,
+		sessions:   sessions,
+		chosen:     store.NewChosenGames(db, q),
+		skips:      store.NewSkips(q),
+		collector:  collector,
+		hub:        hub,
+		pool:       pool,
+		logger:     logger,
+		backendFor: backendFor,
+		notifier:   notifier,
+	}, kickBackend)
+
+	// Every ring line goes out as a `log` SSE event.
+	ring.SetHook(func(l mlog.LogLine) {
+		var name string
+		if id := api.LogAccountID(l); id != "" {
+			if a, err := q.GetAccount(ctx, id); err == nil {
+				name = a.DisplayName
+			}
+		}
+		hub.Publish(api.Event{Name: api.EventLog, Data: api.LogEventJSON(l, name)})
+	})
+
+	builders, err := ro.builders(ctx)
+	if err != nil {
+		return fmt.Errorf("list accounts: %w", err)
+	}
+	if err := pool.Reload(ctx, builders); err != nil {
+		return fmt.Errorf("initial runner boot: %w", err)
 	}
 
 	// Now that the initial Reload has registered every enabled Kick account's
@@ -552,40 +427,20 @@ func run() error {
 	// container whose account is gone. Unlabeled hand-defined sidecars are
 	// never listed by the sweep, so they survive untouched. The periodic
 	// reaper repeats this every minute (covers account deletions at runtime).
-	if kickBackend != nil {
-		kickBackend.SweepSidecars(ctx)
-	}
-
-	// Anonymous active-drops scraper: keeps the /drops page populated
-	// with every active whitelisted campaign even when no watcher has
-	// ticked recently (e.g. all accounts disabled, sessions expired).
-	// Providers borrow ONE shared session per platform — the first
-	// enabled account's — so we don't multiply the gql cost across the
-	// account roster. Whitelist is the union of every enabled account's
-	// game opt-ins; non-whitelisted games are never scraped.
-	// Cadence comes from the /settings DB value (minutes); the env var,
-	// when set, overrides it (ops escape hatch).
-	discMinVal, discMinErr := settingsStore.DiscoveryIntervalMin(ctx)
-	discMin := settingOr(logger, discMinVal, discMinErr, 30, "discovery_interval_min")
-	discoveryInterval := parseDuration(os.Getenv("GRUB_DISCOVERY_INTERVAL"), time.Duration(discMin)*time.Minute)
-	startDiscovery(ctx, logger, q, sessions, registry, campaignPersister, discoveryInterval)
+	kickBackend.SweepSidecars(ctx)
 
 	// Auth-health sweep: probe each account's auth (Twitch token / Kick
 	// cookies) on a long cadence so the operator sees a "needs re-auth"
-	// flag before an account silently stops mining. CheckAll is also wired
-	// to a manual button on /accounts.
-	//
-	// Attach the notifier so an account whose auth dies raises an alert
-	// instead of silently stopping. EventAuth had no producer before this.
+	// flag before an account silently stops mining. The notifier raises an
+	// alert when an account's auth dies.
 	authChecker := authcheck.New(q, sessions, registry).WithNotifier(notifier)
 	authInterval := parseDuration(os.Getenv("GRUB_AUTHCHECK_INTERVAL"), time.Hour)
 	go authChecker.Run(ctx, authInterval)
 
 	// Accrual canary: periodically probes the Twitch beacon and Kick WS
-	// transports so the operator sees a canary result on the dashboard
-	// without waiting for an actual campaign to be live. Borrows ONE shared
-	// session per platform (first enabled account) — the same pattern as
-	// internal/discovery. Channel + interval come from settingsStore; the
+	// transports so the operator sees a canary result without waiting for an
+	// actual campaign to be live. Borrows ONE shared session per platform
+	// (first enabled account). Channel + interval come from settingsStore; the
 	// GRUB_CANARY_INTERVAL env var overrides the DB value for ops use.
 	canarySource := canary.SessionSource(func(runCtx context.Context, plat string) (platform.Session, bool, error) {
 		accs, err := q.ListEnabledAccounts(runCtx)
@@ -628,92 +483,109 @@ func run() error {
 	go canaryRunner.Run(ctx, canaryInterval)
 
 	// Update checker: background GitHub-release poll (boot + every interval),
-	// cached so the render path never calls GitHub. Disabled by GRUB_UPDATE_CHECK=0.
+	// cached so the request path never calls GitHub. Disabled by GRUB_UPDATE_CHECK=0.
+	var updateChecker *update.Checker
 	var updateStatus func(current string) (bool, string)
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("GRUB_UPDATE_CHECK"))); v != "0" && v != "false" {
 		updateClient := &http.Client{Timeout: 10 * time.Second}
 		if proxyTransport != nil {
 			updateClient.Transport = proxyTransport
 		}
-		updateChecker := update.NewChecker(updateClient, "aalejandrofer/GrubDrops", settingsStore)
+		updateChecker = update.NewChecker(updateClient, "aalejandrofer/GrubDrops", settingsStore)
 		updateInterval := parseDuration(os.Getenv("GRUB_UPDATE_INTERVAL"), 6*time.Hour)
 		go updateChecker.Run(ctx, updateInterval)
 		updateStatus = updateChecker.Status
 	}
 
-	// Avoid typed-nil-interface trap: only assign if the concrete pointer is non-nil.
-	var bc legacyapi.KickBrowserClient
-	if browserClient != nil {
-		bc = browserClient // *browser.Client satisfies KickBrowserClient
-	}
-	// The Kick registrar/verifier is the utls backend — always wire it
-	// (independent of the browser sidecar) so Kick login can register
-	// channels + verify cookies over utls with no sidecar.
-	var reg legacyapi.KickChannelRegistrar
-	if kickBackend != nil {
-		reg = kickBackend // *kick.Backend: RegisterChannels + VerifyAuth
-	}
+	// Daily summary at each local midnight, when turned on in Settings.
+	go summary.Run(ctx, summary.Config{
+		Settings: settingsStore,
+		Minutes:  collector.Minutes,
+		Claims:   collector.Claims,
+		Notifier: notifier,
+		Zone:     displayZone.Location,
+	})
 
-	// Effective display timezone: the in-app setting wins over the TZ env var,
-	// falling back to UTC. Held in a live-swappable Zone so a Settings change
-	// applies without a restart. cfg.Location (from TZ env) is the fallback.
-	tzSetting, _ := settingsStore.Timezone(ctx)
-	displayLoc := timeutil.Resolve(tzSetting, os.Getenv("TZ"))
-	displayZone := timeutil.NewZone(displayLoc)
-	cfg.Location = displayLoc
+	deps := api.Deps{
+		DB: db, Q: q, Session: sm,
+		OIDC:          oidcProvider,
+		SecureCookies: cfg.SecureCookies,
+		Version:       cmp.Or(version, os.Getenv("GRUB_VERSION")),
+		SPA:           web.Dist(),
+		Hub:           hub,
 
-	deps := legacyapi.Deps{
-		DB: db, Q: q, Templates: tmplSet, Session: sm,
-		Scheduler: sched, Reload: loadAndStart,
-		Sessions: sessions, Registry: registry,
-		RootCtx:           ctx,
-		BrowserClient:     bc,
-		Registrar:         reg,
-		SettingsStore:     settingsStore,
-		OnSettingsUpdate:  onSettingsUpdate,
-		Notifier:          notifier,
-		AuthCheck:         authChecker.CheckAll,
-		RunCanary:         canaryRunner.RunOnce,
-		ReloadAccount:     reloadAccount,
-		TwitchBrowser:     twitchBrowserEnabled && browserClient != nil,
-		LogRing:           ring,
-		StartTime:         startTime,
-		LogLevelEnv:       cfg.LogLevel,
-		BrowserURLDisplay: cfg.BrowserURL,
-		KickSidecars:      kickSidecarLister(kickBackend),
-		KickActivePath:    kickActivePathFn(kickBackend),
-		GitCommit:         os.Getenv("GIT_COMMIT"),
-		Version:           cmp.Or(version, os.Getenv("GRUB_VERSION")),
-		UpdateStatus:      updateStatus,
-		OIDC:              oidcProvider,
-		SecureCookies:     cfg.SecureCookies,
-		Zone:              displayZone,
+		Pool:         pool,
+		Minutes:      collector.Minutes,
+		Claims:       collector.Claims,
+		Scans:        collector.Scans,
+		Zone:         displayZone.Location,
+		UpdateStatus: updateStatus,
+
+		Chosen:       ro.chosen,
+		Board:        collector.Board,
+		GamesChanged: ro.gamesChanged,
+
+		Sessions:  sessions,
+		Registry:  registry,
+		RootCtx:   ctx,
+		Registrar: kickBackend,
+		AccountChanged: func(id string) {
+			ro.reloadAccount(id)
+			hub.Publish(api.Event{Name: api.EventAccounts, Data: struct{}{}})
+		},
+		AccountRemoved: func(id string) {
+			ro.accountRemoved(id)
+			closeTwitchBackend(id)
+		},
+
+		Settings:         settingsStore,
+		Notifier:         notifier,
+		WebhookFallback:  cfg.DiscordWebhookURL,
+		OnSettingsUpdate: onSettingsUpdate,
+		SetZone: func(name string) {
+			displayZone.Set(timeutil.Resolve(name, os.Getenv("TZ")))
+		},
+
+		Ring:         ring,
+		StartTime:    startTime,
+		Commit:       os.Getenv("GIT_COMMIT"),
+		KickSidecars: kickSidecarLister(kickBackend),
+		RunCanary:    canaryRunner.RunOnce,
+		Update:       updateChecker,
 	}
-
-	// Set process-wide timezone so any residual time.Local-based formatting
-	// matches the display zone at boot.
-	time.Local = displayLoc
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           legacyapi.NewRouter(deps),
+		Handler:           api.NewRouter(deps),
 		ReadHeaderTimeout: 5 * time.Second,
+		// Requests inherit the root ctx, so open SSE streams end on shutdown
+		// instead of holding srv.Shutdown until its deadline.
+		BaseContext: func(net.Listener) context.Context { return ctx },
 	}
 
+	srvErr := make(chan error, 1)
 	go func() {
 		logger.Info("http listening", "addr", cfg.HTTPAddr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("http server", "err", err)
+			srvErr <- err
 		}
 	}()
 
-	<-ctx.Done()
+	var runErr error
+	select {
+	case <-ctx.Done():
+	case runErr = <-srvErr:
+		logger.Error("http server", "err", runErr)
+	}
 	logger.Info("shutting down")
+	ring.SetHook(nil)
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
 
-	// Close all Twitch backends to stop PubSub goroutines
+	pool.Stop()
+
+	// Close all Twitch backends to stop PubSub goroutines.
 	twitchBackendsMu.Lock()
 	for id, bk := range twitchBackends {
 		bk.Close()
@@ -721,106 +593,7 @@ func run() error {
 	}
 	twitchBackends = map[string]*twitch.Backend{}
 	twitchBackendsMu.Unlock()
-
-	sched.Stop(shutdownCtx)
-	return nil
-}
-
-// nopRunner is an idle placeholder entry for an account the scheduler can't
-// actively mine. The reason field tells the dashboard WHY it's idle so a
-// fully-authed account that merely lacks whitelisted games isn't mislabelled
-// "session expired or never authenticated". An empty reason defaults to
-// "needs_auth" (see scheduler.idleState).
-type nopRunner struct{ reason string }
-
-func (nopRunner) Run(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }
-
-// IdleState satisfies scheduler.idleStateReporter so the dashboard surfaces
-// the real idle reason instead of a blanket auth error.
-func (n nopRunner) IdleState() string { return n.reason }
-
-// loadCollectOverrides reads the manual "mark collected" assertions from kv
-// (keys prefixed store.CollectOverridePrefix, value "1") and returns a
-// membership predicate keyed by (accountID, benefitID). The kv key encodes
-// benefitID + ":" + accountID. Errors degrade to "no overrides" (nil), so the
-// reconcile prune keeps its normal behaviour. Loaded per build (per Reload) so
-// marking + reloading takes effect immediately.
-func loadCollectOverrides(ctx context.Context, q *gen.Queries) func(accountID, benefitID string) bool {
-	set := map[string]bool{}
-	rows, err := q.ListKVByPrefix(ctx, sql.NullString{String: store.CollectOverridePrefix, Valid: true})
-	if err == nil {
-		for _, kv := range rows {
-			if string(kv.Value) != "1" {
-				continue
-			}
-			set[strings.TrimPrefix(kv.Key, store.CollectOverridePrefix)] = true
-		}
-	}
-	if len(set) == 0 {
-		return nil
-	}
-	return func(accountID, benefitID string) bool { return set[benefitID+":"+accountID] }
-}
-
-// loadSkipOverrides reads the ghost-skip assertions from kv (keys prefixed
-// store.SkipOverridePrefix) and returns three closures:
-//
-//   - persistedSkips(accountID): returns the set of benefit IDs previously
-//     recorded as skipped for this account. The watcher seeds its
-//     skippedBenefits map with this at New() time, so a freshly-started
-//     watcher already knows about prior skips.
-//   - skipRecorder(accountID, benefitID): writes a new skip row so the next
-//     process start re-loads it.
-//   - skipClearer(accountID, benefitID): deletes a skip row when the watcher
-//     finds the benefit back in the in-progress inventory (the ghost-skip
-//     was a false positive), so a transient enrollment lag can't strand a
-//     legitimate drop permanently.
-//
-// All encode the key as SkipOverridePrefix + benefitID + ":" + accountID,
-// mirroring the collect_override convention. *gen.Queries wraps *sql.DB
-// which is goroutine-safe, so the build-time q can be reused from the
-// watcher goroutine. A read failure degrades to "no prior skips" (legacy
-// restart behavior); a write failure is surfaced by the watcher, which
-// logs it and continues with the in-memory skip for this run.
-func loadSkipOverrides(ctx context.Context, q *gen.Queries) (
-	persistedSkips func(accountID string) (map[string]bool, error),
-	skipRecorder func(accountID, benefitID string) error,
-	skipClearer func(accountID, benefitID string) error,
-) {
-	set := map[string]bool{}
-	rows, err := q.ListKVByPrefix(ctx, sql.NullString{String: store.SkipOverridePrefix, Valid: true})
-	if err == nil {
-		for _, kv := range rows {
-			if string(kv.Value) != "1" {
-				continue
-			}
-			set[strings.TrimPrefix(kv.Key, store.SkipOverridePrefix)] = true
-		}
-	}
-	persistedSkips = func(accountID string) (map[string]bool, error) {
-		out := map[string]bool{}
-		for k := range set {
-			// k = benefitID + ":" + accountID
-			benefitID, acc, ok := strings.Cut(k, ":")
-			if !ok || acc != accountID {
-				continue
-			}
-			out[benefitID] = true
-		}
-		return out, nil
-	}
-	skipRecorder = func(accountID, benefitID string) error {
-		key := store.SkipOverridePrefix + benefitID + ":" + accountID
-		return q.UpsertSettingString(context.Background(), gen.UpsertSettingStringParams{
-			Key:   key,
-			Value: []byte("1"),
-		})
-	}
-	skipClearer = func(accountID, benefitID string) error {
-		key := store.SkipOverridePrefix + benefitID + ":" + accountID
-		return q.DeleteKV(context.Background(), key)
-	}
-	return persistedSkips, skipRecorder, skipClearer
+	return runErr
 }
 
 type indirectNotifier struct {
@@ -890,115 +663,6 @@ func decodeKickChannels(s platform.Session) []string {
 	return out
 }
 
-// loadAccountWhitelist materialises the per-account game allow-list
-// into match + rank closures the watcher consumes, plus the plain
-// display names (as stored in the games table) that feed
-// watcher.Config.Games / platform.Session.Games for TV-client
-// discovery (chandisc.go listByChannels). When the account has NO rows
-// of its own, falls back to the global priority list (settings →
-// Global priority). Returns nil closures (and a nil names slice) only
-// when BOTH the account-specific and global lists are empty.
-func loadAccountWhitelist(ctx context.Context, q *gen.Queries, accountID string) (func(string) bool, func(string) int, []string, error) {
-	rows, err := q.ListAccountGames(ctx, accountID)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("list account games: %w", err)
-	}
-	if len(rows) == 0 {
-		// Fall back to global priority list when account has no
-		// override. The data shape matches ListAccountGames so we
-		// reuse the rest of the function.
-		gRows, gErr := q.ListGlobalGames(ctx)
-		if gErr != nil {
-			return nil, nil, nil, fmt.Errorf("list global games: %w", gErr)
-		}
-		if len(gRows) == 0 {
-			return nil, nil, nil, nil
-		}
-		rows = make([]gen.ListAccountGamesRow, len(gRows))
-		for i, r := range gRows {
-			rows[i] = gen.ListAccountGamesRow{ID: r.ID, Name: r.Name, Slug: r.Slug, Rank: r.Rank}
-		}
-	}
-	// game.name (lowercased) -> rank
-	rankByName := make(map[string]int, len(rows))
-	// game.slug -> rank, in case backends report by slug
-	rankBySlug := make(map[string]int, len(rows))
-	names := make([]string, 0, len(rows))
-	for _, r := range rows {
-		rankByName[strings.ToLower(r.Name)] = int(r.Rank)
-		rankBySlug[r.Slug] = int(r.Rank)
-		names = append(names, r.Name)
-	}
-	allow := func(game string) bool {
-		g := strings.ToLower(game)
-		if _, ok := rankByName[g]; ok {
-			return true
-		}
-		_, ok := rankBySlug[g]
-		return ok
-	}
-	rank := func(game string) int {
-		g := strings.ToLower(game)
-		if r, ok := rankByName[g]; ok {
-			return r
-		}
-		if r, ok := rankBySlug[g]; ok {
-			return r
-		}
-		return 1 << 30
-	}
-	return allow, rank, names, nil
-}
-
-func hasAnyGame(allow func(string) bool) bool {
-	return allow != nil
-}
-
-// loadAccountChannels materialises the per-account channel whitelist
-// into a match closure the watcher consumes. Returns a nil closure when
-// the account has no channel rows (so the watcher's filter ignores it).
-// Used to mine null-game drops the user has opted an account into.
-func loadAccountChannels(ctx context.Context, q *gen.Queries, accountID string) (func([]string) bool, error) {
-	rows, err := q.ListAccountChannels(ctx, accountID)
-	if err != nil {
-		return nil, fmt.Errorf("list account channels: %w", err)
-	}
-	if len(rows) == 0 {
-		return nil, nil
-	}
-	set := make(map[string]struct{}, len(rows))
-	for _, r := range rows {
-		set[strings.ToLower(strings.TrimSpace(r.Channel))] = struct{}{}
-	}
-	allow := func(channels []string) bool {
-		for _, ch := range channels {
-			if _, ok := set[strings.ToLower(strings.TrimSpace(ch))]; ok {
-				return true
-			}
-		}
-		return false
-	}
-	return allow, nil
-}
-
-// forceWatchStore adapts the per-account force-watch channel list to
-// watcher.ForceWatchSource: when channel-points mining is enabled for an
-// account and at least one force channel is configured, the watcher
-// force-watches the highest-priority one while idle.
-type forceWatchStore struct{ q *gen.Queries }
-
-func (f forceWatchStore) Next(ctx context.Context, accountID string) (watcher.ForceTask, bool) {
-	v, err := f.q.GetSettingString(ctx, legacyapi.ForceWatchEnabledKey(accountID))
-	if err != nil || string(v) != "1" {
-		return watcher.ForceTask{}, false
-	}
-	rows, err := f.q.ListForceChannels(ctx, accountID)
-	if err != nil || len(rows) == 0 {
-		return watcher.ForceTask{}, false
-	}
-	return watcher.ForceTask{Channel: rows[0].Channel}, true
-}
-
 // parseDuration parses a Go duration string (e.g. "5m", "30s") with a
 // fallback when the env var is empty or malformed. Matches the pattern
 // used elsewhere in the codebase for config-by-env.
@@ -1011,67 +675,6 @@ func parseDuration(raw string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return d
-}
-
-// startDiscovery wires the anonymous active-drops scraper. Providers
-// are added only when the prerequisite backend is registered; a missing
-// twitch/kick backend means that Provider is silently omitted (the
-// remaining ones still run).
-//
-// Falls back to a graceful no-op for each platform when:
-//   - the backend isn't registered (sidecar absent for Kick, etc.), OR
-//   - no enabled account on that platform has a usable session.
-//
-// In either case a single warning is logged and Run returns without
-// touching the persister. The persister is the same one the watchers
-// use, so duplicate writes are harmless (UPSERT).
-func startDiscovery(
-	ctx context.Context,
-	logger *slog.Logger,
-	q *gen.Queries,
-	sessions *store.SessionStore,
-	registry *platform.Registry,
-	persister *store.CampaignPersister,
-	interval time.Duration,
-) {
-	providers := make([]discovery.Provider, 0, 2)
-	if b, ok := registry.Get("twitch"); ok {
-		providers = append(providers, discovery.NewTwitchScraperFromStore(q, sessions, b))
-	} else {
-		logger.Warn("discovery: no twitch backend registered; skipping twitch scraper")
-	}
-	if b, ok := registry.Get("kick"); ok {
-		providers = append(providers, discovery.NewKickScraperFromStore(q, sessions, b))
-	} else {
-		logger.Warn("discovery: no kick backend registered (GRUB_BROWSER_URL empty?); skipping kick scraper")
-	}
-	if len(providers) == 0 {
-		logger.Warn("discovery: no providers configured; /drops page will only show watcher-discovered campaigns")
-		return
-	}
-	scraper := discovery.New(persister, discovery.NewQueriesWhitelist(q), providers...)
-	logger.Info("discovery scraper started", "interval", interval, "providers", len(providers))
-	go scraper.Run(ctx, interval)
-
-	// Auto-clean stale drop channels (account_channels whose null-game
-	// campaign has ended). Runs on the discovery cadence, just after each
-	// scrape has had a chance to refresh the campaigns table.
-	go func() {
-		t := time.NewTicker(interval)
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-t.C:
-				if n, err := store.SweepStaleDropChannels(ctx, q, time.Now().Unix()); err != nil {
-					slog.Warn("drop-channel sweep failed", "err", err)
-				} else if n > 0 {
-					slog.Info("drop-channel sweep removed stale channels", "kind", "discovery", "removed", n)
-				}
-			}
-		}
-	}()
 }
 
 // kickSidecarLister returns a closure the Status panel calls to list the
@@ -1088,15 +691,6 @@ func kickSidecarLister(b *kick.Backend) func() []string {
 		defer cancel()
 		return b.RunningSidecarAddrs(ctx)
 	}
-}
-
-// kickActivePathFn returns a closure the dashboard calls to tag each Kick row
-// with its live watch path ("ws"|"chrome"), or nil when no Kick backend exists.
-func kickActivePathFn(b *kick.Backend) func(string) string {
-	if b == nil {
-		return nil
-	}
-	return b.ActiveWatchPath
 }
 
 // maskProxyURL masks credentials in proxy URLs for safe logging.

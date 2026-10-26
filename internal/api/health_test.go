@@ -179,3 +179,12 @@ func TestHealth_CanaryNoOverlap(t *testing.T) {
 	e.do("POST", "/api/health/canary", tok, nil)
 	require.Eventually(t, func() bool { return starts.Load() == 2 }, 2*time.Second, 10*time.Millisecond)
 }
+
+func TestLogEventJSON_MatchesHealthEvent(t *testing.T) {
+	at := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	l := mlog.LogLine{TS: at, Level: "INFO", Kind: mlog.KindClaim, Msg: "claimed", Fields: map[string]any{"account": "a1"}}
+	b, err := json.Marshal(LogEventJSON(l, "Alice"))
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"at":"2026-10-25T12:00:00Z","level":"INFO","kind":"claim","account_id":"a1","account_name":"Alice","msg":"claimed"}`, string(b))
+	assert.Equal(t, "", LogAccountID(mlog.LogLine{}))
+}

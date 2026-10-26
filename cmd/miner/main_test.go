@@ -2,6 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"io"
+	"net"
+	"net/http"
+	"net/http/cookiejar"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -9,40 +16,93 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/aalejandrofer/grubdrops/internal/store"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
-func TestLoadAccountChannels(t *testing.T) {
-	ctx := context.Background()
-	db, err := store.Open(ctx, t.TempDir()+"/t.db")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	q := gen.New(db)
-	now := time.Now().Unix()
-
-	_, err = q.CreateAccount(ctx, gen.CreateAccountParams{
-		ID: "acc-1", Platform: "kick", DisplayName: "k",
-		Status: "idle", FingerprintJson: "{}", Enabled: 1,
-		CreatedAt: now, UpdatedAt: now,
-	})
+// TestRun_BootsAndServesAPI boots the whole miner against a temp DB, checks
+// the JSON API and the placeholder SPA answer, then cancels and expects a
+// clean shutdown inside 10 s.
+func TestRun_BootsAndServesAPI(t *testing.T) {
+	key, err := generateMasterKey()
 	require.NoError(t, err)
 
-	// No channels yet -> nil closure.
-	allow, err := loadAccountChannels(ctx, q, "acc-1")
+	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	assert.Nil(t, allow)
+	addr := l.Addr().String()
+	require.NoError(t, l.Close())
 
-	require.NoError(t, q.AddAccountChannel(ctx, gen.AddAccountChannelParams{
-		AccountID: "acc-1", Channel: "adrianozendejas32", Rank: 0,
-	}))
+	t.Setenv("GRUB_MASTER_KEY", key)
+	t.Setenv("GRUB_DB_PATH", filepath.Join(t.TempDir(), "miner.db"))
+	t.Setenv("GRUB_HTTP_ADDR", addr)
+	t.Setenv("GRUB_UPDATE_CHECK", "0")
+	t.Setenv("GRUB_SECURE_COOKIES", "0")
+	t.Setenv("GRUB_BROWSER_URL", "")
+	t.Setenv("GRUB_BROWSER_URLS", "")
 
-	allow, err = loadAccountChannels(ctx, q, "acc-1")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- run(ctx) }()
+
+	base := "http://" + addr
+	jar, err := cookiejar.New(nil)
 	require.NoError(t, err)
-	require.NotNil(t, allow)
-	// Case-insensitive match against a campaign's AllowedChannels.
-	assert.True(t, allow([]string{"Adrianozendejas32"}))
-	assert.False(t, allow([]string{"xqc"}))
-	assert.False(t, allow(nil))
+	client := &http.Client{Timeout: 5 * time.Second, Jar: jar}
+
+	var resp *http.Response
+	require.Eventually(t, func() bool {
+		r, err := client.Get(base + "/api/session")
+		if err != nil {
+			return false
+		}
+		resp = r
+		return true
+	}, 10*time.Second, 50*time.Millisecond, "miner did not start listening")
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Contains(t, resp.Header.Get("Content-Type"), "application/json")
+	var sess map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&sess))
+	assert.Equal(t, true, sess["setup_needed"])
+	token, _ := sess["csrf_token"].(string)
+	require.NotEmpty(t, token)
+
+	// Create the admin so the SSE stream below is a real, held-open stream.
+	req, err := http.NewRequest(http.MethodPost, base+"/api/setup", strings.NewReader(`{"password":"hunter2hunter2","confirm":"hunter2hunter2"}`))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-CSRF-Token", token)
+	setup, err := client.Do(req)
+	require.NoError(t, err)
+	_ = setup.Body.Close()
+	require.Equal(t, http.StatusNoContent, setup.StatusCode)
+
+	// An open SSE stream must not hold shutdown up.
+	sseClient := &http.Client{Jar: jar}
+	sse, err := sseClient.Get(base + "/api/events")
+	require.NoError(t, err)
+	defer sse.Body.Close()
+	require.Equal(t, http.StatusOK, sse.StatusCode)
+	require.Contains(t, sse.Header.Get("Content-Type"), "text/event-stream")
+
+	page, err := client.Get(base + "/")
+	require.NoError(t, err)
+	body, err := io.ReadAll(page.Body)
+	_ = page.Body.Close()
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, page.StatusCode)
+	assert.True(t, strings.Contains(string(body), "GrubDrops"), "placeholder SPA not served")
+
+	start := time.Now()
+	cancel()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("run did not shut down within 10 s")
+	}
+	// srv.Shutdown waits up to 5 s for open requests; the SSE stream must
+	// end with the root ctx well before that.
+	assert.Less(t, time.Since(start), 4*time.Second, "SSE stream held shutdown")
 }
 
 // TestGenerateMasterKey_IsAcceptedByCryptor proves the `keygen` subcommand

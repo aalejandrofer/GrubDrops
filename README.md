@@ -5,7 +5,7 @@ Twitch no longer lists campaigns for new logins, so GrubDrops only finds drops f
 > [!CAUTION]
 > **GrubDrops is currently not working as expected. Critical Auth Issues**
 <p align="center">
-  <img src="internal/web/static/img/logo.png" width="160" alt="GrubDrops">
+  <img src="assets/img/logo.png" width="160" alt="GrubDrops">
 </p>
 
 <p align="center"><sub><strong>English</strong> · <a href="docs/translations/README.zh-CN.md">简体中文</a> · <a href="docs/translations/README.es.md">Español</a></sub></p>
@@ -16,7 +16,7 @@ Twitch no longer lists campaigns for new logins, so GrubDrops only finds drops f
   <img alt="Go" src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white">
   <img alt="Twitch" src="https://img.shields.io/badge/Twitch-drops-9146FF?logo=twitch&logoColor=white">
   <img alt="Kick" src="https://img.shields.io/badge/Kick-drops-53FC18?logo=kick&logoColor=black">
-  <img alt="UI" src="https://img.shields.io/badge/UI-HTMX%20%2B%20Go%20templates-2c2c2c">
+  <img alt="UI" src="https://img.shields.io/badge/UI-SvelteKit%20SPA-2c2c2c">
   <img alt="Storage" src="https://img.shields.io/badge/DB-SQLite-003B57?logo=sqlite&logoColor=white">
   <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-Docker-2496ED?logo=docker&logoColor=white">
   <img alt="Tested browser" src="https://img.shields.io/badge/tested-Chrome%20149-4285F4?logo=googlechrome&logoColor=white">
@@ -219,7 +219,6 @@ default shown.
 | `GRUB_KICK_SIDECAR_PORT` | `9090` | Sidecar gRPC port. |
 | `GRUB_BROWSER_URL` | none | Fixed sidecar address (legacy always-on). |
 | `GRUB_BROWSER_URLS` | none | Always-on sidecar pool, comma-separated. |
-| `GRUB_DISCOVERY_INTERVAL` | `60m` | Catalog-scrape cadence; also in Settings. |
 | `GRUB_AUTHCHECK_INTERVAL` | `1h` | Auth-health sweep cadence. |
 | `GRUB_DISCORD_WEBHOOK` | none | Global Discord webhook. |
 | `GRUB_SECURE_COOKIES` | `0` | `1` marks cookies `Secure` (HTTPS only); keep `0` for plain HTTP — see note. |
@@ -251,26 +250,25 @@ the first four are set:
 > **Heads up:** with no allowlist set, anyone the IdP authenticates becomes an
 > admin. Scope membership in the IdP, or set an allowlist.
 
-## The pages
+## The web UI
 
-| Page | What's on it |
-|------|------|
-| **Console** (`/`) | Lifetime stats, per-account mining, live event feed. |
-| **Drops** (`/drops`) | Past / current / upcoming campaigns, items, connect chips, one-click whitelisting. |
-| **Priority** (`/priority`) | Global and per-account game whitelist + mining order. |
-| **History** (`/history`) | Claim log across every account. |
-| **Settings** (`/settings`) | Intervals, Discord, proxy, language, health, log level, password. |
-| **Accounts** | Add accounts, per-account whitelists, re-auth, auth health. |
+The UI is a SvelteKit static SPA embedded in the binary; the Go side serves a
+JSON API under `/api` and live updates as server-sent events on `/api/events`.
+On the `rebuild/v2` branch `/` serves a placeholder page until the SvelteKit
+app lands.
 
 ## Architecture
 
 ```
 cmd/miner               main daemon
 internal/platform/...   per-platform backends (twitch, kick)
-internal/watcher        per-account state machine (watch, mine, claim)
+internal/plan           pure planner: picks what each account mines next
+internal/runner         per-account runner (watch, mine, claim) and the pool
+internal/collect        runner hooks into the store (claims, minutes, scans)
+internal/summary        daily watch summary at local midnight
 internal/dockerctl      on-demand sidecar start/stop over the docker socket
-internal/discovery      catalog scraper
-internal/api + web      HTMX UI and handlers
+internal/api            JSON API + SSE for the SPA
+internal/web            embedded SPA build (dist/)
 internal/store          SQLite (sqlc + goose), age-encrypted sessions
 ```
 

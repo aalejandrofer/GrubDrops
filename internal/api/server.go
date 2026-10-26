@@ -56,7 +56,6 @@ type Deps struct {
 	Registry       *platform.Registry
 	RootCtx        context.Context
 	Registrar      KickChannelRegistrar
-	KickBrowser    KickBrowserClient
 	AccountChanged func(id string) // nil-safe
 	AccountRemoved func(id string) // nil-safe
 

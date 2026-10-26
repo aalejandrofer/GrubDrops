@@ -43,12 +43,12 @@ GrubDrops watches Twitch and Kick streams on the user's accounts so watch-time d
 ## Brand Commitments
 
 - Name: GrubDrops.
-- Logo: the grub mascot, `internal/web/static/img/logo.png`. Keep it.
+- Logo: the grub mascot, `assets/img/logo.png`. Keep it.
 - Purple is the brand accent and stays.
 
 ## Evidence on Hand
 
-- Logo and icons in `internal/web/static/img/`.
+- Logo and icons in `assets/img/`.
 - Rebuild mockups in `sandbox/home-rebuild/` (round 1: 10 Home styles; round 2: 08, 09, 03 in full plus combined Homes).
 - No user testimonials, usage numbers or press exist; do not invent them.
 

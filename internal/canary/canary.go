@@ -1,7 +1,7 @@
 // Package canary provides a scheduled accrual-canary Runner that periodically
 // probes the Twitch and Kick watch-time transports and persists results via
 // SaveResult / LoadResult. The Runner borrows ONE shared session per platform
-// (the first enabled account's) — the same pattern used by internal/discovery.
+// (the first enabled account's).
 package canary
 
 import (
@@ -26,7 +26,7 @@ type probe interface {
 // the Runner will skip that platform for the current tick without error.
 //
 // Implementations typically call q.ListEnabledAccounts and sessions.Get,
-// filtering by platform name — exactly the pattern in internal/discovery.
+// filtering by platform name (see cmd/miner).
 type SessionSource func(ctx context.Context, platform string) (platform.Session, bool, error)
 
 // RunnerSettings carries the per-run configuration read from settingsStore.

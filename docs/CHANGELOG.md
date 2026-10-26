@@ -27,6 +27,8 @@ All notable changes to GrubDrops.
 ### Changed
 
 - v2 pool restarts a panicked runner from its builder after one minute.
+- The miner runs the v2 planner, runner and collector, and serves the JSON API; the web UI is a placeholder until the SvelteKit app lands (rebuild/v2).
+- `GET /api/events` streams every ring log line as a `log` event, and open streams end when the miner shuts down instead of holding shutdown for 5 s.
 
 ### Fixed
 
@@ -34,6 +36,11 @@ All notable changes to GrubDrops.
 - v2 runner: a swept reward is recorded only when its title resolves to one drop, looking in the current campaign, then the current game, then the rest of the plan. An ambiguous title records nothing, so it cannot hide another drop.
 - v2 runner: a reward code is stored against the drop just claimed, within 10 minutes, and never against the next drop the runner moved on to. Each claim takes one code.
 - v2 runner: every pick retries campaigns that had no live stream earlier, so the top game mines first again after another drop is claimed.
+
+### Removed
+
+- HTML + HTMX web UI, watcher, scheduler and catalog scraper (replaced by v2).
+- The `GRUB_DISCOVERY_INTERVAL` env var, which only drove the removed catalog scraper.
 
 ### Docs
 

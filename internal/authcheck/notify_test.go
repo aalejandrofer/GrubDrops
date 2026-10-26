@@ -168,8 +168,7 @@ func TestPersist_NoNotifyWhenPersistFails(t *testing.T) {
 	c := New(q, nil, nil).WithNotifier(fn)
 
 	// Closing the DB makes every subsequent UpsertSettingString return
-	// sql.ErrConnDone, forcing the persist write to fail — same convention
-	// as internal/api/handlers_settings_save_test.go's brokenSettings helper.
+	// sql.ErrConnDone, forcing the persist write to fail.
 	if err := db.Close(); err != nil {
 		t.Fatalf("close db: %v", err)
 	}

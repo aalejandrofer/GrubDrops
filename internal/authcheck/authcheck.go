@@ -33,7 +33,7 @@ type sessionGetter interface {
 
 // Notifier fires an operator notification. Matches notify.Notifier; kept as
 // a local interface so this package stays decoupled from internal/notify
-// (same pattern as internal/api's Notifier in server.go).
+// (same pattern as internal/api's Notifier in deps.go).
 type Notifier interface {
 	Notify(ctx context.Context, event string, fields map[string]any) error
 }

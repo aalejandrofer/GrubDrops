@@ -1,8 +1,9 @@
 # AGENTS.md
 
 Guidance for AI coding agents working in this repo. GrubDrops is a self-hosted
-Twitch + Kick drops miner: a single Go daemon with an HTMX + `html/template` web
-UI, a SQLite store, and on-demand Chrome sidecars for Kick playback.
+Twitch + Kick drops miner: a single Go daemon serving a JSON + SSE API and an
+embedded SvelteKit SPA, a SQLite store, and on-demand Chrome sidecars for Kick
+playback.
 
 ## Build, test, format
 
@@ -41,13 +42,15 @@ is required; see the README "Configuration" table for the rest (`GRUB_*` prefix)
 cmd/miner               main daemon
 cmd/browser-sidecar     chromedp sidecar binary (Kick IVS playback) — core, not dead code
 internal/platform/...   per-platform backends (twitch, kick)
-internal/watcher        per-account state machine (watch, mine, claim)
+internal/plan           pure planner: picks what each account mines next
+internal/runner         per-account runner (watch, mine, claim) and the pool
+internal/collect        runner hooks into the store (claims, minutes, scans)
+internal/summary        daily watch summary at local midnight
 internal/dockerctl      on-demand sidecar start/stop over the docker socket
-internal/discovery      catalog scraper
-internal/api            HTMX UI handlers (html/template)
-internal/web            embedded templates/ + static/ assets (go:embed)
+internal/api            JSON API + SSE (`/api/events`) for the SPA
+internal/web            embedded SPA build in dist/ (go:embed)
 internal/store          SQLite (sqlc + goose), age-encrypted sessions
-internal/i18n           locale JSON + the `{{t "key"}}` template helper
+internal/i18n           locale JSON for Go-sent strings (notifications)
 proto/                  buf config + gRPC defs for the sidecar — core, not dead code
 ```
 
@@ -58,8 +61,8 @@ proto/                  buf config + gRPC defs for the sidecar — core, not dea
   + buf config, or the Twitch `BrowserBackend`. Kick watch-time (IVS playback
   credit) depends on the on-demand chromedp sidecars. Cleanup passes have
   wrongly flagged these as removable — leave them.
-- **Stay Go + `html/template` + HTMX.** A React/Vite port was tried and scrapped.
-  Do not re-propose a JS port; build features in templates.
+- **UI is a SvelteKit static SPA embedded in the Go binary; the Go side serves
+  JSON + SSE.**
 
 ## Platform gotchas
 
@@ -80,8 +83,8 @@ proto/                  buf config + gRPC defs for the sidecar — core, not dea
 
 ## Internationalization
 
-- User-facing strings go through `internal/i18n` (`{{t "key"}}` in templates,
-  `i18n.T(lang, key)` in Go). Add the key to **every** locale file under
+- User-facing strings Go sends go through `internal/i18n` (`i18n.T(lang, key)`).
+  Add the key to **every** locale file under
   `internal/i18n/locales/` — the locales must keep equal key sets.
 
 ## Releasing

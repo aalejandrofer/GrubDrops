@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../../internal/web/static/img/logo.png" width="160" alt="GrubDrops">
+  <img src="../../assets/img/logo.png" width="160" alt="GrubDrops">
 </p>
 
 <p align="center"><sub><a href="../../README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <strong>Español</strong></sub></p>

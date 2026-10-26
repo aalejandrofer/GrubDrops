@@ -40,6 +40,24 @@ type healthEvent struct {
 	Msg         string    `json:"msg"`
 }
 
+// LogAccountID returns the account a ring line is about, or "".
+func LogAccountID(l mlog.LogLine) string {
+	id, _ := l.Fields["account"].(string)
+	return id
+}
+
+func logEvent(l mlog.LogLine, accountName string) healthEvent {
+	return healthEvent{
+		At: l.TS, Level: l.Level, Kind: l.Kind,
+		AccountID: LogAccountID(l), AccountName: accountName, Msg: l.Msg,
+	}
+}
+
+// LogEventJSON is the Event body of a health event and a `log` SSE event.
+func LogEventJSON(l mlog.LogLine, accountName string) any {
+	return logEvent(l, accountName)
+}
+
 type canaryOut struct {
 	Platform  string    `json:"platform"`
 	OK        bool      `json:"ok"`
@@ -90,11 +108,7 @@ func (s *server) getHealth(w http.ResponseWriter, r *http.Request) {
 		if !keep || len(events) >= maxHealthEvents {
 			continue
 		}
-		id, _ := l.Fields["account"].(string)
-		events = append(events, healthEvent{
-			At: l.TS, Level: l.Level, Kind: l.Kind,
-			AccountID: id, AccountName: names[id], Msg: l.Msg,
-		})
+		events = append(events, logEvent(l, names[LogAccountID(l)]))
 	}
 
 	var lastScan *time.Time
