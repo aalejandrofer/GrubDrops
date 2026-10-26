@@ -10,9 +10,8 @@ import (
 
 // Result is one platform's last accrual-canary outcome.
 type Result struct {
-	OK bool `json:"ok"`
-	// Skipped marks a platform with a channel set but no enabled session to probe with.
-	Skipped   bool      `json:"skipped"`
+	OK        bool      `json:"ok"`
+	Skipped   bool      `json:"skipped"` // channel set but no enabled session to probe with
 	Detail    string    `json:"detail"`
 	CheckedAt time.Time `json:"checked_at"`
 }

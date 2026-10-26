@@ -3,7 +3,7 @@
 	import { api } from '$lib/app';
 	import type { Health, HealthEvent, Platform } from '$lib/api/types';
 	import { clock, relTime, uptime } from '$lib/format';
-	import { runNowState } from '$lib/canary';
+	import { runNowState, type CanaryStamps } from '$lib/canary';
 	import { eventText, isProblem, kindLabel } from '$lib/health';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
@@ -65,6 +65,7 @@
 	}
 
 	async function runCanary(): Promise<void> {
+		const before = Object.fromEntries((h?.canary ?? []).map((c) => [c.platform, c.checked_at]));
 		const clickedAt = Date.now();
 		canaryBusy = true;
 		canaryFailed = false;
@@ -76,19 +77,19 @@
 			canaryBusy = false;
 			return;
 		}
-		poll(clickedAt);
+		poll(before, clickedAt);
 	}
 
-	/** Refetch health every 5 s until a canary is newer than the click or the wait runs out. */
-	function poll(clickedAt: number): void {
+	/** Refetch health every 5 s until a canary result changes or the wait runs out. */
+	function poll(before: CanaryStamps, clickedAt: number): void {
 		clearTimeout(refetchTimer);
 		refetchTimer = setTimeout(async () => {
 			if (destroyed) return;
 			await load(filter);
 			if (destroyed) return;
-			const state = runNowState(clickedAt, h?.canary ?? [], Date.now());
-			if (state === 'running') return poll(clickedAt);
-			canaryNoResult = state === 'no_result';
+			const state = runNowState(before, h?.canary ?? [], Date.now() - clickedAt);
+			if (state === 'running') return poll(before, clickedAt);
+			canaryNoResult = state === 'no_result' && !loadFailed;
 			canaryBusy = false;
 		}, CANARY_REFETCH_MS);
 	}

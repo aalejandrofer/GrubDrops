@@ -1,21 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import { runNowState } from './canary';
 
-const click = Date.parse('2026-10-25T12:00:00Z');
-const at = (s: number) => new Date(click + s * 1000).toISOString();
-const c = (checked_at: string | null) => ({ checked_at });
+const before = { twitch: '2026-10-25T11:00:00Z', kick: null };
+const c = (platform: string, checked_at: string | null) => ({ platform, checked_at });
 
 describe('runNowState', () => {
-	it('no newer result inside 90 s: running', () => {
-		expect(runNowState(click, [c(at(-60)), c(null)], click + 89_000)).toBe('running');
+	it('unchanged checked_at inside 90 s: running', () => {
+		expect(runNowState(before, [c('twitch', '2026-10-25T11:00:00Z'), c('kick', null)], 89_000)).toBe('running');
 	});
-	it('any canary newer than the click: done', () => {
-		expect(runNowState(click, [c(at(-60)), c(at(4))], click + 5000)).toBe('done');
+	it('a changed checked_at: done', () => {
+		expect(runNowState(before, [c('twitch', '2026-10-25T11:00:05Z')], 5000)).toBe('done');
 	});
-	it('nothing new at 90 s: no_result', () => {
-		expect(runNowState(click, [], click + 90_000)).toBe('no_result');
+	it('server clock behind the browser: a new but earlier-looking checked_at is still done', () => {
+		expect(runNowState({ twitch: '2026-10-25T11:00:00Z' }, [c('twitch', '2026-10-25T11:00:07Z')], 5000)).toBe('done');
 	});
-	it('a result at 90 s still counts as done', () => {
-		expect(runNowState(click, [c(at(10))], click + 90_000)).toBe('done');
+	it('null before, non-null now: done', () => {
+		expect(runNowState(before, [c('twitch', '2026-10-25T11:00:00Z'), c('kick', '2026-10-25T12:00:00Z')], 5000)).toBe('done');
+	});
+	it('platform with no snapshot entry and a result: done', () => {
+		expect(runNowState({}, [c('kick', '2026-10-25T12:00:00Z')], 5000)).toBe('done');
+	});
+	it('nothing changed at 90 s: no_result', () => {
+		expect(runNowState(before, [], 90_000)).toBe('no_result');
+	});
+	it('a change at 90 s still counts as done', () => {
+		expect(runNowState(before, [c('kick', '2026-10-25T12:00:00Z')], 90_000)).toBe('done');
 	});
 });
