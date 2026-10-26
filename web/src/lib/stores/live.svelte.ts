@@ -26,6 +26,8 @@ export interface LiveStore {
 	accounts: Account[];
 	recent: Claim[];
 	log: HealthEvent[];
+	/** The last overview or games load failed. Cleared by the next success. */
+	failed: { overview: boolean; games: boolean };
 	unreachable: boolean;
 	retryIn: number;
 	updatedAt: number | null;
@@ -77,6 +79,7 @@ export function createLive(deps: LiveDeps): LiveStore {
 		accounts: [],
 		recent: [],
 		log: [],
+		failed: { overview: false, games: false },
 		unreachable: false,
 		retryIn: 0,
 		updatedAt: null,
@@ -99,13 +102,25 @@ export function createLive(deps: LiveDeps): LiveStore {
 	}
 
 	const loadOverview = async () => {
-		s.overview = await api.overview();
+		try {
+			s.overview = await api.overview();
+			s.failed.overview = false;
+		} catch (e) {
+			s.failed.overview = true;
+			throw e;
+		}
 	};
 	const loadRunners = async () => {
 		s.runners = await api.runners();
 	};
 	const loadGames = async () => {
-		s.games = await api.games();
+		try {
+			s.games = await api.games();
+			s.failed.games = false;
+		} catch (e) {
+			s.failed.games = true;
+			throw e;
+		}
 	};
 	const loadAccounts = async () => {
 		s.accounts = await api.accounts();

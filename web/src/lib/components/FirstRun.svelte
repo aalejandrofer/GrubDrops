@@ -97,6 +97,9 @@
 						{#if step2}<small>{tn('home.games_added', gameCount)}</small>{/if}
 					</h3>
 					<p>{t('home.step2_body')}</p>
+					{#if !step2}
+						<p class="no-games">{t('home.no_games')} <a href="/games">{t('home.no_games_add')}</a></p>
+					{/if}
 					<div class="pick">
 						<label class="search">
 							<svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
@@ -251,6 +254,9 @@
 		gap: 8px;
 		flex-wrap: wrap;
 		margin-top: 12px;
+	}
+	.no-games a {
+		color: var(--accent);
 	}
 	.btn {
 		display: inline-flex;

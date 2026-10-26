@@ -62,19 +62,38 @@ export function foldRows(
 	return { shown: rows.slice(0, limit), hidden: Math.max(0, rows.length - limit), mining, idle };
 }
 
-export type HomeState = 'first_run' | 'healthy' | 'nothing_live' | 'offline';
+/**
+ * What Home shows. Every view has a next step: a retry, a link, or a line
+ * that says when mining starts.
+ */
+export type HomeView =
+	| 'loading'
+	| 'error'
+	| 'offline'
+	| 'first_run'
+	| 'no_games'
+	| 'signed_out'
+	| 'nothing_live'
+	| 'healthy';
 
-export function homeState(o: Overview | null, unreachable: boolean): HomeState {
-	if (unreachable) return 'offline';
-	switch (o?.status.state) {
-		case 'no_accounts':
-		case 'no_games':
-			return 'first_run';
-		case 'nothing_live':
-			return 'nothing_live';
-		default:
-			return 'healthy';
-	}
+export type HomeInput = {
+	overview: Overview | null;
+	/** Chosen games, or null before they load. */
+	games: Game[] | null;
+	overviewFailed: boolean;
+	gamesFailed: boolean;
+	unreachable: boolean;
+};
+
+export function homeView(i: HomeInput): HomeView {
+	const o = i.overview;
+	if (!o) return i.unreachable ? 'offline' : i.overviewFailed ? 'error' : 'loading';
+	if (o.status.state === 'no_accounts') return 'first_run';
+	if (o.status.state === 'no_games' || i.games?.length === 0) return 'no_games';
+	if (!i.games) return i.gamesFailed && !i.unreachable ? 'error' : 'loading';
+	if (o.problems.length >= o.status.accounts_total) return 'signed_out';
+	if (o.status.state === 'nothing_live' || i.games.every((g) => g.state === 'no_campaign')) return 'nothing_live';
+	return 'healthy';
 }
 
 export function groupClaims(

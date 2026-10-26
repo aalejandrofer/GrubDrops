@@ -7,7 +7,7 @@ import mining from '$lib/fixtures/overview.mining.json';
 import nothing from '$lib/fixtures/overview.nothing_live.json';
 import many from '$lib/fixtures/runners.many.json';
 import runnersMining from '$lib/fixtures/runners.mining.json';
-import { foldRows, gameCards, groupClaims, homeState, normName } from './home';
+import { foldRows, gameCards, groupClaims, homeView, normName } from './home';
 
 const G = () => structuredClone(games.games) as Game[];
 const R = () => structuredClone(runnersMining) as Runner[];
@@ -87,14 +87,59 @@ describe('foldRows', () => {
 	});
 });
 
-describe('homeState', () => {
-	it('maps each case', () => {
-		expect(homeState(first as Overview, false)).toBe('first_run');
-		expect(homeState({ ...(first as Overview), status: { ...first.status, state: 'no_games' as const } }, false)).toBe('first_run');
-		expect(homeState(mining as Overview, false)).toBe('healthy');
-		expect(homeState(nothing as Overview, false)).toBe('nothing_live');
-		expect(homeState(mining as Overview, true)).toBe('offline');
-		expect(homeState(null, true)).toBe('offline');
+describe('homeView', () => {
+	const O = (x: unknown) => structuredClone(x) as Overview;
+	const base = { games: G(), overviewFailed: false, gamesFailed: false, unreachable: false };
+	const fourAccounts = (state: Overview['status']['state']): Overview => {
+		const o = O(mining);
+		o.status = { ...o.status, state, accounts_total: 4 };
+		o.problems = [];
+		return o;
+	};
+
+	it('loading before the first overview', () => {
+		expect(homeView({ ...base, overview: null, games: null })).toBe('loading');
+	});
+	it('a failed overview load is an error with retry, not a blank page', () => {
+		expect(homeView({ ...base, overview: null, games: null, overviewFailed: true })).toBe('error');
+	});
+	it('a failed games load is an error once the overview is in', () => {
+		expect(homeView({ ...base, overview: O(mining), games: null, gamesFailed: true })).toBe('error');
+		expect(homeView({ ...base, overview: O(mining), games: null })).toBe('loading');
+	});
+	it('offline before any data defers to the header alert', () => {
+		expect(homeView({ ...base, overview: null, games: null, overviewFailed: true, unreachable: true })).toBe('offline');
+	});
+	it('no accounts is first run, with or without games', () => {
+		expect(homeView({ ...base, overview: O(first), games: [] })).toBe('first_run');
+		expect(homeView({ ...base, overview: O(first) })).toBe('first_run');
+	});
+	it('4 accounts and 0 games shows no games chosen', () => {
+		expect(homeView({ ...base, overview: fourAccounts('no_games'), games: [] })).toBe('no_games');
+		expect(homeView({ ...base, overview: fourAccounts('no_games'), games: null })).toBe('no_games');
+	});
+	it('an empty games list wins over a stale overview state', () => {
+		expect(homeView({ ...base, overview: fourAccounts('mining'), games: [] })).toBe('no_games');
+	});
+	it('no games chosen whatever the account state', () => {
+		const o = fourAccounts('no_games');
+		o.problems = [1, 2, 3, 4].map((i) => ({ kind: 'needs_login' as const, account_id: `a${i}`, account_name: `a${i}` }));
+		expect(homeView({ ...base, overview: o, games: [] })).toBe('no_games');
+	});
+	it('every account signed out', () => {
+		const o = fourAccounts('idle');
+		o.problems = [1, 2, 3, 4].map((i) => ({ kind: 'needs_login' as const, account_id: `a${i}`, account_name: `a${i}` }));
+		expect(homeView({ ...base, overview: o })).toBe('signed_out');
+		o.problems.pop();
+		expect(homeView({ ...base, overview: o })).toBe('healthy');
+	});
+	it('games chosen but no campaigns is nothing live', () => {
+		expect(homeView({ ...base, overview: O(nothing) })).toBe('nothing_live');
+		const g = G().map((x) => ({ ...x, state: 'no_campaign' as const }));
+		expect(homeView({ ...base, overview: fourAccounts('idle'), games: g })).toBe('nothing_live');
+	});
+	it('mining is healthy', () => {
+		expect(homeView({ ...base, overview: O(mining) })).toBe('healthy');
 	});
 });
 

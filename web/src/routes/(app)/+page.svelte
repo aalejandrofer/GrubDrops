@@ -5,12 +5,14 @@
 	import PageHead from '$lib/components/PageHead.svelte';
 	import UpNext from '$lib/components/UpNext.svelte';
 	import { clock, formatInt, relTime, shortDate } from '$lib/format';
-	import { gameCards, groupClaims, homeState } from '$lib/home';
+	import { gameCards, groupClaims, homeView } from '$lib/home';
 	import { t, tn } from '$lib/i18n/index.svelte';
-	import { getLive } from '$lib/live-context';
+	import { getLive, getNet } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
 
 	const live = getLive();
+	const net = getNet();
+	let retrying = $state(false);
 
 	let now = $state(Date.now());
 	$effect(() => {
@@ -20,7 +22,16 @@
 
 	const o = $derived(live.overview);
 	// Offline keeps the last data on screen; the body follows what that data says.
-	const mode = $derived(homeState(o, false));
+	const mode = $derived(
+		homeView({
+			overview: o,
+			games: live.games?.games ?? null,
+			overviewFailed: live.failed.overview,
+			gamesFailed: live.failed.games,
+			unreachable: live.unreachable || net.down
+		})
+	);
+	const dashboard = $derived(mode === 'healthy' || mode === 'nothing_live' || mode === 'signed_out');
 	const lastScan = $derived(live.games?.last_scan_at ?? o?.status.last_scan_at ?? null);
 	const cards = $derived(gameCards(live.games?.games ?? [], live.runners));
 	const groups = $derived(groupClaims(live.recent, now, prefs.zone));
@@ -37,17 +48,44 @@
 		{ key: 'earlier', label: t('home.earlier'), items: groups.earlier }
 	]);
 
+	async function retry(): Promise<void> {
+		retrying = true;
+		try {
+			await live.refetchAll();
+		} finally {
+			retrying = false;
+		}
+	}
+
 	function when(iso: string, bucket: string): string {
 		return bucket === 'earlier' ? shortDate(iso, prefs.zone) : clock(iso, prefs.zone, prefs.fmt);
 	}
 </script>
 
-<PageHead title={t('nav.home')} stamp={mode === 'first_run' ? undefined : stamp}>
-	{#if !o}
-		<!-- first load or offline before any data -->
+<PageHead title={t('nav.home')} stamp={dashboard ? stamp : undefined}>
+	{#if mode === 'offline'}
+		<!-- the header shows the offline alert and the retry countdown -->
+	{:else if mode === 'loading'}
+		<p class="none">{t('home.loading')}</p>
+	{:else if mode === 'error'}
+		<div class="empty err" role="alert">
+			<span>{t('home.load_failed')}</span>
+			<button type="button" class="btn" disabled={retrying} onclick={retry}>{t('rewards.retry')}</button>
+		</div>
 	{:else if mode === 'first_run'}
 		<FirstRun />
-	{:else if kpi}
+	{:else if mode === 'no_games'}
+		<div class="empty">
+			<span>{t('home.no_games')}</span>
+			<a href="/games" class="btn"><Icon name="list" />{t('home.no_games_add')}</a>
+		</div>
+	{:else if o && kpi}
+		{#if mode === 'signed_out'}
+			<div class="empty warn" role="status">
+				<span>{tn('home.signed_out_all', o.status.accounts_total)}</span>
+				<a href="/settings#accounts" class="btn">{t('accounts.log_in_again')}</a>
+			</div>
+		{/if}
 		<div class="kpis">
 			<div class="kpi">
 				<div class="label">{t('home.kpi_minutes')}</div>
@@ -280,6 +318,52 @@
 	.meta {
 		font-size: 12px;
 		color: var(--t3);
+	}
+	.empty {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		flex-wrap: wrap;
+		padding: 14px 16px;
+		border: 1px solid var(--border-soft);
+		border-radius: var(--radius);
+		background: var(--surface);
+		font-size: 13px;
+		margin-bottom: 20px;
+	}
+	.empty .btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 12.5px;
+		font-weight: 500;
+		background: var(--surface-2);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		padding: 4px 10px;
+		color: var(--text);
+		text-decoration: none;
+		white-space: nowrap;
+	}
+	.empty .btn:hover:not([disabled]) {
+		border-color: var(--t3);
+		background: var(--surface-3);
+	}
+	.empty .btn[disabled] {
+		opacity: 0.45;
+		cursor: default;
+	}
+	.empty .btn:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
+	.empty.err {
+		color: var(--red);
+	}
+	.empty.warn {
+		background: var(--amber-soft);
+		border-color: color-mix(in srgb, var(--amber) 45%, transparent);
 	}
 	.none {
 		margin: 0;

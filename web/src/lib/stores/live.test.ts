@@ -137,6 +137,18 @@ describe('live reconnect', () => {
 		expect(sources[0].closed).toBe(true);
 	});
 
+	it('a failed overview or games load is flagged until the next success', async () => {
+		const { api, live } = setup();
+		api.overview.mockRejectedValueOnce(new Error('500'));
+		api.games.mockRejectedValueOnce(new Error('500'));
+		await live.refetchAll();
+		expect(live.overview).toBeNull();
+		expect(live.failed).toEqual({ overview: true, games: true });
+		await live.refetchAll();
+		expect(live.overview).not.toBeNull();
+		expect(live.failed).toEqual({ overview: false, games: false });
+	});
+
 	it('reconnect refetches everything', async () => {
 		const { api, live, sources, pending, cur } = setup();
 		cur().onopen!();
