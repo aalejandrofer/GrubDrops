@@ -1,39 +1,67 @@
-h1 {
+/* Login and setup. Scoped under .auth, the (auth) layout root. */
+.auth ::selection {
+	background: var(--accent-soft);
+	color: var(--text);
+}
+.auth h1 {
+	margin: 0 0 16px;
 	font-size: 18px;
 	font-weight: 600;
-	margin: 0 0 16px;
 	letter-spacing: -0.01em;
+	text-wrap: balance;
 }
-form {
+.auth .lead {
+	margin: -10px 0 16px;
+	color: var(--t2);
+	font-size: 13px;
+}
+.auth form {
 	display: grid;
-	gap: 8px;
+	gap: 6px;
 }
-label {
+.auth label {
 	font-size: 12px;
 	color: var(--t2);
 }
-input {
+.auth label:not(:first-child) {
+	margin-top: 6px;
+}
+.auth input {
 	font: inherit;
 	color: var(--text);
 	background: var(--bg);
 	border: 1px solid var(--border);
 	border-radius: 6px;
-	padding: 8px 10px;
+	height: 36px;
+	padding: 0 10px;
 	width: 100%;
+	caret-color: var(--accent);
 }
-input:focus-visible {
+.auth input:focus-visible {
 	outline: 2px solid var(--accent);
 	outline-offset: 1px;
 }
-input[aria-invalid='true'] {
+.auth input:read-only {
+	color: var(--t3);
+	background: var(--surface-2);
+}
+.auth input[aria-invalid='true'] {
 	border-color: var(--red);
 }
-.err {
+.auth .err {
 	margin: 0;
 	font-size: 12px;
 	color: var(--red);
 }
-.banner {
+.auth .hint {
+	margin: 0;
+	font-size: 12px;
+	color: var(--t3);
+}
+.auth .hint.err {
+	color: var(--red);
+}
+.auth .banner {
 	margin: 0 0 14px;
 	font-size: 13px;
 	color: var(--red);
@@ -42,39 +70,82 @@ input[aria-invalid='true'] {
 	border-radius: 6px;
 	padding: 8px 10px;
 }
-.primary {
+.auth .b {
 	margin-top: 8px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	height: 36px;
+	width: 100%;
 	font: inherit;
 	font-weight: 500;
+	border-radius: 6px;
+	padding: 0 12px;
+	cursor: pointer;
+	text-decoration: none;
+}
+.auth .b svg {
+	width: 15px;
+	height: 15px;
+	flex: none;
+}
+.auth .primary {
 	color: #fff;
 	background: var(--accent-strong);
-	border: 0;
-	border-radius: 6px;
-	padding: 8px 12px;
-	cursor: pointer;
+	border: 1px solid var(--accent-strong);
 }
-.primary:hover:not(:disabled) {
+.auth .primary:hover:not(:disabled) {
 	background: var(--accent);
+	border-color: var(--accent);
 }
-.primary:disabled {
-	opacity: 0.6;
+.auth .ghost {
+	margin-top: 0;
+	color: var(--text);
+	background: transparent;
+	border: 1px solid var(--border);
+}
+.auth .ghost:hover {
+	border-color: var(--t2);
+}
+.auth .b:disabled {
+	opacity: 0.7;
 	cursor: default;
 }
-.primary:focus-visible,
-.sso:focus-visible {
+.auth .b:focus-visible {
 	outline: 2px solid var(--accent);
 	outline-offset: 2px;
 }
-.sso {
-	display: block;
-	margin-top: 12px;
-	text-align: center;
-	color: var(--text);
-	text-decoration: none;
-	border: 1px solid var(--border);
-	border-radius: 6px;
-	padding: 8px 12px;
+.auth .rule {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 16px 0 8px;
+	color: var(--t3);
+	font-size: 12px;
 }
-.sso:hover {
-	border-color: var(--t2);
+.auth .rule::before,
+.auth .rule::after {
+	content: '';
+	flex: 1;
+	height: 1px;
+	background: var(--border-soft);
+}
+.auth .spin {
+	width: 13px;
+	height: 13px;
+	border-radius: 50%;
+	border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+	border-top-color: currentColor;
+	animation: auth-spin 0.8s linear infinite;
+}
+@keyframes auth-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.auth .spin {
+		animation-duration: 2.4s;
+	}
 }

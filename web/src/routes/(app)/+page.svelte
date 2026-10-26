@@ -1,5 +1,5 @@
 <script lang="ts">
-	import FirstRun from '$lib/components/FirstRun.svelte';
+	import { goto } from '$app/navigation';
 	import GameCard from '$lib/components/GameCard.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHead from '$lib/components/PageHead.svelte';
@@ -8,6 +8,7 @@
 	import { gameCards, groupClaims, homeView, visibleCards } from '$lib/home';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive, getNet } from '$lib/live-context';
+	import { wantsWizard } from '$lib/onboarding';
 	import { prefs } from '$lib/prefs.svelte';
 
 	const live = getLive();
@@ -31,6 +32,10 @@
 			unreachable: live.unreachable || net.down
 		})
 	);
+	// First run, no accounts yet: the wizard replaces Home.
+	$effect(() => {
+		if (wantsWizard(mode)) void goto('/welcome', { replaceState: true });
+	});
 	const dashboard = $derived(
 		mode === 'healthy' || mode === 'nothing_live' || mode === 'signed_out' || mode === 'paused'
 	);
@@ -75,15 +80,13 @@
 				<button type="button" class="btn" disabled={retrying} onclick={retry}>{t('rewards.retry')}</button>
 			</div>
 		{/if}
-	{:else if mode === 'loading'}
+	{:else if mode === 'loading' || mode === 'first_run'}
 		<p class="none">{t('home.loading')}</p>
 	{:else if mode === 'error'}
 		<div class="empty err" role="alert">
 			<span>{t('home.load_failed')}</span>
 			<button type="button" class="btn" disabled={retrying} onclick={retry}>{t('rewards.retry')}</button>
 		</div>
-	{:else if mode === 'first_run'}
-		<FirstRun />
 	{:else if mode === 'no_games'}
 		<div class="empty">
 			<span>{t('home.no_games')}</span>

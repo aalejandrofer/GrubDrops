@@ -25,14 +25,18 @@
 			created: '2026-10-26',
 			title: 'Login and setup, three layouts',
 			desc: 'Card, split pane and bare page. Each shows default, wrong password, SSO only, signing in, and first admin setup.',
-			tags: ['auth', 'login', 'SSO', 'for approval']
+			tags: ['auth', 'login', 'SSO'],
+			done: true,
+			chosen: 'Variant A, now live at /login'
 		},
 		{
 			slug: 'onboarding',
 			created: '2026-10-26',
 			title: 'First-run onboarding, three flows',
 			desc: 'Checklist on Home, guided wizard, inline empty states. Each walks add account, pick games, mining started.',
-			tags: ['onboarding', 'first run', 'for approval']
+			tags: ['onboarding', 'first run'],
+			done: true,
+			chosen: 'Variant B, now live as the first-run wizard'
 		}
 	];
 </script>

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { onDestroy, setContext } from 'svelte';
 	import { api, session } from '$lib/app';
 	import type { UpdateInfo } from '$lib/api/types';
@@ -9,6 +10,9 @@
 	import { createLive, type EventSourceLike } from '$lib/stores/live.svelte';
 
 	let { children } = $props();
+
+	// The first-run wizard is full screen, without the top bar.
+	const bare = $derived(page.route.id === '/(app)/welcome');
 
 	const live = createLive({
 		api,
@@ -63,7 +67,9 @@
 	});
 </script>
 
-{#if phase !== 'boot'}
+{#if phase !== 'boot' && bare}
+	{@render children()}
+{:else if phase !== 'boot'}
 	<TopBar version={update?.current || session.version} {update} />
 	<main>
 		{@render children()}
