@@ -56,6 +56,7 @@ All notable changes to GrubDrops.
 - v2 miner: shutdown waits for the background loops before closing the Twitch backends and the database, including after an HTTP listen failure.
 - v2 JSON API: Kick avatars on runners, the overview and SSE `runner` events go through the Kick image proxy, so they load in the browser.
 - v2 JSON API: every time field is an RFC 3339 UTC string, and an unset time is `null` instead of `0001-01-01T00:00:00Z` (games, health, update).
+- v2 Home first run: the setup lead reads "Three steps." without the dropped filler line.
 
 ### Removed
 

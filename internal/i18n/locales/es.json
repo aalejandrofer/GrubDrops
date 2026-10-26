@@ -97,7 +97,7 @@
   "home.all_rewards": "Todas las recompensas",
   "home.updated": "actualizado {rel}",
   "home.setup_title": "Configura GrubDrops",
-  "home.setup_lead": "Tres pasos. Después funciona solo.",
+  "home.setup_lead": "Tres pasos.",
   "home.step1_title": "Añade una cuenta",
   "home.step1_body": "Inicia sesión con la cuenta que debe ganar los drops. Puedes añadir más después en Ajustes.",
   "home.add_twitch": "Añadir cuenta de Twitch",

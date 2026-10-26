@@ -97,7 +97,7 @@
   "home.all_rewards": "全部奖励",
   "home.updated": "{rel}更新",
   "home.setup_title": "设置 GrubDrops",
-  "home.setup_lead": "三个步骤，之后自动运行。",
+  "home.setup_lead": "三个步骤。",
   "home.step1_title": "添加账号",
   "home.step1_body": "用要领取掉落的账号登录。之后可在设置中添加更多账号。",
   "home.add_twitch": "添加 Twitch 账号",

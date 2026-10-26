@@ -97,7 +97,7 @@
   "home.all_rewards": "All rewards",
   "home.updated": "updated {rel}",
   "home.setup_title": "Set up GrubDrops",
-  "home.setup_lead": "Three steps. After that it runs on its own.",
+  "home.setup_lead": "Three steps.",
   "home.step1_title": "Add an account",
   "home.step1_body": "Sign in with the account that should earn the drops. You can add more later in Settings.",
   "home.add_twitch": "Add Twitch account",
