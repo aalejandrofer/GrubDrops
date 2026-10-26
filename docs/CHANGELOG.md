@@ -15,6 +15,7 @@ All notable changes to GrubDrops.
 - v2 runner: a campaign with no live stream moves on to the next queued campaign without rescanning, and swept rewards are recorded in the claim log under their planned game.
 - v2 `collect.Collector`: persists drop states, found claims, scan times and watch minutes from the runner hooks, and serves as the runner claim log.
 - v2 JSON API core: session, setup, login and CSRF under /api, 401 JSON for expired sessions, and the embedded SPA fallback (rebuild/v2).
+- v2 live updates over Server-Sent Events at /api/events (runner, claim, games, accounts, log).
 
 ### Changed
 

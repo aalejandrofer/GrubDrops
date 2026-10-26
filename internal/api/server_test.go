@@ -41,9 +41,11 @@ func newEnv(t *testing.T) *env {
 	sm.Lifetime = time.Hour
 	s := newServer(Deps{
 		DB: db, Q: gen.New(db), Session: sm, Version: "test",
+		Hub: NewHub(),
 		SPA: fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}},
 	})
 	s.protected.Get("/overview", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"ok": "1"}) })
+	s.routesEvents(s.protected)
 	srv := httptest.NewServer(s.handler())
 	t.Cleanup(srv.Close)
 	jar, _ := cookiejar.New(nil)

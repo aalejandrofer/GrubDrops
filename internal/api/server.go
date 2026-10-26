@@ -26,6 +26,7 @@ type Deps struct {
 	SecureCookies bool
 	Version       string
 	SPA           fs.FS
+	Hub           *Hub
 }
 
 type server struct {
@@ -78,7 +79,9 @@ func NewRouter(d Deps) http.Handler {
 
 // routesProtected registers every admin-only resource. Add one line per
 // resource: s.routesX(r).
-func (s *server) routesProtected(r chi.Router) {}
+func (s *server) routesProtected(r chi.Router) {
+	s.routesEvents(r)
+}
 
 // spa serves the embedded SPA, falling back to index.html for unknown paths.
 // Paths under /api/ and /auth/ get a JSON 404 instead.
