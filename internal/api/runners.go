@@ -67,13 +67,9 @@ func TargetJSON(t plan.Target) targetDTO {
 }
 
 // RunnerJSON converts a runner snapshot to its API shape. custom says a
-// session order is set; it is then applied to UpNext (a no-op when the pool
-// already did).
-func RunnerJSON(s runner.Snapshot, a gen.Account, custom bool, order ...string) runnerDTO {
+// session order is set; the pool has already applied it to s.UpNext.
+func RunnerJSON(s runner.Snapshot, a gen.Account, custom bool) runnerDTO {
 	up := s.UpNext
-	if custom && len(order) > 0 {
-		up = plan.ApplyOrder(up, order)
-	}
 	d := runnerDTO{
 		AccountID: s.AccountID, AccountName: a.DisplayName, Platform: s.Platform,
 		AvatarURL: a.AvatarUrl, State: string(s.State), Channel: s.Channel,
@@ -121,7 +117,7 @@ func (s *server) listRunners(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		order := s.sessionOrder(a.ID)
-		out = append(out, RunnerJSON(sn, a, len(order) > 0, order...))
+		out = append(out, RunnerJSON(sn, a, len(order) > 0))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
