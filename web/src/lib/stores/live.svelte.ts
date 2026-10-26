@@ -178,7 +178,7 @@ export function createLive(deps: LiveDeps): LiveStore {
 	}
 
 	async function onError(src: EventSourceLike): Promise<void> {
-		if (dead) return;
+		if (dead || source !== src) return;
 		src.close();
 		source = null;
 		clearTimers();

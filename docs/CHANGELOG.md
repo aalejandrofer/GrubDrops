@@ -27,6 +27,7 @@ All notable changes to GrubDrops.
 - v2 roster builder (`cmd/miner`): builds the per-account runners wired to the collector and the SSE hub, with claim events and per-account reload.
 - v2 shared locales: the SvelteKit app reads internal/i18n/locales, 1.x-only keys are gone, and npm run check fails on missing, unused or mismatched keys.
 - v2 web data layer: typed API client with CSRF, 401 and offline handling, and one SSE store that upserts runners and claims and refetches on reconnect.
+- v2 web shell: top bar, status header with problem and offline chips, version popover, login with SSO and first-run setup.
 
 ### Changed
 

@@ -135,4 +135,10 @@ describe('client', () => {
 		await api.overview().catch(() => {});
 		expect(hooks.onUnauthorized).toHaveBeenCalledTimes(2);
 	});
+
+	it('2xx with a non-JSON body is Unreachable', async () => {
+		const { api, hooks } = setup([{ status: 200, body: '<!doctype html><html></html>' }]);
+		await expect(api.games()).rejects.toBeInstanceOf(Unreachable);
+		expect(hooks.onUnreachable).toHaveBeenLastCalledWith(true);
+	});
 });

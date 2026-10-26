@@ -178,4 +178,13 @@ describe('live reconnect', () => {
 		await settle();
 		expect(delays).toEqual([]);
 	});
+
+	it('a double onerror schedules one reconnect', async () => {
+		const { cur, delays } = setup();
+		const src = cur();
+		src.onerror!();
+		src.onerror!();
+		await settle();
+		expect(delays).toHaveLength(1);
+	});
 });

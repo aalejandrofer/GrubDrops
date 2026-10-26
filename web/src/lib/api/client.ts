@@ -117,8 +117,20 @@ export function createClient(opts: ClientOpts): Api {
 			}
 			const text = res.status === 204 ? '' : await res.text();
 			if (res.ok) {
+				if (text === '') {
+					opts.onUnreachable(false);
+					return undefined;
+				}
+				let data: unknown;
+				try {
+					data = JSON.parse(text);
+				} catch {
+					// 2xx with a non-JSON body, e.g. the SPA fallback page from a proxy
+					opts.onUnreachable(true);
+					throw new Unreachable('non-JSON response');
+				}
 				opts.onUnreachable(false);
-				return text === '' ? undefined : JSON.parse(text);
+				return data;
 			}
 			const parsed = parseBody(text);
 			if (parsed === null && res.status !== 401) {
