@@ -389,7 +389,9 @@ func TestRunner_ClaimFailureRepicksAndRetries(t *testing.T) {
 	if !waitFor(func() bool { return len(cl.recorded()) == 1 }, 2*time.Second) {
 		t.Fatalf("claim not recorded: %v", f.Calls)
 	}
-	if n := f.CallCount("Claim:"); n != 2 {
+	// A second failing attempt can land before ClaimErr is cleared, so only
+	// require at least one retry.
+	if n := f.CallCount("Claim:"); n < 2 {
 		t.Fatalf("claim calls=%d", n)
 	}
 	if n := f.CallCount("Start:"); n < 2 {
