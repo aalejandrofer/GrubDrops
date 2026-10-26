@@ -31,6 +31,7 @@ All notable changes to GrubDrops.
 - v2 Home: KPIs, ranked game cards with per-account progress, Up next, recent claims, and first-run, nothing-live, offline and many-account states.
 - v2 Up next: one queue per account, reorder by button or drag for this session, Reset to Games order.
 - v2 Games page: search or type a game to add it, reorder priority by button or drag, remove with confirm.
+- v2 Rewards page: drops in progress with time left, claim history filtered by game or account, 10 at a time.
 
 ### Changed
 

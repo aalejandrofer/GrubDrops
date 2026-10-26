@@ -178,7 +178,7 @@ export function createClient(opts: ClientOpts): Api {
 			if (q.game) p.set('game', q.game);
 			if (q.account) p.set('account', q.account);
 			if (q.limit) p.set('limit', String(q.limit));
-			if (q.offset) p.set('offset', String(q.offset));
+			if (q.offset !== undefined) p.set('offset', String(q.offset));
 			const qs = p.toString();
 			return get(`/api/claims${qs ? `?${qs}` : ''}`);
 		},
