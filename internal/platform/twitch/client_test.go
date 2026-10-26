@@ -1,13 +1,17 @@
 package twitch
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -195,4 +199,30 @@ func TestClient_HostAllowedForBeacon(t *testing.T) {
 	assert.False(t, c.hostAllowedForBeacon("https://evil.example.com/spade"))
 	assert.False(t, c.hostAllowedForBeacon("https://nottwitch.tv.evil.com/spade"))
 	assert.False(t, c.hostAllowedForBeacon("https://faketwitch.tv/spade"))
+}
+
+func TestIntegrity_LogsNoToken(t *testing.T) {
+	const secret = "SECRET-TOKEN-123"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		exp := time.Now().Add(24 * time.Hour).UnixMilli()
+		_, _ = w.Write([]byte(`{"token":"` + secret + `","expiration":` + strconv.FormatInt(exp, 10) + `,"is_bad_bot":false}`))
+	}))
+	defer srv.Close()
+
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	c := newTestClient(srv.URL)
+	c.integrityURL = srv.URL
+	tok, err := c.integrity(context.Background(), "")
+	require.NoError(t, err)
+	require.Equal(t, secret, tok)
+
+	logged := buf.String()
+	require.Contains(t, logged, "twitch integrity token acquired", "log line must be emitted")
+	assert.NotContains(t, logged, "SECRET", "integrity token must not reach logs")
+	assert.NotContains(t, logged, `"raw"`, "raw response body must not reach logs")
 }

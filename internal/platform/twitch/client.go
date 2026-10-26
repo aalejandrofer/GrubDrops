@@ -165,13 +165,6 @@ func randomHex(nBytes int) string {
 	return hex.EncodeToString(buf)
 }
 
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "...(truncated)"
-}
-
 // bootstrapIdentity is a no-op for the Android client profile —
 // the upstream Twitch app sends a random device ID on first launch
 // and never visits the web; we mirror that by keeping the random
@@ -215,7 +208,7 @@ func (c *client) integrity(ctx context.Context, token string) (string, error) {
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		slog.Error("twitch integrity non-200", "status", resp.Status, "body", truncate(string(raw), 500))
+		slog.Error("twitch integrity non-200", "status", resp.Status)
 		return "", fmt.Errorf("integrity: %s", resp.Status)
 	}
 	var body struct {
@@ -227,11 +220,11 @@ func (c *client) integrity(ctx context.Context, token string) (string, error) {
 		return "", fmt.Errorf("decode integrity: %w", err)
 	}
 	if body.Token == "" {
-		return "", fmt.Errorf("integrity: empty token (is_bad_bot=%v, body=%q)", body.IsBadBot, truncate(string(raw), 200))
+		return "", fmt.Errorf("integrity: empty token (is_bad_bot=%v)", body.IsBadBot)
 	}
 	c.intToken = body.Token
 	c.intExpiry = time.UnixMilli(body.Expiration)
-	slog.Info("twitch integrity token acquired", "expiration", c.intExpiry, "is_bad_bot", body.IsBadBot, "token_prefix", truncate(body.Token, 30), "raw", truncate(string(raw), 500))
+	slog.Info("twitch integrity token acquired", "expiration", c.intExpiry, "is_bad_bot", body.IsBadBot)
 	return c.intToken, nil
 }
 
@@ -323,17 +316,17 @@ func (c *client) do(ctx context.Context, token, opName string, body []byte, out 
 	// hundreds/min). Every failure mode below (5xx, 429, integrity,
 	// decode, application error, partial) is logged independently at
 	// Warn/Error, so the INFO feed loses no signal by dropping this.
-	slog.Debug("twitch gql response", "op", opName, "status", status, "body", truncate(string(rawBody), 800))
+	slog.Debug("twitch gql response", "op", opName, "status", status)
 	if status == http.StatusTooManyRequests {
 		// Twitch rate limit. Return an error so the watcher's exponential
 		// backoff kicks in instead of mis-parsing the body as a decode
 		// failure. (gqlPost doesn't surface Retry-After; the watcher's
 		// backoff is the throttle.)
-		slog.Warn("twitch gql rate-limited (429); backing off", "op", opName, "body", truncate(string(rawBody), 200))
+		slog.Warn("twitch gql rate-limited (429); backing off", "op", opName)
 		return fmt.Errorf("twitch gql %s: rate limited (429)", opName)
 	}
 	if status >= 500 {
-		slog.Error("twitch gql 5xx", "op", opName, "status", status, "body", truncate(string(rawBody), 500))
+		slog.Error("twitch gql 5xx", "op", opName, "status", status)
 		return fmt.Errorf("twitch gql %s: status %d", opName, status)
 	}
 	// Integrity wall: if the sidecar's retry-with-fresh-token path
@@ -342,13 +335,13 @@ func (c *client) do(ctx context.Context, token, opName string, body []byte, out 
 	// account to needs_auth instead of looping silently (C1).
 	if status == 200 && bytes.Contains(rawBody, []byte("failed integrity check")) {
 		slog.Warn("twitch gql still integrity-blocked after retry; flagging account",
-			"op", opName, "status", status, "body", truncate(string(rawBody), 300))
+			"op", opName, "status", status)
 		return ErrIntegrityBlocked
 	}
 
 	var envelope gqlResponse
 	if err := json.Unmarshal(rawBody, &envelope); err != nil {
-		slog.Error("twitch gql decode failed", "op", opName, "status", status, "body", truncate(string(rawBody), 500))
+		slog.Error("twitch gql decode failed", "op", opName, "status", status)
 		return fmt.Errorf("decode gql response: %w", err)
 	}
 	if len(envelope.Errors) > 0 {
@@ -363,11 +356,11 @@ func (c *client) do(ctx context.Context, token, opName string, body []byte, out 
 		// when data is truly missing.
 		dataEmpty := len(envelope.Data) == 0 || string(envelope.Data) == "null" || string(envelope.Data) == "{}"
 		if dataEmpty {
-			slog.Error("twitch gql application error", "op", opName, "status", status, "errors", msgs, "body", truncate(string(rawBody), 500))
+			slog.Error("twitch gql application error", "op", opName, "status", status, "errors", msgs)
 			return fmt.Errorf("twitch gql %s: %s", opName, strings.Join(msgs, "; "))
 		}
 		slog.Warn("twitch gql partial response (returning data anyway)",
-			"op", opName, "status", status, "errors", msgs, "body", truncate(string(rawBody), 500))
+			"op", opName, "status", status, "errors", msgs)
 	}
 	if out == nil {
 		return nil

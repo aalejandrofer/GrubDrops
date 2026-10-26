@@ -271,7 +271,7 @@ func (p *PubSubClient) handleFrame(raw []byte) {
 		Data  json.RawMessage `json:"data,omitempty"`
 	}
 	if err := json.Unmarshal(raw, &env); err != nil {
-		slog.Warn("pubsub bad envelope", "err", err, "raw", string(raw))
+		slog.Warn("pubsub bad envelope", "err", err)
 		return
 	}
 	switch env.Type {

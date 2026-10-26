@@ -49,6 +49,7 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- Twitch integrity tokens and raw responses no longer appear in logs. The integrity log line records only the expiry and bad-bot flag, and gql and PubSub log lines drop the response body (GRUB-20).
 - The health canary says when it skipped for lack of a signed-in account, and Run now shows progress and a result or timeout message.
 - Home shows a message when the miner is unreachable on first load.
 - Paused signed-out accounts offer "Log in again" next to Resume, and Home counts only signed-out accounts when deciding all are signed out.
