@@ -6,6 +6,7 @@ Upgrades prod from the 1.x image to v2. Prod is the compose project at `/home/ja
 
 - Staging is green on the same image and a live-drop check passed.
 - `GRUB_MASTER_KEY` stays unchanged in the compose env. A different key cannot decrypt sessions and every account shows signed out.
+- No `miner.db.pre-v2` is in the data directory. v2 skips its backup when one exists, so rename any old one first.
 - Do all of "Before the tag" first. Pushing `v2.0.0` moves `latest` to v2, so after that the 1.x image can only be recovered from the local copy.
 
 ## Before the tag
@@ -24,7 +25,7 @@ The running image is `sha256:386a3059b9d4f3d6f056cf20a4cfb3ffe2c83c351d3b6064c0d
 4. Check the log for both lines:
    - `goose: successfully migrated database to version: 18`
    - `store 1.x import done`, with games, claims and minutes counts.
-5. If `store 1.x import done` is missing or a `1.x import:` error appears, run `docker compose stop` and roll back. The import is one transaction, so the DB is unchanged and the container would otherwise restart-loop.
+5. If `store 1.x import done` is missing or a `1.x import:` error appears, run `docker compose stop` and roll back. The import is one transaction and rolls back, but the migrations to 18 have already run, so restore the DB before starting 1.x.
 
 v2 writes `<db>.pre-v2` itself before it migrates.
 
@@ -43,6 +44,6 @@ Claims and minutes recorded under v2 are lost.
 1. `docker compose stop`.
 2. Restore the DB, either:
    - the manual backup set: `miner.db`, `miner.db-wal` and `miner.db-shm` together, or
-   - `miner.db.pre-v2` alone as `miner.db`, with `miner.db-wal` and `miner.db-shm` removed. It is a standalone file made at upgrade time, so it is older than the manual set.
+   - `miner.db.pre-v2` alone as `miner.db`, with `miner.db-wal` and `miner.db-shm` removed. It is a standalone copy v2 made just before it migrated.
 3. Rename `miner.db.pre-v2` to `miner.db.pre-v2.used` (or delete it). v2 skips the backup when the file exists, so a later re-upgrade would keep the stale one.
 4. Set the compose image to `grubdrops:rollback-1x` and run `docker compose up -d`.
