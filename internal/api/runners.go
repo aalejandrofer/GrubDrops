@@ -122,22 +122,6 @@ func (s *server) listRunners(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// accountExists writes 404 or 500 and returns false when id is not an account.
-func (s *server) accountExists(w http.ResponseWriter, r *http.Request, id string) bool {
-	accts, err := s.d.Q.ListAllAccounts(r.Context())
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "internal")
-		return false
-	}
-	for _, a := range accts {
-		if a.ID == id {
-			return true
-		}
-	}
-	writeErr(w, http.StatusNotFound, "not_found")
-	return false
-}
-
 func (s *server) putRunnerOrder(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var body struct {
@@ -146,7 +130,7 @@ func (s *server) putRunnerOrder(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &body) {
 		return
 	}
-	if !s.accountExists(w, r, id) {
+	if _, ok := s.account(w, r, id); !ok {
 		return
 	}
 	if body.BenefitIDs == nil {
@@ -158,7 +142,7 @@ func (s *server) putRunnerOrder(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) deleteRunnerOrder(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if !s.accountExists(w, r, id) {
+	if _, ok := s.account(w, r, id); !ok {
 		return
 	}
 	s.d.Pool.ResetOrder(id)
