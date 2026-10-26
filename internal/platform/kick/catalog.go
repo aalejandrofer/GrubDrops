@@ -29,6 +29,7 @@ func (b *Backend) Catalog(ctx context.Context, s platform.Session) ([]platform.C
 			ID:             c.ID,
 			Platform:       "kick",
 			Game:           c.Game,
+			BoxArtURL:      c.GameImage,
 			Name:           c.Name,
 			AccountLinkURL: c.ConnectURL,
 		}

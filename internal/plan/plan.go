@@ -137,7 +137,15 @@ func Build(in Input) Result {
 		if !ok || (c.Status != "" && c.Status != "active") || c.Kind == "reward" {
 			continue
 		}
-		unlinked := (c.Platform == "twitch" || c.AccountLinkChecked) && !c.AccountLinked && !in.ForceLinked[c.ID]
+		// Twitch leaves isAccountConnected false on campaigns that need no
+		// link, so only a publisher link page counts there.
+		var unlinked bool
+		if c.Platform == "twitch" {
+			unlinked = platform.TwitchNeedsLink(c)
+		} else {
+			unlinked = c.AccountLinkChecked && !c.AccountLinked
+		}
+		unlinked = unlinked && !in.ForceLinked[c.ID]
 
 		benefits := append([]platform.DropBenefit(nil), c.Benefits...)
 		sort.SliceStable(benefits, func(i, j int) bool { return benefits[i].RequiredMinutes < benefits[j].RequiredMinutes })

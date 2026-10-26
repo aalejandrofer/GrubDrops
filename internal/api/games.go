@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/collect"
 	"github.com/aalejandrofer/grubdrops/internal/gameslug"
 	"github.com/aalejandrofer/grubdrops/internal/plan"
+	"github.com/aalejandrofer/grubdrops/internal/platform/twitch"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
@@ -58,13 +58,14 @@ type gameHitJSON struct {
 	Priority *int   `json:"priority"`
 }
 
-// boxArtURL is the Twitch directory box art for a game. The ID form works for
-// newer games where the name form redirects to a placeholder.
+// boxArtURL is the Twitch directory box art for a game: the IGDB id form
+// when the Twitch game id is known, which works for newer games where the
+// name form redirects to a placeholder.
 func boxArtURL(name, twitchID string) string {
-	if twitchID != "" {
-		return "https://static-cdn.jtvnw.net/ttv-boxart/" + url.PathEscape(twitchID) + "-144x192.jpg"
+	if u := twitch.BoxArtURL("", twitchID); u != "" {
+		return u
 	}
-	return "https://static-cdn.jtvnw.net/ttv-boxart/" + url.PathEscape(name) + "-144x192.jpg"
+	return twitch.BoxArtByName(name)
 }
 
 func (s *server) routesGames(r chi.Router) {

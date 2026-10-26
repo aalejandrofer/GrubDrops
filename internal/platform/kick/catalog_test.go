@@ -13,7 +13,7 @@ import (
 func TestCatalog_ActiveCampaignsWithRewards(t *testing.T) {
 	f := &fakeDoer{resp: map[string]fakeResp{
 		"https://web.kick.com/api/v1/drops/campaigns": {200, `{"data":[
-			{"id":"c-rust","category":{"name":"Rust","slug":"rust"},"name":"Rust Drops","status":"active",
+			{"id":"c-rust","category":{"banner_image_url":"","id":13,"image_url":"https://files.kick.com/images/subcategories/13/banner/coajjj.jpg","name":"Rust","slug":"rust"},"name":"Rust Drops","status":"active",
 			 "ends_at":"2099-01-01T00:00:00Z","connect_url":"https://example.com/link",
 			 "rewards":[{"id":"r1","name":"Crate","required_units":90,"image_url":"drops/reward-image/a.png"}]},
 			{"id":"c-old","game":"Rust","name":"Old","status":"expired"},
@@ -27,12 +27,30 @@ func TestCatalog_ActiveCampaignsWithRewards(t *testing.T) {
 	require.Len(t, camps, 1)
 	c := camps[0]
 	assert.Equal(t, "Rust", c.Game)
+	assert.Equal(t, "https://files.kick.com/images/subcategories/13/banner/coajjj.jpg", c.BoxArtURL, "category image")
 	assert.Equal(t, "active", c.Status)
 	assert.Equal(t, "https://example.com/link", c.AccountLinkURL)
 	require.Len(t, c.Benefits, 1)
 	assert.Equal(t, 90, c.Benefits[0].RequiredMinutes)
 	assert.Equal(t, "https://ext.cdn.kick.com/drops/reward-image/a.png", c.Benefits[0].ImageURL)
 	assert.Empty(t, b.campaignChannels, "catalog must not touch the mining caches")
+}
+
+func TestGameImage(t *testing.T) {
+	cases := []struct {
+		name string
+		m    map[string]any
+		want string
+	}{
+		{"category image_url", map[string]any{"category": map[string]any{"image_url": "https://files.kick.com/images/subcategories/14138/banner/b049272d-6811-4c3d-b19c-8f6cc170c5ac", "banner_image_url": ""}},
+			"https://files.kick.com/images/subcategories/14138/banner/b049272d-6811-4c3d-b19c-8f6cc170c5ac"},
+		{"banner when no image", map[string]any{"category": map[string]any{"image_url": "", "banner_image_url": "https://files.kick.com/images/subcategories/5/banner/coc99o.jpg"}},
+			"https://files.kick.com/images/subcategories/5/banner/coc99o.jpg"},
+		{"no category", map[string]any{"category": nil, "game": "Rust"}, ""},
+	}
+	for _, tc := range cases {
+		assert.Equal(t, tc.want, gameImage(tc.m), tc.name)
+	}
 }
 
 // anonDoer records whether each request was marked anonymous.

@@ -70,6 +70,7 @@ type campaignsData struct {
 			Game struct {
 				ID          string `json:"id"`
 				DisplayName string `json:"displayName"`
+				BoxArtURL   string `json:"boxArtURL"`
 			} `json:"game"`
 		} `json:"dropCampaigns"`
 	} `json:"currentUser"`
@@ -266,6 +267,7 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 			Platform:           "twitch",
 			Game:               c.Game.DisplayName,
 			GameID:             c.Game.ID,
+			BoxArtURL:          BoxArtURL(c.Game.BoxArtURL, c.Game.ID),
 			Name:               c.Name,
 			StartsAt:           parseISO(c.StartAtRaw),
 			EndsAt:             parseISO(c.EndAtRaw),

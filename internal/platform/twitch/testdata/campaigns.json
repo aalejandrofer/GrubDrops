@@ -8,7 +8,7 @@
           "status": "ACTIVE",
           "startAt": "2026-06-01T00:00:00Z",
           "endAt": "2026-07-01T00:00:00Z",
-          "game": {"id": "263490", "displayName": "Rust"}
+          "game": {"id": "263490", "displayName": "Rust", "boxArtURL": "https://static-cdn.jtvnw.net/ttv-boxart/263490-{width}x{height}.jpg"}
         },
         {
           "id": "camp2",

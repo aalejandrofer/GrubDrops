@@ -96,6 +96,8 @@ All notable changes to GrubDrops.
 - Settings shows no empty strip under Accounts when there are none, and the Health "Last scan" dot stays grey until a scan has run.
 - The Discord webhook field is no longer a password input, so browsers stop autofilling the admin password into it. It saves only on Save or Enter, a URL that is not a Discord webhook shows an inline message, and language and timezone save only on a real change.
 - The health canary re-runs when an account is resumed or signs in and its platform's last result was Skipped, instead of showing Skipped until the next 6-hour run. A check already running is followed by one more.
+- **Box art missing on Discover, Games and Home.** Box art was built from the Twitch game ID as `<id>-144x192.jpg`, which newer IGDB-backed games such as ARKNIGHTS: ENDFIELD or Captain's Call redirect to Twitch's placeholder, and Kick campaigns used the name form, which only older games answer. Twitch campaigns now use the GQL `game.boxArtURL` with its size filled in, then the `<id>_IGDB-144x192.jpg` form. Kick campaigns use the category image through the Kick image proxy, then the same game's Twitch art from the same Discover result.
+- **"Needs account link" on almost every Twitch campaign.** Twitch leaves `self.isAccountConnected` false on many campaigns that need no link, with an empty or twitch.tv `accountLinkURL`. Discover and the planner (and so the Games link warning and Awaiting connect) now treat a Twitch campaign as needing a link only when it is not connected and its link page is off twitch.tv, such as a publisher's connect page.
 
 ### Removed
 
