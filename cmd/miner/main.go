@@ -83,9 +83,16 @@ func generateMasterKey() (string, error) {
 	return id.String(), nil
 }
 
-// run boots the miner and blocks until ctx ends, then shuts down. ctx is the
-// root context: runners, background loops and open SSE streams end with it.
+// setProcessZone sets time.Local. A test that calls run swaps it out, because
+// the write races the test runtime's own timers.
+var setProcessZone = func(l *time.Location) { time.Local = l }
+
+// run boots the miner and blocks until ctx ends or the HTTP server fails,
+// then shuts down. Runners, background loops and open SSE streams run on a
+// child of ctx that every exit path cancels.
 func run(ctx context.Context) error {
+	ctx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -332,7 +339,7 @@ func run(ctx context.Context) error {
 	cfg.Location = displayLoc
 	// Set process-wide timezone so any residual time.Local-based formatting
 	// matches the display zone at boot.
-	time.Local = displayLoc
+	setProcessZone(displayLoc)
 
 	// Per-account direct-Twitch backends. The direct twitch.Backend holds
 	// per-account state (auth, userID/userLogin caches, its own PubSub
@@ -384,10 +391,28 @@ func run(ctx context.Context) error {
 	}
 
 	pool := runner.NewPool(notifier)
+
+	// Background loops join bg. On every exit path the deferred cleanup
+	// cancels them, stops the runners and waits for both before the Twitch
+	// backends and the DB close (their defers run after this one).
+	var bg sync.WaitGroup
+	defer func() {
+		cancelRun()
+		pool.Stop()
+		bg.Wait()
+		twitchBackendsMu.Lock()
+		for id, bk := range twitchBackends {
+			bk.Close()
+			logger.Info("closed twitch backend", "account", id)
+		}
+		twitchBackends = map[string]*twitch.Backend{}
+		twitchBackendsMu.Unlock()
+	}()
+
 	collector := collect.New(db, q)
 	collector.Loc = displayZone.Location
 	hub := api.NewHub()
-	go hub.Run(ctx)
+	bg.Go(func() { hub.Run(ctx) })
 
 	ro := newRoster(roster{
 		ctx:        ctx,
@@ -403,16 +428,11 @@ func run(ctx context.Context) error {
 		notifier:   notifier,
 	}, kickBackend)
 
-	// Every ring line goes out as a `log` SSE event.
-	ring.SetHook(func(l mlog.LogLine) {
-		var name string
-		if id := api.LogAccountID(l); id != "" {
-			if a, err := q.GetAccount(ctx, id); err == nil {
-				name = a.DisplayName
-			}
-		}
-		hub.Publish(api.Event{Name: api.EventLog, Data: api.LogEventJSON(l, name)})
-	})
+	// Every ring line goes out as a `log` SSE event. The hook runs on the
+	// logging goroutine, so it must not block: the account name comes from
+	// the roster's in-memory cache, never the DB.
+	ring.SetHook(logHook(hub, ro.accountName))
+	defer ring.SetHook(nil)
 
 	builders, err := ro.builders(ctx)
 	if err != nil {
@@ -435,7 +455,7 @@ func run(ctx context.Context) error {
 	// alert when an account's auth dies.
 	authChecker := authcheck.New(q, sessions, registry).WithNotifier(notifier)
 	authInterval := parseDuration(os.Getenv("GRUB_AUTHCHECK_INTERVAL"), time.Hour)
-	go authChecker.Run(ctx, authInterval)
+	bg.Go(func() { authChecker.Run(ctx, authInterval) })
 
 	// Accrual canary: periodically probes the Twitch beacon and Kick WS
 	// transports so the operator sees a canary result without waiting for an
@@ -480,7 +500,7 @@ func run(ctx context.Context) error {
 	canaryIntervalSecVal, canaryIntervalSecErr := settingsStore.CanaryIntervalSec(ctx)
 	canaryIntervalSec := settingOr(logger, canaryIntervalSecVal, canaryIntervalSecErr, 3600, "canary_interval_sec")
 	canaryInterval := parseDuration(os.Getenv("GRUB_CANARY_INTERVAL"), time.Duration(canaryIntervalSec)*time.Second)
-	go canaryRunner.Run(ctx, canaryInterval)
+	bg.Go(func() { canaryRunner.Run(ctx, canaryInterval) })
 
 	// Update checker: background GitHub-release poll (boot + every interval),
 	// cached so the request path never calls GitHub. Disabled by GRUB_UPDATE_CHECK=0.
@@ -493,17 +513,19 @@ func run(ctx context.Context) error {
 		}
 		updateChecker = update.NewChecker(updateClient, "aalejandrofer/GrubDrops", settingsStore)
 		updateInterval := parseDuration(os.Getenv("GRUB_UPDATE_INTERVAL"), 6*time.Hour)
-		go updateChecker.Run(ctx, updateInterval)
+		bg.Go(func() { updateChecker.Run(ctx, updateInterval) })
 		updateStatus = updateChecker.Status
 	}
 
 	// Daily summary at each local midnight, when turned on in Settings.
-	go summary.Run(ctx, summary.Config{
-		Settings: settingsStore,
-		Minutes:  collector.Minutes,
-		Claims:   collector.Claims,
-		Notifier: notifier,
-		Zone:     displayZone.Location,
+	bg.Go(func() {
+		summary.Run(ctx, summary.Config{
+			Settings: settingsStore,
+			Minutes:  collector.Minutes,
+			Claims:   collector.Claims,
+			Notifier: notifier,
+			Zone:     displayZone.Location,
+		})
 	})
 
 	deps := api.Deps{
@@ -564,12 +586,12 @@ func run(ctx context.Context) error {
 	}
 
 	srvErr := make(chan error, 1)
-	go func() {
+	bg.Go(func() {
 		logger.Info("http listening", "addr", cfg.HTTPAddr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			srvErr <- err
 		}
-	}()
+	})
 
 	var runErr error
 	select {
@@ -579,21 +601,22 @@ func run(ctx context.Context) error {
 	}
 	logger.Info("shutting down")
 	ring.SetHook(nil)
+	cancelRun()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
-
-	pool.Stop()
-
-	// Close all Twitch backends to stop PubSub goroutines.
-	twitchBackendsMu.Lock()
-	for id, bk := range twitchBackends {
-		bk.Close()
-		logger.Info("closed twitch backend", "account", id)
-	}
-	twitchBackends = map[string]*twitch.Backend{}
-	twitchBackendsMu.Unlock()
 	return runErr
+}
+
+// logHook publishes each ring line as a `log` SSE event. name must not block.
+func logHook(hub *api.Hub, name func(id string) string) func(mlog.LogLine) {
+	return func(l mlog.LogLine) {
+		var n string
+		if id := api.LogAccountID(l); id != "" {
+			n = name(id)
+		}
+		hub.Publish(api.Event{Name: api.EventLog, Data: api.LogEventJSON(l, n)})
+	}
 }
 
 type indirectNotifier struct {

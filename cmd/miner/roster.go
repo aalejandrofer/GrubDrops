@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/api"
@@ -39,10 +40,52 @@ type roster struct {
 	pool      *runner.Pool
 	kick      kickRegistry // nil interface when Kick is not configured; see newRoster
 	logger    *slog.Logger
+	names     *accountNames // set by newRoster
 
 	backendFor func(gen.Account) (platform.Backend, error)
 	notifier   runner.Notifier
 }
+
+// accountNames maps account ID to display name in memory, so the log hook can
+// name an account without a DB read. The roster keeps it current.
+type accountNames struct {
+	mu sync.RWMutex
+	m  map[string]string
+}
+
+func (n *accountNames) get(id string) string {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.m[id]
+}
+
+func (n *accountNames) set(id, name string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.m == nil {
+		n.m = map[string]string{}
+	}
+	n.m[id] = name
+}
+
+func (n *accountNames) remove(id string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	delete(n.m, id)
+}
+
+func (n *accountNames) replace(accts []gen.Account) {
+	m := make(map[string]string, len(accts))
+	for _, a := range accts {
+		m[a.ID] = a.DisplayName
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.m = m
+}
+
+// accountName returns the cached display name for id, or "".
+func (ro *roster) accountName(id string) string { return ro.names.get(id) }
 
 // newRoster returns r wired for claim events. k may be nil. A nil
 // *kick.Backend stored straight in the kickRegistry interface would be a
@@ -50,6 +93,7 @@ type roster struct {
 // non-nil.
 func newRoster(r roster, k *kick.Backend) *roster {
 	ro := &r
+	ro.names = &accountNames{}
 	if k != nil {
 		ro.kick = k
 	}
@@ -137,38 +181,47 @@ func (ro *roster) builder(a gen.Account) runner.Builder {
 			games = append(games, plan.Game{Name: g.Name, Slug: g.Slug})
 		}
 
-		order := ro.pool.OrderFunc(a.ID)
-		r := runner.New(runner.Config{
-			AccountID: a.ID, AccountLabel: a.DisplayName, Platform: a.Platform,
-			Backend: b, Session: sess,
-			Games:       games,
-			ForceLinked: linkOverrideSet(ctx, ro.q),
-			Notifier:    ro.notifier,
-			Claims:      &claimLog{ro: ro},
-			Skips:       ro.skips,
-			Order:       order,
-			OnScan: func(ctx context.Context, s runner.Scan) {
-				ro.collector.OnScan(ctx, s)
-				ro.hub.Publish(api.Event{Name: api.EventGames, Data: struct{}{}})
-			},
-			OnProgress: ro.collector.OnProgress,
-			OnBeat:     ro.collector.OnBeat,
-			OnChange: func(s runner.Snapshot) {
-				// Read the row fresh so a rename shows; the captured row is
-				// the fallback.
-				row := a
-				if fresh, err := ro.q.GetAccount(ro.ctx, a.ID); err == nil {
-					row = fresh
-				}
-				ro.hub.Publish(api.Event{
-					Name: api.EventRunner, Key: a.ID,
-					Data: api.RunnerJSON(s, row, len(order()) > 0),
-				})
-			},
-			ProgressNotifyStepPct: 0,
-			TickInterval:          0,
-		})
+		r := runner.New(ro.runnerConfig(ctx, a, b, sess, games))
 		return runner.Entry{ID: a.ID, Unit: r}
+	}
+}
+
+// progressNotifyStepPct fires progress notifications at start, 50% and 100%,
+// the 1.x default. The notify_progress toggle in Settings gates them.
+const progressNotifyStepPct = 50
+
+// runnerConfig is the runner.Config for one account build.
+func (ro *roster) runnerConfig(ctx context.Context, a gen.Account, b platform.Backend, sess platform.Session, games []plan.Game) runner.Config {
+	order := ro.pool.OrderFunc(a.ID)
+	return runner.Config{
+		AccountID: a.ID, AccountLabel: a.DisplayName, Platform: a.Platform,
+		Backend: b, Session: sess,
+		Games:       games,
+		ForceLinked: linkOverrideSet(ctx, ro.q),
+		Notifier:    ro.notifier,
+		Claims:      &claimLog{ro: ro},
+		Skips:       ro.skips,
+		Order:       order,
+		OnScan: func(ctx context.Context, s runner.Scan) {
+			ro.collector.OnScan(ctx, s)
+			ro.hub.Publish(api.Event{Name: api.EventGames, Data: struct{}{}})
+		},
+		OnProgress: ro.collector.OnProgress,
+		OnBeat:     ro.collector.OnBeat,
+		OnChange: func(s runner.Snapshot) {
+			// Read the row fresh so a rename shows; the captured row is
+			// the fallback.
+			row := a
+			if fresh, err := ro.q.GetAccount(ro.ctx, a.ID); err == nil {
+				row = fresh
+			}
+			ro.hub.Publish(api.Event{
+				Name: api.EventRunner, Key: a.ID,
+				Data: api.RunnerJSON(s, row, len(order()) > 0),
+			})
+		},
+		ProgressNotifyStepPct: progressNotifyStepPct,
+		TickInterval:          0,
 	}
 }
 
@@ -195,6 +248,7 @@ func (ro *roster) builders(_ context.Context) ([]runner.Builder, error) {
 	if err != nil {
 		return nil, err
 	}
+	ro.names.replace(accts)
 	out := make([]runner.Builder, 0, len(accts))
 	for _, a := range accts {
 		out = append(out, ro.builder(a))
@@ -207,6 +261,7 @@ func (ro *roster) builders(_ context.Context) ([]runner.Builder, error) {
 func (ro *roster) reloadAccount(id string) {
 	a, err := ro.q.GetAccount(ro.ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
+		ro.names.remove(id)
 		ro.pool.ReloadAccount(id, nil)
 		return
 	}
@@ -214,11 +269,13 @@ func (ro *roster) reloadAccount(id string) {
 		ro.log().Error("reload account: read row failed", "kind", "error", "account", id, "err", err)
 		return
 	}
+	ro.names.set(a.ID, a.DisplayName)
 	ro.pool.ReloadAccount(id, ro.builder(a))
 }
 
 // accountRemoved drops a deleted account's runner and collected state.
 func (ro *roster) accountRemoved(id string) {
+	ro.names.remove(id)
 	ro.pool.ReloadAccount(id, nil)
 	ro.collector.Forget(id)
 	ro.hub.Publish(api.Event{Name: api.EventAccounts, Data: struct{}{}})

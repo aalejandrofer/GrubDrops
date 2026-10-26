@@ -36,6 +36,9 @@ All notable changes to GrubDrops.
 - v2 runner: a swept reward is recorded only when its title resolves to one drop, looking in the current campaign, then the current game, then the rest of the plan. An ambiguous title records nothing, so it cannot hide another drop.
 - v2 runner: a reward code is stored against the drop just claimed, within 10 minutes, and never against the next drop the runner moved on to. Each claim takes one code.
 - v2 runner: every pick retries campaigns that had no live stream earlier, so the top game mines first again after another drop is claimed.
+- v2 miner: progress notifications fire again (start, 50% and 100%) when turned on in Settings.
+- v2 miner: `log` SSE events take the account name from memory, so logging never waits on the database.
+- v2 miner: shutdown waits for the background loops before closing the Twitch backends and the database, including after an HTTP listen failure.
 
 ### Removed
 

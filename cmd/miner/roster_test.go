@@ -353,3 +353,36 @@ func asMap(t *testing.T, v any) map[string]any {
 	require.NoError(t, json.Unmarshal(b, &m))
 	return m
 }
+
+func TestRoster_ProgressNotifyStepNonZero(t *testing.T) {
+	e := newRosterEnv(t)
+	a := e.account(t, "a1", 1, true)
+	cfg := e.ro.runnerConfig(e.ctx, a, e.fake, platform.Session{}, nil)
+	assert.NotZero(t, cfg.ProgressNotifyStepPct)
+	assert.Equal(t, progressNotifyStepPct, cfg.ProgressNotifyStepPct)
+}
+
+func TestRoster_AccountNamesTrackRows(t *testing.T) {
+	e := newRosterEnv(t)
+	e.account(t, "a1", 0, false)
+	e.account(t, "a2", 0, false)
+	assert.Equal(t, "", e.ro.accountName("a1"), "empty until the first build")
+
+	_, err := e.ro.builders(e.ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "name-a1", e.ro.accountName("a1"))
+	assert.Equal(t, "name-a2", e.ro.accountName("a2"))
+
+	_, err = e.db.ExecContext(e.ctx, `UPDATE accounts SET display_name = 'renamed' WHERE id = 'a1'`)
+	require.NoError(t, err)
+	e.ro.reloadAccount("a1")
+	assert.Equal(t, "renamed", e.ro.accountName("a1"))
+
+	e.ro.accountRemoved("a2")
+	assert.Equal(t, "", e.ro.accountName("a2"))
+
+	_, err = e.db.ExecContext(e.ctx, `DELETE FROM accounts WHERE id = 'a1'`)
+	require.NoError(t, err)
+	e.ro.reloadAccount("a1")
+	assert.Equal(t, "", e.ro.accountName("a1"))
+}

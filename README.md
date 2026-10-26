@@ -225,7 +225,7 @@ default shown.
 | `GRUB_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. |
 | `GRUB_AUTHBYPASS` | `false` | **Disables all auth** when truthy (`1`/`true`). |
 | `GRUB_TWITCH_BROWSER` | `0` | `1` routes Twitch through the browser sidecar instead of direct HTTP. Experimental; the default direct-HTTP path is recommended. |
-| `GRUB_CANARY_INTERVAL` | Health-tab value | Overrides the accrual-canary run cadence (e.g. `6h`); falls back to the Settings ▸ Health value. |
+| `GRUB_CANARY_INTERVAL` | stored value, else `1h` | Overrides the accrual-canary run cadence (e.g. `6h`); falls back to the stored value, else 1 h. |
 
 > **"Invalid CSRF token"?** `GRUB_SECURE_COOKIES` must match your scheme: `0`
 > over plain HTTP, `1` over HTTPS (proxy must forward `X-Forwarded-Proto: https`).

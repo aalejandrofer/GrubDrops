@@ -15,6 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/aalejandrofer/grubdrops/internal/api"
+	mlog "github.com/aalejandrofer/grubdrops/internal/log"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 )
 
@@ -22,6 +24,10 @@ import (
 // the JSON API and the placeholder SPA answer, then cancels and expects a
 // clean shutdown inside 10 s.
 func TestRun_BootsAndServesAPI(t *testing.T) {
+	prevZone := setProcessZone
+	setProcessZone = func(*time.Location) {}
+	t.Cleanup(func() { setProcessZone = prevZone })
+
 	key, err := generateMasterKey()
 	require.NoError(t, err)
 
@@ -123,4 +129,30 @@ func TestGenerateMasterKey_IsAcceptedByCryptor(t *testing.T) {
 	key2, err := generateMasterKey()
 	require.NoError(t, err)
 	assert.NotEqual(t, key, key2, "each keygen must be unique")
+}
+
+func TestLogHook_NamesFromCacheOnly(t *testing.T) {
+	hub := api.NewHub()
+	sub, unsub := hub.Subscribe()
+	defer unsub()
+	var asked []string
+	hook := logHook(hub, func(id string) string {
+		asked = append(asked, id)
+		return "Alice"
+	})
+	hook(mlog.LogLine{Msg: "x", Fields: map[string]any{"account": "a1"}})
+	hook(mlog.LogLine{Msg: "y"})
+
+	for _, want := range []string{"Alice", ""} {
+		ev := <-sub
+		assert.Equal(t, api.EventLog, ev.Name)
+		b, err := json.Marshal(ev.Data)
+		require.NoError(t, err)
+		var got struct {
+			AccountName string `json:"account_name"`
+		}
+		require.NoError(t, json.Unmarshal(b, &got))
+		assert.Equal(t, want, got.AccountName)
+	}
+	assert.Equal(t, []string{"a1"}, asked, "lookup only for account lines")
 }

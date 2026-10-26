@@ -28,12 +28,13 @@ docker build -f deploy/Dockerfile.miner .   # build the miner image
 
 ```bash
 mkdir -p data
-GRUB_MASTER_KEY=$(head -c32 /dev/urandom | base64) \
+GRUB_MASTER_KEY=$(go run ./cmd/miner keygen) \
   GRUB_DB_PATH=./data/miner.db GRUB_SECURE_COOKIES=0 \
   go run ./cmd/miner
 ```
 
-Open http://localhost:8080 and create the admin login. Only `GRUB_MASTER_KEY`
+`/` serves a placeholder until the SPA lands. Create the admin with
+`POST /api/setup` (CSRF token from `GET /api/session`). Only `GRUB_MASTER_KEY`
 is required; see the README "Configuration" table for the rest (`GRUB_*` prefix).
 
 ## Layout
