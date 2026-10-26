@@ -180,7 +180,8 @@ func (s *server) setAccountEnabled(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad_request")
 		return
 	}
-	if _, ok := s.account(w, r, id); !ok {
+	acc, ok := s.account(w, r, id)
+	if !ok {
 		return
 	}
 	var v int64
@@ -194,6 +195,9 @@ func (s *server) setAccountEnabled(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.accountChanged(id)
+	if acc.Enabled == 0 && v == 1 {
+		s.rerunSkippedCanary(r.Context(), acc.Platform)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

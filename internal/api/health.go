@@ -213,16 +213,36 @@ func (s *server) getHealthLog(w http.ResponseWriter, _ *http.Request) {
 // so a run ends with the miner instead of outliving the database.
 func (s *server) postHealthCanary(w http.ResponseWriter, _ *http.Request) {
 	// A run already in flight absorbs this request; still 202.
-	if s.d.RunCanary != nil && s.canaryRunning.CompareAndSwap(false, true) {
-		run := s.d.RunCanary
-		ctx, cancel := context.WithTimeout(s.rootCtx(), canaryRunTimeout)
-		go func() {
-			defer cancel()
-			defer s.canaryRunning.Store(false)
-			if err := run(ctx); err != nil {
-				slog.Warn("canary run-now failed", "err", err)
-			}
-		}()
-	}
+	s.startCanary()
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// startCanary starts one background canary run on the root context with
+// canaryRunTimeout. It returns false when no runner is wired or a run is
+// already in flight.
+func (s *server) startCanary() bool {
+	if s.d.RunCanary == nil || !s.canaryRunning.CompareAndSwap(false, true) {
+		return false
+	}
+	run := s.d.RunCanary
+	ctx, cancel := context.WithTimeout(s.rootCtx(), canaryRunTimeout)
+	go func() {
+		defer cancel()
+		defer s.canaryRunning.Store(false)
+		if err := run(ctx); err != nil {
+			slog.Warn("canary run-now failed", "err", err)
+		}
+	}()
+	return true
+}
+
+// rerunSkippedCanary starts a canary run when the stored result for
+// platform says it skipped for lack of an active account. Called after an
+// account on that platform is resumed or signs in.
+func (s *server) rerunSkippedCanary(ctx context.Context, platform string) {
+	res, ok, err := canary.LoadResult(ctx, s.d.Q, platform)
+	if err != nil || !ok || !res.Skipped {
+		return
+	}
+	s.startCanary()
 }

@@ -127,6 +127,7 @@ func (s *server) persistKickSession(ctx context.Context, id string, f kickCookie
 		s.d.Registrar.RegisterChannels(id, f.Channels)
 	}
 	s.accountChanged(id)
+	s.rerunSkippedCanary(ctx, "kick")
 	return verified, nil
 }
 

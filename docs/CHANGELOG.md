@@ -68,6 +68,7 @@ All notable changes to GrubDrops.
 - A Twitch device status the UI does not know ends the flow with the error line instead of a blank panel.
 - Settings shows no empty strip under Accounts when there are none, and the Health "Last scan" dot stays grey until a scan has run.
 - The Discord webhook field is no longer a password input, so browsers stop autofilling the admin password into it. It saves only on Save or Enter, a URL that is not a Discord webhook shows an inline message, and language and timezone save only on a real change.
+- The health canary re-runs when an account is resumed or signs in and its platform's last result was Skipped, instead of showing Skipped until the next 6-hour run.
 
 ### Removed
 

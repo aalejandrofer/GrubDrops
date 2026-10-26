@@ -129,6 +129,7 @@ func (s *server) pollTwitch(ctx context.Context, id string, backend platform.Bac
 			inv.InvalidateAuth(id)
 		}
 		s.accountChanged(id)
+		s.rerunSkippedCanary(ctx, "twitch")
 		fl.set("done")
 		return
 	}
