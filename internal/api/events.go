@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -159,6 +160,7 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 			}
 			b, err := json.Marshal(e.Data)
 			if err != nil {
+				slog.Error("sse event marshal failed", "kind", "error", "event", e.Name, "err", err)
 				continue
 			}
 			_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", e.Name, b)
