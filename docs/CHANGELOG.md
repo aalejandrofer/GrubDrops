@@ -16,6 +16,9 @@ All notable changes to GrubDrops.
 - v2 `collect.Collector`: persists drop states, found claims, scan times and watch minutes from the runner hooks, and serves as the runner claim log.
 - v2 JSON API core: session, setup, login and CSRF under /api, 401 JSON for expired sessions, and the embedded SPA fallback (rebuild/v2).
 - v2 live updates over Server-Sent Events at /api/events (runner, claim, games, accounts, log).
+- v2 JSON API: overview KPIs and the runner list, with a session-only up-next order (`/api/overview`, `/api/runners`).
+- v2 JSON API: chosen games with local search and box art (`/api/games`).
+- v2 JSON API: filtered, paged claim history (`/api/claims`).
 
 ### Changed
 
