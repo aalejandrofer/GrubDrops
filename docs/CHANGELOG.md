@@ -66,6 +66,7 @@ All notable changes to GrubDrops.
 - v2 UI: release notes with two equal lines, or a Twitch and a Kick campaign with the same id, no longer crash the page on a duplicate list key.
 - v2 SSO: a failed OIDC sign-in redirects to `/login?login_error=oidc`, so the login page shows the SSO error instead of a plain form.
 - v2 Home is never blank: a failed load shows "Couldn't load Home." with Retry, no chosen games shows "No games chosen." with a link to Games, and all accounts signed out says so with a link to Settings → Accounts.
+- v2 Settings: the Discord webhook field is no longer a password input, so browsers stop autofilling the admin password into it and sending it on load. The webhook saves only on Save or Enter, and a URL that is not a Discord webhook shows an inline message instead of being sent. Language and timezone save only on a real change.
 
 ### Removed
 

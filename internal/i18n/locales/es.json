@@ -198,6 +198,7 @@
   "settings.discord": "Discord",
   "settings.connected": "Conectado",
   "settings.webhook_url": "URL del webhook",
+  "settings.webhook_invalid": "Introduce una URL que empiece por https://discord.com/api/webhooks/.",
   "settings.send_test": "Enviar prueba",
   "settings.change": "Cambiar",
   "settings.test_ok": "Mensaje de prueba enviado a Discord.",

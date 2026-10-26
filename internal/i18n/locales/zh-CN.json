@@ -198,6 +198,7 @@
   "settings.discord": "Discord",
   "settings.connected": "已连接",
   "settings.webhook_url": "Webhook 地址",
+  "settings.webhook_invalid": "请输入以 https://discord.com/api/webhooks/ 开头的 URL。",
   "settings.send_test": "发送测试",
   "settings.change": "更改",
   "settings.test_ok": "测试消息已发送到 Discord。",

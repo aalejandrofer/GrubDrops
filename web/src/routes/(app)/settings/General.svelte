@@ -49,8 +49,12 @@
 			<select
 				class="sel"
 				id="lang"
+				autocomplete="off"
 				value={s.language}
-				onchange={(e) => save('language', { language: e.currentTarget.value as Lang })}
+				onchange={(e) => {
+					const v = e.currentTarget.value as Lang;
+					if (e.isTrusted && v !== s.language) void save('language', { language: v });
+				}}
 			>
 				{#each LANGS as l (l.code)}<option value={l.code}>{l.label}</option>{/each}
 			</select>
@@ -81,7 +85,16 @@
 				<b><label for="tz">{t('settings.timezone')}</label></b>
 				{#if errs.timezone}<small class="bad">{t('settings.save_failed')}</small>{/if}
 			</div>
-			<select class="sel tz" id="tz" value={s.timezone} onchange={(e) => save('timezone', { timezone: e.currentTarget.value })}>
+			<select
+				class="sel tz"
+				id="tz"
+				autocomplete="off"
+				value={s.timezone}
+				onchange={(e) => {
+					const v = e.currentTarget.value;
+					if (e.isTrusted && v !== s.timezone) void save('timezone', { timezone: v });
+				}}
+			>
 				{#each zones as z (z.value)}<option value={z.value}>{z.label}</option>{/each}
 			</select>
 		</div>

@@ -21,3 +21,10 @@ export function zoneOptions(effective: string): { value: string; label: string }
 export function timeExample(fmt: '24h' | '12h', zone: string, now: number): string {
 	return clock(new Date(now).toISOString(), zone, fmt);
 }
+
+/** Same prefixes as the server's validWebhook. */
+export const WEBHOOK_PREFIXES = ['https://discord.com/api/webhooks/', 'https://discordapp.com/api/webhooks/'];
+
+export function isDiscordWebhook(v: string): boolean {
+	return WEBHOOK_PREFIXES.some((p) => v.startsWith(p) && v.length > p.length);
+}

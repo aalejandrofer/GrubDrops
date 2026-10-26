@@ -3,6 +3,7 @@
 	import { ApiError } from '$lib/api/client';
 	import type { Settings, SettingsPatch } from '$lib/api/types';
 	import { t } from '$lib/i18n/index.svelte';
+	import { isDiscordWebhook } from '$lib/settings';
 
 	let {
 		s,
@@ -18,18 +19,22 @@
 	let url = $state('');
 	let busy = false;
 	let feedback = $state<{ ok: boolean; text: string } | null>(null);
+	let invalid = $state(false);
 	let testing = $state(false);
 	let input: HTMLInputElement | undefined = $state();
 
 	const showInput = $derived(!s.discord.configured || editing);
 
+	// Saves only on the Save button or Enter, never on blur or input, so a
+	// browser autofill can't send anything.
 	async function commit(): Promise<void> {
 		const v = url.trim();
-		if (busy) return;
-		if (v === '') {
-			editing = false;
+		if (busy || v === '') return;
+		if (!isDiscordWebhook(v)) {
+			invalid = true;
 			return;
 		}
+		invalid = false;
 		busy = true;
 		const ok = await save('webhook', { discord_webhook: v });
 		busy = false;
@@ -38,6 +43,12 @@
 			editing = false;
 			feedback = null;
 		}
+	}
+
+	function cancel(): void {
+		url = '';
+		invalid = false;
+		editing = false;
 	}
 
 	function change(): void {
@@ -85,33 +96,41 @@
 				{#if s.discord.configured}<span class="tag ok">{t('settings.connected')}</span>{/if}
 			</div>
 			<div class="field">
-				<label for="dw">{t('settings.webhook_url')}</label>
+				<label for="discord-webhook">{t('settings.webhook_url')}</label>
 				<div class="inline wrap">
 					{#if showInput}
 						<input
-							class="inp"
-							id="dw"
-							type="password"
+							class="inp masked"
+							id="discord-webhook"
+							name="discord-webhook"
+							type="url"
+							inputmode="url"
 							autocomplete="off"
 							spellcheck="false"
+							data-1p-ignore
+							data-lpignore="true"
+							data-bwignore
 							placeholder="https://discord.com/api/webhooks/…"
+							aria-invalid={invalid ? true : undefined}
 							bind:value={url}
 							bind:this={input}
-							onblur={commit}
+							oninput={() => (invalid = false)}
 							onkeydown={(e) => {
-								if (e.key === 'Enter') void commit();
-								else if (e.key === 'Escape') {
-									url = '';
-									editing = false;
-								}
+								if (e.key === 'Enter' && e.isTrusted) void commit();
+								else if (e.key === 'Escape') cancel();
 							}}
 						/>
+						<button type="button" class="btn" disabled={url.trim() === ''} onclick={commit}>{t('accounts.save')}</button>
+						{#if s.discord.configured}
+							<button type="button" class="btn" onclick={cancel}>{t('accounts.cancel')}</button>
+						{/if}
 					{:else}
-						<input class="inp" id="dw" type="text" value={s.discord.webhook_hint} readonly />
+						<input class="inp" id="discord-webhook" type="text" value={s.discord.webhook_hint} readonly />
 						<button type="button" class="btn" disabled={testing} onclick={sendTest}>{t('settings.send_test')}</button>
 						<button type="button" class="btn" onclick={change}>{t('settings.change')}</button>
 					{/if}
 				</div>
+				{#if invalid}<span class="feedback bad" role="alert">{t('settings.webhook_invalid')}</span>{/if}
 				{#if errs.webhook}<span class="feedback bad">{t('settings.save_failed')}</span>{/if}
 				{#if feedback}<span class="feedback" class:bad={!feedback.ok} role="status">{feedback.text}</span>{/if}
 			</div>
@@ -155,6 +174,10 @@
 </section>
 
 <style>
+	/* Masked by CSS, not a password input, so password managers leave it alone. */
+	.masked {
+		-webkit-text-security: disc;
+	}
 	.bad {
 		color: var(--red);
 	}
