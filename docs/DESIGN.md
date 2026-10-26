@@ -36,7 +36,7 @@ loaded. `--t2` and `--t3` are secondary text steps.
 
 - Top bar 52px high, content container max width 1160px.
 - Breakpoints: 960px (Home collapses its columns), 720px (top bar, Home,
-  Games, Rewards and Settings go single column), 420px (top bar and Settings
+  Games, Discover, Rewards and Settings go single column), 420px (top bar and Settings
   tighten).
 - Pages render a `PageHead` (title, optional timestamp and status, actions in
   its snippet) above their sections.
@@ -45,7 +45,8 @@ loaded. `--t2` and `--t3` are secondary text steps.
 
 Routes under `web/src/routes/`:
 
-- `(app)`: Home, Games (`games/`), Rewards (`rewards/`), Settings
+- `(app)`: Home, Games (`games/`), Discover (`discover/`), Rewards
+  (`rewards/`), Settings
   (`settings/`) with sections General, Accounts, Notifications, Updates and
   Health, each its own component.
 - `(auth)`: Login (`login/`) and first-run Setup (`setup/`), styled by

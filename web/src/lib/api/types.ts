@@ -126,6 +126,39 @@ export interface GamesResp {
 	next_scan_at: string | null;
 }
 
+export interface DiscoverReward {
+	name: string;
+	image_url: string;
+	minutes: number;
+}
+
+export interface DiscoverCampaign {
+	id: string;
+	platform: Platform;
+	game: string;
+	box_art_url: string;
+	name: string;
+	starts_at: string | null;
+	ends_at: string | null;
+	link_url: string;
+	needs_link: boolean;
+	rewards: DiscoverReward[];
+}
+
+/** error: '' on success, else needs_android, timeout or failed. */
+export interface DiscoverPlatform {
+	ok: boolean;
+	error: '' | 'needs_android' | 'timeout' | 'failed';
+	count: number;
+}
+
+export interface DiscoverResp {
+	fetched_at: string | null;
+	next_refresh_at: string | null;
+	platforms: Partial<Record<Platform, DiscoverPlatform>>;
+	campaigns: DiscoverCampaign[];
+}
+
 export interface SearchHit {
 	id: string;
 	name: string;

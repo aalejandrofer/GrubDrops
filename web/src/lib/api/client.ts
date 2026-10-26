@@ -6,6 +6,7 @@ import type {
 	ClaimsResp,
 	DeviceStart,
 	DeviceStatus,
+	DiscoverResp,
 	GamesResp,
 	Game,
 	Health,
@@ -63,6 +64,8 @@ export interface Api {
 	scanGames(): Promise<void>;
 	setGames(ids: string[]): Promise<void>;
 	searchGames(q: string): Promise<SearchHit[]>;
+	/** refresh bypasses the server cache, at most once a minute. */
+	discover(refresh?: boolean): Promise<DiscoverResp>;
 	claims(q: ClaimsQuery): Promise<ClaimsResp>;
 	accounts(): Promise<Account[]>;
 	addAccount(platform: Platform, name?: string): Promise<{ id: string }>;
@@ -184,6 +187,7 @@ export function createClient(opts: ClientOpts): Api {
 		scanGames: () => post('/api/games/scan'),
 		setGames: (ids) => send('PUT', '/api/games', { ids }) as Promise<void>,
 		searchGames: (q) => get(`/api/games/search?q=${enc(q)}`),
+		discover: (refresh) => (refresh ? post('/api/discover/refresh') : get('/api/discover')),
 		claims(q) {
 			const p = new URLSearchParams();
 			if (q.game) p.set('game', q.game);
