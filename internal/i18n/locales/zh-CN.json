@@ -350,5 +350,8 @@
   "home.more_games.other": "另有 {n} 个游戏在追踪",
   "games.view_cards": "卡片",
   "games.view_list": "列表",
-  "games.view_label": "视图"
+  "games.view_label": "视图",
+  "home.upnext_more.one": "再显示 {n} 个",
+  "home.upnext_more.other": "再显示 {n} 个",
+  "home.upnext_less": "收起"
 }

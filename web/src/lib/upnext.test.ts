@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Runner } from '$lib/api/types';
 import mining from '$lib/fixtures/runners.mining.json';
-import { afterLabel, anyCustom, commitMove, moveItem, queues } from './upnext';
+import { afterLabel, anyCustom, commitMove, foldQueue, moveItem, queues } from './upnext';
 
 const fx = () => structuredClone(mining) as Runner[];
 
@@ -92,5 +92,23 @@ describe('commitMove', () => {
 		const h = mk(async () => {}, async () => fx());
 		await commitMove(h.io, 'acc-hjune', 0, 0);
 		expect(h.calls).toEqual([]);
+	});
+});
+
+describe('foldQueue', () => {
+	const list = [1, 2, 3, 4, 5, 6, 7];
+	it('shows the first 5 and counts the rest', () => {
+		expect(foldQueue(list, false)).toEqual({ rows: [1, 2, 3, 4, 5], more: 2 });
+	});
+	it('expanded shows every row and keeps the count', () => {
+		expect(foldQueue(list, true)).toEqual({ rows: list, more: 2 });
+	});
+	it('5 or fewer has nothing more', () => {
+		expect(foldQueue([1, 2, 3], false)).toEqual({ rows: [1, 2, 3], more: 0 });
+	});
+	it('a move among visible rows leaves hidden rows in place', () => {
+		const moved = moveItem(list, 4, 0);
+		expect(moved).toEqual([5, 1, 2, 3, 4, 6, 7]);
+		expect(foldQueue(moved, false).rows).toEqual([5, 1, 2, 3, 4]);
 	});
 });

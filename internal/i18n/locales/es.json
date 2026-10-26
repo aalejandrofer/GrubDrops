@@ -350,5 +350,8 @@
   "home.more_games.other": "{n} juegos más en seguimiento",
   "games.view_cards": "Tarjetas",
   "games.view_list": "Lista",
-  "games.view_label": "Vista"
+  "games.view_label": "Vista",
+  "home.upnext_more.one": "Mostrar {n} más",
+  "home.upnext_more.other": "Mostrar {n} más",
+  "home.upnext_less": "Mostrar menos"
 }

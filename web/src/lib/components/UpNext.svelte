@@ -3,13 +3,15 @@
 	import { nextScanMin } from '$lib/format';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
-	import { afterLabel, anyCustom, commitMove, moveItem, queues } from '$lib/upnext';
+	import { afterLabel, anyCustom, commitMove, foldQueue, moveItem, queues } from '$lib/upnext';
 	import type { Runner } from '$lib/api/types';
 	import PlatformMark from './PlatformMark.svelte';
 
 	const live = getLive();
 	let failed = $state(false);
 	let drag = $state<{ id: string; from: number; to: number } | null>(null);
+	// Accounts whose queue shows every row; not persisted.
+	let open = $state<Record<string, boolean>>({});
 	let now = $state(Date.now());
 	$effect(() => {
 		const id = setInterval(() => (now = Date.now()), 30000);
@@ -116,12 +118,14 @@
 	{/if}
 	{#each qs as q (q.accountId)}
 		{@const r = runner(q.accountId)}
+		{@const full = shown(q.accountId, q.items)}
+		{@const fold = foldQueue(full, open[q.accountId] === true)}
 		{#if qs.length > 1}
 			<div class="acct"><PlatformMark platform={q.platform} size="sm" />{q.accountName}</div>
 		{/if}
 		<ol class="queue">
-			{#each shown(q.accountId, q.items) as item, i (item.benefit_id)}
-				{@const after = r ? afterLabel({ ...r, up_next: shown(q.accountId, q.items) }, i) : null}
+			{#each fold.rows as item, i (item.benefit_id)}
+				{@const after = r ? afterLabel({ ...r, up_next: full }, i) : null}
 				<li class:dragging={drag?.id === q.accountId && drag.to === i}>
 					<span
 						class="grip"
@@ -160,6 +164,16 @@
 				</li>
 			{/each}
 		</ol>
+		{#if fold.more > 0}
+			<button
+				class="more"
+				type="button"
+				aria-expanded={open[q.accountId] === true}
+				onclick={() => (open[q.accountId] = !open[q.accountId])}
+			>
+				{open[q.accountId] ? t('home.upnext_less') : tn('home.upnext_more', fold.more)}
+			</button>
+		{/if}
 	{/each}
 	{#if failed}<p class="err" role="alert">{t('upnext.save_failed')}</p>{/if}
 	<div class="panel-f">
@@ -298,6 +312,22 @@
 	.mv svg {
 		width: 12px;
 		height: 12px;
+	}
+	.more {
+		display: block;
+		width: 100%;
+		padding: 8px 14px;
+		font-size: 12px;
+		color: var(--t2);
+		text-align: left;
+		background: none;
+		border: 0;
+		border-top: 1px solid var(--border-soft);
+		cursor: pointer;
+	}
+	.more:hover {
+		color: var(--text);
+		background: var(--surface-2);
 	}
 	.panel-f {
 		border-top: 1px solid var(--border-soft);

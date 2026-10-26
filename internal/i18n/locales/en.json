@@ -350,5 +350,8 @@
   "home.more_games.other": "{n} more games tracked",
   "games.view_cards": "Cards",
   "games.view_list": "List",
-  "games.view_label": "View"
+  "games.view_label": "View",
+  "home.upnext_more.one": "Show {n} more",
+  "home.upnext_more.other": "Show {n} more",
+  "home.upnext_less": "Show less"
 }

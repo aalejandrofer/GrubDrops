@@ -73,3 +73,9 @@ export async function commitMove(io: OrderIO, accountId: string, from: number, t
 	}
 	return ok;
 }
+
+/** Rows of one queue to render: the first `limit` unless expanded, and how many more there are. */
+export function foldQueue<T>(items: readonly T[], expanded: boolean, limit = 5): { rows: T[]; more: number } {
+	const more = Math.max(0, items.length - limit);
+	return { rows: expanded || more === 0 ? items.slice() : items.slice(0, limit), more };
+}
