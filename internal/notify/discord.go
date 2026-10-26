@@ -181,6 +181,15 @@ func buildEmbed(event Event, fields map[string]any) map[string]any {
 		return embed
 	}
 
+	if event == EventSummary {
+		embed["title"] = str("title")
+		if embed["title"] == "" {
+			embed["title"] = titleFor(event)
+		}
+		embed["description"] = str("msg")
+		return embed
+	}
+
 	// Fallback path: auth/error/state — simple title + description dump.
 	embed["title"] = titleFor(event)
 	embed["description"] = descFor(event, fields)
@@ -242,6 +251,8 @@ func titleFor(event Event) string {
 		return "Error"
 	case EventCanary:
 		return "Heartbeat health check failed"
+	case EventSummary:
+		return "Daily summary"
 	default:
 		return event
 	}

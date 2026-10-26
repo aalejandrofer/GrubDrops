@@ -786,5 +786,7 @@
   "account.force_add_desc": "Add a channel to watch for points (e.g. xqc)",
   "account.force_reorder": "Channels · drag to reorder",
   "account.force_priority_hint": "Top of the list is watched first when idle.",
-  "account.force_save": "Save order"
+  "account.force_save": "Save order",
+  "summary.title": "Daily summary",
+  "summary.message": "%s: %d min watched, %d drops claimed."
 }

@@ -277,12 +277,14 @@ func run() error {
 		// PROGRESS fired regardless of the checkbox). State events are
 		// never sent to Discord (too noisy).
 		claim, progress, auth, errs, canaryOn := settingsStore.NotifyKinds(ctx)
+		dailySummary, _ := settingsStore.NotifyDailySummary(ctx)
 		filter := &notify.VerbosityFilter{Allow: map[string]bool{
 			notify.EventClaim:    claim,
 			notify.EventProgress: progress,
 			notify.EventAuth:     auth,
 			notify.EventError:    errs,
 			notify.EventCanary:   canaryOn,
+			notify.EventSummary:  dailySummary,
 			notify.EventState:    false,
 			// Manual "send test" always delivers, regardless of toggles.
 			notify.EventTest: true,

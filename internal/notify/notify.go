@@ -17,6 +17,9 @@ const (
 	// EventCanary fires when the accrual canary transitions to a failed
 	// state (OK→fail or first-ever fail). fail→fail does NOT re-fire.
 	EventCanary Event = "canary"
+	// EventSummary is the daily summary sent at local midnight. The fields
+	// carry day, minutes, claims plus a localized title and msg.
+	EventSummary Event = "summary"
 )
 
 type Notifier interface {

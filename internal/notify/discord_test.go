@@ -217,3 +217,10 @@ func TestDiscordWebhook_DropsBelowVerbosity(t *testing.T) {
 	}})
 	require.NoError(t, n.Notify(context.Background(), EventState, map[string]any{}))
 }
+
+func TestBuildEmbed_Summary(t *testing.T) {
+	e := buildEmbed(EventSummary, map[string]any{"title": "Daily summary", "msg": "2026-03-08: 5 min"})
+	assert.Equal(t, "Daily summary", e["title"])
+	assert.Equal(t, "2026-03-08: 5 min", e["description"])
+	assert.Equal(t, "Daily summary", buildEmbed(EventSummary, nil)["title"])
+}

@@ -786,5 +786,7 @@
   "account.force_add_desc": "Añade un canal para ver por puntos (p. ej. xqc)",
   "account.force_reorder": "Canales · arrastra para reordenar",
   "account.force_priority_hint": "El primero de la lista se ve primero cuando está inactiva.",
-  "account.force_save": "Guardar orden"
+  "account.force_save": "Guardar orden",
+  "summary.title": "Resumen diario",
+  "summary.message": "%s: %d min vistos, %d drops reclamados."
 }

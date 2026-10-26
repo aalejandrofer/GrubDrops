@@ -420,3 +420,95 @@ func (s *Settings) SetTimezone(ctx context.Context, name string) error {
 	}
 	return s.setString(ctx, keyTimezone, name)
 }
+
+// v2 UI settings
+const (
+	keyUILanguage         = "settings:ui_language"
+	keyUITimeFormat       = "settings:ui_time_format"
+	keyUITheme            = "settings:ui_theme"
+	keyNotifyDailySummary = "settings:notify_daily_summary"
+	keyUpdateAuto         = "settings:update_auto"
+)
+
+// UILanguage is the UI and notification language: en, es or zh-CN. Default en.
+func (s *Settings) UILanguage(ctx context.Context) (string, error) {
+	return s.enumString(ctx, keyUILanguage, "en", "en", "es", "zh-CN")
+}
+
+func (s *Settings) SetUILanguage(ctx context.Context, v string) error {
+	return s.setEnum(ctx, keyUILanguage, v, "en", "es", "zh-CN")
+}
+
+// UITimeFormat is 24h or 12h. Default 24h.
+func (s *Settings) UITimeFormat(ctx context.Context) (string, error) {
+	return s.enumString(ctx, keyUITimeFormat, "24h", "24h", "12h")
+}
+
+func (s *Settings) SetUITimeFormat(ctx context.Context, v string) error {
+	return s.setEnum(ctx, keyUITimeFormat, v, "24h", "12h")
+}
+
+// UITheme is dark or light. Default dark.
+func (s *Settings) UITheme(ctx context.Context) (string, error) {
+	return s.enumString(ctx, keyUITheme, "dark", "dark", "light")
+}
+
+func (s *Settings) SetUITheme(ctx context.Context, v string) error {
+	return s.setEnum(ctx, keyUITheme, v, "dark", "light")
+}
+
+// NotifyDailySummary reports whether the midnight summary is sent. Default off.
+func (s *Settings) NotifyDailySummary(ctx context.Context) (bool, error) {
+	return s.boolKey(ctx, keyNotifyDailySummary, false)
+}
+
+func (s *Settings) SetNotifyDailySummary(ctx context.Context, on bool) error {
+	return s.setBool(ctx, keyNotifyDailySummary, on)
+}
+
+// UpdateAuto reports whether the app updates itself. Default on.
+func (s *Settings) UpdateAuto(ctx context.Context) (bool, error) {
+	return s.boolKey(ctx, keyUpdateAuto, true)
+}
+
+func (s *Settings) SetUpdateAuto(ctx context.Context, on bool) error {
+	return s.setBool(ctx, keyUpdateAuto, on)
+}
+
+// enumString returns the stored value when it is one of allowed, else def.
+func (s *Settings) enumString(ctx context.Context, key, def string, allowed ...string) (string, error) {
+	v, err := s.getString(ctx, key)
+	if err != nil {
+		return def, err
+	}
+	for _, a := range allowed {
+		if v == a {
+			return v, nil
+		}
+	}
+	return def, nil
+}
+
+func (s *Settings) setEnum(ctx context.Context, key, v string, allowed ...string) error {
+	for _, a := range allowed {
+		if v == a {
+			return s.setString(ctx, key, v)
+		}
+	}
+	return fmt.Errorf("invalid value %q for %s", v, key)
+}
+
+func (s *Settings) boolKey(ctx context.Context, key string, def bool) (bool, error) {
+	v, err := s.getString(ctx, key)
+	if err != nil || v == "" {
+		return def, err
+	}
+	return v == "1", nil
+}
+
+func (s *Settings) setBool(ctx context.Context, key string, on bool) error {
+	if on {
+		return s.setString(ctx, key, "1")
+	}
+	return s.setString(ctx, key, "0")
+}
