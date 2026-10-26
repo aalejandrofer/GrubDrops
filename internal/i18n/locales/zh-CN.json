@@ -43,5 +43,16 @@
   "auth.too_short": "至少 8 个字符。",
   "auth.mismatch": "两次输入的密码不一致。",
   "auth.unreachable": "无法连接矿工。",
-  "auth.failed": "出了点问题。"
+  "auth.failed": "出了点问题。",
+  "upnext.title": "接下来",
+  "upnext.hint": "仅对本次会话有效",
+  "upnext.move_up": "上移",
+  "upnext.drag": "拖动以重新排序",
+  "upnext.meta": "{account} · {min} 分钟",
+  "upnext.meta_after": "{account} · {min} 分钟 · 在 {drop} 之后",
+  "upnext.permanent": "永久顺序请在{games}中设置。",
+  "upnext.reset": "恢复为游戏页顺序",
+  "upnext.empty.one": "队列为空。下次扫描在 {n} 分钟后。",
+  "upnext.empty.other": "队列为空。下次扫描在 {n} 分钟后。",
+  "upnext.save_failed": "无法保存顺序。"
 }

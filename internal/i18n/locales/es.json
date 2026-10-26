@@ -43,5 +43,16 @@
   "auth.too_short": "Mínimo 8 caracteres.",
   "auth.mismatch": "Las contraseñas no coinciden.",
   "auth.unreachable": "No se puede contactar con el minero.",
-  "auth.failed": "Algo salió mal."
+  "auth.failed": "Algo salió mal.",
+  "upnext.title": "A continuación",
+  "upnext.hint": "Orden solo para esta sesión",
+  "upnext.move_up": "Subir",
+  "upnext.drag": "Arrastra para reordenar",
+  "upnext.meta": "{account} · {min} min",
+  "upnext.meta_after": "{account} · {min} min · tras {drop}",
+  "upnext.permanent": "El orden permanente está en {games}.",
+  "upnext.reset": "Restablecer al orden de Juegos",
+  "upnext.empty.one": "Nada en cola. Próximo escaneo en {n} min.",
+  "upnext.empty.other": "Nada en cola. Próximo escaneo en {n} min.",
+  "upnext.save_failed": "No se pudo guardar el orden."
 }

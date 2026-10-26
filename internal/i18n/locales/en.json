@@ -43,5 +43,16 @@
   "auth.too_short": "At least 8 characters.",
   "auth.mismatch": "Passwords don't match.",
   "auth.unreachable": "Can't reach the miner.",
-  "auth.failed": "Something went wrong."
+  "auth.failed": "Something went wrong.",
+  "upnext.title": "Up next",
+  "upnext.hint": "Order for this session only",
+  "upnext.move_up": "Move up",
+  "upnext.drag": "Drag to reorder",
+  "upnext.meta": "{account} · {min} min",
+  "upnext.meta_after": "{account} · {min} min · after {drop}",
+  "upnext.permanent": "Permanent order lives on {games}.",
+  "upnext.reset": "Reset to Games order",
+  "upnext.empty.one": "Nothing queued. Next scan in {n} min.",
+  "upnext.empty.other": "Nothing queued. Next scan in {n} min.",
+  "upnext.save_failed": "Couldn't save the order."
 }

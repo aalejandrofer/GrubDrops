@@ -28,6 +28,7 @@ All notable changes to GrubDrops.
 - v2 shared locales: the SvelteKit app reads internal/i18n/locales, 1.x-only keys are gone, and npm run check fails on missing, unused or mismatched keys.
 - v2 web data layer: typed API client with CSRF, 401 and offline handling, and one SSE store that upserts runners and claims and refetches on reconnect.
 - v2 web shell: top bar, status header with problem and offline chips, version popover, login with SSO and first-run setup.
+- v2 Up next: one queue per account, reorder by button or drag for this session, Reset to Games order.
 
 ### Changed
 
