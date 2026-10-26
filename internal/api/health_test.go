@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -150,4 +151,31 @@ func TestHealth_CanaryRuns202(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("canary did not run")
 	}
+}
+
+func TestHealth_CanaryNoOverlap(t *testing.T) {
+	var starts atomic.Int32
+	release := make(chan struct{})
+	started := make(chan struct{}, 2)
+	e := newHealthEnv(t, func(d *Deps) {
+		d.RunCanary = func(context.Context) error {
+			starts.Add(1)
+			started <- struct{}{}
+			<-release
+			return nil
+		}
+	})
+	_, tok := e.session()
+	resp, _ := e.do("POST", "/api/health/canary", tok, nil)
+	assert.Equal(t, 202, resp.StatusCode)
+	<-started
+	resp, _ = e.do("POST", "/api/health/canary", tok, nil)
+	assert.Equal(t, 202, resp.StatusCode)
+	time.Sleep(100 * time.Millisecond)
+	assert.EqualValues(t, 1, starts.Load())
+
+	close(release)
+	require.Eventually(t, func() bool { return !e.s.canaryRunning.Load() }, 2*time.Second, 10*time.Millisecond)
+	e.do("POST", "/api/health/canary", tok, nil)
+	require.Eventually(t, func() bool { return starts.Load() == 2 }, 2*time.Second, 10*time.Millisecond)
 }

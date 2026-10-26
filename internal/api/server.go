@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -81,6 +82,8 @@ type server struct {
 	// directly; admin-only routes register on protected.
 	api       chi.Router
 	protected chi.Router
+	// canaryRunning is set while a run-now canary is in flight.
+	canaryRunning atomic.Bool
 }
 
 func newServer(d Deps) *server {

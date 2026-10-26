@@ -24,6 +24,7 @@ type Checker struct {
 	s          *store.Settings
 	latest     atomic.Value // string
 
+	runMu     sync.Mutex // serializes RunOnce so KV writes never interleave
 	mu        sync.RWMutex
 	notesURL  string
 	notes     []string
@@ -95,6 +96,8 @@ func (c *Checker) Release() (latest, notesURL string, notes []string, checkedAt 
 // RunOnce fetches the latest release once and caches it. Returns an error on
 // any failure; the cached value is left unchanged on error.
 func (c *Checker) RunOnce(ctx context.Context) error {
+	c.runMu.Lock()
+	defer c.runMu.Unlock()
 	url := fmt.Sprintf("%s/repos/%s/releases/latest", c.apiBase, c.repo)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

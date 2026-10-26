@@ -163,11 +163,13 @@ func (s *server) getHealthLog(w http.ResponseWriter, _ *http.Request) {
 
 // postHealthCanary starts a canary run on a detached context and returns 202.
 func (s *server) postHealthCanary(w http.ResponseWriter, _ *http.Request) {
-	if s.d.RunCanary != nil {
+	// A run already in flight absorbs this request; still 202.
+	if s.d.RunCanary != nil && s.canaryRunning.CompareAndSwap(false, true) {
 		run := s.d.RunCanary
 		ctx, cancel := context.WithTimeout(context.Background(), canaryRunTimeout)
 		go func() {
 			defer cancel()
+			defer s.canaryRunning.Store(false)
 			if err := run(ctx); err != nil {
 				slog.Warn("canary run-now failed", "err", err)
 			}

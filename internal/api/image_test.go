@@ -15,12 +15,13 @@ import (
 type fakeKick struct {
 	platform.Backend
 	gotURL string
+	ct     string
 }
 
 func (f *fakeKick) Name() string { return "kick" }
 func (f *fakeKick) FetchImage(_ context.Context, u string) ([]byte, string, int, error) {
 	f.gotURL = u
-	return []byte("IMG"), "", http.StatusOK, nil
+	return []byte("IMG"), f.ct, http.StatusOK, nil
 }
 
 func TestImage_RejectsOtherPaths(t *testing.T) {
@@ -31,14 +32,15 @@ func TestImage_RejectsOtherPaths(t *testing.T) {
 	}
 }
 
-func TestImage_NoKickBackend503(t *testing.T) {
+func TestImage_NoKickBackend502(t *testing.T) {
 	e := newHealthEnv(t, func(d *Deps) { d.Registry = platform.NewRegistry() })
-	resp, _ := e.do("GET", "/api/img/kick?u=drops/a.png", "", nil)
-	assert.Equal(t, 503, resp.StatusCode)
+	resp, b := e.do("GET", "/api/img/kick?u=drops/a.png", "", nil)
+	assert.Equal(t, 502, resp.StatusCode)
+	assert.JSONEq(t, `{"error":"upstream"}`, string(b))
 }
 
 func TestImage_ProxiesRewardAndAvatar(t *testing.T) {
-	fk := &fakeKick{}
+	fk := &fakeKick{ct: "image/webp"}
 	e := newHealthEnv(t, func(d *Deps) {
 		d.Registry = platform.NewRegistry()
 		d.Registry.Register(fk)
@@ -47,8 +49,22 @@ func TestImage_ProxiesRewardAndAvatar(t *testing.T) {
 	require.Equal(t, 200, resp.StatusCode)
 	assert.Equal(t, "IMG", string(b))
 	assert.Equal(t, "image/webp", resp.Header.Get("Content-Type"))
+	assert.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
 	assert.Equal(t, "https://ext.cdn.kick.com/drops/a.png?width=384,format=webp,quality=75", fk.gotURL)
 
 	e.do("GET", "/api/img/kick?u=/images/user/1/p.png", "", nil)
 	assert.Equal(t, "https://files.kick.com/images/user/1/p.png", fk.gotURL)
+}
+
+func TestImage_NonImageContentType502(t *testing.T) {
+	for _, ct := range []string{"text/html", ""} {
+		fk := &fakeKick{ct: ct}
+		e := newHealthEnv(t, func(d *Deps) {
+			d.Registry = platform.NewRegistry()
+			d.Registry.Register(fk)
+		})
+		resp, b := e.do("GET", "/api/img/kick?u=drops/a.png", "", nil)
+		assert.Equal(t, 502, resp.StatusCode, ct)
+		assert.JSONEq(t, `{"error":"upstream"}`, string(b))
+	}
 }

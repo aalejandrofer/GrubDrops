@@ -5,7 +5,11 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
+
+// imageFetchTimeout bounds the upstream fetch.
+const imageFetchTimeout = 15 * time.Second
 
 // imageFetcher is satisfied by the Kick backend: it pulls a CDN asset over the
 // utls transport, bypassing Cloudflare's hotlink 403.
@@ -51,28 +55,28 @@ func (s *server) getKickImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.d.Registry == nil {
-		writeErr(w, http.StatusServiceUnavailable, "unavailable")
+		writeErr(w, http.StatusBadGateway, "upstream")
 		return
 	}
 	b, ok := s.d.Registry.Get("kick")
 	if !ok {
-		writeErr(w, http.StatusServiceUnavailable, "unavailable")
+		writeErr(w, http.StatusBadGateway, "upstream")
 		return
 	}
 	fetcher, ok := b.(imageFetcher)
 	if !ok {
-		writeErr(w, http.StatusServiceUnavailable, "unavailable")
+		writeErr(w, http.StatusBadGateway, "upstream")
 		return
 	}
-	data, ct, status, err := fetcher.FetchImage(r.Context(), target)
-	if err != nil || status != http.StatusOK {
-		writeErr(w, http.StatusBadGateway, "bad_gateway")
+	ctx, cancel := context.WithTimeout(r.Context(), imageFetchTimeout)
+	defer cancel()
+	data, ct, status, err := fetcher.FetchImage(ctx, target)
+	if err != nil || status != http.StatusOK || !strings.HasPrefix(strings.ToLower(ct), "image/") {
+		writeErr(w, http.StatusBadGateway, "upstream")
 		return
-	}
-	if ct == "" {
-		ct = "image/webp"
 	}
 	w.Header().Set("Content-Type", ct)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
