@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -21,6 +23,11 @@ type Checker struct {
 	apiBase    string // overridable in tests; defaults to https://api.github.com
 	s          *store.Settings
 	latest     atomic.Value // string
+
+	mu        sync.RWMutex
+	notesURL  string
+	notes     []string
+	checkedAt time.Time
 }
 
 // NewChecker builds a checker. The cached latest is seeded from kv so a restart
@@ -31,6 +38,12 @@ func NewChecker(client *http.Client, repo string, s *store.Settings) *Checker {
 	if s != nil {
 		if v, err := s.LatestRelease(context.Background()); err == nil && v != "" {
 			c.latest.Store(v)
+		}
+		ctx := context.Background()
+		c.notesURL, _ = s.LatestReleaseURL(ctx)
+		c.notes, _ = s.LatestReleaseNotes(ctx)
+		if ts, err := s.LastReleaseCheck(ctx); err == nil && ts > 0 {
+			c.checkedAt = time.Unix(ts, 0)
 		}
 	}
 	return c
@@ -47,6 +60,36 @@ func (c *Checker) getLatest() string {
 
 type ghRelease struct {
 	TagName string `json:"tag_name"`
+	Body    string `json:"body"`
+	HTMLURL string `json:"html_url"`
+}
+
+// maxNotes caps how many release bullets are kept.
+const maxNotes = 5
+
+// parseNotes returns the first maxNotes bullet lines ("- " or "* ") of a
+// release body with the marker stripped.
+func parseNotes(body string) []string {
+	var out []string
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "- ") && !strings.HasPrefix(line, "* ") {
+			continue
+		}
+		out = append(out, strings.TrimSpace(line[2:]))
+		if len(out) == maxNotes {
+			break
+		}
+	}
+	return out
+}
+
+// Release returns the cached latest tag, release page URL, highlights and the
+// time of the last successful check. No network call.
+func (c *Checker) Release() (latest, notesURL string, notes []string, checkedAt time.Time) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.getLatest(), c.notesURL, append([]string(nil), c.notes...), c.checkedAt
 }
 
 // RunOnce fetches the latest release once and caches it. Returns an error on
@@ -73,19 +116,43 @@ func (c *Checker) RunOnce(ctx context.Context) error {
 	if rel.TagName == "" {
 		return fmt.Errorf("github releases: empty tag_name")
 	}
-	c.setLatest(rel.TagName)
+	now := time.Now()
+	notes := parseNotes(rel.Body)
+	c.mu.Lock()
+	c.latest.Store(rel.TagName)
+	c.notesURL, c.notes, c.checkedAt = rel.HTMLURL, notes, now
+	c.mu.Unlock()
 	if c.s != nil {
 		_ = c.s.SetLatestRelease(ctx, rel.TagName)
-		_ = c.s.SetLastReleaseCheck(ctx, time.Now().Unix())
+		_ = c.s.SetLatestReleaseURL(ctx, rel.HTMLURL)
+		_ = c.s.SetLatestReleaseNotes(ctx, notes)
+		_ = c.s.SetLastReleaseCheck(ctx, now.Unix())
 	}
 	return nil
 }
 
-// Run checks once immediately, then every `every` until ctx is cancelled.
-func (c *Checker) Run(ctx context.Context, every time.Duration) {
+// autoOn reports whether the background check is enabled (default true).
+func (c *Checker) autoOn(ctx context.Context) bool {
+	if c.s == nil {
+		return true
+	}
+	on, err := c.s.UpdateAuto(ctx)
+	return err != nil || on
+}
+
+func (c *Checker) tick(ctx context.Context) {
+	if !c.autoOn(ctx) {
+		return
+	}
 	if err := c.RunOnce(ctx); err != nil {
 		slog.Warn("update check failed", "component", "update", "err", err)
 	}
+}
+
+// Run checks once immediately, then every `every` until ctx is cancelled. A
+// check is skipped while the update_auto setting is off.
+func (c *Checker) Run(ctx context.Context, every time.Duration) {
+	c.tick(ctx)
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
@@ -93,9 +160,7 @@ func (c *Checker) Run(ctx context.Context, every time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			if err := c.RunOnce(ctx); err != nil {
-				slog.Warn("update check failed", "component", "update", "err", err)
-			}
+			c.tick(ctx)
 		}
 	}
 }

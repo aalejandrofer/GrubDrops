@@ -1,0 +1,153 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/cookiejar"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"testing"
+	"testing/fstest"
+	"time"
+
+	"github.com/alexedwards/scs/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	mlog "github.com/aalejandrofer/grubdrops/internal/log"
+	"github.com/aalejandrofer/grubdrops/internal/store"
+	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+)
+
+// newHealthEnv builds an authenticated env (auth bypass) with the health
+// routes mounted and Deps adjusted by mut.
+func newHealthEnv(t *testing.T, mut func(*Deps)) *env {
+	t.Helper()
+	t.Setenv("GRUB_AUTHBYPASS", "true")
+	db, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "t.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	sm := scs.New()
+	sm.Store = NewKVSessionStore(db)
+	sm.Lifetime = time.Hour
+	d := Deps{
+		DB: db, Q: gen.New(db), Session: sm, Version: "v1.0.0", Hub: NewHub(),
+		Scans: store.NewAccountScans(gen.New(db)), Settings: store.NewSettings(gen.New(db)),
+		SPA: fstest.MapFS{"index.html": {Data: []byte("spa")}},
+	}
+	if mut != nil {
+		mut(&d)
+	}
+	s := newServer(d)
+	s.routesHealth(s.protected)
+	srv := httptest.NewServer(s.handler())
+	t.Cleanup(srv.Close)
+	jar, _ := cookiejar.New(nil)
+	return &env{t: t, srv: srv, cl: &http.Client{Jar: jar}, s: s}
+}
+
+func testRing() *mlog.Ring {
+	r := mlog.NewRing(10)
+	r.PushEvent(mlog.KindClaim, "INFO", "claimed it", map[string]any{"account": "a1"})
+	r.PushEvent(mlog.KindError, "", "boom", map[string]any{"account": "a1"})
+	r.PushEvent(mlog.KindState, "INFO", "mining", nil)
+	return r
+}
+
+func TestHealth_FilterAndCounts(t *testing.T) {
+	e := newHealthEnv(t, func(d *Deps) {
+		d.Ring = testRing()
+		d.StartTime = time.Unix(1700000000, 0).UTC()
+		d.Commit = "abc123"
+		d.KickSidecars = func() []string { return []string{"sc1:50051"} }
+	})
+	_, err := e.s.d.DB.Exec(`INSERT INTO accounts (id, platform, display_name, status, created_at, updated_at) VALUES ('a1','kick','Alice','active',1,1)`)
+	require.NoError(t, err)
+
+	_, tok := e.session()
+	resp, b := e.do("GET", "/api/health?filter=problems", tok, nil)
+	require.Equal(t, 200, resp.StatusCode, string(b))
+	var got struct {
+		Miner  map[string]any    `json:"miner"`
+		Kick   map[string]any    `json:"kick_sidecars"`
+		Events []healthEvent     `json:"events"`
+		Counts map[string]int    `json:"counts"`
+		Canary []json.RawMessage `json:"canary"`
+	}
+	require.NoError(t, json.Unmarshal(b, &got))
+	require.Len(t, got.Events, 1)
+	assert.Equal(t, "boom", got.Events[0].Msg)
+	assert.Equal(t, "a1", got.Events[0].AccountID)
+	assert.Equal(t, "Alice", got.Events[0].AccountName)
+	assert.Equal(t, map[string]int{"all": 3, "problems": 1, "claims": 1}, got.Counts)
+	assert.Equal(t, "abc123", got.Miner["commit"])
+	assert.Equal(t, "v1.0.0", got.Miner["version"])
+	assert.Equal(t, []any{"sc1:50051"}, got.Kick["running"])
+	assert.Empty(t, got.Canary)
+
+	// all: newest first, counts unchanged.
+	_, b = e.do("GET", "/api/health", tok, nil)
+	require.NoError(t, json.Unmarshal(b, &got))
+	require.Len(t, got.Events, 3)
+	assert.Equal(t, "mining", got.Events[0].Msg)
+	assert.Equal(t, "claimed it", got.Events[2].Msg)
+
+	_, b = e.do("GET", "/api/health?filter=claims", tok, nil)
+	require.NoError(t, json.Unmarshal(b, &got))
+	require.Len(t, got.Events, 1)
+	assert.Equal(t, "claimed it", got.Events[0].Msg)
+
+	resp, _ = e.do("GET", "/api/health?filter=nope", tok, nil)
+	assert.Equal(t, 400, resp.StatusCode)
+}
+
+func TestHealth_EventsCappedAt50(t *testing.T) {
+	ring := mlog.NewRing(100)
+	for i := 0; i < 80; i++ {
+		ring.PushEvent(mlog.KindState, "INFO", "x", nil)
+	}
+	e := newHealthEnv(t, func(d *Deps) { d.Ring = ring })
+	_, b := e.do("GET", "/api/health", "", nil)
+	var got struct {
+		Events []healthEvent  `json:"events"`
+		Counts map[string]int `json:"counts"`
+	}
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.Len(t, got.Events, 50)
+	assert.Equal(t, 80, got.Counts["all"])
+}
+
+func TestHealth_LogDownload(t *testing.T) {
+	e := newHealthEnv(t, func(d *Deps) { d.Ring = testRing() })
+	resp, b := e.do("GET", "/api/health/log", "", nil)
+	require.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, `attachment; filename="grubdrops-log.txt"`, resp.Header.Get("Content-Disposition"))
+	assert.True(t, strings.HasPrefix(resp.Header.Get("Content-Type"), "text/plain"))
+	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+	require.Len(t, lines, 3)
+	assert.Contains(t, lines[0], "claimed it")
+	assert.Contains(t, lines[0], "account=a1")
+	assert.Contains(t, lines[1], "ERROR [error] boom")
+}
+
+func TestHealth_CanaryRuns202(t *testing.T) {
+	ran := make(chan struct{})
+	e := newHealthEnv(t, func(d *Deps) {
+		d.RunCanary = func(ctx context.Context) error {
+			_, hasDeadline := ctx.Deadline()
+			assert.True(t, hasDeadline)
+			close(ran)
+			return nil
+		}
+	})
+	_, tok := e.session()
+	resp, _ := e.do("POST", "/api/health/canary", tok, nil)
+	assert.Equal(t, 202, resp.StatusCode)
+	select {
+	case <-ran:
+	case <-time.After(2 * time.Second):
+		t.Fatal("canary did not run")
+	}
+}
