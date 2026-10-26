@@ -5,7 +5,7 @@ All notable changes to GrubDrops.
 ## [Unreleased]
 
 ### Added
-- **Twitch Android login.** Adding a Twitch account offers Android login (recommended) next to the TV code. Sign in to Twitch in a new tab, then paste the address you land on. Android tokens see the drops dashboard, so campaign discovery is complete; TV tokens get null from ViewerDropsDashboard and DropCampaignDetails. Adding the same Twitch user again updates its session.
+- **Twitch Android login.** Adding a Twitch account offers Android login (recommended) next to the TV code. Sign in to Twitch in a new tab, then copy the whole URL of the Twitch homepage it lands on and paste it in. Android tokens see the drops dashboard, so campaign discovery is complete; TV tokens get null from ViewerDropsDashboard and DropCampaignDetails. Adding the same Twitch user again updates its session.
 - **Mine now.** Each Up next row on Home and Rewards has a Mine now button. It stops the account's current drop and starts the chosen one at once; the stopped drop goes back to the top of Up next. Signed-out and paused accounts don't show it.
 - **Scan now.** A button at the top right of Games asks every account to rescan campaigns at once. It replaces the "GrubDrops only mines these" line.
 - **Up next on Rewards.** A read-only Up next section lists each account's queued drops (5 per account, with Show more), replacing the "more drops queued" line.
