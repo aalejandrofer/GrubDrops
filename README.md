@@ -66,7 +66,7 @@ Twitch is direct HTTP — a plain Go binary mines it anywhere, no Docker. Kick m
 
 > **Raspberry Pi / ARM:** both images ship `arm64`; the sidecar uses Debian Chromium (keeps the H.264/AAC codecs for Kick's IVS stream). Heavy — ~4 GB RAM each.
 >
-> **Kick watch path:** defaults to *WS, fall back to Chrome* — tries the browserless WebSocket path first (no Docker) and switches to the Chrome sidecar only if WS stops accruing. Keep the docker-socket mount so the fallback works; force *Chrome sidecar* or *WebSocket only* in Settings → Experimental.
+> **Kick watch path:** defaults to *WS, fall back to Chrome* — tries the browserless WebSocket path first (no Docker) and switches to the Chrome sidecar only if WS stops accruing. Keep the docker-socket mount so the fallback works.
 
 ### Supported platforms
 
@@ -166,7 +166,8 @@ you add at least one game, and until then every account shows a *no games*
 state, which is not an error.
 
 The chosen games form one global priority list that every account shares. On
-**Games**, search the games from live campaigns and add one. Drag the list to
+**Games**, type a game name to add it; matching games you added before show as
+suggestions. A game doesn't need a live campaign to be added. Drag the list to
 change what mines first. Each change reloads the runners in the background.
 
 ## How it works
@@ -256,7 +257,7 @@ Pages:
 | Page | What it shows |
 |------|------|
 | **Home** | What each account is mining, the up-next queue, recent events. |
-| **Games** | Your chosen games, searched from live campaigns, in a priority order you drag. |
+| **Games** | Your chosen games, added by name, in a priority order you drag. |
 | **Rewards** | Claimed drops across accounts, with filters. |
 | **Settings** | General, Accounts, Notifications, Updates and Health. |
 

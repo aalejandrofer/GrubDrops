@@ -37,7 +37,7 @@ imagen de Docker y lo guarda todo en un único archivo SQLite.
 - 🔗 **Conoce los enlaces de cuenta** (Krafton, Embark, …) con una anulación manual por cuenta del tipo "ya lo he enlazado".
 - 🖥️ **Una consola en vivo**: estadísticas totales, minado actual, catálogo de drops, historial de reclamos.
 - 🔔 **Notificaciones de Discord**, activables por tipo de evento.
-- 🧪 **Kick sin navegador (experimental)** (Ajustes → Experimental): un modo de observación solo por WebSocket que elimina el sidecar de Chrome —sin Docker para Kick, ligero para cualquier Pi. Opcional; puede dejar de acumular.
+- 🧪 **Kick sin navegador primero**: por defecto observa por WebSocket, sin Chrome ni Docker, y recurre al sidecar de Chrome si el WebSocket deja de acumular.
 - 🔒 **Tus credenciales siguen siendo tuyas**: Twitch usa el inicio de sesión oficial por código de dispositivo, Kick usa una sesión que tú exportas. No se envía ninguna contraseña a GrubDrops.
 
 ## Primeros pasos
@@ -59,7 +59,7 @@ Twitch funciona sobre HTTP directo, así que un binario de Go normal lo mina en 
 
 > **Raspberry Pi / ARM:** ambas imágenes se publican para `arm64`; en arm64 el sidecar usa Chromium de Debian (conserva los códecs H.264/AAC que decodifican el stream IVS de Kick). Funciona, pero es pesado —~4 GB de RAM por sidecar, así que una Pi con poca RAM solo gestiona un par de cuentas de Kick.
 >
-> **Kick sin navegador (experimental):** Ajustes → Experimental → *WebSocket only* observa Kick sin navegador —sin Chrome, sin Docker para Kick, ligero para cualquier Pi. Experimental: puede dejar de acumular.
+> **Ruta de observación de Kick:** por defecto prueba primero el WebSocket sin navegador (sin Docker) y pasa al sidecar de Chrome solo si el WebSocket deja de acumular. Mantén el montaje del socket de Docker para que funcione el respaldo.
 
 ### Plataformas compatibles
 
@@ -172,7 +172,7 @@ que añades al menos un juego, y hasta entonces cada cuenta muestra el estado
 *sin juegos*, que no es un error.
 
 Los juegos elegidos forman una única lista de prioridad global que comparten todas las cuentas.
-En **Juegos**, busca entre los juegos de las campañas en directo y añade uno. Arrastra la lista
+En **Juegos**, escribe el nombre de un juego para añadirlo; los juegos que añadiste antes aparecen como sugerencias. Un juego no necesita una campaña en directo para añadirse. Arrastra la lista
 para cambiar qué se mina primero. Cada cambio recarga los runners en segundo plano.
 
 ## Cómo funciona
@@ -267,7 +267,7 @@ La interfaz es una SPA estática de SvelteKit (código en `web/`) incrustada en 
 | Página | Qué muestra |
 |------|------|
 | **Inicio** | Qué mina cada cuenta, la cola de próximos y los eventos recientes. |
-| **Juegos** | Tus juegos elegidos, buscados entre las campañas en directo, en un orden de prioridad que arrastras. |
+| **Juegos** | Tus juegos elegidos, añadidos por nombre, en un orden de prioridad que arrastras. |
 | **Recompensas** | Drops reclamados de todas las cuentas, con filtros. |
 | **Ajustes** | General, Cuentas, Notificaciones, Actualizaciones y Salud. |
 
