@@ -228,7 +228,7 @@ func newDetailsTestDiscovery(t *testing.T, detailsJSON string) *discovery {
 	}))
 	t.Cleanup(srv.Close)
 	c := newTestClient(srv.URL)
-	return &discovery{c: c, userLogin: "testuser"}
+	return &discovery{c: c, userID: "12345"}
 }
 
 // TestFetchDetails_IncludesZeroMinuteDrops proves sub/action drops
