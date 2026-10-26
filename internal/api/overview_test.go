@@ -62,23 +62,22 @@ func (f *fakePool) ResetOrder(id string) {
 
 func (*fakePool) RescanAll() {}
 
-// MineNow mirrors the real pool's checks: the benefit must be in Up next.
-func (f *fakePool) MineNow(id, bid string) error {
+// MineNow mirrors the real pool's checks: Up next must hold a target.
+func (f *fakePool) MineNow(id string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, s := range f.snaps {
 		if s.AccountID != id {
 			continue
 		}
-		for _, t := range s.UpNext {
-			if t.Benefit.ID == bid {
-				f.mineNow = append(f.mineNow, id+"/"+bid)
-				return nil
-			}
+		if len(s.UpNext) == 0 {
+			return "", runner.ErrNotQueued
 		}
-		return runner.ErrNotQueued
+		bid := s.UpNext[0].Benefit.ID
+		f.mineNow = append(f.mineNow, id+"/"+bid)
+		return bid, nil
 	}
-	return runner.ErrNotRunning
+	return "", runner.ErrNotRunning
 }
 func (f *fakePool) OrderFunc(id string) func() []string {
 	return func() []string {

@@ -8,8 +8,6 @@ import (
 	"slices"
 	"sync"
 	"time"
-
-	"github.com/aalejandrofer/grubdrops/internal/plan"
 )
 
 // panicRestart is how long a panicked unit waits before it is rebuilt.
@@ -353,10 +351,15 @@ type switcher interface {
 	MineNow(benefitID string) error
 }
 
-// MineNow puts benefitID first in the account's session order, the target
-// it was mining second and the rest of Up next after, then tells the runner
-// to switch now. The old order comes back if the runner refuses.
-func (p *Pool) MineNow(accountID, benefitID string) error {
+// MineNow starts the account's first Up next target now. It writes the
+// session order as that target, then the target it was mining, then the rest
+// of Up next, and tells the runner to switch. The replaced drop is first in
+// Up next until the new one is claimed or found unmineable. The old order
+// comes back if the runner refuses. It returns the chosen benefit ID.
+//
+// The server picks the target: a client's Up next copy can be a scan behind,
+// and its first item may no longer be queued.
+func (p *Pool) MineNow(accountID string) (string, error) {
 	p.mu.Lock()
 	var unit Unit
 	for _, u := range p.units {
@@ -368,20 +371,19 @@ func (p *Pool) MineNow(accountID, benefitID string) error {
 	p.mu.Unlock()
 	sw, ok := unit.(switcher)
 	if !ok {
-		return ErrNotRunning
+		return "", ErrNotRunning
 	}
 	snap := sw.Snapshot()
-	if !slices.ContainsFunc(snap.UpNext, func(t plan.Target) bool { return t.Benefit.ID == benefitID }) {
-		return ErrNotQueued
+	if len(snap.UpNext) == 0 {
+		return "", ErrNotQueued
 	}
+	benefitID := snap.UpNext[0].Benefit.ID
 	order := []string{benefitID}
 	if snap.Current != nil {
 		order = append(order, snap.Current.Benefit.ID)
 	}
-	for _, t := range snap.UpNext {
-		if t.Benefit.ID != benefitID {
-			order = append(order, t.Benefit.ID)
-		}
+	for _, t := range snap.UpNext[1:] {
+		order = append(order, t.Benefit.ID)
 	}
 	p.mu.Lock()
 	prev, had := p.orders[accountID]
@@ -395,9 +397,10 @@ func (p *Pool) MineNow(accountID, benefitID string) error {
 			delete(p.orders, accountID)
 		}
 		p.mu.Unlock()
-		return err
+		return "", err
 	}
-	return nil
+	slog.Info("runner mine now requested", "kind", "state", "account", accountID, "drop", benefitID)
+	return benefitID, nil
 }
 
 // SetOrder sets the session-only Up next order for an account.

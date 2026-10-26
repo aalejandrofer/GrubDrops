@@ -69,6 +69,10 @@ func (r *Runner) start(ctx context.Context) error {
 	}
 	if len(streams) == 0 {
 		r.noStream[camp.ID] = true
+		// A Mine now target with no stream is unmineable: back to the plan.
+		if r.pinned != nil && r.pinned.Campaign.ID == camp.ID {
+			r.pinned = nil
+		}
 		var next *plan.Target
 		for i := range r.queue {
 			if !r.noStream[r.queue[i].Campaign.ID] {
@@ -362,6 +366,7 @@ func (r *Runner) skipCurrent(ctx context.Context, benefitID string) {
 	r.mu.Lock()
 	r.skipped[benefitID] = true
 	r.current = nil
+	r.unpinLocked(benefitID)
 	r.mu.Unlock()
 	if r.cfg.Skips != nil {
 		if err := r.cfg.Skips.RecordSkip(r.cfg.AccountID, benefitID); err != nil {

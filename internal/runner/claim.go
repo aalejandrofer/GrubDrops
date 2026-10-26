@@ -126,6 +126,7 @@ func (r *Runner) finishClaim(ctx context.Context, benefit platform.DropBenefit, 
 
 	r.mu.Lock()
 	r.current = nil
+	r.unpinLocked(benefit.ID)
 	r.mu.Unlock()
 	r.setState(ctx, StatePicking)
 }

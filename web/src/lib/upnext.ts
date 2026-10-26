@@ -82,6 +82,55 @@ export async function commitMove(io: OrderIO, accountId: string, from: number, t
 	return ok;
 }
 
+/** The queue Mine now acts on: the first account that can switch and has items. */
+export function mineTarget(qs: readonly Queue[]): Queue | null {
+	return qs.find((q) => q.canMine && q.items.length > 0) ?? null;
+}
+
+/** The runner after Mine now: item 0 becomes current, the old current leads Up next. */
+export function applyMineNow(r: Runner): Runner {
+	const [first, ...rest] = r.up_next;
+	if (!first) return r;
+	return {
+		...r,
+		current: first,
+		minutes: first.minutes,
+		channel: '',
+		viewer_count: 0,
+		up_next: r.current ? [r.current, ...rest] : rest,
+		order_custom: true
+	};
+}
+
+export interface MineIO {
+	get(): Runner[];
+	set(runners: Runner[]): void;
+	mineNow(accountId: string): Promise<unknown>;
+	fetchRunners(): Promise<Runner[]>;
+}
+
+/**
+ * Show the switch at once, then ask the server. The runner event that follows
+ * carries the real state. On failure the server list wins; if that fetch also
+ * fails, the previous list is restored. Returns true when the request succeeded.
+ */
+export async function commitMineNow(io: MineIO, accountId: string): Promise<boolean> {
+	const before = io.get();
+	if (!before.some((x) => x.account_id === accountId && x.up_next.length > 0)) return false;
+	io.set(before.map((x) => (x.account_id === accountId ? applyMineNow(x) : x)));
+	try {
+		await io.mineNow(accountId);
+		return true;
+	} catch {
+		try {
+			io.set(await io.fetchRunners());
+		} catch {
+			io.set(before);
+		}
+		return false;
+	}
+}
+
 /** Rows of one queue to render: the first `limit` unless expanded, and how many more there are. */
 export function foldQueue<T>(items: readonly T[], expanded: boolean, limit = 5): { rows: T[]; more: number } {
 	const more = Math.max(0, items.length - limit);

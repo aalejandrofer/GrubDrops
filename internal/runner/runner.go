@@ -72,11 +72,14 @@ type Runner struct {
 	forceScan     atomic.Bool   // set by Rescan; the next watch poll rescans
 	switchCh      chan struct{} // signalled by MineNow, cap 1
 	switchNow     atomic.Bool   // set by MineNow; Run drops the watch and re-picks
-	tramp         *trampoline   // PubSub forwarder for this account; nil = none
-	queue         []plan.Target
-	blocked       []plan.Blocked
-	skipped       map[string]bool
-	noStream      map[string]bool // campaign IDs with no live channel this cycle
+	// pinned is the Mine now target. pick keeps it while a scan merely omits
+	// it, and drops it once it is claimed, blocked, ended or has no stream.
+	pinned   *plan.Target
+	tramp    *trampoline // PubSub forwarder for this account; nil = none
+	queue    []plan.Target
+	blocked  []plan.Blocked
+	skipped  map[string]bool
+	noStream map[string]bool // campaign IDs with no live channel this cycle
 
 	// claimFailures counts consecutive Claim failures per benefit (Task 5).
 	claimFailures map[string]int
@@ -173,12 +176,16 @@ func (r *Runner) Rescan() {
 func (r *Runner) MineNow(benefitID string) error {
 	r.mu.Lock()
 	st := r.state
-	queued := slices.ContainsFunc(r.queue, func(t plan.Target) bool { return t.Benefit.ID == benefitID })
+	i := slices.IndexFunc(r.queue, func(t plan.Target) bool { return t.Benefit.ID == benefitID })
+	if st != StateNeedsLogin && st != StateNoGames && i >= 0 {
+		t := r.queue[i]
+		r.pinned = &t
+	}
 	r.mu.Unlock()
 	if st == StateNeedsLogin || st == StateNoGames {
 		return ErrNotRunning
 	}
-	if !queued {
+	if i < 0 {
 		return ErrNotQueued
 	}
 	r.switchNow.Store(true)
@@ -340,6 +347,9 @@ func (r *Runner) pick(ctx context.Context) error {
 		t := res.Queue[0]
 		next = &t
 	}
+	if p := r.pinnedLocked(res, time.Now()); p != nil {
+		next = p
+	}
 	if next != nil {
 		r.current = next
 		r.minutes = next.Minutes
@@ -371,6 +381,44 @@ func (r *Runner) pick(ctx context.Context) error {
 		r.setState(ctx, StateSleeping)
 	}
 	return nil
+}
+
+// pinnedLocked resolves the Mine now pin against a fresh plan. A queued pin
+// comes back with the plan's fresh data. A pin the plan blocked or counts as
+// claimed, or whose campaign has ended, is dropped. A pin the scan merely
+// omitted stays: Twitch TV discovery samples live channels, so one scan can
+// miss a campaign the last one listed. Caller holds r.mu.
+func (r *Runner) pinnedLocked(res plan.Result, now time.Time) *plan.Target {
+	p := r.pinned
+	if p == nil {
+		return nil
+	}
+	id := p.Benefit.ID
+	for _, t := range res.Queue {
+		if t.Benefit.ID == id {
+			return &t
+		}
+	}
+	gone := !p.Campaign.EndsAt.IsZero() && !now.Before(p.Campaign.EndsAt)
+	for _, b := range res.Blocked {
+		gone = gone || b.Benefit.ID == id
+	}
+	for _, t := range res.Claimed {
+		gone = gone || t.Benefit.ID == id
+	}
+	if gone {
+		r.pinned = nil
+		return nil
+	}
+	t := *p
+	return &t
+}
+
+// unpinLocked drops the Mine now pin if it is benefitID. Caller holds r.mu.
+func (r *Runner) unpinLocked(benefitID string) {
+	if r.pinned != nil && r.pinned.Benefit.ID == benefitID {
+		r.pinned = nil
+	}
 }
 
 // scan lists campaigns, reads the inventory (unless the caller already has

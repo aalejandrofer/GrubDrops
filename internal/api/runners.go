@@ -141,25 +141,16 @@ func (s *server) putRunnerOrder(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// postRunnerMineNow switches the account to a queued Up next target now.
+// postRunnerMineNow switches the account to its first Up next target now.
+// The server picks the target; the response names it.
 func (s *server) postRunnerMineNow(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	var body struct {
-		BenefitID string `json:"benefit_id"`
-	}
-	if !readJSON(w, r, &body) {
-		return
-	}
-	if body.BenefitID == "" {
-		writeErr(w, http.StatusBadRequest, "bad_request")
-		return
-	}
 	if _, ok := s.account(w, r, id); !ok {
 		return
 	}
-	switch err := s.d.Pool.MineNow(id, body.BenefitID); {
+	switch bid, err := s.d.Pool.MineNow(id); {
 	case err == nil:
-		w.WriteHeader(http.StatusAccepted)
+		writeJSON(w, http.StatusAccepted, map[string]string{"benefit_id": bid})
 	case errors.Is(err, runner.ErrNotQueued):
 		writeErr(w, http.StatusNotFound, "not_queued")
 	case errors.Is(err, runner.ErrNotRunning):
