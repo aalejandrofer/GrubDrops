@@ -19,6 +19,20 @@
 			tags: ['theme', 'light mode', 'GRUB-22'],
 			done: true,
 			chosen: 'V1 Dimmed off-white, now the light theme in app.css'
+		},
+		{
+			slug: 'login',
+			created: '2026-10-26',
+			title: 'Login and setup, three layouts',
+			desc: 'Card, split pane and bare page. Each shows default, wrong password, SSO only, signing in, and first admin setup.',
+			tags: ['auth', 'login', 'SSO', 'for approval']
+		},
+		{
+			slug: 'onboarding',
+			created: '2026-10-26',
+			title: 'First-run onboarding, three flows',
+			desc: 'Checklist on Home, guided wizard, inline empty states. Each walks add account, pick games, mining started.',
+			tags: ['onboarding', 'first run', 'for approval']
 		}
 	];
 </script>

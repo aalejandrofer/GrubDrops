@@ -1,0 +1,238 @@
+/* Shared pieces for the onboarding mockups. Scoped under .ob. */
+.ob {
+	container-type: inline-size;
+	min-height: 100%;
+	background: var(--bg);
+	color: var(--text);
+	font: 14px/1.5 var(--font);
+}
+.ob ::selection {
+	background: var(--accent-soft);
+	color: var(--text);
+}
+.ob a {
+	color: inherit;
+	text-decoration: none;
+}
+.ob h1 {
+	margin: 0;
+	font-size: 18px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	text-wrap: balance;
+}
+.ob .muted {
+	color: var(--t2);
+}
+.ob .faint {
+	color: var(--t3);
+}
+.ob .mono {
+	font-family: var(--mono);
+	font-variant-numeric: tabular-nums;
+}
+.ob .panel {
+	border: 1px solid var(--border-soft);
+	border-radius: 12px;
+	background: var(--surface);
+}
+.ob .btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	height: 32px;
+	font: inherit;
+	font-size: 13px;
+	font-weight: 500;
+	padding: 0 12px;
+	border-radius: 7px;
+	border: 1px solid var(--border);
+	background: var(--surface-2);
+	color: var(--text);
+	white-space: nowrap;
+	cursor: pointer;
+}
+.ob .btn:hover:not(:disabled) {
+	border-color: var(--t2);
+}
+.ob .btn.primary {
+	background: var(--accent-strong);
+	border-color: var(--accent-strong);
+	color: #fff;
+}
+.ob .btn.primary:hover:not(:disabled) {
+	background: var(--accent);
+	border-color: var(--accent);
+}
+.ob .btn.quiet {
+	background: transparent;
+	border-color: transparent;
+	color: var(--t2);
+}
+.ob .btn:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+.ob .btn:focus-visible,
+.ob a:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+.ob .field {
+	display: grid;
+	gap: 6px;
+}
+.ob .field label,
+.ob .lbl {
+	font-size: 12px;
+	color: var(--t2);
+}
+.ob input[type='text'],
+.ob input[type='search'],
+.ob textarea {
+	font: inherit;
+	color: var(--text);
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 7px;
+	padding: 7px 10px;
+	width: 100%;
+	caret-color: var(--accent);
+}
+.ob textarea {
+	font: 12px/1.5 var(--mono);
+	resize: vertical;
+}
+.ob input:focus-visible,
+.ob textarea:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+.ob input::placeholder,
+.ob textarea::placeholder {
+	color: var(--t3);
+}
+.ob .search {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	height: 40px;
+	padding: 0 14px;
+	border: 1px solid var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-soft);
+	border-radius: 10px;
+	background: var(--bg);
+	color: var(--t3);
+}
+.ob .search input {
+	flex: 1;
+	min-width: 0;
+	background: none;
+	border: 0;
+	outline: 0;
+	padding: 0;
+}
+.ob .sugg {
+	margin: 6px 0 0;
+	padding: 4px;
+	list-style: none;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--surface-2);
+}
+.ob .sugg li {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 6px 8px;
+	border-radius: 6px;
+}
+.ob .sugg li:first-child {
+	background: var(--surface-3);
+}
+.ob .art {
+	width: 28px;
+	height: 37px;
+	border-radius: 4px;
+	flex: none;
+	display: grid;
+	place-items: center;
+	background: var(--art-bg);
+	color: var(--t2);
+	font: 600 12px var(--font);
+}
+.ob .grow {
+	flex: 1;
+	min-width: 0;
+}
+.ob .bar {
+	height: 4px;
+	border-radius: 2px;
+	background: var(--surface-3);
+	overflow: hidden;
+}
+.ob .bar > i {
+	display: block;
+	height: 100%;
+	background: var(--accent);
+	border-radius: 2px;
+}
+.ob .ok {
+	color: var(--green);
+}
+.ob .chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 1px 8px;
+	border-radius: 999px;
+	background: var(--surface-2);
+	color: var(--t2);
+	font-size: 12px;
+	white-space: nowrap;
+}
+.ob .chip.green {
+	background: var(--green-soft);
+	color: var(--green);
+}
+.ob .live {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--green);
+}
+.ob .live.grey {
+	color: var(--t2);
+}
+.ob .live::before {
+	content: '';
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: currentColor;
+}
+.ob .live.grey::before {
+	background: var(--t3);
+}
+.ob .spin {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+	border-top-color: currentColor;
+	animation: ob-spin 0.8s linear infinite;
+	flex: none;
+}
+@keyframes ob-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.ob .spin {
+		animation-duration: 2.4s;
+	}
+}
