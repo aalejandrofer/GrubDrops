@@ -134,6 +134,21 @@ func TestGames_AddAppendsAndNotifies(t *testing.T) {
 	assert.Equal(t, 1, g.changed)
 }
 
+func TestGames_AddKeepsStoredName(t *testing.T) {
+	g := newGamesEnv(t)
+	g.seed("Rust")
+	resp, b := g.do("POST", "/api/games", g.csrf, map[string]string{"name": " rust "})
+	require.Equal(t, 201, resp.StatusCode, string(b))
+	var got gameJSON
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.Equal(t, "Rust", got.Name)
+	assert.Equal(t, "rust", got.Slug)
+	all, err := g.q.ListAllGames(context.Background())
+	require.NoError(t, err)
+	require.Len(t, all, 1)
+	assert.Equal(t, "Rust", all[0].Name)
+}
+
 func TestGames_AddDuplicateConflict(t *testing.T) {
 	g := newGamesEnv(t)
 	ids := g.seed("Rust")
@@ -173,6 +188,10 @@ func TestGames_PutReorderAndRemove(t *testing.T) {
 
 	resp, _ = g.do("PUT", "/api/games", g.csrf, map[string]any{})
 	assert.Equal(t, 400, resp.StatusCode)
+
+	resp, _ = g.do("PUT", "/api/games", g.csrf, map[string]any{"ids": []string{}})
+	assert.Equal(t, 204, resp.StatusCode)
+	assert.Empty(t, g.chosenIDs())
 }
 
 func TestGames_Search(t *testing.T) {

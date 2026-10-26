@@ -160,9 +160,24 @@ func (s *server) handleGamesAdd(w http.ResponseWriter, r *http.Request) {
 		}
 		ids = append(ids, c.ID)
 	}
-	if err := s.d.Q.UpsertGame(r.Context(), gen.UpsertGameParams{ID: id, Name: name, Slug: slug}); err != nil {
+	// Keep the stored name and slug of an existing row; insert only when missing.
+	all, err := s.d.Q.ListAllGames(r.Context())
+	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
+	}
+	exists := false
+	for _, g := range all {
+		if g.ID == id {
+			exists = true
+			break
+		}
+	}
+	if !exists {
+		if err := s.d.Q.UpsertGame(r.Context(), gen.UpsertGameParams{ID: id, Name: name, Slug: slug}); err != nil {
+			writeErr(w, http.StatusInternalServerError, "internal")
+			return
+		}
 	}
 	if err := s.d.Chosen.Set(r.Context(), append(ids, id)); err != nil {
 		writeErr(w, http.StatusInternalServerError, "internal")
