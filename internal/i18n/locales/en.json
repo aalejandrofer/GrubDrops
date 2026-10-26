@@ -30,6 +30,7 @@
   "version.latest": "You're on the latest version, {v}",
   "version.notes": "Release notes",
   "version.available": "{v} is available",
+  "version.badge_available": "available",
   "version.full_notes": "Full release notes",
   "auth.password": "Password",
   "auth.confirm": "Confirm password",

@@ -30,6 +30,7 @@
   "version.latest": "Tienes la última versión, {v}",
   "version.notes": "Notas de la versión",
   "version.available": "{v} está disponible",
+  "version.badge_available": "disponible",
   "version.full_notes": "Notas completas de la versión",
   "auth.password": "Contraseña",
   "auth.confirm": "Confirmar contraseña",

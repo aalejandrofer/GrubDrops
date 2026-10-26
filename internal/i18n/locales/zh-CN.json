@@ -30,6 +30,7 @@
   "version.latest": "已是最新版本 {v}",
   "version.notes": "发行说明",
   "version.available": "{v} 可用",
+  "version.badge_available": "可用",
   "version.full_notes": "完整发行说明",
   "auth.password": "密码",
   "auth.confirm": "确认密码",

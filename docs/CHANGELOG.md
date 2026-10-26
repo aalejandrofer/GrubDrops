@@ -59,6 +59,7 @@ All notable changes to GrubDrops.
 - v2 Home first run: the setup lead reads "Three steps." without the dropped filler line.
 - v2 Settings accounts: a Twitch device status the UI does not know ends the flow with the error line instead of a blank panel; the `device.json` fixture carries `status: pending`.
 - v2 Settings: no empty bordered strip under Accounts when there are no accounts, and the Health "Last scan" dot stays grey until a scan has run.
+- v2 top bar: with an update available the version reads `{current} → {latest} available` as in r4, shortened to the latest version under 720 px.
 
 ### Removed
 

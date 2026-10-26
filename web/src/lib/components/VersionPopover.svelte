@@ -39,7 +39,10 @@
 		aria-expanded={open}
 		aria-controls="verpop"
 		bind:this={trigger}
-		onclick={() => (open = !open)}>{current || 'dev'}</button
+		onclick={() => (open = !open)}
+		>{#if update && hasUpdate}<span class="vfrom">{current || 'dev'} →{' '}</span>{update.latest}<span class="vtail"
+				>{' '}{t('version.badge_available')}</span
+			>{:else}{current || 'dev'}{/if}</button
 	>
 	<div class="pop" id="verpop" role="dialog" aria-label={t('version.label')} hidden={!open} bind:this={pop}>
 		{#if update && hasUpdate}
@@ -65,6 +68,12 @@
 </span>
 
 <style>
+	@media (max-width: 720px) {
+		.ver .vfrom,
+		.ver .vtail {
+			display: none;
+		}
+	}
 	.verwrap {
 		margin-left: auto;
 		position: relative;
