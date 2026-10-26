@@ -109,8 +109,8 @@ func (s *server) getClaims(w http.ResponseWriter, r *http.Request) {
 	names := make(map[string]string, len(accts))
 	accounts := make([]claimAccount, 0, len(accts))
 	for _, a := range accts {
-		names[a.ID] = a.DisplayName
-		accounts = append(accounts, claimAccount{ID: a.ID, Name: a.DisplayName})
+		names[a.ID] = store.AccountName(a)
+		accounts = append(accounts, claimAccount{ID: a.ID, Name: store.AccountName(a)})
 	}
 	items := make([]claimItem, 0, len(entries))
 	for _, e := range entries {

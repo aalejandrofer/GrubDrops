@@ -149,7 +149,10 @@ export interface ClaimsResp {
 export interface Account {
 	id: string;
 	platform: Platform;
+	/** Custom name, else the platform name. */
 	name: string;
+	/** The platform login. */
+	platform_name: string;
 	avatar_url: string;
 	state: string;
 	needs_login: boolean;

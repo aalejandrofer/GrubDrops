@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -162,13 +163,40 @@ func TestAccounts_Rename(t *testing.T) {
 	assert.Equal(t, map[string]string{id: "New"}, renamed)
 	a, err := e.s.d.Q.GetAccount(context.Background(), id)
 	require.NoError(t, err)
-	assert.Equal(t, "New", a.DisplayName)
+	assert.Equal(t, "New", a.CustomName)
+	assert.Equal(t, "Old", a.DisplayName, "rename keeps the platform name")
 	assert.Equal(t, []string{id}, c.changedList(), "rename must not fire AccountChanged")
 
+	listed := func() (string, string) {
+		t.Helper()
+		_, body := e.do("GET", "/api/accounts", "", nil)
+		var list []struct {
+			Name         string `json:"name"`
+			PlatformName string `json:"platform_name"`
+		}
+		require.NoError(t, json.Unmarshal(body, &list))
+		require.Len(t, list, 1)
+		return list[0].Name, list[0].PlatformName
+	}
+	name, plat := listed()
+	assert.Equal(t, "New", name)
+	assert.Equal(t, "Old", plat)
+
+	// Empty resets to the platform name.
 	resp, _ = e.do("PATCH", "/api/accounts/"+id, tok, map[string]string{"name": " "})
+	require.Equal(t, 204, resp.StatusCode)
+	assert.Equal(t, "Old", renamed[id])
+	name, _ = listed()
+	assert.Equal(t, "Old", name)
+
+	resp, _ = e.do("PATCH", "/api/accounts/"+id, tok, map[string]string{"name": strings.Repeat("é", 40)})
+	assert.Equal(t, 204, resp.StatusCode, "40 characters fit")
+	resp, _ = e.do("PATCH", "/api/accounts/"+id, tok, map[string]string{"name": strings.Repeat("x", 41)})
 	assert.Equal(t, 400, resp.StatusCode)
 	resp, _ = e.do("PATCH", "/api/accounts/nope", tok, map[string]string{"name": "X"})
 	assert.Equal(t, 404, resp.StatusCode)
+	resp, _ = e.do("PATCH", "/api/accounts/"+id, "", map[string]string{"name": "X"})
+	assert.Equal(t, 403, resp.StatusCode, "CSRF token required")
 }
 
 func TestAccounts_RenamePublishesEvent(t *testing.T) {

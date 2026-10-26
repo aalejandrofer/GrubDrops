@@ -271,6 +271,8 @@
   "accounts.remove_yes": "移除",
   "accounts.cancel": "取消",
   "accounts.rename_label": "重命名 {name}",
+  "accounts.rename": "重命名",
+  "accounts.rename_too_long": "最多 40 个字符。",
   "accounts.rename_failed": "无法重命名。",
   "accounts.remove_failed": "无法移除。",
   "accounts.add_failed": "无法添加账号。",

@@ -10,11 +10,13 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/aalejandrofer/grubdrops/internal/authcheck"
 	"github.com/aalejandrofer/grubdrops/internal/runner"
+	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
@@ -38,14 +40,15 @@ type accountAuthJSON struct {
 }
 
 type accountJSON struct {
-	ID         string           `json:"id"`
-	Platform   string           `json:"platform"`
-	Name       string           `json:"name"`
-	AvatarURL  string           `json:"avatar_url"`
-	State      string           `json:"state"`
-	NeedsLogin bool             `json:"needs_login"`
-	Enabled    bool             `json:"enabled"` // false: paused, the runner idles
-	Auth       *accountAuthJSON `json:"auth"`    // null until a check has run
+	ID           string           `json:"id"`
+	Platform     string           `json:"platform"`
+	Name         string           `json:"name"`          // custom name, else the platform name
+	PlatformName string           `json:"platform_name"` // the platform login
+	AvatarURL    string           `json:"avatar_url"`
+	State        string           `json:"state"`
+	NeedsLogin   bool             `json:"needs_login"`
+	Enabled      bool             `json:"enabled"` // false: paused, the runner idles
+	Auth         *accountAuthJSON `json:"auth"`    // null until a check has run
 }
 
 // checkedAt is nil when no check has run.
@@ -86,7 +89,7 @@ func (s *server) listAccounts(w http.ResponseWriter, r *http.Request) {
 			slog.Warn("accounts: session lookup failed", "kind", "error", "account", a.ID, "err", err)
 		}
 		item := accountJSON{
-			ID: a.ID, Platform: a.Platform, Name: a.DisplayName,
+			ID: a.ID, Platform: a.Platform, Name: store.AccountName(a), PlatformName: a.DisplayName,
 			AvatarURL:  avatarSrc(a.Platform, a.AvatarUrl),
 			State:      state,
 			NeedsLogin: state == string(runner.StateNeedsLogin) || !hasSession,
@@ -144,22 +147,25 @@ func (s *server) renameAccount(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &body) {
 		return
 	}
-	name := strings.TrimSpace(body.Name)
-	if name == "" {
+	// Empty clears the custom name: the account shows its platform name again.
+	custom := strings.TrimSpace(body.Name)
+	if utf8.RuneCountInString(custom) > store.AccountNameMax {
 		writeErr(w, http.StatusBadRequest, "bad_request")
 		return
 	}
-	if _, ok := s.account(w, r, id); !ok {
+	acc, ok := s.account(w, r, id)
+	if !ok {
 		return
 	}
-	if err := s.d.Q.UpdateAccountDisplayName(r.Context(), gen.UpdateAccountDisplayNameParams{
-		DisplayName: name, UpdatedAt: time.Now().Unix(), ID: id,
+	if err := s.d.Q.UpdateAccountCustomName(r.Context(), gen.UpdateAccountCustomNameParams{
+		CustomName: custom, UpdatedAt: time.Now().Unix(), ID: id,
 	}); err != nil {
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
 	}
+	acc.CustomName = custom
 	if s.d.AccountRenamed != nil {
-		s.d.AccountRenamed(id, name)
+		s.d.AccountRenamed(id, store.AccountName(acc))
 	}
 	// Not accountChanged: a rename must not reload the runner, only tell clients.
 	if s.d.Hub != nil {

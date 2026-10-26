@@ -271,6 +271,8 @@
   "accounts.remove_yes": "Remove",
   "accounts.cancel": "Cancel",
   "accounts.rename_label": "Rename {name}",
+  "accounts.rename": "Rename",
+  "accounts.rename_too_long": "40 characters max.",
   "accounts.rename_failed": "Couldn't rename.",
   "accounts.remove_failed": "Couldn't remove.",
   "accounts.add_failed": "Couldn't add the account.",

@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/aalejandrofer/grubdrops/internal/runner"
+	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
@@ -92,7 +93,7 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 	names := make(map[string]string, len(accts))
 	signedOutIDs := map[string]bool{}
 	for _, a := range accts {
-		names[a.ID] = a.DisplayName
+		names[a.ID] = store.AccountName(a)
 		if s.signedOut(ctx, a.ID) {
 			signedOutIDs[a.ID] = true
 		}
@@ -132,7 +133,7 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 	// Signed-out accounts without a snapshot (none yet) still need a login.
 	for _, a := range accts {
 		if signedOutIDs[a.ID] && !flagged[a.ID] {
-			problems = append(problems, overviewProblem{Kind: "needs_login", AccountID: a.ID, AccountName: a.DisplayName})
+			problems = append(problems, overviewProblem{Kind: "needs_login", AccountID: a.ID, AccountName: store.AccountName(a)})
 		}
 	}
 	scans, err := s.d.Scans.List(ctx)

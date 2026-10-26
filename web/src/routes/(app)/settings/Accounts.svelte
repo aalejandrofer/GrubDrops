@@ -11,6 +11,8 @@
 		createDeviceFlow,
 		hasAndroidToken,
 		initials,
+		NAME_MAX,
+		renameRequest,
 		rowActions,
 		type DeviceFlow,
 		type DeviceState,
@@ -229,17 +231,29 @@
 	}
 
 	function startRename(a: Account): void {
+		menu = null;
+		confirming = null;
 		renaming = a.id;
 		renameValue = a.name;
 		rowError[a.id] = '';
 	}
 
-	async function commitRename(a: Account): Promise<void> {
-		const name = renameValue.trim();
+	function cancelRename(a: Account): void {
 		renaming = null;
-		if (name === '' || name === a.name) return;
+		rowError[a.id] = '';
+	}
+
+	async function commitRename(a: Account): Promise<void> {
+		const req = renameRequest(a, renameValue);
+		if (req.kind === 'too_long') {
+			rowError[a.id] = t('accounts.rename_too_long');
+			return;
+		}
+		renaming = null;
+		rowError[a.id] = '';
+		if (req.kind === 'skip') return;
 		try {
-			await api.renameAccount(a.id, name);
+			await api.renameAccount(a.id, req.name);
 		} catch (e) {
 			rowError[a.id] = errMsg(e, t('accounts.rename_failed'));
 		}
@@ -450,19 +464,25 @@
 				</span>
 				<div class="who">
 					{#if renaming === a.id}
-						<input
-							class="inp rename"
-							aria-label={t('accounts.rename_label', { name: a.name })}
-							bind:value={renameValue}
-							use:focusSelect
-							onkeydown={(e) => {
-								if (e.key === 'Enter') void commitRename(a);
-								else if (e.key === 'Escape') renaming = null;
-							}}
-							onblur={() => {
-								if (renaming === a.id) void commitRename(a);
-							}}
-						/>
+						<div class="inline rename-row">
+							<input
+								class="inp rename"
+								aria-label={t('accounts.rename_label', { name: a.name })}
+								placeholder={a.platform_name}
+								maxlength={NAME_MAX}
+								bind:value={renameValue}
+								use:focusSelect
+								onkeydown={(e) => {
+									if (e.key === 'Enter') void commitRename(a);
+									else if (e.key === 'Escape') {
+										e.stopPropagation();
+										cancelRename(a);
+									}
+								}}
+							/>
+							<button type="button" class="btn primary" onclick={() => commitRename(a)}>{t('accounts.save')}</button>
+							<button type="button" class="btn" onclick={() => cancelRename(a)}>{t('accounts.cancel')}</button>
+						</div>
 					{:else}
 						<b><button type="button" class="nm" title={t('accounts.rename_label', { name: a.name })} onclick={() => startRename(a)}>{a.name}</button></b>
 					{/if}
@@ -498,6 +518,7 @@
 									<button type="button" onclick={() => (confirming = null)}>{t('accounts.cancel')}</button>
 								</div>
 							{:else}
+								<button type="button" role="menuitem" onclick={() => startRename(a)}>{t('accounts.rename')}</button>
 								<button type="button" role="menuitem" onclick={() => setEnabled(a, !a.enabled)}>
 									{t(a.enabled ? 'accounts.pause' : 'accounts.resume')}
 								</button>
@@ -679,7 +700,15 @@
 		outline-offset: 2px;
 		border-radius: 3px;
 	}
+	.rename-row {
+		gap: 6px;
+	}
+	.rename-row .btn {
+		height: 28px;
+	}
 	.rename {
+		flex: 1;
+		min-width: 0;
 		height: 28px;
 		font-family: var(--font);
 		font-size: 13.5px;

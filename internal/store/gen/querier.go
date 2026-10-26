@@ -114,6 +114,7 @@ type Querier interface {
 	SumWatchMinutes(ctx context.Context) (int64, error)
 	SumWatchMinutesDay(ctx context.Context, day string) (int64, error)
 	UpdateAccountAvatar(ctx context.Context, arg UpdateAccountAvatarParams) error
+	UpdateAccountCustomName(ctx context.Context, arg UpdateAccountCustomNameParams) error
 	UpdateAccountDisplayName(ctx context.Context, arg UpdateAccountDisplayNameParams) error
 	UpdateAccountStatus(ctx context.Context, arg UpdateAccountStatusParams) error
 	UpdateAccountWebhook(ctx context.Context, arg UpdateAccountWebhookParams) error

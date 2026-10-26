@@ -9,6 +9,7 @@ import (
 
 	"github.com/aalejandrofer/grubdrops/internal/plan"
 	"github.com/aalejandrofer/grubdrops/internal/runner"
+	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
@@ -72,7 +73,7 @@ func TargetJSON(t plan.Target) targetDTO {
 func RunnerJSON(s runner.Snapshot, a gen.Account, custom bool) runnerDTO {
 	up := s.UpNext
 	d := runnerDTO{
-		AccountID: s.AccountID, AccountName: a.DisplayName, Platform: s.Platform,
+		AccountID: s.AccountID, AccountName: store.AccountName(a), Platform: s.Platform,
 		AvatarURL: avatarSrc(a.Platform, a.AvatarUrl), State: string(s.State), Channel: s.Channel,
 		ViewerCount: s.ViewerCount, Minutes: s.MinutesWatched,
 		StartedAt: rfc3339(s.StartedAt), LastScanAt: rfc3339(s.LastScanAt),
