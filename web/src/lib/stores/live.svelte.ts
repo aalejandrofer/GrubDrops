@@ -98,12 +98,21 @@ export function createLive(deps: LiveDeps): LiveStore {
 		}
 	}
 
-	const loadOverview = async () => void (s.overview = await api.overview());
-	const loadRunners = async () => void (s.runners = await api.runners());
-	const loadGames = async () => void (s.games = await api.games());
-	const loadAccounts = async () => void (s.accounts = await api.accounts());
-	const loadRecent = async () =>
-		void (s.recent = (await api.claims({ limit: MAX_RECENT })).items.slice(0, MAX_RECENT));
+	const loadOverview = async () => {
+		s.overview = await api.overview();
+	};
+	const loadRunners = async () => {
+		s.runners = await api.runners();
+	};
+	const loadGames = async () => {
+		s.games = await api.games();
+	};
+	const loadAccounts = async () => {
+		s.accounts = await api.accounts();
+	};
+	const loadRecent = async () => {
+		s.recent = (await api.claims({ limit: MAX_RECENT })).items.slice(0, MAX_RECENT);
+	};
 
 	async function refetchAll(): Promise<void> {
 		await Promise.all(

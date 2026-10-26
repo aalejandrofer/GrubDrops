@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Game, SearchHit } from '$lib/api/types';
 import { setLang } from '$lib/i18n/index.svelte';
-import { campaignLine, commitGames, moveGame, removeGame, suggestions, withoutId } from './games';
+import { campaignLine, commitGames, moveGame, suggestions, withoutId } from './games';
 
 beforeEach(() => setLang('en'));
 
@@ -44,11 +44,10 @@ describe('campaignLine', () => {
 	});
 });
 
-describe('moveGame and removeGame', () => {
-	it('moves and removes', () => {
+describe('moveGame', () => {
+	it('moves', () => {
 		const l = [game('a'), game('b'), game('c')];
 		expect(moveGame(l, 2, 0).map((g) => g.id)).toEqual(['c', 'a', 'b']);
-		expect(removeGame(l, 'b').map((g) => g.id)).toEqual(['a', 'c']);
 	});
 });
 

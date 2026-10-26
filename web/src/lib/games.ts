@@ -56,7 +56,3 @@ export async function commitGames(io: GamesIO, next: Game[]): Promise<boolean> {
 export function moveGame(games: Game[], from: number, to: number): Game[] {
 	return moveItem(games, from, to);
 }
-
-export function removeGame(games: Game[], id: string): Game[] {
-	return games.filter((g) => g.id !== id);
-}

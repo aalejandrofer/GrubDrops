@@ -8,7 +8,7 @@
 	import PageHead from '$lib/components/PageHead.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { relTime } from '$lib/format';
-	import { campaignLine, commitGames, moveGame, removeGame, suggestions } from '$lib/games';
+	import { campaignLine, commitGames, moveGame, suggestions, withoutId } from '$lib/games';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
@@ -29,6 +29,7 @@
 	let busy = $state<string | null>(null);
 	let confirming = $state<string | null>(null);
 	let moved = $state<string | null>(null);
+	let saving = $state(false);
 	let drag = $state<{ id: string; from: number; to: number } | null>(null);
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let flash: ReturnType<typeof setTimeout> | undefined;
@@ -95,6 +96,8 @@
 	}
 
 	async function commit(next: Game[], id?: string): Promise<void> {
+		if (saving) return;
+		saving = true;
 		failed = false;
 		confirming = null;
 		const ok = await commitGames(
@@ -108,6 +111,7 @@
 			},
 			next
 		);
+		saving = false;
 		if (!ok) failed = true;
 		if (ok && id) {
 			moved = id;
@@ -116,8 +120,16 @@
 		}
 	}
 
+	function remove(id: string): Promise<void> {
+		const keep = withoutId(
+			games.map((g) => g.id),
+			id
+		);
+		return commit(keep.map((k) => games.find((g) => g.id === k)!));
+	}
+
 	function down(e: PointerEvent, id: string, from: number): void {
-		if (e.button !== 0) return;
+		if (e.button !== 0 || saving) return;
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 		drag = { id, from, to: from };
 	}
@@ -142,6 +154,7 @@
 		if (!drag) return;
 		const d = drag;
 		drag = null;
+		if (d.from === d.to) return;
 		void commit(moveGame(games, d.from, d.to), d.id);
 	}
 
@@ -219,7 +232,7 @@
 		{#each rows as g, i (g.id)}
 			<article class="game" class:moved={moved === g.id} class:dragging={drag?.id === g.id}>
 				<div class="grip">
-					<button type="button" aria-label={t('games.move_up')} title={t('games.move_up')} disabled={i === 0} onclick={() => commit(moveGame(games, i, i - 1), g.id)}>
+					<button type="button" aria-label={t('games.move_up')} title={t('games.move_up')} disabled={i === 0 || saving} onclick={() => commit(moveGame(games, i, i - 1), g.id)}>
 						<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
 					</button>
 					<span
@@ -229,11 +242,12 @@
 						onpointermove={move}
 						onpointerup={up}
 						onpointercancel={() => (drag = null)}
+						onlostpointercapture={() => (drag = null)}
 						role="presentation"
 					>
 						<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3" /></svg>
 					</span>
-					<button type="button" aria-label={t('games.move_down')} title={t('games.move_down')} disabled={i === rows.length - 1} onclick={() => commit(moveGame(games, i, i + 1), g.id)}>
+					<button type="button" aria-label={t('games.move_down')} title={t('games.move_down')} disabled={i === rows.length - 1 || saving} onclick={() => commit(moveGame(games, i, i + 1), g.id)}>
 						<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
 					</button>
 				</div>
@@ -248,7 +262,7 @@
 						{#if confirming === g.id}
 							<span class="conf">
 								<span>{t('games.remove_confirm', { game: g.name })}</span>
-								<button type="button" class="danger" onclick={() => commit(removeGame(games, g.id))}>{t('games.remove')}</button>
+								<button type="button" class="danger" onclick={() => remove(g.id)}>{t('games.remove')}</button>
 								<button type="button" class="plain" onclick={() => (confirming = null)}>{t('games.cancel')}</button>
 							</span>
 						{:else}
