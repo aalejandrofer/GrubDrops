@@ -6,6 +6,7 @@ All notable changes to GrubDrops.
 
 ### Added
 
+- 1.x upgrade carries over chosen games (global list, then per-account games), claim history and total minutes watched.
 - v2 web app scaffold in web/ (SvelteKit static SPA), built into internal/web/dist by npm, the Docker image and CI (rebuild/v2).
 - v2 SPA serving: a "UI not built" page when the build is missing, no-cache index.html, immutable hashed assets, and 404 for missing assets (rebuild/v2).
 - v2 planner (`internal/plan`) and per-account runner + pool (`internal/runner`), replacing the watcher and scheduler.

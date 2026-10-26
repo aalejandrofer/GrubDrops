@@ -49,6 +49,10 @@ func Open(ctx context.Context, path string) (*sql.DB, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+	if err := ImportLegacy(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	return db, nil
 }
 

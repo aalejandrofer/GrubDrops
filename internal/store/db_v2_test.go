@@ -81,7 +81,7 @@ func TestOpen_BacksUpBeforeV2(t *testing.T) {
 
 	require.NoError(t, db.QueryRow(`SELECT max(version_id) FROM goose_db_version`).Scan(&v))
 	require.Equal(t, 17, v)
-	require.Equal(t, 0, count(t, db, "claim_log"))
+	require.Equal(t, 1, count(t, db, "claim_log"), "seed claim imported from 1.x")
 }
 
 func TestOpen_BackupNotOverwritten(t *testing.T) {
@@ -104,7 +104,7 @@ func TestOpen_BackupNotOverwritten(t *testing.T) {
 	db2, err := Open(ctx, path)
 	require.NoError(t, err)
 	defer db2.Close()
-	require.Equal(t, 1, count(t, db2, "claim_log"))
+	require.Equal(t, 2, count(t, db2, "claim_log"), "imported claim plus the inserted one")
 
 	after, err := os.Stat(backup)
 	require.NoError(t, err)
