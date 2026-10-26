@@ -37,6 +37,7 @@ All notable changes to GrubDrops.
 - **Shared locales.** The web app reads `internal/i18n/locales`, and `npm run check` fails on missing, unused or mismatched keys.
 
 ### Changed
+- **Top bar order.** Home, Discover, Games, Rewards, Settings.
 - **Home game cards fill the left column.** On wide screens Home shows as many game cards as fit down to the bottom of the right column (Up next and Claimed), instead of a fixed 7, with at least 2. The narrow single-column layout keeps 7.
 - **Login and setup page.** A tighter centered card with the host below it. Password comes first; when SSO is on it sits under an "or" rule. Signing in shows a spinner and locks the field, a wrong password marks the field, and setup shows the 8-character hint and a mismatch error on the confirm field. After setup the app opens the first-run wizard.
 - **Light mode.** The light theme is one step darker: an off-white background instead of pure white, with darker surfaces, borders and text colors to match (GRUB-22).
