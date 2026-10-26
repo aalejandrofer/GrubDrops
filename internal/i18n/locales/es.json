@@ -219,5 +219,6 @@
   "settings.checked": "comprobado {rel}",
   "settings.check_auto": "Buscar automáticamente",
   "settings.once_a_day": "Una vez al día.",
-  "settings.check_failed": "No se pudo buscar actualizaciones."
+  "settings.check_failed": "No se pudo buscar actualizaciones.",
+  "settings.signout_failed": "No se pudo cerrar la sesión."
 }

@@ -219,5 +219,6 @@
   "settings.checked": "checked {rel}",
   "settings.check_auto": "Check automatically",
   "settings.once_a_day": "Once a day.",
-  "settings.check_failed": "Couldn't check for updates."
+  "settings.check_failed": "Couldn't check for updates.",
+  "settings.signout_failed": "Couldn't sign out."
 }

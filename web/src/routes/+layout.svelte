@@ -11,7 +11,11 @@
 
 	let applied = false;
 	$effect(() => {
-		if (!session.authed || applied) return;
+		if (!session.authed) {
+			applied = false;
+			return;
+		}
+		if (applied) return;
 		applied = true;
 		api
 			.settings()

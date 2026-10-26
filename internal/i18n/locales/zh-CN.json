@@ -219,5 +219,6 @@
   "settings.checked": "{rel}检查",
   "settings.check_auto": "自动检查",
   "settings.once_a_day": "每天一次。",
-  "settings.check_failed": "无法检查更新。"
+  "settings.check_failed": "无法检查更新。",
+  "settings.signout_failed": "无法退出登录。"
 }

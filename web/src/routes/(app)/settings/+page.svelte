@@ -47,6 +47,9 @@
 		}
 	}
 
+	/** A section link click or a hash on load wins over scroll tracking while the jump settles. */
+	let holdUntil = 0;
+
 	onMount(() => {
 		api
 			.settings()
@@ -60,9 +63,6 @@
 	});
 
 	const loaded = $derived(s !== null);
-
-		/** A section link click or a hash on load wins over scroll tracking while the jump settles. */
-	let holdUntil = 0;
 
 	/** The last section whose top has passed the line under the top bar, or the last one at the page bottom. */
 	function track(): void {

@@ -87,7 +87,7 @@
 		</div>
 		<div class="row">
 			<div class="lbl">
-				{#if signoutFailed}<small class="bad">{t('settings.save_failed')}</small>{/if}
+				{#if signoutFailed}<small class="bad">{t('settings.signout_failed')}</small>{/if}
 			</div>
 			<button type="button" class="btn" onclick={signOut}>{t('settings.sign_out')}</button>
 		</div>
