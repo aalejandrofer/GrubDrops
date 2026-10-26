@@ -33,6 +33,7 @@ coverage.out
 
 # build / dist
 dist/
+!internal/web/dist/
 out/
 
 # stray local build binaries (cmd/* tools)

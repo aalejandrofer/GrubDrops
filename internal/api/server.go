@@ -29,7 +29,8 @@ type Deps struct {
 }
 
 type server struct {
-	d Deps
+	d      Deps
+	bypass bypass
 	// api is the /api sub-router (CSRF applied). Public routes register on it
 	// directly; admin-only routes register on protected.
 	api       chi.Router
@@ -37,13 +38,13 @@ type server struct {
 }
 
 func newServer(d Deps) *server {
-	s := &server{d: d}
+	s := &server{d: d, bypass: readBypass()}
 	s.api = chi.NewRouter()
 	s.api.Use(CSRF(d.SecureCookies))
 	s.api.NotFound(func(w http.ResponseWriter, _ *http.Request) { writeErr(w, http.StatusNotFound, "not_found") })
 	s.api.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) { writeErr(w, http.StatusMethodNotAllowed, "bad_request") })
 	s.routesAuth(s.api)
-	s.protected = s.api.Group(func(r chi.Router) { r.Use(RequireAdmin(d.Session)) })
+	s.protected = s.api.Group(func(r chi.Router) { r.Use(requireAdmin(d.Session, s.bypass)) })
 	return s
 }
 

@@ -46,7 +46,10 @@ func (b bypass) allows(r *http.Request) bool {
 // X-Forwarded-For through. GRUB_AUTHBYPASS=true disables auth for every
 // request; staging/dev only.
 func RequireAdmin(sm *scs.SessionManager) func(http.Handler) http.Handler {
-	b := readBypass()
+	return requireAdmin(sm, readBypass())
+}
+
+func requireAdmin(sm *scs.SessionManager, b bypass) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if b.allows(r) || sm.GetBool(r.Context(), "admin_authed") {
@@ -139,15 +142,21 @@ func envTrue(name string) bool {
 	return false
 }
 
-func adminConfigured(ctx context.Context, q *gen.Queries) bool {
-	exists, err := q.AdminExists(ctx)
-	return err == nil && exists
+// adminConfigured reports whether an admin exists. A lookup error is returned
+// so callers fail closed.
+func adminConfigured(ctx context.Context, q *gen.Queries) (bool, error) {
+	return q.AdminExists(ctx)
 }
 
 // routesAuth registers the public session, setup, login and logout routes.
 func (s *server) routesAuth(r chi.Router) {
-	b := readBypass()
+	b := s.bypass
 	r.Get("/session", func(w http.ResponseWriter, r *http.Request) {
+		configured, err := adminConfigured(r.Context(), s.d.Q)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "internal")
+			return
+		}
 		oidcOn := s.d.OIDC != nil && s.d.OIDC.Enabled()
 		name := ""
 		if s.d.OIDC != nil {
@@ -155,7 +164,7 @@ func (s *server) routesAuth(r chi.Router) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"authed":       b.allows(r) || s.d.Session.GetBool(r.Context(), "admin_authed"),
-			"setup_needed": !adminConfigured(r.Context(), s.d.Q),
+			"setup_needed": !configured,
 			"oidc":         map[string]any{"enabled": oidcOn, "name": name},
 			"csrf_token":   nosurf.Token(r),
 			"version":      s.d.Version,
@@ -177,7 +186,12 @@ func (s *server) setup(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &in) {
 		return
 	}
-	if adminConfigured(r.Context(), s.d.Q) {
+	configured, err := adminConfigured(r.Context(), s.d.Q)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	if configured {
 		writeErr(w, http.StatusConflict, "conflict")
 		return
 	}

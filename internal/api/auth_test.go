@@ -1,6 +1,7 @@
 package api
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
 func (e *env) setup(pw string) {
@@ -51,8 +54,10 @@ func TestSetup_Rejects(t *testing.T) {
 func TestLogin_WrongPassword401(t *testing.T) {
 	e := newEnv(t)
 	e.setup("password123")
-	e.do("POST", "/api/logout", func() string { _, t := e.session(); return t }(), nil)
 	_, tok := e.session()
+	resp, _ := e.do("POST", "/api/logout", tok, nil)
+	require.Equal(t, 204, resp.StatusCode)
+	_, tok = e.session()
 	resp, b := e.do("POST", "/api/login", tok, map[string]string{"password": "nope"})
 	assert.Equal(t, 401, resp.StatusCode)
 	assert.JSONEq(t, `{"error":"unauthorized"}`, string(b))
@@ -129,4 +134,40 @@ func TestCSRF_CrossSiteOrigin403(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	assert.Equal(t, 403, resp.StatusCode)
+	b, _ := io.ReadAll(resp.Body)
+	assert.JSONEq(t, `{"error":"csrf"}`, string(b))
+}
+
+func TestOIDC_DisabledRedirectsHome(t *testing.T) {
+	e := newEnv(t)
+	cl := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	for _, p := range []string{"/auth/oidc/login", "/auth/oidc/callback"} {
+		resp, err := cl.Get(e.srv.URL + p)
+		require.NoError(t, err)
+		resp.Body.Close()
+		assert.Equal(t, http.StatusSeeOther, resp.StatusCode, p)
+		assert.Equal(t, "/", resp.Header.Get("Location"), p)
+	}
+}
+
+func TestOIDC_CallbackStateMismatch(t *testing.T) {
+	e := newEnv(t)
+	p := fakeOIDC(t)
+	e.s.d.OIDC = p
+	cl := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	req, _ := http.NewRequest("GET", e.srv.URL+"/auth/oidc/callback?state=b&code=x", nil)
+	req.AddCookie(&http.Cookie{Name: oidcStateCookie, Value: "a"})
+	resp, err := cl.Do(req)
+	require.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, http.StatusSeeOther, resp.StatusCode)
+	assert.Equal(t, "/?login_error=oidc", resp.Header.Get("Location"))
+}
+
+func TestSetup_AdminLookupErrorFailsClosed(t *testing.T) {
+	e := newEnv(t)
+	_, tok := e.session()
+	e.s.d.Q = gen.New(adminErrDB{e.s.d.DB})
+	resp, _ := e.do("POST", "/api/setup", tok, map[string]string{"password": "password123", "confirm": "password123"})
+	assert.Equal(t, 500, resp.StatusCode)
 }

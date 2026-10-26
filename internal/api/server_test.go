@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
@@ -110,4 +112,39 @@ func TestReadJSON_TooLarge(t *testing.T) {
 	r = httptest.NewRequest("POST", "/x", strings.NewReader(`{"nope":1}`))
 	assert.False(t, readJSON(w, r, &v))
 	assert.Equal(t, 400, w.Code)
+}
+
+// fakeOIDC returns an enabled provider backed by a discovery-only IdP.
+func fakeOIDC(t *testing.T) *oidc.Provider {
+	t.Helper()
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/openid-configuration" {
+			http.NotFound(w, r)
+			return
+		}
+		writeJSON(w, 200, map[string]any{
+			"issuer":                 srv.URL,
+			"authorization_endpoint": srv.URL + "/auth",
+			"token_endpoint":         srv.URL + "/token",
+			"jwks_uri":               srv.URL + "/jwks",
+		})
+	}))
+	t.Cleanup(srv.Close)
+	p, err := oidc.New(context.Background(), oidc.Config{
+		Issuer: srv.URL, ClientID: "id", ClientSecret: "secret", RedirectURL: "http://localhost/auth/oidc/callback",
+	})
+	require.NoError(t, err)
+	require.True(t, p.Enabled())
+	return p
+}
+
+// adminErrDB makes only the AdminExists query fail.
+type adminErrDB struct{ *sql.DB }
+
+func (d adminErrDB) QueryRowContext(ctx context.Context, q string, args ...any) *sql.Row {
+	if strings.Contains(q, "FROM admin WHERE id = 1)") {
+		return d.DB.QueryRowContext(ctx, "SELECT x FROM no_such_table")
+	}
+	return d.DB.QueryRowContext(ctx, q, args...)
 }
