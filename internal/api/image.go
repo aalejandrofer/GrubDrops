@@ -71,6 +71,9 @@ func (s *server) getKickImage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), imageFetchTimeout)
 	defer cancel()
 	data, ct, status, err := fetcher.FetchImage(ctx, target)
+	if ct == "" {
+		ct = "image/webp" // 1.x default for a missing type
+	}
 	if err != nil || status != http.StatusOK || !strings.HasPrefix(strings.ToLower(ct), "image/") {
 		writeErr(w, http.StatusBadGateway, "upstream")
 		return

@@ -512,3 +512,32 @@ func (s *Settings) setBool(ctx context.Context, key string, on bool) error {
 	}
 	return s.setString(ctx, key, "0")
 }
+
+// v2 release notes
+
+const (
+	keyLatestReleaseNotes = "settings:latest_release_notes" // newline-joined highlight bullets
+	keyLatestReleaseURL   = "settings:latest_release_url"   // html_url of the latest release
+)
+
+// LatestReleaseNotes returns the stored release highlights, one per line.
+func (s *Settings) LatestReleaseNotes(ctx context.Context) ([]string, error) {
+	v, err := s.getString(ctx, keyLatestReleaseNotes)
+	if err != nil || v == "" {
+		return nil, err
+	}
+	return strings.Split(v, "\n"), nil
+}
+
+func (s *Settings) SetLatestReleaseNotes(ctx context.Context, notes []string) error {
+	return s.setString(ctx, keyLatestReleaseNotes, strings.Join(notes, "\n"))
+}
+
+// LatestReleaseURL is the GitHub page of the latest release. Empty when unset.
+func (s *Settings) LatestReleaseURL(ctx context.Context) (string, error) {
+	return s.getString(ctx, keyLatestReleaseURL)
+}
+
+func (s *Settings) SetLatestReleaseURL(ctx context.Context, url string) error {
+	return s.setString(ctx, keyLatestReleaseURL, strings.TrimSpace(url))
+}

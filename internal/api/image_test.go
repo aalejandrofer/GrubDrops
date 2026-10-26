@@ -56,8 +56,19 @@ func TestImage_ProxiesRewardAndAvatar(t *testing.T) {
 	assert.Equal(t, "https://files.kick.com/images/user/1/p.png", fk.gotURL)
 }
 
+func TestImage_EmptyContentTypeIsWebp(t *testing.T) {
+	fk := &fakeKick{}
+	e := newHealthEnv(t, func(d *Deps) {
+		d.Registry = platform.NewRegistry()
+		d.Registry.Register(fk)
+	})
+	resp, _ := e.do("GET", "/api/img/kick?u=drops/a.png", "", nil)
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, "image/webp", resp.Header.Get("Content-Type"))
+}
+
 func TestImage_NonImageContentType502(t *testing.T) {
-	for _, ct := range []string{"text/html", ""} {
+	for _, ct := range []string{"text/html", "application/json"} {
 		fk := &fakeKick{ct: ct}
 		e := newHealthEnv(t, func(d *Deps) {
 			d.Registry = platform.NewRegistry()
