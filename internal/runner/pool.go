@@ -7,7 +7,12 @@ import (
 	"log/slog"
 	"slices"
 	"sync"
+	"time"
 )
+
+// panicRestart is how long a panicked unit waits before it is rebuilt.
+// A var so tests can shorten it.
+var panicRestart = time.Minute
 
 // Unit is one supervised account worker. *Runner satisfies it.
 type Unit interface {
@@ -41,14 +46,16 @@ type Entry struct {
 type Builder func() Entry
 
 type poolUnit struct {
-	entry  Entry
+	pool   *Pool
+	build  Builder
+	entry  Entry // guarded by pool.mu; replaced when the unit restarts
 	cancel context.CancelFunc
 	done   chan struct{}
 }
 
 // Pool runs one Unit per account and holds the session-only Up next order.
-// A unit that panics or returns nil (needs user action) stays in the roster
-// and is not restarted, as in 1.x supervise; plan 3 decides restart policy.
+// A unit that panics is rebuilt from its Builder after panicRestart. A unit
+// that returns nil (needs user action) stays in the roster and is not restarted.
 type Pool struct {
 	n Notifier
 
@@ -79,19 +86,47 @@ func (p *Pool) base(parent context.Context) context.Context {
 	return p.baseCtx
 }
 
-func (p *Pool) spawn(base context.Context, e Entry) *poolUnit {
+func (u *poolUnit) current() Entry {
+	u.pool.mu.Lock()
+	defer u.pool.mu.Unlock()
+	return u.entry
+}
+
+func (p *Pool) spawn(base context.Context, b Builder, e Entry) *poolUnit {
 	ctx, cancel := context.WithCancel(base)
-	u := &poolUnit{entry: e, cancel: cancel, done: make(chan struct{})}
+	u := &poolUnit{pool: p, build: b, entry: e, cancel: cancel, done: make(chan struct{})}
 	go func() {
 		defer close(u.done)
-		p.supervise(ctx, e)
+		for {
+			if !p.supervise(ctx, u.current()) || u.build == nil {
+				return
+			}
+			// Panicked: wait, then rebuild in the same slot. The unit's own
+			// context ends on Stop, Reload and ReloadAccount, so a removed or
+			// replaced unit is never resurrected.
+			t := time.NewTimer(panicRestart)
+			select {
+			case <-ctx.Done():
+				t.Stop()
+				return
+			case <-t.C:
+			}
+			release(u.current())
+			ne := u.build()
+			ne.ID = u.current().ID
+			p.mu.Lock()
+			u.entry = ne
+			p.mu.Unlock()
+		}
 	}()
 	return u
 }
 
-func (p *Pool) supervise(ctx context.Context, e Entry) {
+// supervise runs e once and reports whether it panicked.
+func (p *Pool) supervise(ctx context.Context, e Entry) (panicked bool) {
 	defer func() {
 		if r := recover(); r != nil {
+			panicked = true
 			slog.Error("runner panic", "kind", "error", "account", e.ID, "panic", fmt.Sprint(r))
 			p.notifyErr(map[string]any{"account": e.ID, "panic": fmt.Sprint(r)})
 		}
@@ -100,6 +135,7 @@ func (p *Pool) supervise(ctx context.Context, e Entry) {
 		slog.Error("runner exited", "kind", "error", "account", e.ID, "err", err)
 		p.notifyErr(map[string]any{"account": e.ID, "error": err.Error()})
 	}
+	return false
 }
 
 func (p *Pool) notifyErr(f map[string]any) {
@@ -137,12 +173,12 @@ func (p *Pool) Reload(parent context.Context, builders []Builder) error {
 		<-u.done
 	}
 	for _, u := range old {
-		release(u.entry)
+		release(u.current())
 	}
 
 	units := make([]*poolUnit, 0, len(entries))
-	for _, e := range entries {
-		units = append(units, p.spawn(base, e))
+	for i, e := range entries {
+		units = append(units, p.spawn(base, builders[i], e))
 	}
 	p.mu.Lock()
 	p.units = units
@@ -190,7 +226,7 @@ func (p *Pool) ReloadAccount(id string, b Builder) {
 	}
 
 	if old != nil {
-		release(old.entry)
+		release(old.current())
 	}
 	if b == nil {
 		if old != nil {
@@ -201,7 +237,7 @@ func (p *Pool) ReloadAccount(id string, b Builder) {
 		return
 	}
 
-	nu := p.spawn(base, e)
+	nu := p.spawn(base, func() Entry { r := b(); r.ID = id; return r }, e)
 	p.mu.Lock()
 	if idx >= 0 && idx < len(p.units) && p.units[idx] == old {
 		p.units[idx] = nu
@@ -239,7 +275,7 @@ func (p *Pool) Snapshots() []Snapshot {
 	p.mu.Unlock()
 	out := make([]Snapshot, 0, len(units))
 	for _, u := range units {
-		out = append(out, u.entry.Unit.Snapshot())
+		out = append(out, u.current().Unit.Snapshot())
 	}
 	return out
 }

@@ -16,6 +16,10 @@ All notable changes to GrubDrops.
 - v2 `collect.Collector`: persists drop states, found claims, scan times and watch minutes from the runner hooks, and serves as the runner claim log.
 - v2 JSON API core: session, setup, login and CSRF under /api, 401 JSON for expired sessions, and the embedded SPA fallback (rebuild/v2).
 
+### Changed
+
+- v2 pool restarts a panicked runner from its builder after one minute.
+
 ### Fixed
 
 - v2 store: the pre-v2 backup is written to a `.tmp` file and renamed, so a failed or interrupted backup is retried on the next boot instead of leaving a partial `.pre-v2`.

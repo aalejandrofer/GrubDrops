@@ -285,3 +285,127 @@ func TestPool_RunnerPanicStopsWatch(t *testing.T) {
 		t.Fatalf("snapshot still watching: %+v", s)
 	}
 }
+
+// shortRestart shrinks panicRestart for one test.
+func shortRestart(t *testing.T, d time.Duration) {
+	old := panicRestart
+	panicRestart = d
+	t.Cleanup(func() { panicRestart = old })
+}
+
+type onceUnit struct {
+	id      string
+	panics  bool
+	ran     chan struct{}
+	runOnce sync.Once
+}
+
+func (u *onceUnit) Run(ctx context.Context) error {
+	u.runOnce.Do(func() { close(u.ran) })
+	if u.panics {
+		panic("boom")
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
+func (u *onceUnit) Snapshot() Snapshot { return Snapshot{AccountID: u.id} }
+
+func TestPool_PanicRestartsFromBuilder(t *testing.T) {
+	shortRestart(t, 10*time.Millisecond)
+	var builds int32
+	var secondP atomic.Pointer[onceUnit]
+	b := func() Entry {
+		n := atomic.AddInt32(&builds, 1)
+		u := &onceUnit{id: "a", panics: n == 1, ran: make(chan struct{})}
+		if n == 2 {
+			secondP.Store(u)
+		}
+		return Entry{ID: "a", Unit: u}
+	}
+	p := NewPool(nil)
+	defer p.Stop()
+	_ = p.Reload(context.Background(), []Builder{b})
+	deadline := time.Now().Add(2 * time.Second)
+	for secondP.Load() == nil && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if atomic.LoadInt32(&builds) != 2 {
+		t.Fatalf("builds %d", builds)
+	}
+	second := secondP.Load()
+	select {
+	case <-second.ran:
+	case <-time.After(time.Second):
+		t.Fatal("second unit never ran")
+	}
+	if got := p.Snapshots(); len(got) != 1 || got[0].AccountID != "a" {
+		t.Fatalf("snapshots %v", got)
+	}
+	p.mu.Lock()
+	cur := p.units[0].entry.Unit
+	p.mu.Unlock()
+	if cur != Unit(second) {
+		t.Fatal("snapshots do not read the second unit")
+	}
+}
+
+func TestPool_StopDuringPanicDelay(t *testing.T) {
+	shortRestart(t, time.Hour)
+	var builds int32
+	p := NewPool(nil)
+	ran := make(chan struct{})
+	_ = p.Reload(context.Background(), []Builder{func() Entry {
+		atomic.AddInt32(&builds, 1)
+		return Entry{ID: "a", Unit: &onceUnit{id: "a", panics: true, ran: ran}}
+	}})
+	<-ran
+	time.Sleep(50 * time.Millisecond)
+	done := make(chan struct{})
+	go func() { p.Stop(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Stop blocked on restart delay")
+	}
+	if atomic.LoadInt32(&builds) != 1 {
+		t.Fatalf("builds %d", builds)
+	}
+}
+
+func TestPool_ReloadAccountDuringPanicDelayWins(t *testing.T) {
+	shortRestart(t, 200*time.Millisecond)
+	var builds int32
+	p := NewPool(nil)
+	defer p.Stop()
+	ran := make(chan struct{})
+	_ = p.Reload(context.Background(), []Builder{func() Entry {
+		atomic.AddInt32(&builds, 1)
+		return Entry{ID: "a", Unit: &onceUnit{id: "a", panics: true, ran: ran}}
+	}})
+	<-ran
+	p.ReloadAccount("a", nil)
+	time.Sleep(400 * time.Millisecond)
+	if atomic.LoadInt32(&builds) != 1 || len(p.Snapshots()) != 0 {
+		t.Fatalf("removed unit resurrected: builds %d", builds)
+	}
+}
+
+func TestPool_ErrStopNotRestarted(t *testing.T) {
+	shortRestart(t, 10*time.Millisecond)
+	var builds int32
+	p := NewPool(nil)
+	defer p.Stop()
+	_ = p.Reload(context.Background(), []Builder{func() Entry {
+		atomic.AddInt32(&builds, 1)
+		return Entry{ID: "a", Unit: nilUnit{}}
+	}})
+	time.Sleep(100 * time.Millisecond)
+	if atomic.LoadInt32(&builds) != 1 {
+		t.Fatalf("builds %d", builds)
+	}
+}
+
+type nilUnit struct{}
+
+func (nilUnit) Run(context.Context) error { return nil }
+func (nilUnit) Snapshot() Snapshot        { return Snapshot{} }
