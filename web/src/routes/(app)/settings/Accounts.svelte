@@ -27,6 +27,7 @@
 	import { getLive } from '$lib/live-context';
 	import { loginFlow } from '$lib/login-flow.svelte';
 	import { moveItem } from '$lib/upnext';
+	import { reorder } from '$lib/drag';
 
 	const STATUS_KEYS = {
 		mining: 'accounts.status.mining',
@@ -102,35 +103,19 @@
 		void commitOrder(moveItem(listed, i, moveTarget(listed.length, i, dir, e.shiftKey)));
 	}
 
-	function dragDown(e: PointerEvent, from: number): void {
-		if (e.button !== 0 || ordering) return;
-		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-		drag = { from, to: from };
-	}
-
-	function dragMove(e: PointerEvent): void {
-		if (!drag) return;
-		const list = (e.currentTarget as HTMLElement).closest('#acct-list');
-		if (!list) return;
-		const els = Array.from(list.querySelectorAll(':scope > .acct'));
-		if (els.length === 0) return;
-		const y = e.clientY;
-		let to = drag.to;
-		els.forEach((el, i) => {
-			const b = el.getBoundingClientRect();
-			if (y >= b.top && y <= b.bottom) to = i;
-		});
-		if (y < els[0].getBoundingClientRect().top) to = 0;
-		if (y > els[els.length - 1].getBoundingClientRect().bottom) to = els.length - 1;
-		drag.to = to;
-	}
-
-	function dragUp(): void {
-		if (!drag) return;
-		const d = drag;
-		drag = null;
-		if (d.from !== d.to) void commitOrder(moveItem(listed, d.from, d.to));
-	}
+	const dragOpts = {
+		items: (list: HTMLElement) => Array.from(list.querySelectorAll<HTMLElement>(':scope > .acct')),
+		enabled: () => !ordering,
+		onStart: (from: number) => (drag = { from, to: from }),
+		onMove: (to: number) => {
+			if (drag) drag.to = to;
+		},
+		onEnd: (from: number, to: number) => {
+			drag = null;
+			if (from !== to) void commitOrder(moveItem(listed, from, to));
+		},
+		onCancel: () => (drag = null)
+	};
 
 
 	function schedule(fn: () => void, ms: number): () => void {
@@ -517,7 +502,7 @@
 	</div>
 	{#if addError}<p class="bad top" role="alert">{addError}</p>{/if}
 	{#if orderError}<p class="bad top" role="alert">{orderError}</p>{/if}
-	<div class="panel" id="acct-list" class:none={!panel?.isNew && listed.length === 0}>
+	<div class="panel" id="acct-list" class:none={!panel?.isNew && listed.length === 0} use:reorder={dragOpts}>
 		{#if panel?.isNew}{@render flowPanel()}{/if}
 		{#each rows as a, i (a.id)}
 			{@const r = runnerOf(a.id)}
@@ -531,11 +516,6 @@
 					<span
 						class="h"
 						title={t('accounts.drag')}
-						onpointerdown={(e) => dragDown(e, i)}
-						onpointermove={dragMove}
-						onpointerup={dragUp}
-						onpointercancel={() => (drag = null)}
-						onlostpointercapture={() => (drag = null)}
 						role="presentation"
 					>
 						<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3" /></svg>
@@ -847,7 +827,11 @@
 	}
 	.acct.dragging {
 		background: var(--surface-2);
-		box-shadow: inset 2px 0 0 var(--accent);
+		box-shadow:
+			inset 2px 0 0 var(--accent),
+			0 8px 24px rgb(0 0 0 / 0.35);
+		position: relative;
+		z-index: 1;
 	}
 	.grip {
 		display: flex;

@@ -58,6 +58,7 @@ All notable changes to GrubDrops.
 - The README and site screenshots show the current Home, Games, Rewards and Settings pages.
 
 ### Fixed
+- **Drag to reorder works.** Games, Settings > Accounts and Up next now pick a row up from anywhere on it (not only the dotted handle) after a 4 px move, so clicks still work. The drag no longer ends after one slot, no text gets selected while dragging, and Escape cancels. The dragged row is lifted with a shadow and accent border. One shared helper, `web/src/lib/drag.ts`, serves all three lists.
 
 - **Discord webhook URL in logs.** A failed Discord send no longer puts the webhook URL, whose path is the secret, in its error or the log.
 - **A drop that needs an account link no longer blocks the runner.** A Kick claim rejected for a missing link was retried, then skipped like any failure. The runner now marks the drop not linked, moves on to the next Up next target, and retries the claim every 5 minutes, so it lands once the account is linked. The link rows had also never saved: their campaigns foreign key failed on every insert, and migration 0020 drops it.

@@ -3,6 +3,7 @@
 	import { etaShort, nextScanMin } from '$lib/format';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
+	import { reorder } from '$lib/drag';
 	import { afterLabel, anyCustom, commitMove, foldQueue, moveItem, queues } from '$lib/upnext';
 	import type { Runner } from '$lib/api/types';
 	import MineNow from './MineNow.svelte';
@@ -80,37 +81,18 @@
 		return drag && drag.id === id ? moveItem(items, drag.from, drag.to) : items;
 	}
 
-	function down(e: PointerEvent, id: string, from: number): void {
-		if (e.button !== 0) return;
-		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-		drag = { id, from, to: from };
-	}
-
-	function move(e: PointerEvent): void {
-		if (!drag) return;
-		const ol = (e.currentTarget as HTMLElement).closest('ol');
-		if (!ol) return;
-		const rows = Array.from(ol.children);
-		const y = e.clientY;
-		let to = drag.to;
-		rows.forEach((li, i) => {
-			const b = li.getBoundingClientRect();
-			if (y >= b.top && y <= b.bottom) to = i;
-		});
-		if (y < rows[0].getBoundingClientRect().top) to = 0;
-		if (y > rows[rows.length - 1].getBoundingClientRect().bottom) to = rows.length - 1;
-		drag.to = to;
-	}
-
-	function cancel(): void {
-		drag = null;
-	}
-
-	function up(): void {
-		if (!drag) return;
-		const d = drag;
-		drag = null;
-		void commit(d.id, d.from, d.to);
+	function dragOpts(id: string) {
+		return {
+			onStart: (from: number) => (drag = { id, from, to: from }),
+			onMove: (to: number) => {
+				if (drag) drag.to = to;
+			},
+			onEnd: (from: number, to: number) => {
+				drag = null;
+				if (from !== to) void commit(id, from, to);
+			},
+			onCancel: () => (drag = null)
+		};
 	}
 </script>
 
@@ -132,17 +114,13 @@
 		{#if qs.length > 1}
 			<div class="acct"><PlatformMark platform={q.platform} size="sm" /><span class="pf-name {q.platform}">{q.accountName}</span></div>
 		{/if}
-		<ol class="queue">
+		<ol class="queue" use:reorder={dragOpts(q.accountId)}>
 			{#each fold.rows as item, i (item.benefit_id)}
 				{@const after = r ? afterLabel({ ...r, up_next: full }, i) : null}
 				<li class:dragging={drag?.id === q.accountId && drag.to === i}>
 					<span
 						class="grip"
 						title={t('upnext.drag')}
-						onpointerdown={(e) => down(e, q.accountId, i)}
-						onpointermove={move}
-						onpointerup={up}
-						onpointercancel={cancel}
 						role="presentation"
 					>
 						<svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"
@@ -263,7 +241,12 @@
 		border-top: 1px solid var(--border-soft);
 	}
 	.queue li.dragging {
-		opacity: 0.4;
+		background: var(--surface-2);
+		box-shadow:
+			inset 2px 0 0 var(--accent),
+			0 6px 18px rgb(0 0 0 / 0.35);
+		position: relative;
+		z-index: 1;
 	}
 	.grip {
 		color: var(--t3);

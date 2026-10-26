@@ -86,3 +86,11 @@ a {
 .pf-name.kick {
 	color: var(--kick-fg);
 }
+
+/* Set on <html> while a list row is being dragged (lib/drag.ts). */
+html.grub-dragging,
+html.grub-dragging * {
+	user-select: none;
+	-webkit-user-select: none;
+	cursor: grabbing !important;
+}

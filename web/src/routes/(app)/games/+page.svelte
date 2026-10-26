@@ -13,6 +13,7 @@
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
 	import { scanStamp } from '$lib/scan';
+	import { reorder } from '$lib/drag';
 
 	const live = getLive();
 
@@ -169,35 +170,19 @@
 		return commit(keep.map((k) => games.find((g) => g.id === k)!));
 	}
 
-	function down(e: PointerEvent, id: string, from: number): void {
-		if (e.button !== 0 || saving) return;
-		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-		drag = { id, from, to: from };
-	}
-
-	function move(e: PointerEvent): void {
-		if (!drag) return;
-		const list = (e.currentTarget as HTMLElement).closest('.list');
-		if (!list) return;
-		const els = Array.from(list.children);
-		const y = e.clientY;
-		let to = drag.to;
-		els.forEach((el, i) => {
-			const b = el.getBoundingClientRect();
-			if (y >= b.top && y <= b.bottom) to = i;
-		});
-		if (y < els[0].getBoundingClientRect().top) to = 0;
-		if (y > els[els.length - 1].getBoundingClientRect().bottom) to = els.length - 1;
-		drag.to = to;
-	}
-
-	function up(): void {
-		if (!drag) return;
-		const d = drag;
-		drag = null;
-		if (d.from === d.to) return;
-		void commit(moveGame(games, d.from, d.to), d.id);
-	}
+	const dragOpts = {
+		enabled: () => !saving,
+		onStart: (from: number) => (drag = { id: games[from].id, from, to: from }),
+		onMove: (to: number) => {
+			if (drag) drag.to = to;
+		},
+		onEnd: (from: number, to: number) => {
+			const d = drag;
+			drag = null;
+			if (d && from !== to) void commit(moveGame(games, from, to), d.id);
+		},
+		onCancel: () => (drag = null)
+	};
 
 	function stateText(g: Game): string {
 		return g.state === 'mining'
@@ -283,7 +268,7 @@
 	{#if live.games && games.length === 0}
 		<p class="empty">{t('games.empty')}</p>
 	{/if}
-	<div class="list" class:compact={view === 'list'}>
+	<div class="list" class:compact={view === 'list'} use:reorder={dragOpts}>
 		{#each rows as g, i (g.id)}
 			{#if view === 'list'}
 				<div class="game row" class:moved={moved === g.id} class:dragging={drag?.id === g.id}>
@@ -355,11 +340,6 @@
 				<span
 					class="h"
 					title={t('games.drag')}
-					onpointerdown={(e) => down(e, g.id, i)}
-					onpointermove={move}
-					onpointerup={up}
-					onpointercancel={() => (drag = null)}
-					onlostpointercapture={() => (drag = null)}
 					role="presentation"
 				>
 					<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3" /></svg>
@@ -620,8 +600,11 @@
 		border-color: var(--accent);
 	}
 	.game.dragging {
-		opacity: 0.6;
 		border-color: var(--accent);
+		background: var(--surface-2);
+		box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+		position: relative;
+		z-index: 1;
 	}
 	.grip {
 		display: flex;
