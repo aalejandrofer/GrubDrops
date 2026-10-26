@@ -18,7 +18,7 @@ import (
 // maxHealthEvents caps the events returned after the filter.
 const maxHealthEvents = 50
 
-// canaryRunTimeout bounds one detached canary run: two Twitch beacons at 5 s
+// canaryRunTimeout bounds one run-now canary run: two Twitch beacons at 5 s
 // plus the Kick window (45 s) with headroom.
 const canaryRunTimeout = 90 * time.Second
 
@@ -174,12 +174,13 @@ func (s *server) getHealthLog(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(b.String()))
 }
 
-// postHealthCanary starts a canary run on a detached context and returns 202.
+// postHealthCanary starts a canary run on the root context and returns 202,
+// so a run ends with the miner instead of outliving the database.
 func (s *server) postHealthCanary(w http.ResponseWriter, _ *http.Request) {
 	// A run already in flight absorbs this request; still 202.
 	if s.d.RunCanary != nil && s.canaryRunning.CompareAndSwap(false, true) {
 		run := s.d.RunCanary
-		ctx, cancel := context.WithTimeout(context.Background(), canaryRunTimeout)
+		ctx, cancel := context.WithTimeout(s.rootCtx(), canaryRunTimeout)
 		go func() {
 			defer cancel()
 			defer s.canaryRunning.Store(false)

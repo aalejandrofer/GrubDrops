@@ -218,3 +218,29 @@ func TestHealth_TimesUTCOrNull(t *testing.T) {
 	require.Len(t, got.Events, 1)
 	assert.True(t, strings.HasSuffix(got.Events[0]["at"].(string), "Z"), got.Events[0]["at"])
 }
+
+func TestHealth_CanaryRunEndsWithRootCtx(t *testing.T) {
+	root, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ended := make(chan struct{})
+	started := make(chan struct{})
+	e := newHealthEnv(t, func(d *Deps) {
+		d.RootCtx = root
+		d.RunCanary = func(ctx context.Context) error {
+			close(started)
+			<-ctx.Done()
+			close(ended)
+			return ctx.Err()
+		}
+	})
+	_, tok := e.session()
+	resp, _ := e.do("POST", "/api/health/canary", tok, nil)
+	require.Equal(t, 202, resp.StatusCode)
+	<-started
+	cancel()
+	select {
+	case <-ended:
+	case <-time.After(2 * time.Second):
+		t.Fatal("canary run outlived the root context")
+	}
+}
