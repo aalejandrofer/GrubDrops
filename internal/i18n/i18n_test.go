@@ -39,7 +39,7 @@ func TestSpanishLoaded(t *testing.T) {
 	if err := Load(); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if got := T("es", "nav.settings"); got != "Ajustes" {
-		t.Errorf("T(es, nav.settings) = %q, want %q", got, "Ajustes")
+	if got := T("es", "summary.title"); got != "Resumen diario" {
+		t.Errorf("T(es, summary.title) = %q, want %q", got, "Resumen diario")
 	}
 }

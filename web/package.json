@@ -7,7 +7,7 @@
     "dev": "vite dev",
     "build": "vite build && node scripts/keep-dist.mjs",
     "test": "svelte-kit sync && vitest run",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings"
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && node scripts/check-locales.mjs"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "4.0.0",
