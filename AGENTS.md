@@ -70,7 +70,7 @@ proto/                  buf config + gRPC defs for the sidecar — core, not dea
   `Client-Integrity` header — adding it is a self-inflicted integrity wall. Do
   not re-implement logged-out catalog scraping; `/drops/campaigns` while logged
   out is just a login wall.
-- **Twitch credit beacon is gated by `HeartbeatInterval`** (1 minute credited
+- **Twitch credit beacon is gated by `runner.DefaultTick`** (1 minute credited
   per beacon), so anything above 60s under-credits. Keep it at 60s. Kick is
   immune.
 - **Kick detection/claims** ride a Chrome-TLS-fingerprinted HTTP client (`utls`)

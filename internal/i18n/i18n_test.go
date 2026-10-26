@@ -42,7 +42,4 @@ func TestSpanishLoaded(t *testing.T) {
 	if got := T("es", "nav.settings"); got != "Ajustes" {
 		t.Errorf("T(es, nav.settings) = %q, want %q", got, "Ajustes")
 	}
-	if !isSupported("es") {
-		t.Error("es should be a supported language")
-	}
 }

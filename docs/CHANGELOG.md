@@ -41,6 +41,7 @@ All notable changes to GrubDrops.
 
 - HTML + HTMX web UI, watcher, scheduler and catalog scraper (replaced by v2).
 - The `GRUB_DISCOVERY_INTERVAL` env var, which only drove the removed catalog scraper.
+- Settings with no v2 reader: tick interval, discovery interval, progress notify step, priority mode, log level and log retention. Their stored values are ignored.
 
 ### Docs
 

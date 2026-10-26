@@ -28,23 +28,6 @@ func TestSettings_RoundTrip(t *testing.T) {
 	assert.Equal(t, "https://discord.example/wh/abc", url)
 }
 
-func TestSettings_LogRetentionDays(t *testing.T) {
-	db, err := Open(context.Background(), filepath.Join(t.TempDir(), "t.db"))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-
-	s := NewSettings(gen.New(db))
-
-	days, err := s.LogRetentionDays(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, 7, days) // default
-
-	require.NoError(t, s.SetLogRetentionDays(context.Background(), 30))
-	days, err = s.LogRetentionDays(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, 30, days)
-}
-
 func TestSettings_Canary(t *testing.T) {
 	db, err := Open(context.Background(), filepath.Join(t.TempDir(), "t.db"))
 	require.NoError(t, err)

@@ -15,19 +15,11 @@ import (
 const (
 	keyGlobalDiscord       = "settings:discord_webhook"
 	keyNotifyAvatarURL     = "settings:notify_avatar_url"
-	keyLogRetention        = "settings:log_retention_days"
-	keyLogLevel            = "settings:log_level"
-	keyTickIntervalSec     = "settings:tick_interval_sec"
-	keyTickIntervalMs      = "settings:tick_interval_ms" // legacy; migrated to tick_interval_sec
-	keyDiscoveryIntvMin    = "settings:discovery_interval_min"
-	keyDiscoveryIntvSec    = "settings:discovery_interval_sec" // legacy; migrated to discovery_interval_min
 	keyNotifyClaim         = "settings:notify_claim"
 	keyNotifyProgress      = "settings:notify_progress"
 	keyNotifyAuth          = "settings:notify_auth"
 	keyNotifyError         = "settings:notify_error"
 	keyNotifyCanary        = "settings:notify_canary"
-	keyNotifyProgStep      = "settings:notify_progress_step_pct"
-	keyPriorityMode        = "settings:priority_mode"
 	keyKickWatchMode       = "settings:kick_watch_mode"
 	keyCanaryTwitchChannel = "settings:canary_twitch_channel"
 	keyCanaryKickChannel   = "settings:canary_kick_channel"
@@ -52,18 +44,6 @@ const (
 	KickWatchModeBrowser = "browser"
 	KickWatchModeWS      = "ws"
 	KickWatchModeAuto    = "auto"
-)
-
-// PriorityMode controls campaign pick ordering when multiple
-// whitelisted campaigns are eligible.
-//   - "ordered" (default): sort by whitelist rank, top = first.
-//   - "ending_soonest": sort by ends_at ascending so campaigns near
-//     expiry get mined first.
-//
-// Mirrors DevilXD/TwitchDropsMiner's PRIORITY_ORDER toggle.
-const (
-	PriorityModeOrdered       = "ordered"
-	PriorityModeEndingSoonest = "ending_soonest"
 )
 
 type Settings struct {
@@ -108,122 +88,10 @@ func (s *Settings) SetNotifyAvatarURL(ctx context.Context, url string) error {
 	return s.setString(ctx, keyNotifyAvatarURL, url)
 }
 
-func (s *Settings) LogRetentionDays(ctx context.Context) (int, error) {
-	raw, err := s.getString(ctx, keyLogRetention)
-	if err != nil {
-		return 0, err
-	}
-	if raw == "" {
-		return 7, nil
-	}
-	n, err := strconv.Atoi(raw)
-	if err != nil {
-		return 7, nil
-	}
-	return n, nil
-}
-
-func (s *Settings) SetLogRetentionDays(ctx context.Context, days int) error {
-	return s.setString(ctx, keyLogRetention, strconv.Itoa(days))
-}
-
-// LogLevel is the runtime log level. "" means "use the launch env
-// GRUB_LOG_LEVEL"; explicit value here overrides it.
-func (s *Settings) LogLevel(ctx context.Context) (string, error) {
-	return s.getString(ctx, keyLogLevel)
-}
-
-func (s *Settings) SetLogLevel(ctx context.Context, level string) error {
-	return s.setString(ctx, keyLogLevel, level)
-}
-
-// TickIntervalSec is the watcher state-machine pulse in seconds (default 5).
-// Pure loop granularity — no network call rides on the tick itself; the
-// heartbeat/livecheck cadences are wall-clock and derived independently.
-// Falls back to the legacy ms key when unset. Clamped to [1s, 5m].
-func (s *Settings) TickIntervalSec(ctx context.Context) (int, error) {
-	raw, err := s.getString(ctx, keyTickIntervalSec)
-	if err != nil || raw == "" {
-		// Legacy migration: tick_interval_ms, rounded up to a whole second.
-		if legacy, lerr := s.getString(ctx, keyTickIntervalMs); lerr == nil && legacy != "" {
-			if ms, _ := strconv.Atoi(legacy); ms > 0 {
-				return clampInt((ms+999)/1000, 1, 300), nil
-			}
-		}
-		return 5, err
-	}
-	n, _ := strconv.Atoi(raw)
-	if n <= 0 {
-		return 5, nil
-	}
-	return clampInt(n, 1, 300), nil
-}
-
-func (s *Settings) SetTickIntervalSec(ctx context.Context, sec int) error {
-	return s.setString(ctx, keyTickIntervalSec, strconv.Itoa(sec))
-}
-
-// DiscoveryIntervalMin is the campaign-catalog re-scan cadence in minutes
-// (default 60). Falls back to the legacy seconds key when unset. Clamped to
-// [1m, 24h].
-func (s *Settings) DiscoveryIntervalMin(ctx context.Context) (int, error) {
-	raw, err := s.getString(ctx, keyDiscoveryIntvMin)
-	if err != nil || raw == "" {
-		// Legacy migration: discovery_interval_sec, rounded up to a minute.
-		if legacy, lerr := s.getString(ctx, keyDiscoveryIntvSec); lerr == nil && legacy != "" {
-			if sec, _ := strconv.Atoi(legacy); sec > 0 {
-				return clampInt((sec+59)/60, 1, 1440), nil
-			}
-		}
-		return 60, err
-	}
-	n, _ := strconv.Atoi(raw)
-	if n <= 0 {
-		return 60, nil
-	}
-	return clampInt(n, 1, 1440), nil
-}
-
-func (s *Settings) SetDiscoveryIntervalMin(ctx context.Context, min int) error {
-	return s.setString(ctx, keyDiscoveryIntvMin, strconv.Itoa(min))
-}
-
 // HeartbeatInterval is intentionally NOT a setting. It is locked to 60s in the
-// watcher build (cmd/miner): the Twitch watch-ping beacon cadence derives from
+// runner (runner.DefaultTick): the Twitch watch-ping beacon cadence derives from
 // it and Twitch credits exactly 1 minute per beacon, so any value >60s
 // under-credits Twitch watch-time. Do not re-expose this as a user setting.
-
-func clampInt(n, lo, hi int) int {
-	if n < lo {
-		return lo
-	}
-	if n > hi {
-		return hi
-	}
-	return n
-}
-
-// ProgressNotifyStepPct is the milestone granularity for Discord progress
-// notifications: fire at 0% (start), every N%, and 100%. Default 50 (so
-// start/50%/100%). 0 disables progress notifications entirely (claim only).
-func (s *Settings) ProgressNotifyStepPct(ctx context.Context) (int, error) {
-	raw, err := s.getString(ctx, keyNotifyProgStep)
-	if err != nil || raw == "" {
-		return 50, err
-	}
-	n, _ := strconv.Atoi(raw)
-	if n < 0 {
-		return 0, nil
-	}
-	if n > 100 {
-		return 100, nil
-	}
-	return n, nil
-}
-
-func (s *Settings) SetProgressNotifyStepPct(ctx context.Context, pct int) error {
-	return s.setString(ctx, keyNotifyProgStep, strconv.Itoa(pct))
-}
 
 // NotifyKinds returns the boolean toggles for each Discord
 // notification category. Defaults: claim+error on, progress+auth+canary off.
@@ -236,24 +104,6 @@ func (s *Settings) NotifyKinds(ctx context.Context) (claim, progress, auth, erro
 		return v == "1"
 	}
 	return get(keyNotifyClaim, true), get(keyNotifyProgress, false), get(keyNotifyAuth, false), get(keyNotifyError, true), get(keyNotifyCanary, false)
-}
-
-func (s *Settings) PriorityMode(ctx context.Context) (string, error) {
-	v, err := s.getString(ctx, keyPriorityMode)
-	if err != nil || v == "" {
-		return PriorityModeOrdered, err
-	}
-	if v != PriorityModeOrdered && v != PriorityModeEndingSoonest {
-		return PriorityModeOrdered, nil
-	}
-	return v, nil
-}
-
-func (s *Settings) SetPriorityMode(ctx context.Context, mode string) error {
-	if mode != PriorityModeOrdered && mode != PriorityModeEndingSoonest {
-		mode = PriorityModeOrdered
-	}
-	return s.setString(ctx, keyPriorityMode, mode)
 }
 
 // KickWatchMode returns the configured Kick watch path. Default is "auto"

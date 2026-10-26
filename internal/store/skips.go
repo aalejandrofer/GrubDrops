@@ -11,6 +11,14 @@ import (
 
 const skipTimeout = 5 * time.Second
 
+// SkipOverridePrefix keys a ghost-skip assertion in kv.
+const SkipOverridePrefix = "skip_override:"
+
+// LinkOverridePrefix keys a manual "I've linked it" assertion in kv. Full key:
+// LinkOverridePrefix + campaignID, value "1": mine the campaign even when the
+// backend reports the account unlinked.
+const LinkOverridePrefix = "link_override:"
+
 // Skips persists ghost-skip assertions in kv under the 1.x keys
 // SkipOverridePrefix + benefitID + ":" + accountID, value "1".
 type Skips struct{ Q *gen.Queries }
