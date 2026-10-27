@@ -295,6 +295,10 @@ func (r *Runner) tick(ctx context.Context) error {
 		r.lastPollMin = p.MinutesWatched
 		r.minutes = p.MinutesWatched
 		r.noProgress = 0
+		if r.current != nil && r.current.Benefit.ID == benefit.ID {
+			// Home and Rewards read the current drop's minutes.
+			r.current.Minutes = p.MinutesWatched
+		}
 		if p.InstanceID != "" && r.current != nil {
 			r.current.Benefit.InstanceID = p.InstanceID
 		}

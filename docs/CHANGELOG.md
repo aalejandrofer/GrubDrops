@@ -4,8 +4,14 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [2.1.1] — 2026-10-27
+
 ### Changed
 - README and landing page screenshots show 2.1.0: the Games page with the Lists rail, and Home, Discover and Rewards.
+
+### Fixed
+- **Home progress moves while watching.** The minutes and progress bar on Home, Rewards and the account line stayed at the value from when the drop was picked, and only moved after a restart. Each inventory poll and Twitch PubSub progress push now also updates the current drop's minutes, which is what the UI reads. Display only: accrual and claims are unchanged. Reported in #75.
+- **Favicon.** The browser tab shows the grub icon again, and phones get the home-screen icon and the purple theme color. The 2.0 UI had no icon links, so every icon path got the app page instead. The root layout now links the 16 and 32 px favicons and the Apple touch icon from `assets/img/`.
 
 ## [2.1.0] — 2026-10-26
 

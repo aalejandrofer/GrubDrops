@@ -268,9 +268,16 @@ func TestSnapshot_ClearedWhenNotWatching(t *testing.T) {
 	if s := r.Snapshot(); s.Channel != "a" || s.ViewerCount != 10 || s.MinutesWatched != 6 {
 		t.Fatalf("watching snapshot %+v", s)
 	}
+	// The current drop's minutes follow the poll; Home reads them.
+	if c := r.Snapshot().Current; c == nil || c.Minutes != 6 {
+		t.Fatalf("current minutes %+v", c)
+	}
 	r.stopWatch(context.Background())
 	if s := r.Snapshot(); s.Channel != "" || s.ViewerCount != 0 || s.MinutesWatched != 0 {
 		t.Fatalf("after stopWatch %+v", s)
+	}
+	if c := r.Snapshot().Current; c == nil || c.Minutes != 6 {
+		t.Fatalf("current minutes after stopWatch %+v", c)
 	}
 
 	// current=nil path: claim clears it.

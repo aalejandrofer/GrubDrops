@@ -81,6 +81,9 @@ func TestPubSub_ProgressUpdatesSnapshot(t *testing.T) {
 	if got := r.Snapshot().MinutesWatched; got != 7 {
 		t.Fatalf("minutes=%d", got)
 	}
+	if c := r.Snapshot().Current; c == nil || c.Minutes != 7 {
+		t.Fatalf("current minutes=%+v", c)
+	}
 	r.mu.Lock()
 	np, na, lm := r.noProgress, r.noAdvance, r.lastMin
 	r.mu.Unlock()

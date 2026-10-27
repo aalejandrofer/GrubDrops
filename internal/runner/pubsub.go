@@ -120,6 +120,7 @@ func (r *Runner) onDropProgress(dropID string, curMin, _ int64) {
 	}
 	r.lastMin = int(curMin)
 	r.minutes = int(curMin)
+	r.current.Minutes = int(curMin)
 	r.noProgress = 0
 	r.mu.Unlock()
 	r.changed()
