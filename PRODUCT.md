@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-v2: SvelteKit static SPA (TypeScript) embedded in the Go binary; Go serves a JSON API and Server-Sent Events. See `docs/superpowers/specs/2026-10-25-grubdrops-v2-rebuild-design.md`. 1.x on master is Go + `html/template` + HTMX.
+v2: SvelteKit static SPA (TypeScript) embedded in the Go binary; Go serves a JSON API and Server-Sent Events. See `docs/superpowers/specs/2026-10-25-grubdrops-v2-rebuild-design.md`.
 
 ## Users
 

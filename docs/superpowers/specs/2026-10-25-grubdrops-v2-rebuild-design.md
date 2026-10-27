@@ -121,5 +121,5 @@ Kept as-is; v2 calls it, does not rewrite it. Behaviour changes here need live-d
 
 ## Prior art
 
-- `docs/superpowers/specs/2026-06-22-spa-migration-foundation-design.md`: an earlier Svelte + Vite strangler migration that kept the 1.x feature set. It did not land. v2 differs: ground-zero rebuild on a branch, new product model, features dropped.
+- The 2026-06-22 SPA migration spec (since removed): an earlier Svelte + Vite strangler migration that kept the 1.x feature set. It did not land. v2 differs: ground-zero rebuild on a branch, new product model, features dropped.
 - PR #52 pipeline v2 spec (`docs/superpowers/specs/2026-09-27-pipeline-v2-design.md` on `feat/pipeline-v2`): reference only for the reconcile idea.

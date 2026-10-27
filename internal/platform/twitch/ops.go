@@ -1,7 +1,6 @@
 package twitch
 
-// Captured 2026-06-04 from DevilXD/TwitchDropsMiner@c5e6286c41dab46e1189333eede734e3b1995dc4. See
-// docs/superpowers/notes/2026-06-04-twitch-ops-source.md for source links.
+// Captured 2026-06-04 from DevilXD/TwitchDropsMiner@c5e6286c41dab46e1189333eede734e3b1995dc4.
 // Refresh these constants if production sees PersistedQueryNotFound errors.
 const (
 	// Twitch Android app client. Has weaker integrity gating than the

@@ -13,12 +13,13 @@ labels: bug
 
 **Environment**
 - Platform mined: Twitch / Kick
-- GrubDrops version / commit:
+- Login method: Twitch Android / Twitch TV code / Kick cookies.txt
+- GrubDrops version (Settings → Updates):
 - Deploy: Docker / `go run` / other
 
 **Logs** (optional, if any)
 
-Grab them from the Logs tab in the web UI, or `docker logs grubdrops`.
+Use Download full log in Settings → Health, or `docker logs grubdrops`.
 Scrub any tokens/cookies before pasting.
 ```
 ```

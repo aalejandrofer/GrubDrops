@@ -4,6 +4,12 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Changed
+- PR and bug report templates match v2: UI check and test, locale and changelog checklist items, login method, version and full log from Settings.
+
+### Removed
+- Outdated design docs and 1.x UI mockups for features v2 dropped or replaced: SPA migration, channel whitelist, manual mark-collected, item pulling, settings tabs, SSO login UI.
+
 ## [2.0.0] — 2026-10-26
 
 ### Added

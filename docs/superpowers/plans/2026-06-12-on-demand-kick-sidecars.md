@@ -807,7 +807,7 @@ Run (from repo root):
 ```bash
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /tmp/gd-build/grubdrops ./cmd/miner
 # helpers as before (see prior deploy), then scp /tmp/gd-build/* to host and:
-ssh -i /Users/jandro/.ssh/jandro -o IdentityAgent=none 10.10.2.40 'cd /tmp/gd-build && docker build -t grubdrops:latest .'
+ssh <host> 'cd /tmp/gd-build && docker build -t grubdrops:latest .'
 ```
 Expected: image built.
 
