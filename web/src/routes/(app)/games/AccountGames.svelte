@@ -142,7 +142,7 @@
 				add({ id: '', name: q });
 			}
 		}}
-		placeholder={t('games.add_ph')}
+		placeholder={t('games.add_name_ph')}
 		aria-label={t('games.add_label')}
 		autocomplete="off"
 	/>

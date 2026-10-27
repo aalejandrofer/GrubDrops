@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import CampaignDrawer, { type CampaignTarget } from '$lib/components/CampaignDrawer.svelte';
 	import GameCard from '$lib/components/GameCard.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHead from '$lib/components/PageHead.svelte';
+	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import UpNext from '$lib/components/UpNext.svelte';
 	import { clock, formatInt, relTime, shortDate } from '$lib/format';
-	import { gameCards, groupClaims, homeView, visibleCards, fitCount } from '$lib/home';
+	import { gameCards, groupClaims, homeView, notMining, visibleCards, fitCount } from '$lib/home';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive, getNet } from '$lib/live-context';
 	import { wantsWizard } from '$lib/onboarding';
@@ -14,6 +16,7 @@
 	const live = getLive();
 	const net = getNet();
 	let retrying = $state(false);
+	let drawer = $state<CampaignTarget | null>(null);
 
 	let now = $state(Date.now());
 	$effect(() => {
@@ -29,7 +32,8 @@
 			games: live.games?.games ?? null,
 			overviewFailed: live.failed.overview,
 			gamesFailed: live.failed.games,
-			unreachable: live.unreachable || net.down
+			unreachable: live.unreachable || net.down,
+			forceWatching: live.runners.some((r) => r.state === 'force_watching')
 		})
 	);
 	// First run, no accounts yet: the wizard replaces Home.
@@ -43,18 +47,26 @@
 	const nextScan = $derived(live.games?.next_scan_at ?? o?.status.next_scan_at ?? null);
 	const pausedIds = $derived(new Set(live.accounts.filter((a) => !a.enabled).map((a) => a.id)));
 	const cards = $derived(gameCards(live.games?.games ?? [], live.runners, pausedIds));
+	const idle = $derived(notMining(live.accounts, live.runners));
+	const IDLE_KEYS = {
+		idle: 'accounts.status.idle',
+		signed_out: 'accounts.status.signed_out',
+		paused: 'accounts.status.paused'
+	} as const;
 	// Wide layout: render every card, measure them, show as many as fit beside
 	// the right column. Cards past the fit stay in the DOM, out of flow, so
 	// their heights stay measurable. Narrow layout: fixed cap.
 	const MAX_NARROW = 7;
 	const CARD_GAP = 12;
-	const MORE_LINE = 30;
+	const MORE_LINE = 46;
 	let cardsEl = $state<HTMLElement | null>(null);
 	let asideEl = $state<HTMLElement | null>(null);
 	let fit = $state<number | null>(null);
 	const ordered = $derived(visibleCards(cards, Infinity).shown);
-	const shownCount = $derived(Math.min(ordered.length, fit ?? MAX_NARROW));
-	const hiddenCount = $derived(cards.length - shownCount);
+	let expanded = $state(false);
+	const fitShown = $derived(Math.min(ordered.length, fit ?? MAX_NARROW));
+	const hiddenCount = $derived(cards.length - fitShown);
+	const shownCount = $derived(expanded ? ordered.length : fitShown);
 	const listed = $derived(fit === null ? ordered.slice(0, shownCount) : ordered);
 
 	$effect(() => {
@@ -71,7 +83,8 @@
 			}
 			const arts = [...list.querySelectorAll<HTMLElement>(':scope > article.game')];
 			if (arts.length === 0) return;
-			const avail = side.offsetHeight - arts[0].offsetTop;
+			const chips = list.querySelector<HTMLElement>(':scope > .not-mining');
+			const avail = side.offsetHeight - arts[0].offsetTop - (chips ? chips.offsetHeight + CARD_GAP : 0);
 			const heights = arts.map((a) => a.offsetHeight);
 			let n = fitCount(heights, CARD_GAP, avail, 2);
 			if (n < heights.length) n = fitCount(heights, CARD_GAP, avail - MORE_LINE, 2);
@@ -110,6 +123,7 @@
 	);
 	const kpi = $derived(o?.kpis);
 	const unhealthy = $derived(o && kpi ? kpi.accounts_healthy < o.status.accounts_total : false);
+	const force = $derived(o?.force_watch ?? null);
 	const sections = $derived([
 		{ key: 'today', label: t('home.today'), items: groups.today },
 		{ key: 'yesterday', label: t('home.yesterday'), items: groups.yesterday },
@@ -135,7 +149,7 @@
 		{#if !o}
 			<div class="empty err" role="alert">
 				<span>{t('home.offline')}</span>
-				<button type="button" class="btn" disabled={retrying} onclick={retry}>{t('rewards.retry')}</button>
+				<button type="button" class="btn" disabled={retrying} onclick={retry}>{t('inventory.retry')}</button>
 			</div>
 		{/if}
 	{:else if mode === 'loading' || mode === 'first_run'}
@@ -143,7 +157,7 @@
 	{:else if mode === 'error'}
 		<div class="empty err" role="alert">
 			<span>{t('home.load_failed')}</span>
-			<button type="button" class="btn" disabled={retrying} onclick={retry}>{t('rewards.retry')}</button>
+			<button type="button" class="btn" disabled={retrying} onclick={retry}>{t('inventory.retry')}</button>
 		</div>
 	{:else if mode === 'no_games'}
 		<div class="empty">
@@ -162,30 +176,51 @@
 				<a href="/settings#accounts" class="btn">{t('accounts.log_in_again')}</a>
 			</div>
 		{/if}
-		<div class="kpis">
+		<div class="kpis" class:four={!!force}>
 			<div class="kpi">
 				<div class="label">{t('home.kpi_minutes')}</div>
 				<div class="val">{formatInt(kpi.minutes_total)}<small>{t('home.kpi_min_unit')}</small></div>
-				<div class="sub">
-					{tn('home.kpi_minutes_sub', o.status.accounts_total, { today: formatInt(kpi.minutes_today) })}
-				</div>
+				<div class="sub">{t('home.kpi_today', { n: formatInt(kpi.minutes_today) })}</div>
 			</div>
-			<a class="kpi" href="/rewards">
+			<a class="kpi" href="/inventory">
 				<div class="label">{t('home.kpi_claimed')}</div>
-				<div class="val">{formatInt(kpi.claimed_today)}</div>
-				<div class="sub">{t('home.all_time', { n: formatInt(kpi.claimed_all_time) })}</div>
+				<div class="val">{formatInt(kpi.claimed_all_time)}</div>
+				<div class="sub">{t('home.kpi_today', { n: formatInt(kpi.claimed_today) })}</div>
 			</a>
+			{#if force}
+				<a class="kpi" href="/games">
+					<div class="label">{t('home.kpi_force')}</div>
+					{#if force.live.length > 0}
+						<ul class="tile">
+							{#each force.live as r (`${r.platform}/${r.channel}`)}
+								<li>
+									<span class="dot"></span><PlatformMark platform={r.platform} size="sm" /><b>{r.channel}</b>
+									{#if r.watchers.length > 0}
+										<span class="on">{r.watchers.join(', ')}</span>
+									{:else}
+										<span class="off">{t('home.kpi_force_nobody')}</span>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+						{#if force.more > 0}<div class="sub more">{t('home.kpi_force_more', { n: formatInt(force.more) })}</div>{/if}
+					{:else}
+						<div class="val none-live">{t('home.kpi_force_none')}</div>
+						<div class="sub">{tn('home.kpi_force_waiting', force.total)}</div>
+					{/if}
+				</a>
+			{/if}
 			<a class="kpi" class:bad={unhealthy} href="/settings#accounts">
 				<div class="label">
 					{#if unhealthy}<Icon name="alert" size={12} />{/if}
-					{t('home.kpi_healthy')}
+					{t('home.kpi_mining')}
 				</div>
 				<div class="val">
-					{formatInt(kpi.accounts_healthy)}<small>/ {formatInt(o.status.accounts_total)}</small>
+					{formatInt(o.status.accounts_mining)}<small>/ {formatInt(o.status.accounts_total)}</small>
 				</div>
 				<div class="sub">
 					{#if !unhealthy}
-						{t('home.kpi_all_signed_in')}
+						{tn('home.kpi_healthy_n', kpi.accounts_healthy)}
 					{:else if o.problems.length > 0}
 						{t('home.kpi_signed_out', { name: o.problems[0].account_name })}
 					{:else}
@@ -201,6 +236,7 @@
 					<h2>{t('home.games_title')} <span class="cnt">{cards.length}</span></h2>
 					<a href="/games" class="edit"><Icon name="list" />{t('home.edit_games')}</a>
 				</div>
+				{#if cards.length === 0}<p class="none">{t('home.no_games')}</p>{/if}
 				{#each listed as card, i (card.game.id)}
 					<GameCard
 						{card}
@@ -208,16 +244,32 @@
 						{lastScan}
 						{nextScan}
 						{now}
+						onopen={(tg) => (drawer = tg)}
 						readyAccounts={mode === 'nothing_live' ? o.status.accounts_total - (o.status.accounts_paused ?? 0) : null}
 					/>
 				{/each}
 				{#if hiddenCount > 0}
-					<a class="more-games" href="/games">{tn('home.more_games', hiddenCount)}</a>
+					<button type="button" class="more-games" aria-expanded={expanded} onclick={() => (expanded = !expanded)}
+						>{expanded ? t('home.show_fewer') : tn('home.more_games', hiddenCount)}<Icon
+							name={expanded ? 'chevron-up' : 'chevron-down'}
+						/></button
+					>
+				{/if}
+				{#if idle.length > 0}
+					<ul class="not-mining" aria-label={t('home.not_mining')}>
+						{#each idle as a (a.id)}
+							<li>
+								<PlatformMark platform={a.platform} /><span class="who">{a.name}</span><i class="sd {a.state}"></i><span
+									>{t(IDLE_KEYS[a.state])}</span
+								>
+							</li>
+						{/each}
+					</ul>
 				{/if}
 			</div>
 
 			<aside bind:this={asideEl}>
-				<UpNext />
+				<UpNext onopen={(tg) => (drawer = tg)} />
 				<section class="sec" aria-label={t('home.claimed')}>
 					<div class="sec-h">
 						<h2>
@@ -249,13 +301,15 @@
 					{/if}
 					<div class="claims-foot">
 						<span>{t('home.all_time', { n: formatInt(kpi.claimed_all_time) })}</span>
-						<a href="/rewards" class="link">{t('home.all_rewards')}</a>
+						<a href="/inventory" class="link">{t('home.all_rewards')}</a>
 					</div>
 				</section>
 			</aside>
 		</div>
 	{/if}
 </PageHead>
+
+<CampaignDrawer target={drawer} onclose={() => (drawer = null)} />
 
 <style>
 	.kpis {
@@ -311,6 +365,58 @@
 		outline: 2px solid var(--accent);
 		outline-offset: -2px;
 	}
+	.kpis.four {
+		grid-template-columns: 1fr 1fr 1.3fr 1fr;
+	}
+	.kpi .val.none-live {
+		font-size: 20px;
+		color: var(--t2);
+	}
+	.tile {
+		list-style: none;
+		margin: 8px 0 0;
+		padding: 0;
+		display: grid;
+		gap: 6px;
+	}
+	.tile li {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 13px;
+		min-width: 0;
+	}
+	.tile b {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 0;
+	}
+	.tile li > :last-child {
+		margin-left: auto;
+		font-size: 12px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 0;
+	}
+	.tile .dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: var(--red);
+		flex: none;
+	}
+	.tile .on {
+		color: var(--green);
+		font-weight: 500;
+	}
+	.tile .off {
+		color: var(--t3);
+	}
+	.kpi .sub.more {
+		margin-top: 6px;
+	}
 	.kpi.bad {
 		background: var(--amber-soft);
 		border-radius: 0 var(--radius) var(--radius) 0;
@@ -359,14 +465,67 @@
 		border-radius: 10px;
 		padding: 0 6px;
 	}
-	.more-games {
-		display: block;
-		padding: 6px 2px;
-		font-size: 12.5px;
+	.not-mining {
+		list-style: none;
+		margin: 10px 0 0;
+		padding: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	.not-mining li {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+		max-width: 100%;
+		padding: 3px 9px 3px 5px;
+		border: 1px solid var(--border-soft);
+		border-radius: 999px;
+		background: var(--surface);
+		font-size: 12px;
 		color: var(--t3);
+	}
+	.not-mining .who {
+		color: var(--t2);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 0;
+	}
+	.sd {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		flex: none;
+		background: var(--t3);
+	}
+	.sd.signed_out {
+		background: var(--amber);
+	}
+	.sd.paused {
+		background: transparent;
+		box-shadow: inset 0 0 0 1.5px var(--t3);
+	}
+	.more-games {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		width: 100%;
+		margin-top: 12px;
+		padding: 7px 12px;
+		border: 1px dashed var(--border);
+		border-radius: 10px;
+		background: none;
+		font: inherit;
+		font-size: 12.5px;
+		color: var(--t2);
+		cursor: pointer;
 	}
 	.more-games:hover {
 		color: var(--text);
+		border-color: var(--t3);
 	}
 	.edit {
 		color: var(--t2);
@@ -533,7 +692,8 @@
 		}
 	}
 	@media (max-width: 720px) {
-		.kpis {
+		.kpis,
+		.kpis.four {
 			grid-template-columns: 1fr 1fr;
 		}
 		.kpi {
@@ -542,13 +702,23 @@
 		.kpi .val {
 			font-size: 24px;
 		}
-		.kpi:nth-child(3) {
+		.kpis:not(.four) .kpi:nth-child(3) {
 			grid-column: 1 / -1;
 			border-left: 0;
 			border-top: 1px solid var(--border-soft);
 		}
+		.kpis.four .kpi:nth-child(3),
+		.kpis.four .kpi:nth-child(4) {
+			border-top: 1px solid var(--border-soft);
+		}
+		.kpis.four .kpi:nth-child(3) {
+			border-left: 0;
+		}
 		.kpi.bad {
 			border-radius: 0 0 var(--radius) var(--radius);
+		}
+		.kpis.four .kpi.bad {
+			border-radius: 0 0 var(--radius) 0;
 		}
 	}
 </style>

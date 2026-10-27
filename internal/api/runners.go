@@ -24,7 +24,15 @@ type targetDTO struct {
 	RequiredMinutes int     `json:"required_minutes"`
 	Minutes         int     `json:"minutes"`
 	EndsAt          *string `json:"ends_at"`
+	// Channels names up to maxTargetChannels of the channels the campaign
+	// is limited to; ChannelCount is how many there are. 0 means any channel.
+	Channels     []string `json:"channels"`
+	ChannelCount int      `json:"channel_count"`
 }
+
+// maxTargetChannels caps the channel names sent per target: some Twitch
+// campaigns allow hundreds.
+const maxTargetChannels = 3
 
 type blockedDTO struct {
 	Target targetDTO `json:"target"`
@@ -59,12 +67,15 @@ func rfc3339(t time.Time) *string {
 
 // TargetJSON converts a plan target to its API shape.
 func TargetJSON(t plan.Target) targetDTO {
+	chans := t.Campaign.AllowedChannels
+	count := max(t.Campaign.AllowedChannelCount, len(chans))
 	return targetDTO{
 		Game: t.Campaign.Game, Platform: t.Campaign.Platform,
 		CampaignID: t.Campaign.ID, CampaignName: t.Campaign.Name,
 		BenefitID: t.Benefit.ID, BenefitName: t.Benefit.Name, ImageURL: t.Benefit.ImageURL,
 		RequiredMinutes: t.Benefit.RequiredMinutes, Minutes: t.Minutes,
-		EndsAt: rfc3339(t.Campaign.EndsAt),
+		EndsAt:   rfc3339(t.Campaign.EndsAt),
+		Channels: append([]string{}, chans[:min(len(chans), maxTargetChannels)]...), ChannelCount: count,
 	}
 }
 

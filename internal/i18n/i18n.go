@@ -27,7 +27,7 @@ var (
 )
 
 // Supported lists the locales the miner ships; each must have every key in en.
-var Supported = []string{"en", "zh-CN", "es"}
+var Supported = []string{"en", "zh-CN", "es", "tr"}
 
 const defaultLang = "en"
 

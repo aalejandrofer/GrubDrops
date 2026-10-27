@@ -19,6 +19,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/gameslug"
 	"github.com/aalejandrofer/grubdrops/internal/plan"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/platform/twitch"
 	"github.com/aalejandrofer/grubdrops/internal/runner"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
@@ -102,6 +103,33 @@ func (g *gamesEnv) chosenIDs() []string {
 		ids = append(ids, c.ID)
 	}
 	return ids
+}
+
+// A campaign with nothing left to mine is done; one with a queued drop waits.
+func TestGames_ListDoneVersusWaiting(t *testing.T) {
+	g := newGamesEnv(t)
+	ids := g.seed("Rust", "Overwatch")
+	require.NoError(t, g.chosen.Set(context.Background(), ids))
+	active := func(id, game string) platform.Campaign {
+		return platform.Campaign{
+			ID: id, Platform: "twitch", Game: game, Name: game + " Drops", Status: "active",
+			EndsAt: time.Now().Add(24 * time.Hour), Benefits: []platform.DropBenefit{{ID: id + "b", RequiredMinutes: 30}},
+		}
+	}
+	rust, ow := active("c1", "Rust"), active("c2", "Overwatch")
+	g.board.Observe(runner.Scan{AccountID: "a1", Platform: "twitch", At: time.Now(),
+		Campaigns: []platform.Campaign{rust, ow},
+		Result:    plan.Result{Queue: []plan.Target{{Campaign: ow, Benefit: ow.Benefits[0]}}},
+	})
+
+	resp, b := g.do("GET", "/api/games", "", nil)
+	require.Equal(t, 200, resp.StatusCode)
+	var got gamesJSON
+	require.NoError(t, json.Unmarshal(b, &got))
+	require.Len(t, got.Games, 2)
+	assert.Equal(t, "done", got.Games[0].State)
+	assert.Len(t, got.Games[0].Campaigns, 1, "a done campaign is still listed")
+	assert.Equal(t, "waiting", got.Games[1].State)
 }
 
 func TestGames_ListStatesAndOrder(t *testing.T) {
@@ -267,6 +295,7 @@ func TestGames_Search(t *testing.T) {
 	assert.Equal(t, 2, *hits[0].Priority)
 	assert.Equal(t, "Rusty Lake", hits[1].Name)
 	assert.False(t, hits[1].Chosen)
+	assert.Equal(t, twitch.BoxArtByName("Rust"), hits[0].BoxArtURL)
 
 	_, b = g.do("GET", "/api/games/search?q=", "", nil)
 	assert.JSONEq(t, `[]`, string(b))

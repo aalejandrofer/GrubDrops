@@ -324,7 +324,7 @@ func (s *server) putSettings(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
-	valid := (req.Language == nil || oneOf(*req.Language, "en", "es", "zh-CN")) &&
+	valid := (req.Language == nil || oneOf(*req.Language, "en", "es", "zh-CN", "tr")) &&
 		(req.TimeFormat == nil || oneOf(*req.TimeFormat, "24h", "12h")) &&
 		(req.Theme == nil || oneOf(*req.Theme, "dark", "light")) &&
 		(req.Timezone == nil || *req.Timezone == "" || validZone(*req.Timezone)) &&

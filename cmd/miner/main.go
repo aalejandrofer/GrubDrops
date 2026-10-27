@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -27,6 +28,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/config"
 	"github.com/aalejandrofer/grubdrops/internal/discover"
 	"github.com/aalejandrofer/grubdrops/internal/dockerctl"
+	"github.com/aalejandrofer/grubdrops/internal/forcewatch"
 	"github.com/aalejandrofer/grubdrops/internal/i18n"
 	mlog "github.com/aalejandrofer/grubdrops/internal/log"
 	"github.com/aalejandrofer/grubdrops/internal/netutil"
@@ -48,6 +50,10 @@ import (
 // It auto-tracks the git tag of each released image; the GRUB_VERSION env var
 // is only a fallback for source/dev builds where no ldflag is set.
 var version string
+
+// forceCheckEvery is the force-watch live cache ttl and background refresh
+// pace.
+const forceCheckEvery = 2 * time.Minute
 
 func main() {
 	// `grubdrops keygen` prints a fresh, valid GRUB_MASTER_KEY and exits, so a
@@ -104,13 +110,21 @@ func run(ctx context.Context) error {
 	startTime := time.Now()
 	logger.Info("miner starting", "log_level", cfg.LogLevel, "http_addr", cfg.HTTPAddr, "db_path", cfg.DBPath, "browser_url", cfg.BrowserURL, "secure_cookies", cfg.SecureCookies)
 
+	masterKey, keySrc, err := resolveMasterKey(cfg.MasterKey, cfg.DBPath)
+	if err != nil {
+		return err
+	}
+	if keySrc == keyGenerated {
+		logger.Info("master key generated", "path", filepath.Join(filepath.Dir(cfg.DBPath), masterKeyFile))
+	}
+
 	db, err := store.Open(ctx, cfg.DBPath)
 	if err != nil {
 		return fmt.Errorf("open store: %w", err)
 	}
 	defer db.Close()
 
-	cryptor, err := store.NewCryptor(cfg.MasterKey)
+	cryptor, err := store.NewCryptor(masterKey)
 	if err != nil {
 		return fmt.Errorf("master key invalid: %w", err)
 	}
@@ -425,9 +439,16 @@ func run(ctx context.Context) error {
 		backendFor:  backendFor,
 		notifier:    notifier,
 		settings:    settingsStore,
+		force:       store.NewForceWatch(db, q),
 	}, kickBackend)
 
+	// Force watch: one shared live-status cache. Lookups borrow a session a
+	// runner build already loaded; with none the channel stays unknown.
+	forceChecker := forcewatch.New(ro.lookupForce, forceCheckEvery)
+	ro.forceLookup = forceChecker.Lookup
+
 	bg.Go(ro.runGamesReloader)
+	bg.Go(ro.runForceReloader)
 
 	// Every ring line goes out as a `log` SSE event. The hook runs on the
 	// logging goroutine, so it must not block: the account name comes from
@@ -443,6 +464,8 @@ func run(ctx context.Context) error {
 	if err := pool.Reload(ctx, builders); err != nil {
 		return fmt.Errorf("initial runner boot: %w", err)
 	}
+	// After the boot, so the first pass has sessions to borrow.
+	bg.Go(func() { forceChecker.Run(ctx, ro.forceList, forceCheckEvery) })
 
 	// Now that the initial Reload has registered every enabled Kick account's
 	// sidecar, sweep away any auto-created (grubdrops.managed=true) browser
@@ -514,7 +537,7 @@ func run(ctx context.Context) error {
 			updateClient.Transport = proxyTransport
 		}
 		updateChecker = update.NewChecker(updateClient, "aalejandrofer/GrubDrops", settingsStore)
-		updateInterval := parseDuration(os.Getenv("GRUB_UPDATE_INTERVAL"), 6*time.Hour)
+		updateInterval := parseDuration(os.Getenv("GRUB_UPDATE_INTERVAL"), time.Hour)
 		bg.Go(func() { updateChecker.Run(ctx, updateInterval) })
 		updateStatus = updateChecker.Status
 	}
@@ -564,6 +587,11 @@ func run(ctx context.Context) error {
 		Board:        collector.Board,
 		GamesChanged: ro.requestGamesReload,
 		Discover:     discoverSvc,
+
+		ForceWatch:     ro.force,
+		ForceLive:      func(plat, login string) *bool { return forceChecker.Peek(plat, login).Live },
+		ForceChanged:   ro.forceChanged,
+		LookupCategory: ro.lookupCategory,
 
 		Sessions:  sessions,
 		Registry:  registry,

@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { etaShort, formatInt } from '$lib/format';
-	import { foldRows, type AccountRow, type GameCard } from '$lib/home';
+	import { cardCampaign, foldRows, type AccountRow, type GameCard } from '$lib/home';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { foldQueue } from '$lib/upnext';
 	import { scanStamp } from '$lib/scan';
 	import { linkNames } from '$lib/games';
 	import BoxArt from './BoxArt.svelte';
+	import type { CampaignTarget } from './CampaignDrawer.svelte';
 	import Icon from './Icon.svelte';
 	import LinkRecheck from './LinkRecheck.svelte';
 	import PlatformMark from './PlatformMark.svelte';
@@ -16,7 +17,8 @@
 		nextScan = null,
 		now,
 		readyAccounts = null,
-		over = false
+		over = false,
+		onopen
 	}: {
 		card: GameCard;
 		lastScan: string | null;
@@ -25,6 +27,8 @@
 		readyAccounts?: number | null;
 		/** Past what fits: laid out off the flow so it can still be measured. */
 		over?: boolean;
+		/** Opens the campaign drawer; without it the campaign name is plain text. */
+		onopen?: (t: CampaignTarget) => void;
 	} = $props();
 
 	let open = $state(false);
@@ -33,16 +37,37 @@
 	const list = $derived(folded && !open ? fold.shown : card.rows);
 	const game = $derived(card.game);
 	const unlinked = $derived(linkNames(game));
-	const camp = $derived(
-		card.rows.find((r) => r.runner.current)?.runner.current?.campaign_name ?? game.campaigns[0]?.name ?? ''
-	);
+	const camp = $derived(cardCampaign(card));
+	const wait = $derived(card.waitFor);
 	const stateText = $derived(
 		game.state === 'mining'
 			? t('home.state_mining')
 			: game.state === 'waiting'
-				? t('home.state_waiting')
-				: t('home.state_none')
+				? waitBadge()
+				: game.state === 'done'
+					? t('home.state_done')
+					: t('home.state_none')
 	);
+	const waitLine = $derived(lineFor());
+
+	function waitBadge(): string {
+		if (wait?.kind === 'account') return t('home.wait_account', { account: wait.account });
+		if (wait?.kind !== 'live') return t('home.state_waiting');
+		if (wait.channels.length === 0) return t('home.wait_live_any');
+		const n = wait.channels.length - 1 + wait.more;
+		return n > 0
+			? t('home.wait_live_more', { channel: wait.channels[0], n })
+			: t('home.wait_live', { channel: wait.channels[0] });
+	}
+
+	function lineFor(): string {
+		if (wait?.kind === 'account') return t('home.waiting_line', { account: wait.account });
+		if (wait?.kind !== 'live') return t('home.waiting_line_any');
+		if (wait.channels.length === 0) return t('home.live_line_any');
+		if (wait.channels.length === 1 && wait.more === 0) return t('home.live_line', { channel: wait.channels[0] });
+		const names = wait.channels.join(', ') + (wait.more > 0 ? ` +${wait.more}` : '');
+		return t('home.live_line_some', { channels: names });
+	}
 	const foot = $derived(
 		[
 			folded ? t('home.most_advanced') : '',
@@ -73,8 +98,17 @@
 			<span class="state {game.state}">{stateText}</span>
 			{#if game.state === 'no_campaign'}
 				<span class="camp">{scanStamp(lastScan, nextScan, new Date(now)).map((x) => t(x.key, x.vars)).join(' · ')}</span>
-			{:else if camp}
-				<span class="camp">{camp}</span>
+			{:else if camp?.id && onopen}
+				<button
+					type="button"
+					class="camp clink"
+					data-campaign
+					aria-haspopup="dialog"
+					title={t('campaign.open')}
+					onclick={() => onopen({ platform: camp.platform, id: camp.id })}>{camp.name}</button
+				>
+			{:else if camp?.name}
+				<span class="camp">{camp.name}</span>
 			{/if}
 		</div>
 
@@ -92,7 +126,7 @@
 		{#if showRows}
 			{#if folded}
 				<div class="summ">
-					<span><b>{t('home.summary_mining', { m: fold.mining })}</b> {t('home.summary_idle', { i: fold.idle })}</span>
+					<span><b>{t('home.summary_mining', { m: card.rows.length })}</b></span>
 					<button type="button" class="toggle" aria-expanded={open} onclick={() => (open = !open)}>
 						<span>{open ? t('home.show_fewer') : t('home.show_all', { n: card.rows.length })}</span>
 						<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5l3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
@@ -102,12 +136,9 @@
 			<div class="accts">
 				{#each list as r (r.runner.account_id)}
 					{@const c = r.runner.current}
-					<div class="acct" class:out={r.muted} class:idle={!r.muted && !c}>
+					<div class="acct">
 						<div class="who"><PlatformMark platform={r.runner.platform} /><b>{r.runner.account_name}</b></div>
-						{#if r.muted}
-							<div class="drop">{t(r.paused ? 'accounts.paused_line' : 'home.signed_out_row')}</div>
-							<div class="eta"></div>
-						{:else if c}
+						{#if c}
 							<div class="drop">
 								<div class="l">
 									<span>{c.benefit_name}{#if r.runner.channel} <span class="ch">· {r.runner.channel}</span>{/if}</span>
@@ -116,9 +147,6 @@
 								<div class="bar"><i style:width={pct(r)}></i></div>
 							</div>
 							<div class="eta"><span>{left(r)}</span><small>{t('home.left')}</small></div>
-						{:else}
-							<div class="drop">{t('home.idle_row')}</div>
-							<div class="eta"></div>
 						{/if}
 					</div>
 				{/each}
@@ -128,9 +156,7 @@
 			{/if}
 		{:else if game.state === 'waiting' && card.queued.length > 0}
 			<ul class="queued">
-				<li class="q-h">
-					{card.queuedBy ? t('home.waiting_head', { account: card.queuedBy }) : t('home.waiting_head_any')}
-				</li>
+				<li class="q-h">{t('home.queued_head', { line: waitLine })}</li>
 				{#each queuedFold.rows as q (q.benefit_id)}
 					<li><span>{q.benefit_name}</span><span>{t('home.queued_min', { n: formatInt(q.required_minutes) })}</span></li>
 				{/each}
@@ -139,9 +165,9 @@
 				{/if}
 			</ul>
 		{:else if game.state === 'waiting'}
-			<p class="idle-l">
-				{card.queuedBy ? t('home.waiting_line', { account: card.queuedBy }) : t('home.waiting_line_any')}
-			</p>
+			<p class="idle-l">{waitLine}</p>
+		{:else if game.state === 'done'}
+			<p class="idle-l">{t('home.done_line')}</p>
 		{/if}
 	</div>
 </article>
@@ -235,6 +261,10 @@
 		color: var(--t2);
 		background: var(--surface-3);
 	}
+	.state.done {
+		color: var(--green);
+		background: var(--surface-3);
+	}
 	.camp {
 		color: var(--t2);
 		font-size: 13px;
@@ -242,6 +272,27 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		min-width: 0;
+	}
+	.clink {
+		font-family: inherit;
+		text-align: left;
+		background: none;
+		border: 0;
+		padding: 0;
+		cursor: pointer;
+		text-decoration: underline dotted;
+		text-decoration-color: var(--t3);
+		text-underline-offset: 2px;
+	}
+	.clink:hover {
+		color: var(--text);
+		text-decoration-style: solid;
+		text-decoration-color: currentColor;
+	}
+	.clink:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+		border-radius: 3px;
 	}
 	.p1 {
 		--aw: 168px;
@@ -349,13 +400,6 @@
 		margin-left: 4px;
 		color: var(--t3);
 		font-size: 12px;
-	}
-	.acct.out .who b,
-	.acct.out .drop,
-	.acct.idle .who b,
-	.acct.idle .drop {
-		color: var(--t2);
-		font-size: 13px;
 	}
 	.foot {
 		margin-top: auto;

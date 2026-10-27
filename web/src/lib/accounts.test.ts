@@ -216,6 +216,13 @@ describe('accountLine', () => {
 		r.current = null;
 		expect(accountLine(ACC('acc-hjune'), r)).toBe('Sleeping');
 	});
+	it('force watching names the channel', () => {
+		const r = RUN('acc-hjune');
+		r.state = 'force_watching';
+		r.current = null;
+		r.channel = 'keshaeuw';
+		expect(accountLine(ACC('acc-hjune'), r)).toBe('Force watching keshaeuw');
+	});
 });
 
 describe('accountStatus', () => {
@@ -227,6 +234,15 @@ describe('accountStatus', () => {
 		r.current = null;
 		expect(accountStatus(ACC('acc-hjune'), r)).toBe('idle');
 		expect(accountStatus(ACC('acc-hjune'), undefined)).toBe('idle');
+	});
+	it('force watching has its own status', () => {
+		const r = RUN('acc-hjune');
+		r.state = 'force_watching';
+		r.current = null;
+		expect(accountStatus(ACC('acc-hjune'), r)).toBe('force_watching');
+		const a = ACC('acc-hjune');
+		a.enabled = false;
+		expect(accountStatus(a, r)).toBe('paused');
 	});
 	it('paused wins over idle and mining, signed out wins over paused', () => {
 		const a = ACC('acc-hjune');

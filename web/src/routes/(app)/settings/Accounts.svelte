@@ -25,6 +25,7 @@
 
 	const STATUS_KEYS = {
 		mining: 'accounts.status.mining',
+		force_watching: 'accounts.status.force_watching',
 		signed_out: 'accounts.status.signed_out',
 		idle: 'accounts.status.idle',
 		paused: 'accounts.status.paused'
@@ -692,7 +693,8 @@
 		border-radius: 50%;
 		background: currentColor;
 	}
-	.st.mining {
+	.st.mining,
+	.st.force_watching {
 		color: var(--green);
 		background: var(--green-soft);
 	}

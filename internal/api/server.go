@@ -53,9 +53,19 @@ type Deps struct {
 	AccountGames *store.AccountGames // per-account lists; nil serves 503
 	Board        *collect.Board
 	GamesChanged func() // nil-safe; must return at once, the reload runs in the background
+	// LookupCategory turns a pasted category link's slug into the game's
+	// name; nil rejects links.
+	LookupCategory func(ctx context.Context, platform, slug string) (name string, ok bool, err error)
 
 	// Discover lists every current campaign; nil serves 503.
 	Discover *discover.Service
+
+	// Force watch. ForceWatch nil serves 503. ForceLive reads the live
+	// cache without blocking: nil result = not checked yet; nil func = all
+	// unknown.
+	ForceWatch   *store.ForceWatch
+	ForceLive    func(platform, login string) *bool
+	ForceChanged func() // nil-safe; must return at once, the reload runs in the background
 
 	// Accounts and logins.
 	Sessions       *store.SessionStore
@@ -129,6 +139,11 @@ func (s *server) handler() http.Handler {
 		r.Mount("/api", s.api)
 	})
 
+	// Rewards was renamed Inventory; keep old bookmarks working.
+	r.Get("/rewards", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/inventory", http.StatusMovedPermanently)
+	})
+
 	r.NotFound(s.spa())
 	return r
 }
@@ -147,6 +162,8 @@ func (s *server) routesProtected(r chi.Router) {
 	s.routesEvents(r)
 	s.routesOverview(r)
 	s.routesGames(r)
+	s.routesForceWatch(r)
+	s.routesCampaigns(r)
 	s.routesDiscover(r)
 	s.routesClaims(r)
 	s.routesAccounts(r)

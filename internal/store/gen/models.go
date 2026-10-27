@@ -138,6 +138,19 @@ type DropState struct {
 	UpdatedAt       int64  `json:"updated_at"`
 }
 
+type ForceChannel struct {
+	ID        int64  `json:"id"`
+	Platform  string `json:"platform"`
+	Channel   string `json:"channel"`
+	Rank      int64  `json:"rank"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+type ForceChannelAccount struct {
+	ChannelID int64  `json:"channel_id"`
+	AccountID string `json:"account_id"`
+}
+
 type Game struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`

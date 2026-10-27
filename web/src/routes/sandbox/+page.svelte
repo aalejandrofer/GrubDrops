@@ -12,6 +12,69 @@
 
 	const mockups: Mockup[] = [
 		{
+			slug: 'games-drop-priority',
+			created: '2026-10-27',
+			title: 'Drop priority switch on Games, three placements',
+			desc: 'Where the Priority Order / Ending Soonest switch goes on Games so the game list starts near the top: rows above the list (A, B), next to the title (C), or in the rail (D, E, F). Each variant toggles Ending Soonest.',
+			tags: ['games', 'ending soonest'],
+			done: true,
+			chosen: 'Variant F, a Priority Mode panel at the top of the rail; Cards | List beside Scan now'
+		},
+		{
+			slug: 'home-drawer',
+			created: '2026-10-27',
+			title: 'Campaign drawer on Home, two click targets',
+			desc: 'Opens the campaign drawer from a Home game card campaign and from an Up next row, with the clicked drop highlighted. The campaign name is the link, or a details button sits beside it so drag in Up next stays clear.',
+			tags: ['home', 'GRUB-27'],
+			done: true,
+			chosen: 'Variant A, the campaign name is the link'
+		},
+		{
+			slug: 'home-idle-accounts',
+			created: '2026-10-27',
+			title: 'Where idle accounts go on Home, four placements',
+			desc: 'Idle, paused and signed-out accounts all pile under the rank 1 card today. A separate Not mining strip; each account under the best card it can mine; one quiet line under the last card, grouped by state; or the same line as chips. A Today page shows the current layout.',
+			tags: ['home', 'GRUB-36'],
+			done: true,
+			chosen: 'Variant D, chips under the last card, with no Log in link'
+		},
+		{
+			slug: 'inventory-upnext',
+			created: '2026-10-27',
+			title: 'Inventory Up next grouped by game, two ways to open a game',
+			desc: "One Up next row per game in queue order, with drops added up across its campaigns. A expands the row in place; B opens a side drawer with all of that game's campaigns. Home Up next stays one row per drop.",
+			tags: ['inventory', 'GRUB-29'],
+			done: true,
+			chosen: 'Variant A, the row expands in place'
+		},
+		{
+			slug: 'home-force-watch',
+			created: '2026-10-27',
+			title: 'Force watch on Home, three placements',
+			desc: 'Live forced channels and who is watching them, shown only when the Force watch list has a channel. A fourth KPI tile, a section above Up next, or a status next to the mining line.',
+			tags: ['home', 'force watch', 'GRUB-24'],
+			done: true,
+			chosen: 'Variant A, as the third KPI tile before Accounts healthy'
+		},
+		{
+			slug: 'force-watch',
+			created: '2026-10-27',
+			title: 'Force watch panel on Games, two add flows',
+			desc: 'A Force watch panel under Lists on the Games rail. Paste a twitch.tv or kick.com link, pick the accounts that watch it when idle. Panel order decides. Adding in a dialog or inline in the panel.',
+			tags: ['games', 'force watch', 'GRUB-24'],
+			done: true,
+			chosen: 'Variant A, add in a dialog'
+		},
+		{
+			slug: 'campaign-detail',
+			created: '2026-10-27',
+			title: 'Campaign detail from Games and Rewards, three containers',
+			desc: 'One view of a whole campaign: every drop, minutes, per-account claimed, progress or needs-link, clicked reward highlighted. Shown as a modal, a side drawer, or inline expand.',
+			tags: ['games', 'rewards', 'GRUB-25', 'GRUB-26'],
+			done: true,
+			chosen: 'Variant B, side drawer on /games and /rewards'
+		},
+		{
 			slug: 'account-games',
 			created: '2026-10-26',
 			title: 'Per-account game lists on Games, three layouts',

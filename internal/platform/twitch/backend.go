@@ -419,6 +419,109 @@ func (b *Backend) InventoryProgress(ctx context.Context, s platform.Session) ([]
 	return b.disc.inventory(ctx, s)
 }
 
+// LookupChannel satisfies platform.ChannelLooker.
+func (b *Backend) LookupChannel(ctx context.Context, s platform.Session, login string) (platform.Stream, bool, error) {
+	b.c.bind(s)
+	return b.chans.lookup(ctx, s, login)
+}
+
+// LookupCategory satisfies platform.CategoryLooker.
+func (b *Backend) LookupCategory(ctx context.Context, s platform.Session, slug string) (string, bool, error) {
+	b.c.bind(s)
+	const q = `query GameBySlug($slug: String) { game(slug: $slug) { displayName } }`
+	var resp struct {
+		Game *struct {
+			DisplayName string `json:"displayName"`
+		} `json:"game"`
+	}
+	if err := b.c.gqlQuery(ctx, s.AccessToken, "GameBySlug", q, map[string]any{"slug": slug}, &resp); err != nil {
+		return "", false, fmt.Errorf("game by slug %s: %w", slug, err)
+	}
+	if resp.Game == nil || resp.Game.DisplayName == "" {
+		return "", false, nil
+	}
+	return resp.Game.DisplayName, true, nil
+}
+
+// LookupGameID satisfies platform.GameIDLooker: the game with this exact
+// name, else the category search hit the name only extends by a version
+// number ("Counter-Strike 2" is Twitch's "Counter-Strike").
+func (b *Backend) LookupGameID(ctx context.Context, s platform.Session, name string) (string, bool, error) {
+	b.c.bind(s)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", false, nil
+	}
+	const byName = `query GameID($name: String) { game(name: $name) { id } }`
+	var game struct {
+		Game *struct {
+			ID string `json:"id"`
+		} `json:"game"`
+	}
+	if err := b.c.gqlQuery(ctx, s.AccessToken, "GameID", byName, map[string]any{"name": name}, &game); err != nil {
+		return "", false, fmt.Errorf("game id %s: %w", name, err)
+	}
+	if game.Game != nil && game.Game.ID != "" {
+		return game.Game.ID, true, nil
+	}
+	const search = `query GameSearch($query: String!) { searchCategories(query: $query, first: 5) { edges { node { id name } } } }`
+	var found struct {
+		SearchCategories *struct {
+			Edges []struct {
+				Node searchHit `json:"node"`
+			} `json:"edges"`
+		} `json:"searchCategories"`
+	}
+	if err := b.c.gqlQuery(ctx, s.AccessToken, "GameSearch", search, map[string]any{"query": name}, &found); err != nil {
+		return "", false, fmt.Errorf("game search %s: %w", name, err)
+	}
+	if found.SearchCategories == nil {
+		return "", false, nil
+	}
+	hits := make([]searchHit, 0, len(found.SearchCategories.Edges))
+	for _, e := range found.SearchCategories.Edges {
+		hits = append(hits, e.Node)
+	}
+	id, ok := searchHitID(name, hits)
+	return id, ok, nil
+}
+
+type searchHit struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// searchHitID picks the hit named exactly name, ignoring case, else the hit
+// whose name plus " <number>" is name. Anything looser could be a different
+// game, so it is no match.
+func searchHitID(name string, hits []searchHit) (string, bool) {
+	for _, h := range hits {
+		if h.ID != "" && strings.EqualFold(h.Name, name) {
+			return h.ID, true
+		}
+	}
+	i := strings.LastIndexByte(name, ' ')
+	if i <= 0 {
+		return "", false
+	}
+	if strings.Trim(name[i+1:], "0123456789") != "" {
+		return "", false
+	}
+	base := name[:i]
+	for _, h := range hits {
+		if h.ID != "" && strings.EqualFold(h.Name, base) {
+			return h.ID, true
+		}
+	}
+	return "", false
+}
+
+// ReadyDrops satisfies platform.ReadyDropLister.
+func (b *Backend) ReadyDrops(ctx context.Context, s platform.Session) ([]platform.ReadyDrop, error) {
+	b.c.bind(s)
+	return b.disc.readyDrops(ctx, s)
+}
+
 func (b *Backend) StartWatch(ctx context.Context, s platform.Session, stream platform.Stream) (platform.WatchHandle, error) {
 	b.c.bind(s)
 	return b.watch.start(ctx, s, stream)

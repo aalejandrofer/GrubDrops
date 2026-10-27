@@ -121,6 +121,12 @@ describe('client', () => {
 		expect(JSON.parse(calls[0].init.body as string)).toEqual({ cookies_txt: 'junk', channels: [] });
 	});
 
+	it('campaign encodes the path', async () => {
+		const { api, calls } = setup([{ status: 200, body: '{}' }]);
+		await api.campaign('kick', 'a/b c');
+		expect(calls[0].url).toBe('/api/campaigns/kick/a%2Fb%20c');
+	});
+
 	it('claims builds query string', async () => {
 		const { api, calls } = setup([{ status: 200, body: '{}' }]);
 		await api.claims({ game: 'Rust', account: 'a1', limit: 10, offset: 10 });
@@ -225,5 +231,20 @@ describe('client', () => {
 		expect(JSON.parse(calls[1].init.body as string)).toEqual({ own: true, games: [{ id: '', name: 'Rust' }] });
 		expect(JSON.parse(calls[2].init.body as string)).toEqual({ own: false });
 		expect(hdr(calls[1], 'X-CSRF-Token')).toBe('tok');
+	});
+	it('forceWatch gets the list and putForceWatch puts it with CSRF', async () => {
+		const list = '{"channels":[{"platform":"twitch","channel":"keshaeuw","live":true,"accounts":["a1"],"watching":[]}]}';
+		const { api, calls } = setup([{ status: 200, body: list }, { status: 200, body: list }]);
+		expect((await api.forceWatch()).channels[0].channel).toBe('keshaeuw');
+		const sent = [{ platform: 'twitch' as const, channel: 'keshaeuw', accounts: ['a1'] }];
+		expect((await api.putForceWatch(sent)).channels).toHaveLength(1);
+		expect(calls.map((c) => [c.init.method ?? 'GET', c.url])).toEqual([
+			['GET', '/api/force-watch'],
+			['PUT', '/api/force-watch']
+		]);
+		expect(hdr(calls[0], 'X-CSRF-Token')).toBeUndefined();
+		expect(hdr(calls[1], 'X-CSRF-Token')).toBe('tok');
+		expect(hdr(calls[1], 'Content-Type')).toBe('application/json');
+		expect(JSON.parse(calls[1].init.body as string)).toEqual({ channels: sent });
 	});
 });

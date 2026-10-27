@@ -1,5 +1,5 @@
 -- name: ListAllGames :many
-SELECT id, name, slug, priority FROM games ORDER BY name;
+SELECT id, name, slug, priority, twitch_game_id FROM games ORDER BY name;
 
 -- name: UpsertGame :exec
 INSERT INTO games (id, name, slug, priority)

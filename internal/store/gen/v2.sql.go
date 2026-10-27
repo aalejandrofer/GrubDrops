@@ -280,6 +280,52 @@ func (q *Queries) ListClaimLogBenefitIDs(ctx context.Context, accountID string) 
 	return items, nil
 }
 
+const listClaimLogForCampaign = `-- name: ListClaimLogForCampaign :many
+SELECT account_id, benefit_id, platform, game, campaign_id, campaign_name, benefit_name, image_url, code, source, claimed_at FROM claim_log WHERE platform = ? AND campaign_id = ?
+ORDER BY claimed_at ASC, account_id ASC, benefit_id ASC
+`
+
+type ListClaimLogForCampaignParams struct {
+	Platform   string `json:"platform"`
+	CampaignID string `json:"campaign_id"`
+}
+
+// Every claim of one campaign on one platform, oldest first.
+func (q *Queries) ListClaimLogForCampaign(ctx context.Context, arg ListClaimLogForCampaignParams) ([]ClaimLog, error) {
+	rows, err := q.db.QueryContext(ctx, listClaimLogForCampaign, arg.Platform, arg.CampaignID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClaimLog
+	for rows.Next() {
+		var i ClaimLog
+		if err := rows.Scan(
+			&i.AccountID,
+			&i.BenefitID,
+			&i.Platform,
+			&i.Game,
+			&i.CampaignID,
+			&i.CampaignName,
+			&i.BenefitName,
+			&i.ImageUrl,
+			&i.Code,
+			&i.Source,
+			&i.ClaimedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listClaimLogGames = `-- name: ListClaimLogGames :many
 SELECT DISTINCT game FROM claim_log WHERE game <> '' ORDER BY game ASC
 `

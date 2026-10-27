@@ -2,9 +2,11 @@
 	import { onDestroy, untrack } from 'svelte';
 	import { api } from '$lib/app';
 	import type { Claim, ClaimsQuery, ClaimsResp } from '$lib/api/types';
-	import UpNext from '$lib/components/UpNext.svelte';
+	import UpNextGames from '$lib/components/UpNextGames.svelte';
+	import ArmButton from '$lib/components/ArmButton.svelte';
 	import BoxArt from '$lib/components/BoxArt.svelte';
 	import CopyCommand from '$lib/components/CopyCommand.svelte';
+	import CampaignDrawer, { type CampaignTarget } from '$lib/components/CampaignDrawer.svelte';
 	import PageHead from '$lib/components/PageHead.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { claimStamp, etaShort, formatInt, relTime } from '$lib/format';
@@ -12,9 +14,21 @@
 	import { queues } from '$lib/upnext';
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
-	import { inProgress, pageCount, pageQuery, pageRange, PAGE_SIZES, readPageSize, validPageSize, writePageSize } from '$lib/rewards';
+	import { inProgress, pageCount, pageQuery, pageRange, PAGE_SIZES, readPageSize, validPageSize, writePageSize } from '$lib/inventory';
 
 	const live = getLive();
+
+	let drawer = $state<CampaignTarget | null>(null);
+
+	function openCampaign(c: Claim): void {
+		if (c.campaign_id) drawer = { platform: c.platform, id: c.campaign_id, highlight: c.benefit_id };
+	}
+
+	/** A click anywhere on a row opens its campaign, except on the row's own controls. */
+	function onRowClick(e: MouseEvent, c: Claim): void {
+		if (e.target instanceof Element && e.target.closest('button, a, input')) return;
+		openCampaign(c);
+	}
 
 	let now = $state(Date.now());
 	$effect(() => {
@@ -46,7 +60,7 @@
 	const queuedTotal = $derived(qs.reduce((n, x) => n + x.items.length, 0));
 	const kpi = $derived(live.overview?.kpis);
 	const head = $derived(
-		kpi ? t('rewards.head', { today: formatInt(kpi.claimed_today), total: formatInt(kpi.claimed_all_time) }) : undefined
+		kpi ? t('inventory.head', { today: formatInt(kpi.claimed_today), total: formatInt(kpi.claimed_all_time) }) : undefined
 	);
 	const stamp = $derived(
 		live.updatedAt === null
@@ -149,38 +163,12 @@
 	const removed = (c: Claim) => c.account_name === '' || (live.accounts.length > 0 && !known(c.account_id));
 	const anyFilter = $derived(game !== '' || account !== '');
 
-	// Row actions: mark an in-progress drop collected, remove a claim. Remove
-	// takes a second click on the same row within a few seconds.
+	// Row action: mark a claim uncollected (ArmButton asks for a second click).
 	let acting = $state<Record<string, boolean>>({});
 	let actErr = $state('');
-	let confirmKey = $state('');
-	let confirmTimer: ReturnType<typeof setTimeout> | undefined;
-	onDestroy(() => clearTimeout(confirmTimer));
-
-	async function markCollected(accountId: string, benefitId: string): Promise<void> {
-		const k = `${accountId}:${benefitId}`;
-		if (acting[k]) return;
-		acting[k] = true;
-		actErr = '';
-		try {
-			await api.markCollected(accountId, benefitId);
-			live.runners = live.runners.map((r) => (r.account_id === accountId && r.current?.benefit_id === benefitId ? { ...r, current: null } : r));
-		} catch {
-			actErr = t('rewards.mark_failed');
-		}
-		acting[k] = false;
-	}
 
 	async function removeClaim(c: Claim): Promise<void> {
 		const k = key(c);
-		if (confirmKey !== k) {
-			confirmKey = k;
-			clearTimeout(confirmTimer);
-			confirmTimer = setTimeout(() => (confirmKey = ''), 4000);
-			return;
-		}
-		clearTimeout(confirmTimer);
-		confirmKey = '';
 		acting[k] = true;
 		actErr = '';
 		try {
@@ -189,21 +177,33 @@
 			live.recent = live.recent.filter((x) => key(x) !== k);
 			total = Math.max(0, total - 1);
 		} catch {
-			actErr = t('rewards.remove_failed');
+			actErr = t('mark.uncollect_failed');
 		}
 		acting[k] = false;
 	}
 	const searching = $derived(q !== '');
 </script>
 
-<PageHead title={t('nav.rewards')} status={head} {stamp}>
+<PageHead title={t('nav.inventory')} status={head} lead={stamp}>
+	{#snippet action()}
+		<span class="invlinks"
+			>{#each t('inventory.links', { twitch: '{twitch}', kick: '{kick}' }).split(/(\{twitch\}|\{kick\})/) as part, i (i)}{#if part === '{twitch}'}<a
+						class="tw"
+						href="https://www.twitch.tv/drops/inventory"
+						target="_blank"
+						rel="noopener">{t('inventory.link_twitch')}</a
+					>{:else if part === '{kick}'}<a class="ki" href="https://kick.com/drops/all-campaigns" target="_blank" rel="noopener"
+						>{t('inventory.link_kick')}</a
+					>{:else}{part}{/if}{/each}</span
+		>
+	{/snippet}
 	{#if progress.length > 0}
-		<section class="sec" aria-label={t('rewards.in_progress')}>
+		<section class="sec" aria-label={t('inventory.in_progress')}>
 			<div class="sec-h">
 				<h2>
 					<svg viewBox="0 0 16 16" fill="none" stroke="var(--accent)" stroke-width="1.6" aria-hidden="true"
 						><circle cx="8" cy="8" r="6" stroke="var(--surface-3)" /><path d="M8 2a6 6 0 0 1 6 6" stroke-linecap="round" /></svg
-					>{t('rewards.in_progress')} <span class="n">{progress.length}</span>
+					>{t('inventory.in_progress')} <span class="n">{progress.length}</span>
 				</h2>
 			</div>
 			<div class="panel">
@@ -218,21 +218,14 @@
 						</div>
 						<div class="bw">
 							<div class="num">
-								<span>{t('rewards.min_of', { m: p.target.minutes, req: p.target.required_minutes })}</span>
+								<span>{t('inventory.min_of', { m: p.target.minutes, req: p.target.required_minutes })}</span>
 								<span>{p.pct}%</span>
 							</div>
 							<div class="bar"><i style="width:{p.pct}%"></i></div>
 						</div>
 						<div class="eta">
-							{t('rewards.eta', { eta: etaShort(p.left) })}<span
-								>{t('rewards.eta_on', { account: p.runner.account_name })}</span
-							>
-							<button
-								type="button"
-								class="mark"
-								title={t('rewards.mark_collected_title')}
-								disabled={acting[`${p.runner.account_id}:${p.target.benefit_id}`]}
-								onclick={() => markCollected(p.runner.account_id, p.target.benefit_id)}>{t('rewards.mark_collected')}</button
+							{t('inventory.eta', { eta: etaShort(p.left) })}<span
+								>{t('inventory.eta_on', { account: p.runner.account_name })}</span
 							>
 						</div>
 					</div>
@@ -242,15 +235,15 @@
 	{/if}
 
 	{#if queuedTotal > 0}
-		<section class="sec" aria-label={t('upnext.title')}><UpNext /></section>
+		<section class="sec" aria-label={t('upnext.title')}><UpNextGames onopen={(c) => (drawer = c)} /></section>
 	{/if}
 
-	<section class="sec" aria-label={t('rewards.claimed')}>
+	<section class="sec" aria-label={t('inventory.claimed')}>
 		<div class="sec-h">
 			<h2>
 				<svg viewBox="0 0 16 16" fill="none" stroke="var(--green)" stroke-width="1.6" aria-hidden="true"
 					><circle cx="8" cy="8" r="6" /><path d="m5.3 8.2 1.8 1.8 3.6-3.8" stroke-linecap="round" stroke-linejoin="round" /></svg
-				>{t('rewards.claimed')} <span class="n">{formatInt(total)}</span>
+				>{t('inventory.claimed')} <span class="n">{formatInt(total)}</span>
 			</h2>
 		</div>
 		{#if games.length > 0 || accts.length > 0 || anyFilter || searching || total > 0}
@@ -258,24 +251,24 @@
 				<input
 					class="search"
 					type="search"
-					placeholder={t('rewards.search_placeholder')}
-					aria-label={t('rewards.search_placeholder')}
+					placeholder={t('inventory.search_placeholder')}
+					aria-label={t('inventory.search_placeholder')}
 					bind:value={search}
 					oninput={onSearch}
 				/>
-				<div class="fgroup" role="group" aria-label={t('rewards.filter_game')}>
-					<span>{t('rewards.filter_game')}</span>
+				<div class="fgroup" role="group" aria-label={t('inventory.filter_game')}>
+					<span>{t('inventory.filter_game')}</span>
 					<button type="button" class="chip" class:on={game === ''} aria-pressed={game === ''} onclick={() => pick('game', '')}
-						>{t('rewards.all')}</button
+						>{t('inventory.all')}</button
 					>
 					{#each games as g (g)}
 						<button type="button" class="chip" class:on={game === g} aria-pressed={game === g} onclick={() => pick('game', g)}>{g}</button>
 					{/each}
 				</div>
-				<div class="fgroup" role="group" aria-label={t('rewards.filter_account')}>
-					<span>{t('rewards.filter_account')}</span>
+				<div class="fgroup" role="group" aria-label={t('inventory.filter_account')}>
+					<span>{t('inventory.filter_account')}</span>
 					<button type="button" class="chip" class:on={account === ''} aria-pressed={account === ''} onclick={() => pick('account', '')}
-						>{t('rewards.all')}</button
+						>{t('inventory.all')}</button
 					>
 					{#each accts as a (a.id)}
 						{@const pf = platformOf(a.id)}
@@ -289,71 +282,72 @@
 		<div class="panel">
 			{#if items.length > 0}
 				<div class="hist-h">
-					<span>{t('rewards.col_reward')}</span><span>{t('rewards.col_game')}</span><span>{t('rewards.col_account')}</span><span class="tmh"
-						>{t('rewards.col_claimed')}</span
+					<span>{t('inventory.col_reward')}</span><span>{t('inventory.col_game')}</span><span>{t('inventory.col_account')}</span><span class="tmh"
+						>{t('inventory.col_claimed')}</span
 					><span></span>
 				</div>
 				{#each items as c (key(c))}
 					{@const pf = platformOf(c.account_id)}
-					<div class="hrow">
+					<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -- the reward name button is the keyboard path -->
+					<div class="hrow" class:open={!!c.campaign_id} data-campaign={c.campaign_id ? '' : undefined} onclick={(e) => onRowClick(e, c)}>
 						<div class="rw">
 							<span class="img"><BoxArt src={c.image_url || null} name={c.benefit_name} size="sm" /></span>
 							<span class="rwt">
-								<span class="nm">{c.benefit_name}</span>
-								{#if c.source === 'manual'}<span class="tag">{t('rewards.manual')}</span>{/if}
+								{#if c.campaign_id}
+									<button type="button" class="nm" aria-haspopup="dialog" title={t('campaign.open')} onclick={() => openCampaign(c)}
+										>{c.benefit_name}</button
+									>
+								{:else}
+									<span class="nm">{c.benefit_name}</span>
+								{/if}
+								{#if c.source === 'manual'}<span class="tag">{t('inventory.manual')}</span>{/if}
 								{#if c.code}<CopyCommand command={c.code} />{/if}
 							</span>
 						</div>
 						<span class="gm">{c.game}</span>
 						<span class="ac">
 							{#if removed(c)}
-								<span class="gone">{t('rewards.removed_account')}</span>
+								<span class="gone">{t('inventory.removed_account')}</span>
 							{:else}
 								<span class="acct">{#if pf}<PlatformMark platform={pf} size="sm" />{/if}{c.account_name}</span>
 							{/if}
 						</span>
 						<span class="tm">{claimStamp(c.claimed_at, now, prefs.zone, prefs.fmt)}</span>
-						<button
-							type="button"
-							class="rm"
-							class:sure={confirmKey === key(c)}
-							aria-label={confirmKey === key(c) ? t('rewards.remove_confirm') : t('rewards.remove_claim', { drop: c.benefit_name })}
-							title={confirmKey === key(c) ? t('rewards.remove_confirm') : t('rewards.remove_claim_title')}
-							disabled={acting[key(c)]}
-							onclick={() => removeClaim(c)}
+						<span class="rm"
+							><ArmButton
+								kind="uncollect"
+								drop={c.benefit_name}
+								account={c.account_name || t('inventory.removed_account')}
+								disabled={acting[key(c)]}
+								onconfirm={() => removeClaim(c)}
+							/></span
 						>
-							{#if confirmKey === key(c)}
-								<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.8 6.2 2.2 2.2 4.2-4.6" /></svg>
-							{:else}
-								<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="m3.5 3.5 5 5m0-5-5 5" /></svg>
-							{/if}
-						</button>
 					</div>
 				{/each}
 			{:else if loaded && !busy && !failed}
-				<div class="empty">{searching ? t('rewards.no_match') : anyFilter ? t('rewards.empty_filtered') : t('rewards.empty')}</div>
+				<div class="empty">{searching ? t('inventory.no_match') : anyFilter ? t('inventory.empty_filtered') : t('inventory.empty')}</div>
 			{/if}
 			{#if actErr}<div class="empty err" role="alert">{actErr}</div>{/if}
 			{#if failed}
 				<div class="empty err" role="status">
-					{t('rewards.failed')}
-					<button type="button" class="btn" disabled={busy} onclick={() => load()}>{t('rewards.retry')}</button>
+					{t('inventory.failed')}
+					<button type="button" class="btn" disabled={busy} onclick={() => load()}>{t('inventory.retry')}</button>
 				</div>
 			{/if}
 			{#if total > PAGE_SIZES[0]}
 				<div class="hist-foot">
-					<span class="rng">{t('rewards.range', { from: formatInt(range.from), to: formatInt(range.to), total: formatInt(total) })}</span>
+					<span class="rng">{t('inventory.range', { from: formatInt(range.from), to: formatInt(range.to), total: formatInt(total) })}</span>
 					<label class="per">
-						<span>{t('rewards.per_page')}</span>
+						<span>{t('inventory.per_page')}</span>
 						<select value={size} onchange={pickSize} disabled={busy}>
 							{#each PAGE_SIZES as n}<option value={n}>{n}</option>{/each}
 						</select>
 					</label>
 					{#if pages > 1}
 						<div class="nav">
-							<button type="button" class="btn" disabled={busy || page <= 1} onclick={() => goto(page - 1)}>{t('rewards.prev')}</button>
-							<span>{t('rewards.page_of', { page: formatInt(page), pages: formatInt(pages) })}</span>
-							<button type="button" class="btn" disabled={busy || page >= pages} onclick={() => goto(page + 1)}>{t('rewards.next')}</button>
+							<button type="button" class="btn" disabled={busy || page <= 1} onclick={() => goto(page - 1)}>{t('inventory.prev')}</button>
+							<span>{t('inventory.page_of', { page: formatInt(page), pages: formatInt(pages) })}</span>
+							<button type="button" class="btn" disabled={busy || page >= pages} onclick={() => goto(page + 1)}>{t('inventory.next')}</button>
 						</div>
 					{/if}
 				</div>
@@ -362,7 +356,30 @@
 	</section>
 </PageHead>
 
+<CampaignDrawer target={drawer} onclose={() => (drawer = null)} />
+
 <style>
+	.invlinks {
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--t2);
+	}
+	.invlinks a {
+		text-decoration: none;
+	}
+	.invlinks a:hover {
+		text-decoration: underline;
+	}
+	.invlinks a:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
+	.invlinks .tw {
+		color: var(--twitch-fg);
+	}
+	.invlinks .ki {
+		color: var(--kick-fg);
+	}
 	.sec {
 		margin-top: 28px;
 		min-width: 0;
@@ -504,25 +521,6 @@
 		color: var(--t3);
 		font-weight: 400;
 	}
-	.mark {
-		margin-top: 4px;
-		padding: 0;
-		font: inherit;
-		font-size: 12px;
-		font-weight: 400;
-		color: var(--t2);
-		background: none;
-		border: 0;
-		cursor: pointer;
-	}
-	.mark:hover:not(:disabled) {
-		color: var(--text);
-		text-decoration: underline;
-	}
-	.mark:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
 	.tag {
 		font-size: 11px;
 		color: var(--t2);
@@ -532,34 +530,8 @@
 		flex: none;
 	}
 	.rm {
-		width: 22px;
-		height: 22px;
 		display: grid;
-		place-items: center;
-		padding: 0;
-		background: none;
-		border: 1px solid transparent;
-		border-radius: 4px;
-		color: var(--t3);
-		cursor: pointer;
-	}
-	.rm svg {
-		width: 12px;
-		height: 12px;
-	}
-	.rm:hover:not(:disabled) {
-		border-color: var(--border);
-		color: var(--text);
-		background: var(--surface-2);
-	}
-	.rm.sure,
-	.rm.sure:hover:not(:disabled) {
-		color: var(--red);
-		border-color: var(--red);
-	}
-	.rm:disabled {
-		opacity: 0.5;
-		cursor: default;
+		justify-items: end;
 	}
 
 	.filters {
@@ -659,6 +631,26 @@
 		text-overflow: ellipsis;
 		font-weight: 500;
 		max-width: 100%;
+	}
+	button.nm {
+		padding: 0;
+		border: 0;
+		background: none;
+		color: inherit;
+		font: inherit;
+		font-weight: 500;
+		text-align: left;
+		cursor: pointer;
+	}
+	button.nm:hover {
+		text-decoration: underline;
+	}
+	button.nm:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
+	.hrow.open {
+		cursor: pointer;
 	}
 	.gm {
 		color: var(--t2);

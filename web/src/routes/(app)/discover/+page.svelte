@@ -26,7 +26,7 @@
 	let failed = $state(false);
 	let q = $state('');
 	let platform = $state<'all' | Platform>('all');
-	let hideAdded = $state(false);
+	let hideAdded = $state(true);
 	let adding = $state<string | null>(null);
 	let addFailed = $state<string | null>(null);
 
@@ -92,6 +92,7 @@
 		</button>
 	{/snippet}
 
+	{#if busy && data}{@render loader()}{/if}
 	{#if data}
 		{#if twitchState?.error === 'needs_android'}
 			<p class="note" role="status">
@@ -196,10 +197,17 @@
 			<button type="button" class="btn" disabled={busy} onclick={() => load()}>{t('discover.retry')}</button>
 		</div>
 	{:else}
-		<p class="empty" role="status">{t('discover.loading')}</p>
+		<div class="empty">{@render loader()}</div>
 	{/if}
 	{#if data && failed}<p class="note bad" role="alert"><Icon name="alert" size={14} />{t('discover.failed')}</p>{/if}
 </PageHead>
+
+{#snippet loader()}
+	<div class="loading" role="status">
+		<div class="lbar" aria-hidden="true"><i></i></div>
+		<span>{t('discover.loading')}</span>
+	</div>
+{/snippet}
 
 <style>
 	.btn {
@@ -467,6 +475,47 @@
 		margin: 0;
 		color: var(--red);
 		font-size: 12px;
+	}
+	.loading {
+		display: grid;
+		gap: 8px;
+		justify-items: center;
+		margin: 0 0 10px;
+		font-size: 13px;
+		color: var(--t2);
+	}
+	.empty .loading {
+		margin: 0;
+	}
+	.lbar {
+		width: min(320px, 100%);
+		height: 4px;
+		border-radius: 2px;
+		background: var(--surface-3);
+		overflow: hidden;
+	}
+	.lbar i {
+		display: block;
+		width: 35%;
+		height: 100%;
+		border-radius: 2px;
+		background: var(--accent);
+		animation: slide 1.2s ease-in-out infinite;
+	}
+	@keyframes slide {
+		from {
+			transform: translateX(-100%);
+		}
+		to {
+			transform: translateX(290%);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.lbar i {
+			width: 100%;
+			animation: none;
+			opacity: 0.5;
+		}
 	}
 	.empty {
 		padding: 28px 16px;

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -303,6 +304,33 @@ func (a *api) Campaigns(ctx context.Context, sess platform.Session) ([]kickCampa
 	return out, nil
 }
 
+// Subcategory returns a category's display name from its slug. Public
+// endpoint on kick.com.
+func (a *api) Subcategory(ctx context.Context, sess platform.Session, slug string) (string, error) {
+	body, status, err := a.d.do(ctx, sess, http.MethodGet, discoveryBase+"/api/v1/subcategories/"+url.PathEscape(slug), nil)
+	if err != nil {
+		return "", err
+	}
+	if status != 200 {
+		return "", &statusError{what: "subcategory " + slug, status: status}
+	}
+	var r struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return "", fmt.Errorf("decode subcategory %s: %w", slug, err)
+	}
+	return strings.TrimSpace(r.Name), nil
+}
+
+// statusError is a non-200 HTTP response; callers can detect it with errors.As.
+type statusError struct {
+	what   string
+	status int
+}
+
+func (e *statusError) Error() string { return fmt.Sprintf("%s: status %d", e.what, e.status) }
+
 // ChannelLivestream reports whether a channel is live and, if so, its livestream
 // id (needed for the watch ping) + viewer count. Public endpoint on kick.com.
 // {data:null} = offline. Used to filter a campaign's eligible channels down to
@@ -313,7 +341,7 @@ func (a *api) ChannelLivestream(ctx context.Context, sess platform.Session, slug
 		return false, "", 0, "", err
 	}
 	if status != 200 {
-		return false, "", 0, "", fmt.Errorf("channel livestream %s: status %d", slug, status)
+		return false, "", 0, "", &statusError{what: "channel livestream " + slug, status: status}
 	}
 	var r struct {
 		Data *struct {

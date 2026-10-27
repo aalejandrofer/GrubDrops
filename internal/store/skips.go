@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 
@@ -55,4 +56,17 @@ func (s *Skips) ClearSkip(accountID, benefitID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), skipTimeout)
 	defer cancel()
 	return s.Q.DeleteKV(ctx, SkipOverridePrefix+benefitID+":"+accountID)
+}
+
+// Unskip removes one skip and reports whether it was there.
+func (s *Skips) Unskip(ctx context.Context, accountID, benefitID string) (bool, error) {
+	key := SkipOverridePrefix + benefitID + ":" + accountID
+	_, err := s.Q.GetSettingString(ctx, key)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, s.Q.DeleteKV(ctx, key)
 }

@@ -25,6 +25,7 @@ type claimItem struct {
 	AccountName  string `json:"account_name"`
 	Platform     string `json:"platform"`
 	Game         string `json:"game"`
+	CampaignID   string `json:"campaign_id"`
 	CampaignName string `json:"campaign_name"`
 	BenefitID    string `json:"benefit_id"`
 	BenefitName  string `json:"benefit_name"`
@@ -43,7 +44,7 @@ type claimAccount struct {
 func ClaimJSON(e store.ClaimEntry, accountName string) claimItem {
 	return claimItem{
 		AccountID: e.AccountID, AccountName: accountName, Platform: e.Platform,
-		Game: e.Game, CampaignName: e.CampaignName, BenefitID: e.BenefitID,
+		Game: e.Game, CampaignID: e.CampaignID, CampaignName: e.CampaignName, BenefitID: e.BenefitID,
 		BenefitName: e.BenefitName, ImageURL: e.ImageURL, Code: e.Code, Source: e.Source,
 		ClaimedAt: e.ClaimedAt.UTC().Format(time.RFC3339),
 	}
@@ -130,16 +131,23 @@ func (s *server) postClaim(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, item)
 }
 
-// deleteClaim forgets one claim, so the runner may mine the drop again. A
-// drop the platform shows as claimed comes back on the next scan.
+// deleteClaim marks a drop uncollected: it forgets the claim and the
+// runner's skip, so the account may mine the drop again. A drop the platform
+// shows as claimed comes back on the next scan. The reload rebuilds the
+// runner, which reads its skips from the store again.
 func (s *server) deleteClaim(w http.ResponseWriter, r *http.Request) {
 	acct, benefit := pathParam(r, "account"), pathParam(r, "benefit")
-	found, err := s.d.Claims.Delete(r.Context(), acct, benefit)
+	claimed, err := s.d.Claims.Delete(r.Context(), acct, benefit)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
 	}
-	if !found {
+	skipped, err := store.NewSkips(s.d.Q).Unskip(r.Context(), acct, benefit)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	if !claimed && !skipped {
 		writeErr(w, http.StatusNotFound, "not_found")
 		return
 	}

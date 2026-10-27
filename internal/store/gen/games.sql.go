@@ -104,30 +104,24 @@ func (q *Queries) ListAccountGames(ctx context.Context, accountID string) ([]Lis
 }
 
 const listAllGames = `-- name: ListAllGames :many
-SELECT id, name, slug, priority FROM games ORDER BY name
+SELECT id, name, slug, priority, twitch_game_id FROM games ORDER BY name
 `
 
-type ListAllGamesRow struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Slug     string `json:"slug"`
-	Priority int64  `json:"priority"`
-}
-
-func (q *Queries) ListAllGames(ctx context.Context) ([]ListAllGamesRow, error) {
+func (q *Queries) ListAllGames(ctx context.Context) ([]Game, error) {
 	rows, err := q.db.QueryContext(ctx, listAllGames)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListAllGamesRow
+	var items []Game
 	for rows.Next() {
-		var i ListAllGamesRow
+		var i Game
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
 			&i.Slug,
 			&i.Priority,
+			&i.TwitchGameID,
 		); err != nil {
 			return nil, err
 		}

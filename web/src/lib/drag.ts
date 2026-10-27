@@ -5,7 +5,7 @@
 export const DRAG_THRESHOLD = 4;
 export const DRAGGING_CLASS = 'grub-dragging';
 
-const INTERACTIVE = 'button, a, input, select, textarea, label, [role="menu"], [contenteditable]';
+const INTERACTIVE = 'button, a, input, select, textarea, label, [role="menu"], [contenteditable], [data-campaign]';
 
 type Closest = { closest(sel: string): unknown };
 

@@ -121,8 +121,6 @@
 		border-radius: 10px;
 		background: var(--surface);
 		padding: 8px;
-		position: sticky;
-		top: 12px;
 	}
 	.rh {
 		margin: 8px 8px 4px;
@@ -274,10 +272,5 @@
 	.ico:hover {
 		background: var(--surface-3);
 		color: var(--text);
-	}
-	@media (max-width: 860px) {
-		.rail {
-			position: static;
-		}
 	}
 </style>

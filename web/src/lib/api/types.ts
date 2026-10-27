@@ -36,7 +36,32 @@ export interface Overview {
 		accounts_healthy: number;
 	};
 	version: { current: string; latest: string; update_available: boolean };
+	/** null when no force watch channel is set. Older fixtures leave it out. */
+	force_watch?: OverviewForceWatch;
 }
+
+/** One force watch channel. live null = not checked yet. accounts and watching hold account IDs. */
+export interface ForceChannel {
+	platform: Platform;
+	channel: string;
+	live: boolean | null;
+	accounts: string[];
+	watching: string[];
+}
+
+/** PUT /api/force-watch body item. The server rejects any other field. */
+export interface ForceChannelPut {
+	platform: Platform;
+	channel: string;
+	accounts: string[];
+}
+
+/** Home tile: live channels, watched first, at most two. watchers holds account names. */
+export type OverviewForceWatch = {
+	live: { platform: Platform; channel: string; watchers: string[] }[];
+	more: number;
+	total: number;
+} | null;
 
 export type RunnerState =
 	| 'idle'
@@ -47,7 +72,8 @@ export type RunnerState =
 	| 'sleeping'
 	| 'awaiting_connect'
 	| 'needs_login'
-	| 'no_games';
+	| 'no_games'
+	| 'force_watching';
 
 export interface Target {
 	game: string;
@@ -60,6 +86,9 @@ export interface Target {
 	required_minutes: number;
 	minutes: number;
 	ends_at: string | null;
+	/** Up to three of the channels the campaign is limited to; empty means any channel. */
+	channels: string[];
+	channel_count: number;
 }
 
 export interface Blocked {
@@ -84,7 +113,7 @@ export interface Runner {
 	order_custom: boolean;
 }
 
-export type GameState = 'mining' | 'waiting' | 'no_campaign';
+export type GameState = 'mining' | 'waiting' | 'done' | 'no_campaign';
 
 export interface Campaign {
 	id: string;
@@ -162,6 +191,7 @@ export interface DiscoverResp {
 export interface SearchHit {
 	id: string;
 	name: string;
+	box_art_url: string;
 	chosen: boolean;
 	priority: number | null;
 }
@@ -180,12 +210,51 @@ export interface Claim {
 	platform: Platform;
 	game: string;
 	campaign_name: string;
+	/** '' when the claim log has no campaign for it. */
+	campaign_id?: string;
 	benefit_id: string;
 	benefit_name: string;
 	image_url: string;
 	code: string;
 	source: string;
 	claimed_at: string;
+}
+
+export type DropCellState = 'claimed' | 'claimable' | 'accruing' | 'eligible' | 'blocked';
+
+/** One account's state on one drop of a campaign. */
+export interface DropCell {
+	account_id: string;
+	account_name: string;
+	platform: Platform;
+	state: DropCellState;
+	reason: string;
+	minutes: number;
+	claimed_at: string | null;
+	/** The drop is in the account's runner plan, so it can be marked collected. */
+	queued?: boolean;
+}
+
+export interface CampaignDrop {
+	id: string;
+	name: string;
+	image_url: string;
+	required_minutes: number;
+	accounts: DropCell[];
+}
+
+/** live false: rebuilt from the claim log because no account scans it now. */
+export interface CampaignDetail {
+	id: string;
+	platform: Platform;
+	game: string;
+	name: string;
+	box_art_url: string;
+	starts_at: string | null;
+	ends_at: string | null;
+	live: boolean;
+	link_url: string;
+	drops: CampaignDrop[];
 }
 
 export interface ClaimsResp {
@@ -234,7 +303,7 @@ export interface AccountGames {
 }
 
 export interface Settings {
-	language: 'en' | 'es' | 'zh-CN';
+	language: 'en' | 'es' | 'zh-CN' | 'tr';
 	time_format: '24h' | '12h';
 	theme: 'dark' | 'light';
 	/** Empty means the server zone. */

@@ -308,6 +308,44 @@ func (q *Queries) ListPastCampaigns(ctx context.Context, arg ListPastCampaignsPa
 	return items, nil
 }
 
+const listUnlinkedCampaignLinks = `-- name: ListUnlinkedCampaignLinks :many
+SELECT account_id, campaign_id, link_url
+FROM account_campaign_links
+WHERE linked = 0
+ORDER BY account_id, campaign_id
+`
+
+type ListUnlinkedCampaignLinksRow struct {
+	AccountID  string `json:"account_id"`
+	CampaignID string `json:"campaign_id"`
+	LinkUrl    string `json:"link_url"`
+}
+
+// Account and campaign pairs whose claim the platform rejected until an
+// external account is linked.
+func (q *Queries) ListUnlinkedCampaignLinks(ctx context.Context) ([]ListUnlinkedCampaignLinksRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUnlinkedCampaignLinks)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUnlinkedCampaignLinksRow
+	for rows.Next() {
+		var i ListUnlinkedCampaignLinksRow
+		if err := rows.Scan(&i.AccountID, &i.CampaignID, &i.LinkUrl); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUpcomingCampaigns = `-- name: ListUpcomingCampaigns :many
 SELECT id, platform, game, name, starts_at, ends_at, status, raw_json, discovered_at, kind, account_linked, account_link_url FROM campaigns
 WHERE starts_at > ?
@@ -345,44 +383,6 @@ func (q *Queries) ListUpcomingCampaigns(ctx context.Context, arg ListUpcomingCam
 			&i.AccountLinked,
 			&i.AccountLinkUrl,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listUnlinkedCampaignLinks = `-- name: ListUnlinkedCampaignLinks :many
-SELECT account_id, campaign_id, link_url
-FROM account_campaign_links
-WHERE linked = 0
-ORDER BY account_id, campaign_id
-`
-
-type ListUnlinkedCampaignLinksRow struct {
-	AccountID  string `json:"account_id"`
-	CampaignID string `json:"campaign_id"`
-	LinkUrl    string `json:"link_url"`
-}
-
-// Account and campaign pairs whose claim the platform rejected until an
-// external account is linked.
-func (q *Queries) ListUnlinkedCampaignLinks(ctx context.Context) ([]ListUnlinkedCampaignLinksRow, error) {
-	rows, err := q.db.QueryContext(ctx, listUnlinkedCampaignLinks)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListUnlinkedCampaignLinksRow
-	for rows.Next() {
-		var i ListUnlinkedCampaignLinksRow
-		if err := rows.Scan(&i.AccountID, &i.CampaignID, &i.LinkUrl); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -3,9 +3,11 @@ import type { Game, SearchHit } from '$lib/api/types';
 import { setLang } from '$lib/i18n/index.svelte';
 import { ApiError } from '$lib/api/client';
 import {
+	byEndingSoonest,
 	campaignLine,
 	commitGames,
 	dupePriority,
+	linkErrorKey,
 	linkHref,
 	linkNames,
 	matchParts,
@@ -47,7 +49,7 @@ describe('recheckAccounts', () => {
 
 beforeEach(() => setLang('en'));
 
-const hit = (name: string): SearchHit => ({ id: name, name, chosen: false, priority: null });
+const hit = (name: string): SearchHit => ({ id: name, name, box_art_url: '', chosen: false, priority: null });
 const game = (id: string): Game => ({
 	id,
 	name: id,
@@ -108,6 +110,26 @@ describe('campaignLine', () => {
 		expect(campaignLine(c, 'UTC')).toBe('3 drops · ends Oct 31');
 		expect(campaignLine({ ...c, drops: 1 }, 'UTC')).toBe('1 drop · ends Oct 31');
 		expect(campaignLine({ ...c, ends_at: null }, 'UTC')).toBe('3 drops');
+	});
+});
+
+describe('byEndingSoonest', () => {
+	const ends = (id: string, ...at: (string | null)[]): Game => ({
+		...game(id),
+		campaigns: at.map((ends_at, i) => ({ id: `${id}${i}`, platform: 'twitch', name: id, drops: 1, ends_at }))
+	});
+	it('puts the game whose campaign ends first on top', () => {
+		const list = [ends('a', '2026-11-05T00:00:00Z'), ends('b', '2026-11-09T00:00:00Z', '2026-11-01T00:00:00Z'), ends('c', '2026-11-03T00:00:00Z')];
+		expect(byEndingSoonest(list).map((g) => g.id)).toEqual(['b', 'c', 'a']);
+	});
+	it('keeps game order for ties and for games with no end date or no campaign', () => {
+		const list = [game('none'), ends('open', null), ends('x', '2026-11-02T00:00:00Z'), ends('y', '2026-11-02T00:00:00Z'), game('none2')];
+		expect(byEndingSoonest(list).map((g) => g.id)).toEqual(['x', 'y', 'none', 'open', 'none2']);
+	});
+	it('does not reorder the input', () => {
+		const list = [ends('a', '2026-11-05T00:00:00Z'), ends('b', '2026-11-01T00:00:00Z')];
+		byEndingSoonest(list);
+		expect(list.map((g) => g.id)).toEqual(['a', 'b']);
 	});
 });
 
@@ -201,5 +223,17 @@ describe('dupePriority', () => {
 		expect(dupePriority(new ApiError(500, { error: 'internal' }))).toBeNull();
 		expect(dupePriority(new ApiError(409, { error: 'exists' }))).toBeNull();
 		expect(dupePriority(new Error('net'))).toBeNull();
+	});
+});
+
+describe('linkErrorKey', () => {
+	it('maps each link failure code to its message', () => {
+		expect(linkErrorKey(new ApiError(400, { error: 'unknown_category' }))).toBe('games.link_unknown');
+		expect(linkErrorKey(new ApiError(502, { error: 'lookup_failed' }))).toBe('games.link_failed');
+		expect(linkErrorKey(new ApiError(409, { error: 'no_account' }))).toBe('games.link_no_account');
+	});
+	it('other failures are null', () => {
+		expect(linkErrorKey(new ApiError(500, { error: 'internal' }))).toBeNull();
+		expect(linkErrorKey(new Error('net'))).toBeNull();
 	});
 });

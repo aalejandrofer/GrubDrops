@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -349,4 +351,68 @@ func TestAcquireSession_CtxCancelledDuringBackoffReturnsPromptly(t *testing.T) {
 		t.Fatal("acquireSession did not respect ctx cancellation during backoff")
 	}
 	require.Error(t, err)
+}
+
+// TestAcquireSession_VerifyFallbackWarnsOncePerAccount: every roster rebuild
+// reruns acquireSession, so a refused refresh on a still-good token warns
+// once per account and error, then logs at debug until something changes.
+func TestAcquireSession_VerifyFallbackWarnsOncePerAccount(t *testing.T) {
+	var buf bytes.Buffer
+	deps := noBackoffDeps()
+	deps.logger = slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	deps.fallbackLog = &refreshFallbackLog{}
+	expired := platform.Session{ExpiresAt: time.Now().Add(-time.Hour), RefreshToken: "rt"}
+	deps.get = func(ctx context.Context, id string) (platform.Session, bool, error) {
+		return expired, true, nil
+	}
+	refreshErr := errors.New("refresh: 400 Bad Request")
+	var refreshOK bool
+	deps.refresh = func(ctx context.Context, s platform.Session) (platform.Session, error) {
+		if refreshOK {
+			return platform.Session{ExpiresAt: time.Now().Add(time.Hour)}, nil
+		}
+		return platform.Session{}, refreshErr
+	}
+	deps.put = func(ctx context.Context, id string, s platform.Session) error { return nil }
+	deps.verify = func(ctx context.Context, s platform.Session) error { return nil }
+	a := gen.Account{ID: "acc-1", Platform: "twitch"}
+	b := gen.Account{ID: "acc-2", Platform: "twitch"}
+
+	warns := func() int {
+		n := strings.Count(buf.String(), "level=WARN msg=\"session refresh failed but the current token still verifies")
+		buf.Reset()
+		return n
+	}
+	load := func(acc gen.Account) {
+		_, reason, err := acquireSession(context.Background(), deps, acc, time.Now())
+		require.NoError(t, err)
+		require.Empty(t, reason)
+	}
+
+	load(a)
+	assert.Equal(t, 1, warns(), "first fallback warns")
+	load(a)
+	load(a)
+	assert.Equal(t, 0, warns(), "repeats with the same error stay at debug")
+	load(b)
+	assert.Equal(t, 1, warns(), "another account warns on its own")
+
+	refreshErr = errors.New("refresh: 401 Unauthorized")
+	load(a)
+	assert.Equal(t, 1, warns(), "a new error text warns again")
+
+	refreshOK = true
+	load(a)
+	refreshOK = false
+	load(a)
+	assert.Equal(t, 1, warns(), "a successful refresh resets the account")
+
+	deps.verify = func(ctx context.Context, s platform.Session) error { return errors.New("token invalid") }
+	_, reason, err := acquireSession(context.Background(), deps, a, time.Now())
+	require.NoError(t, err)
+	require.NotEmpty(t, reason)
+	deps.verify = func(ctx context.Context, s platform.Session) error { return nil }
+	buf.Reset()
+	load(a)
+	assert.Equal(t, 1, warns(), "a failed verify resets the account")
 }

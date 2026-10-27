@@ -176,7 +176,7 @@ func TestSPA_CacheHeaders(t *testing.T) {
 		"index.html":                         {Data: []byte("<html>spa</html>")},
 		"_app/immutable/entry/app.abc123.js": {Data: []byte("export {}")},
 	})
-	for _, p := range []string{"/", "/rewards"} {
+	for _, p := range []string{"/", "/inventory"} {
 		resp, _ := e.do("GET", p, "", nil)
 		assert.Equal(t, 200, resp.StatusCode, p)
 		assert.Equal(t, "no-cache", resp.Header.Get("Cache-Control"), p)
@@ -185,6 +185,16 @@ func TestSPA_CacheHeaders(t *testing.T) {
 	assert.Equal(t, 200, resp.StatusCode)
 	assert.Equal(t, "public, max-age=31536000, immutable", resp.Header.Get("Cache-Control"))
 	assert.True(t, strings.HasPrefix(resp.Header.Get("Content-Type"), "text/javascript"), resp.Header.Get("Content-Type"))
+}
+
+func TestRewardsRedirectsToInventory(t *testing.T) {
+	e := newEnvSPA(t, fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}})
+	cl := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := cl.Get(e.srv.URL + "/rewards")
+	require.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, http.StatusMovedPermanently, resp.StatusCode)
+	assert.Equal(t, "/inventory", resp.Header.Get("Location"))
 }
 
 func TestSPA_MissingAssetIs404(t *testing.T) {

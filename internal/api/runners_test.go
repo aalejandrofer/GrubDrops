@@ -59,6 +59,7 @@ func TestRunners_ShapeAndOrderCustom(t *testing.T) {
 		"game": "Game", "platform": "twitch", "campaign_id": "c-cur", "campaign_name": "Camp cur",
 		"benefit_id": "cur", "benefit_name": "Item cur", "image_url": "http://img/cur",
 		"required_minutes": float64(60), "minutes": float64(12), "ends_at": "2026-11-01T12:00:00Z",
+		"channels": []any{}, "channel_count": float64(0),
 	}, r["current"])
 	up := r["up_next"].([]any)
 	require.Len(t, up, 2)
@@ -201,4 +202,20 @@ func TestAccounts_RecheckLinks(t *testing.T) {
 	resp, b = e.do("POST", "/api/accounts/b2/recheck-links", tok, nil)
 	assert.Equal(t, 502, resp.StatusCode)
 	assert.JSONEq(t, `{"error":"recheck_failed"}`, string(b))
+}
+
+func TestTargetJSON_Channels(t *testing.T) {
+	c := platform.Campaign{AllowedChannels: []string{"oilrats", "a", "b", "c", "d"}, AllowedChannelCount: 5}
+	got := TargetJSON(plan.Target{Campaign: c})
+	assert.Equal(t, []string{"oilrats", "a", "b"}, got.Channels, "capped at three names")
+	assert.Equal(t, 5, got.ChannelCount)
+
+	// Kick sends the list without a count.
+	got = TargetJSON(plan.Target{Campaign: platform.Campaign{AllowedChannels: []string{"oilrats"}}})
+	assert.Equal(t, []string{"oilrats"}, got.Channels)
+	assert.Equal(t, 1, got.ChannelCount)
+
+	got = TargetJSON(plan.Target{})
+	assert.Equal(t, []string{}, got.Channels, "any channel: empty list, not null")
+	assert.Equal(t, 0, got.ChannelCount)
 }

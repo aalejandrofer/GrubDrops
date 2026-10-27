@@ -40,7 +40,7 @@ test('tn refs cover .one and .other', () => {
 test('the real locales pass', () => {
 	const here = dirname(fileURLToPath(import.meta.url));
 	const locales = loadLocales(join(here, '../../internal/i18n/locales'));
-	expect(Object.keys(locales).sort()).toEqual(['en', 'es', 'zh-CN']);
+	expect(Object.keys(locales).sort()).toEqual(['en', 'es', 'tr', 'zh-CN']);
 	const problems = diffKeys(locales);
 	const refs = referencedKeys(loadSources(join(here, '../..')));
 	problems.push(...unusedKeys(Object.keys(locales.en), refs).map((k) => `unused ${k}`));

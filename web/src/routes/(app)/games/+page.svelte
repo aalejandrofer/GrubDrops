@@ -8,15 +8,20 @@
 	import PageHead from '$lib/components/PageHead.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { relTime } from '$lib/format';
-	import { campaignLine, commitGames, dupePriority, linkHref, matchParts, moveGame, moveTarget, suggestions, withoutId } from '$lib/games';
+	import { byEndingSoonest, campaignLine, commitGames, dupePriority, linkErrorKey, linkHref, matchParts, moveGame, moveTarget, suggestions, withoutId } from '$lib/games';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
-	import { prefs } from '$lib/prefs.svelte';
+	import { applyPrefs, prefs } from '$lib/prefs.svelte';
+	import type { Settings } from '$lib/api/types';
 	import { scanStamp } from '$lib/scan';
 	import { reorder } from '$lib/drag';
 	import AccountLists from './AccountLists.svelte';
+	import ForceWatch from './ForceWatch.svelte';
+	import CampaignDrawer, { type CampaignTarget } from '$lib/components/CampaignDrawer.svelte';
 
 	const live = getLive();
+
+	let drawer = $state<CampaignTarget | null>(null);
 
 	let now = $state(Date.now());
 	$effect(() => {
@@ -28,7 +33,24 @@
 	let hits = $state<SearchHit[]>([]);
 	let searchFailed = $state(false);
 	let failed = $state(false);
+	let modeBusy = $state(false);
+	let modeFailed = $state(false);
+
+	/** Saves the drop priority mode, the same setting as Settings, Engine. */
+	async function setMode(mode: Settings['priority_mode']): Promise<void> {
+		if (modeBusy || prefs.priorityMode === mode) return;
+		modeBusy = true;
+		modeFailed = false;
+		try {
+			applyPrefs(await api.saveSettings({ priority_mode: mode }));
+		} catch {
+			modeFailed = true;
+		} finally {
+			modeBusy = false;
+		}
+	}
 	let dupe = $state<number | null>(null);
+	let linkErr = $state<string | null>(null);
 	let busy = $state<string | null>(null);
 	let confirming = $state<string | null>(null);
 	let moved = $state<string | null>(null);
@@ -63,7 +85,8 @@
 			.map((x) => t(x.key, x.vars))
 			.join(' · ')
 	);
-	const rows = $derived(drag ? moveGame(games, drag.from, drag.to) : games);
+	const ending = $derived(prefs.priorityMode === 'ending_soonest');
+	const rows = $derived(ending ? byEndingSoonest(games) : drag ? moveGame(games, drag.from, drag.to) : games);
 	const sugg = $derived(suggestions(hits, q));
 	const head = $derived(
 		live.games ? tn('games.head', games.length, { rel: relTime(lastScan, now) }) : undefined
@@ -93,6 +116,7 @@
 		clearTimeout(timer);
 		searchFailed = false;
 		dupe = null;
+		linkErr = null;
 		const text = q.trim();
 		const mine = ++seq;
 		if (!text) {
@@ -124,6 +148,7 @@
 		busy = name;
 		failed = false;
 		dupe = null;
+		linkErr = null;
 		try {
 			await api.addGame(name);
 			q = '';
@@ -131,7 +156,8 @@
 			seq++;
 		} catch (e) {
 			dupe = dupePriority(e);
-			failed = dupe === null;
+			linkErr = linkErrorKey(e);
+			failed = dupe === null && linkErr === null;
 		} finally {
 			busy = null;
 		}
@@ -172,7 +198,7 @@
 	}
 
 	const dragOpts = {
-		enabled: () => !saving,
+		enabled: () => !saving && !ending,
 		onStart: (from: number) => (drag = { id: games[from].id, from, to: from }),
 		onMove: (to: number) => {
 			if (drag) drag.to = to;
@@ -190,7 +216,9 @@
 			? t('home.state_mining')
 			: g.state === 'waiting'
 				? t('home.state_waiting')
-				: t('home.state_none');
+				: g.state === 'done'
+					? t('home.state_done')
+					: t('home.state_none');
 	}
 
 	onDestroy(() => {
@@ -203,14 +231,35 @@
 <PageHead title={t('nav.games')} status={head}>
 	{#snippet action()}
 		<span class="scan-now">
+			<div class="seg" role="group" aria-label={t('games.view_label')}>
+				<button type="button" aria-pressed={view === 'cards'} onclick={() => setView('cards')}>{t('games.view_cards')}</button>
+				<button type="button" aria-pressed={view === 'list'} onclick={() => setView('list')}>{t('games.view_list')}</button>
+			</div>
 			{#if scanFailed}<small class="bad" role="alert">{t('games.scan_failed')}</small>{/if}
 			<button type="button" class="btn" disabled={scanning} onclick={scanNow}>
 				<Icon name="refresh" />{scanning ? t('games.scanning') : t('games.scan_now')}
 			</button>
 		</span>
 	{/snippet}
-	<div class="cols" class:with-rail={live.accounts.length > 0}>
-		{#if live.accounts.length > 0}<AccountLists />{/if}
+	<div class="cols with-rail">
+		<div class="side">
+			<aside class="rail" aria-labelledby="pm-g">
+				<h2 id="pm-g" class="rh">{t('settings.priority_mode')}</h2>
+				<div class="seg pm" role="group" aria-labelledby="pm-g">
+					<button type="button" aria-pressed={prefs.priorityMode === 'ordered'} disabled={modeBusy} onclick={() => setMode('ordered')}>
+						{t('settings.pm_ordered')}
+					</button>
+					<button type="button" aria-pressed={prefs.priorityMode === 'ending_soonest'} disabled={modeBusy} onclick={() => setMode('ending_soonest')}>
+						{t('settings.pm_ending_soonest')}
+					</button>
+				</div>
+				{#if modeFailed}<p class="err" role="alert">{t('settings.save_failed')}</p>{/if}
+			</aside>
+			{#if live.accounts.length > 0}
+				<AccountLists />
+				<ForceWatch />
+			{/if}
+		</div>
 		<div class="main">
 			<section class="add" aria-label={t('games.add_label')}>
 				<label class="search">
@@ -230,7 +279,7 @@
 							<li>
 								{#if s.kind === 'hit'}
 									{@const m = matchParts(s.hit.name, q)}
-									<span class="thumb" aria-hidden="true">{Array.from(s.hit.name)[0]?.toUpperCase() ?? '?'}</span>
+									<span class="thumb" aria-hidden="true"><BoxArt src={s.hit.box_art_url || null} name={s.hit.name} size="sm" /></span>
 									<span class="nm">
 										<b>{m.pre}{#if m.hit}<mark>{m.hit}</mark>{/if}{m.post}</b>
 										{#if s.hit.chosen && s.hit.priority !== null}
@@ -251,22 +300,14 @@
 							</li>
 						{/each}
 					</ul>
+				{:else}
+					<p class="eg">{t('games.add_example', { url: 'https://www.twitch.tv/directory/category/rust' })}</p>
 				{/if}
 				{#if dupe !== null}<p class="note" role="status">{t('games.already', { n: dupe })}</p>{/if}
+				{#if linkErr}<p class="err" role="alert">{t(linkErr)}</p>{/if}
 				{#if searchFailed}<p class="err" role="alert">{t('home.search_failed')}</p>{/if}
-				<p class="hint">
-					<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>{t('games.scan_hint')}
-				</p>
 			</section>
 
-			<div class="list-head">
-				<h2>{t('games.list_title')}</h2>
-				<p>{t('games.list_hint')}</p>
-				<div class="seg" role="group" aria-label={t('games.view_label')}>
-					<button type="button" aria-pressed={view === 'cards'} onclick={() => setView('cards')}>{t('games.view_cards')}</button>
-					<button type="button" aria-pressed={view === 'list'} onclick={() => setView('list')}>{t('games.view_list')}</button>
-				</div>
-			</div>
 			{#if failed}<p class="err" role="alert">{t('games.save_failed')}</p>{/if}
 
 			{#if live.games && games.length === 0}
@@ -307,7 +348,17 @@
 								<ul class="camps">
 									{#each g.campaigns as c (`${c.platform}/${c.id}`)}
 										<li>
-											<PlatformMark platform={c.platform} /><span>{c.name}</span><small>{campaignLine(c, prefs.zone)}</small>
+											<button
+												type="button"
+												class="camp"
+												data-campaign
+												aria-haspopup="dialog"
+												title={t('campaign.open')}
+												onclick={() => (drawer = { platform: c.platform, id: c.id })}
+											>
+												<PlatformMark platform={c.platform} /><span>{c.name}</span><small>{campaignLine(c, prefs.zone)}</small>
+												<svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="m4.5 2.5 3.5 3.5-3.5 3.5" /></svg>
+											</button>
 										</li>
 									{/each}
 								</ul>
@@ -338,7 +389,14 @@
 	</div>
 </PageHead>
 
+<CampaignDrawer target={drawer} onclose={() => (drawer = null)} />
+
 	{#snippet grip(g: Game, i: number)}
+		{#if ending}
+			<div class="grip locked" title={t('settings.pm_ending_soonest')}>
+				<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+			</div>
+		{:else}
 			<div class="grip">
 				<button type="button" aria-label={t('games.move_up')} title={t('games.move_up')} disabled={i === 0 || saving} onclick={(e) => commit(moveGame(games, i, moveTarget(games.length, i, -1, e.shiftKey)), g.id)}>
 					<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
@@ -354,6 +412,7 @@
 					<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
 				</button>
 			</div>
+		{/if}
 	{/snippet}
 
 <style>
@@ -363,14 +422,28 @@
 		gap: 22px;
 		align-items: start;
 	}
+	.side {
+		display: grid;
+		gap: 12px;
+		position: sticky;
+		top: 12px;
+		max-height: calc(100dvh - 24px);
+		overflow-y: auto;
+	}
 	@media (max-width: 860px) {
 		.cols.with-rail {
 			grid-template-columns: minmax(0, 1fr);
+		}
+		.side {
+			position: static;
+			max-height: none;
+			overflow: visible;
 		}
 	}
 	.scan-now {
 		display: inline-flex;
 		align-items: center;
+		flex-wrap: wrap;
 		gap: 10px;
 	}
 	.scan-now small {
@@ -381,12 +454,13 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		font-size: 12px;
+		font-size: 13px;
 		font-weight: 500;
 		background: var(--surface-2);
 		border: 1px solid var(--border);
-		border-radius: 6px;
-		padding: 3px 9px;
+		border-radius: 8px;
+		height: 32px;
+		padding: 0 14px;
 		color: var(--text);
 		white-space: nowrap;
 		cursor: pointer;
@@ -415,7 +489,7 @@
 	}
 	.add {
 		position: relative;
-		margin-bottom: 28px;
+		margin-bottom: 14px;
 	}
 	.search {
 		display: flex;
@@ -444,6 +518,11 @@
 	.search input::placeholder {
 		color: var(--t3);
 	}
+	.eg {
+		margin: 6px 2px 0;
+		font-size: 11.5px;
+		color: var(--t3);
+	}
 	.sugg {
 		margin: 6px 0 0;
 		padding: 4px;
@@ -469,6 +548,7 @@
 	.thumb {
 		width: 28px;
 		height: 37px;
+		overflow: hidden;
 		border-radius: 4px;
 		flex: none;
 		display: grid;
@@ -512,14 +592,6 @@
 		border-color: transparent;
 		cursor: default;
 	}
-	.hint {
-		margin: 8px 2px 0;
-		color: var(--t3);
-		font-size: 12px;
-		display: flex;
-		align-items: center;
-		gap: 6px;
-	}
 	.note {
 		margin: 8px 2px 0;
 		font-size: 12.5px;
@@ -533,35 +605,50 @@
 	.add .err {
 		margin: 8px 2px 0;
 	}
-	.list-head {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 12px;
-		flex-wrap: wrap;
-		margin-bottom: 10px;
+	.rail {
+		border: 1px solid var(--border-soft);
+		border-radius: 10px;
+		background: var(--surface);
+		padding: 8px;
 	}
-	.list-head h2 {
-		margin: 0;
-		font-size: 13px;
+	.rh {
+		margin: 8px 8px 4px;
+		font-size: 11px;
 		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--t3);
 	}
-	.list-head p {
-		margin: 0;
-		color: var(--t2);
-		font-size: 12.5px;
+	.seg.pm {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		margin: 0 8px 6px;
+	}
+	.seg.pm button {
+		min-width: 0;
+		padding: 4px 6px;
+		font-size: 12px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.rail .err {
+		margin: 0 8px 6px;
+	}
+	.seg button:disabled {
+		cursor: default;
 	}
 	.seg {
 		display: inline-flex;
 		border: 1px solid var(--border);
 		border-radius: 8px;
 		overflow: hidden;
-		margin-left: auto;
 	}
 	.seg button {
 		font: inherit;
 		font-size: 12.5px;
-		padding: 4px 12px;
+		padding: 0 12px;
+		height: 30px;
 		border: 0;
 		background: var(--surface);
 		color: var(--t2);
@@ -582,6 +669,9 @@
 		align-items: center;
 		height: 38px;
 		border-radius: 8px;
+	}
+	.grip.locked {
+		color: var(--accent);
 	}
 	.row .rk {
 		text-align: center;
@@ -739,6 +829,10 @@
 		color: var(--t2);
 		background: var(--surface-3);
 	}
+	.state.done {
+		color: var(--green);
+		background: var(--surface-3);
+	}
 	.rm {
 		margin-left: auto;
 		color: var(--t3);
@@ -788,12 +882,42 @@
 		display: grid;
 		gap: 6px;
 	}
-	.camps li {
+	.camp {
+		width: 100%;
 		display: grid;
-		grid-template-columns: 14px 1fr auto;
+		grid-template-columns: 14px 1fr auto 12px;
 		gap: 10px;
 		align-items: center;
+		margin: -4px -6px;
+		padding: 4px 6px;
+		box-sizing: content-box;
+		border: 0;
+		border-radius: 6px;
+		background: none;
+		color: inherit;
+		font: inherit;
 		font-size: 13px;
+		text-align: left;
+		cursor: pointer;
+	}
+	.camp:hover {
+		background: var(--surface-2);
+	}
+	.camp:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 0;
+	}
+	.chev {
+		width: 12px;
+		height: 12px;
+		fill: none;
+		stroke: var(--t3);
+		stroke-width: 1.6;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+	.camp:hover .chev {
+		stroke: var(--text);
 	}
 	.camps li span:nth-child(2) {
 		white-space: nowrap;
@@ -853,11 +977,12 @@
 		.body {
 			padding: 12px 14px;
 		}
-		.camps li {
-			grid-template-columns: 14px 1fr;
+		.camp {
+			grid-template-columns: 14px 1fr 12px;
 		}
 		.camps li small {
 			grid-column: 2;
+			grid-row: 2;
 			margin-top: -4px;
 		}
 	}

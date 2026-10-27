@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -566,6 +568,48 @@ func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, 
 		out = append(out, platform.Stream{Channel: ch, DropsEnabled: true})
 	}
 	return out, nil
+}
+
+// LookupCategory satisfies platform.CategoryLooker. A 404 means no such
+// category.
+func (b *Backend) LookupCategory(ctx context.Context, s platform.Session, slug string) (string, bool, error) {
+	name, err := b.api.Subcategory(ctx, s, slug)
+	if err != nil {
+		var se *statusError
+		if errors.As(err, &se) && se.status == http.StatusNotFound {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	return name, name != "", nil
+}
+
+// LookupChannel satisfies platform.ChannelLooker. A 404 means no such channel,
+// reported as offline; other failures are errors.
+func (b *Backend) LookupChannel(ctx context.Context, s platform.Session, slug string) (platform.Stream, bool, error) {
+	live, lsID, viewers, category, err := b.api.ChannelLivestream(ctx, s, slug)
+	if err != nil {
+		var se *statusError
+		if errors.As(err, &se) && se.status == http.StatusNotFound {
+			return platform.Stream{}, false, nil
+		}
+		return platform.Stream{}, false, err
+	}
+	if !live {
+		return platform.Stream{}, false, nil
+	}
+	channelID, _, _, err := b.api.channelAndLivestream(ctx, s, slug)
+	if err != nil {
+		return platform.Stream{}, false, err
+	}
+	return platform.Stream{
+		Channel:      slug,
+		ChannelID:    strconv.FormatInt(channelID, 10),
+		BroadcastID:  lsID,
+		ViewerCount:  viewers,
+		Game:         category,
+		DropsEnabled: true,
+	}, true, nil
 }
 
 // probeLive checks each candidate channel's livestream and returns the ones

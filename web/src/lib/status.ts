@@ -3,9 +3,14 @@ import { t, tn } from '$lib/i18n/index.svelte';
 
 export type Tone = 'green' | 'amber' | 'red' | 'grey';
 
+/** Some account force watches. The overview lists watched channels first, so the first row tells. */
+function forceWatching(o: Overview): boolean {
+	return (o.force_watch?.live[0]?.watchers.length ?? 0) > 0;
+}
+
 export function headerTone(o: Overview | null, unreachable: boolean): Tone {
 	if (unreachable) return 'red';
-	if (o?.status.state === 'mining') return o.problems.length > 0 ? 'amber' : 'green';
+	if (o && (o.status.state === 'mining' || forceWatching(o))) return o.problems.length > 0 ? 'amber' : 'green';
 	return o && o.problems.length > 0 ? 'amber' : 'grey';
 }
 
@@ -19,9 +24,9 @@ export function statusText(o: Overview | null, unreachable: boolean): string {
 		case 'mining':
 			return tn('status.mining', o.status.accounts_total, { m: o.status.accounts_mining });
 		case 'nothing_live':
-			return t('status.nothing_live');
+			return forceWatching(o) ? t('status.force_watching') : t('status.nothing_live');
 		default:
-			return t('status.idle');
+			return forceWatching(o) ? t('status.force_watching') : t('status.idle');
 	}
 }
 

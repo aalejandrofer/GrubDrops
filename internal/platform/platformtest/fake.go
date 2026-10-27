@@ -22,7 +22,15 @@ type Fake struct {
 	// OnHeartbeat is called with Mu held. nil = +1 minute to every unclaimed row.
 	OnHeartbeat func(f *Fake)
 
+	// Lookups scripts LookupChannel per login; absent = offline.
+	Lookups map[string]Lookup
+	// Ready is returned by ReadyDrops.
+	Ready    []platform.ReadyDrop
+	ReadyErr error
+
 	ListErr, InventoryErr, StartErr, HeartbeatErr, ClaimErr error
+	// StartErrs fails StartWatch for one channel; StartErr wins when set.
+	StartErrs map[string]error
 
 	// Calls records "List", "Inventory", "Channels:<campID>",
 	// "Start:<channel>", "Heartbeat:<channel>", "Stop:<channel>",
@@ -30,12 +38,45 @@ type Fake struct {
 	Calls []string
 }
 
+// Lookup is one scripted LookupChannel result.
+type Lookup struct {
+	Stream platform.Stream
+	Live   bool
+	Err    error
+}
+
 // NewFake returns an empty Fake.
 func NewFake() *Fake {
 	return &Fake{
 		Streams:  map[string][]platform.Stream{},
 		Progress: map[string]*platform.Progress{},
+		Lookups:  map[string]Lookup{},
 	}
+}
+
+var (
+	_ platform.ChannelLooker   = (*Fake)(nil)
+	_ platform.ReadyDropLister = (*Fake)(nil)
+)
+
+// LookupChannel records "Lookup:<login>" and returns the scripted result.
+func (f *Fake) LookupChannel(_ context.Context, _ platform.Session, login string) (platform.Stream, bool, error) {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+	f.Calls = append(f.Calls, "Lookup:"+login)
+	l := f.Lookups[login]
+	return l.Stream, l.Live, l.Err
+}
+
+// ReadyDrops records "ReadyDrops" and returns Ready.
+func (f *Fake) ReadyDrops(_ context.Context, _ platform.Session) ([]platform.ReadyDrop, error) {
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+	f.Calls = append(f.Calls, "ReadyDrops")
+	if f.ReadyErr != nil {
+		return nil, f.ReadyErr
+	}
+	return append([]platform.ReadyDrop(nil), f.Ready...), nil
 }
 
 var _ platform.Backend = (*Fake)(nil)
@@ -109,6 +150,9 @@ func (f *Fake) StartWatch(_ context.Context, _ platform.Session, s platform.Stre
 	f.Calls = append(f.Calls, "Start:"+s.Channel)
 	if f.StartErr != nil {
 		return platform.WatchHandle{}, f.StartErr
+	}
+	if err := f.StartErrs[s.Channel]; err != nil {
+		return platform.WatchHandle{}, err
 	}
 	return platform.WatchHandle{Channel: s.Channel}, nil
 }
@@ -205,16 +249,27 @@ func (p *PubSubFake) InventoryProgress(ctx context.Context, s platform.Session) 
 	return out, err
 }
 
-// SweepFake adds platform.CompletedSweeper.
+// SweepFake adds platform.CompletedSweeper. Sweeps counts the calls under Mu.
 type SweepFake struct {
 	*Fake
-	Sweep func() []platform.ClaimedReward
+	Sweep  func() []platform.ClaimedReward
+	Sweeps int
 }
 
 var _ platform.Backend = (*SweepFake)(nil)
 var _ platform.CompletedSweeper = (*SweepFake)(nil)
 
+// SweepCount returns how many times SweepCompletedClaims ran.
+func (s *SweepFake) SweepCount() int {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+	return s.Sweeps
+}
+
 func (s *SweepFake) SweepCompletedClaims(_ context.Context, _ platform.Session) ([]platform.ClaimedReward, error) {
+	s.Mu.Lock()
+	s.Sweeps++
+	s.Mu.Unlock()
 	if s.Sweep == nil {
 		return nil, nil
 	}

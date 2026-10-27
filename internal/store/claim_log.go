@@ -102,6 +102,16 @@ func (l *ClaimLog) Recent(ctx context.Context, limit int) ([]ClaimEntry, error) 
 	return claimEntries(rows), nil
 }
 
+// ForCampaign returns every claim of one campaign on one platform, oldest
+// first.
+func (l *ClaimLog) ForCampaign(ctx context.Context, platform, campaignID string) ([]ClaimEntry, error) {
+	rows, err := l.Q.ListClaimLogForCampaign(ctx, gen.ListClaimLogForCampaignParams{Platform: platform, CampaignID: campaignID})
+	if err != nil {
+		return nil, err
+	}
+	return claimEntries(rows), nil
+}
+
 func claimEntries(rows []gen.ClaimLog) []ClaimEntry {
 	out := make([]ClaimEntry, 0, len(rows))
 	for _, r := range rows {

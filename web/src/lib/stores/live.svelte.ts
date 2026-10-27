@@ -1,5 +1,5 @@
 import type { Api } from '$lib/api/client';
-import type { Account, Claim, GamesResp, HealthEvent, Overview, Runner } from '$lib/api/types';
+import type { Account, Claim, ForceChannel, GamesResp, HealthEvent, Overview, Runner } from '$lib/api/types';
 
 export interface EventSourceLike {
 	onopen: (() => void) | null;
@@ -26,6 +26,8 @@ export interface LiveStore {
 	accounts: Account[];
 	recent: Claim[];
 	log: HealthEvent[];
+	/** Force watch channels in rank order, or null before they load. */
+	forceWatch: ForceChannel[] | null;
 	/** The last overview or games load failed. Cleared by the next success. */
 	failed: { overview: boolean; games: boolean };
 	unreachable: boolean;
@@ -79,6 +81,7 @@ export function createLive(deps: LiveDeps): LiveStore {
 		accounts: [],
 		recent: [],
 		log: [],
+		forceWatch: null,
 		failed: { overview: false, games: false },
 		unreachable: false,
 		retryIn: 0,
@@ -125,13 +128,16 @@ export function createLive(deps: LiveDeps): LiveStore {
 	const loadAccounts = async () => {
 		s.accounts = await api.accounts();
 	};
+	const loadForceWatch = async () => {
+		s.forceWatch = (await api.forceWatch()).channels;
+	};
 	const loadRecent = async () => {
 		s.recent = (await api.claims({ limit: MAX_RECENT })).items.slice(0, MAX_RECENT);
 	};
 
 	async function refetchAll(): Promise<void> {
 		await Promise.all(
-			[loadOverview, loadRunners, loadGames, loadAccounts, loadRecent].map((f) => quiet(f()))
+			[loadOverview, loadRunners, loadGames, loadAccounts, loadRecent, loadForceWatch].map((f) => quiet(f()))
 		);
 		touch();
 	}
@@ -172,8 +178,16 @@ export function createLive(deps: LiveDeps): LiveStore {
 			const r = parse<Runner>(ev);
 			if (!r) return;
 			const i = s.runners.findIndex((x) => x.account_id === r.account_id);
+			const was = i < 0 ? undefined : s.runners[i].state;
 			s.runners = i < 0 ? [...s.runners, r] : s.runners.map((x, j) => (j === i ? r : x));
 			touch();
+			// The Home force watch tile names who watches; it lives on the overview.
+			const force = (st: string | undefined) => st === 'force_watching';
+			// The force list carries live state; a switch is the cheap moment to refresh it.
+			if (force(was) !== force(r.state)) {
+				void quiet(loadOverview());
+				void quiet(loadForceWatch());
+			}
 		});
 		src.addEventListener('claim', (ev) => {
 			const c = parse<Claim>(ev);
@@ -191,6 +205,13 @@ export function createLive(deps: LiveDeps): LiveStore {
 			touch();
 			void quiet(loadAccounts());
 			void quiet(loadRunners());
+			void quiet(loadOverview());
+			// A removed account drops out of its force watch channels.
+			void quiet(loadForceWatch());
+		});
+		src.addEventListener('force_watch', () => {
+			touch();
+			void quiet(loadForceWatch());
 			void quiet(loadOverview());
 		});
 		src.addEventListener('log', (ev) => {

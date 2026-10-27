@@ -47,7 +47,8 @@ const STATES = new Set([
 	'sleeping',
 	'awaiting_connect',
 	'needs_login',
-	'no_games'
+	'no_games',
+	'force_watching'
 ]);
 
 /** Runner state enums read through the accounts.state.* labels; anything else stays raw. */

@@ -132,6 +132,8 @@ func newResEnv(t *testing.T, mut func(*Deps)) *resEnv {
 		Claims:  store.NewClaimLog(q),
 		Scans:   store.NewAccountScans(q),
 		Chosen:  store.NewChosenGames(db, q),
+
+		ForceWatch: store.NewForceWatch(db, q),
 	}
 	cr, err := store.NewCryptor(testAgeKey)
 	require.NoError(t, err)
@@ -153,6 +155,7 @@ func newResEnv(t *testing.T, mut func(*Deps)) *resEnv {
 	}
 	s := newServer(d)
 	s.routesOverview(s.protected)
+	s.routesForceWatch(s.protected)
 	srv := httptest.NewServer(s.handler())
 	t.Cleanup(srv.Close)
 	jar, _ := cookiejar.New(nil)

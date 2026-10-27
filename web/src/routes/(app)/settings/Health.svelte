@@ -474,7 +474,10 @@
 		grid-template-columns: 56px 8px 104px minmax(0, 1fr);
 		gap: 10px;
 		align-items: baseline;
-		padding: 4px 16px;
+		padding: 6px 16px;
+	}
+	.log li + li {
+		border-top: 1px solid var(--border-soft);
 	}
 	.log li:hover {
 		background: var(--surface-2);
@@ -487,7 +490,9 @@
 		width: 7px;
 		height: 7px;
 		border-radius: 50%;
-		align-self: center;
+		/* Centre on the first line, so a wrapped message keeps its dot at the top. */
+		align-self: start;
+		margin-top: calc(0.75em - 3.5px);
 	}
 	.lv.info {
 		background: var(--t3);
@@ -502,7 +507,7 @@
 		background: var(--red);
 	}
 	.acc {
-		color: var(--text);
+		color: var(--t2);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -515,13 +520,13 @@
 		margin-right: 6px;
 		font-weight: 600;
 	}
-	.log li.ok :is(.acc, .msg) {
+	.log li.ok .msg {
 		color: var(--green);
 	}
-	.log li.warn :is(.acc, .msg) {
+	.log li.warn .msg {
 		color: var(--amber);
 	}
-	.log li.err :is(.acc, .msg) {
+	.log li.err .msg {
 		color: var(--red);
 	}
 	.empty {
@@ -581,7 +586,7 @@
 		}
 		.msg {
 			grid-column: 3;
-			margin-top: -4px;
+			margin-top: -2px;
 		}
 	}
 </style>

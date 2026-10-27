@@ -199,25 +199,18 @@ func (ch *channels) listEligible(ctx context.Context, sess platform.Session, c p
 			if probeCtx.Err() != nil {
 				return
 			}
-			var sd streamLiveData
-			if err := ch.c.gql(probeCtx, sess.AccessToken, OpGetStreamInfo,
-				map[string]any{"channel": login}, &sd); err != nil {
+			st, live, err := ch.lookup(probeCtx, sess, login)
+			if err != nil {
 				errMu.Lock()
 				if firstErr == nil {
-					firstErr = fmt.Errorf("stream live %s: %w", login, err)
+					firstErr = err
 					cancel()
 				}
 				errMu.Unlock()
 				return
 			}
-			if sd.User.Stream == nil {
+			if !live {
 				return
-			}
-			gameID, gameName := "", ""
-			if sd.User.Stream.Game != nil {
-				gameID, gameName = sd.User.Stream.Game.ID, sd.User.Stream.Game.DisplayName
-			} else if sd.User.BroadcastSettings.Game != nil {
-				gameID, gameName = sd.User.BroadcastSettings.Game.ID, sd.User.BroadcastSettings.Game.DisplayName
 			}
 			// Category gate: an allow-listed channel that's live but
 			// streaming a DIFFERENT game earns ZERO drop progress — Twitch
@@ -229,20 +222,12 @@ func (ch *channels) listEligible(ctx context.Context, sess platform.Session, c p
 			// both sides are known; an empty/unknown stream game falls
 			// through (rare metadata gap — the AvailableDropIDs probe in
 			// pickStream is the secondary gate).
-			if c.Game != "" && gameName != "" && !sameGame(gameName, c.Game) {
+			if c.Game != "" && st.Game != "" && !sameGame(st.Game, c.Game) {
 				slog.Debug("watcher skip allow-list channel on wrong game",
-					"channel", sd.User.Login, "streaming", gameName, "want", c.Game)
+					"channel", st.Channel, "streaming", st.Game, "want", c.Game)
 				return
 			}
-			results[i] = platform.Stream{
-				Channel:      sd.User.Login,
-				ViewerCount:  sd.User.Stream.ViewersCount,
-				DropsEnabled: true,
-				ChannelID:    sd.User.ID,
-				BroadcastID:  sd.User.Stream.ID,
-				GameID:       gameID,
-				Game:         gameName,
-			}
+			results[i] = st
 			hits[i] = true
 		}()
 	}
@@ -257,4 +242,32 @@ func (ch *channels) listEligible(ctx context.Context, sess platform.Session, c p
 		}
 	}
 	return out, nil
+}
+
+// lookup probes one channel login. live=false (nil error) when offline. No
+// game filter applies; callers gate on category themselves.
+func (ch *channels) lookup(ctx context.Context, sess platform.Session, login string) (platform.Stream, bool, error) {
+	var sd streamLiveData
+	if err := ch.c.gql(ctx, sess.AccessToken, OpGetStreamInfo,
+		map[string]any{"channel": login}, &sd); err != nil {
+		return platform.Stream{}, false, fmt.Errorf("stream live %s: %w", login, err)
+	}
+	if sd.User.Stream == nil {
+		return platform.Stream{}, false, nil
+	}
+	gameID, gameName := "", ""
+	if sd.User.Stream.Game != nil {
+		gameID, gameName = sd.User.Stream.Game.ID, sd.User.Stream.Game.DisplayName
+	} else if sd.User.BroadcastSettings.Game != nil {
+		gameID, gameName = sd.User.BroadcastSettings.Game.ID, sd.User.BroadcastSettings.Game.DisplayName
+	}
+	return platform.Stream{
+		Channel:      sd.User.Login,
+		ViewerCount:  sd.User.Stream.ViewersCount,
+		DropsEnabled: true,
+		ChannelID:    sd.User.ID,
+		BroadcastID:  sd.User.Stream.ID,
+		GameID:       gameID,
+		Game:         gameName,
+	}, true, nil
 }

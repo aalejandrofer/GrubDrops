@@ -728,3 +728,36 @@ func TestKickBackend_LinkRejectionFlagsCampaign(t *testing.T) {
 	require.Len(t, other, 1)
 	assert.False(t, other[0].ClaimNeedsLink, "another account is not flagged")
 }
+
+func TestLookupChannel(t *testing.T) {
+	f := &fakeDoer{resp: map[string]fakeResp{
+		"https://kick.com/api/v2/channels/tippie/livestream": {200, `{"data":{"id":999,"viewer_count":50,"categories":[{"name":"Rust","slug":"rust"}]}}`},
+		"https://kick.com/api/v2/channels/tippie":            {200, `{"id":27589,"livestream":{"id":999,"is_live":true}}`},
+		"https://kick.com/api/v2/channels/bob/livestream":    {200, `{"data":null}`},
+		"https://kick.com/api/v2/channels/ghost/livestream":  {404, `{}`},
+		"https://kick.com/api/v2/channels/broken/livestream": {500, `oops`},
+	}}
+	b := withFake(f)
+	ctx := context.Background()
+
+	st, live, err := b.LookupChannel(ctx, sess("acc1"), "tippie")
+	require.NoError(t, err)
+	require.True(t, live)
+	assert.Equal(t, "tippie", st.Channel)
+	assert.Equal(t, "27589", st.ChannelID)
+	assert.Equal(t, "999", st.BroadcastID)
+	assert.Equal(t, 50, st.ViewerCount)
+	assert.Equal(t, "Rust", st.Game)
+
+	_, live, err = b.LookupChannel(ctx, sess("acc1"), "bob")
+	require.NoError(t, err)
+	assert.False(t, live)
+
+	_, live, err = b.LookupChannel(ctx, sess("acc1"), "ghost")
+	require.NoError(t, err)
+	assert.False(t, live)
+
+	_, live, err = b.LookupChannel(ctx, sess("acc1"), "broken")
+	require.Error(t, err)
+	assert.False(t, live)
+}

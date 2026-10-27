@@ -172,6 +172,38 @@ type CompletedSweeper interface {
 	SweepCompletedClaims(ctx context.Context, s Session) ([]ClaimedReward, error)
 }
 
+// ChannelLooker is optional: one channel's live stream by login (Twitch) or slug (Kick).
+type ChannelLooker interface {
+	LookupChannel(ctx context.Context, s Session, login string) (stream Stream, live bool, err error)
+}
+
+// CategoryLooker is optional: a game's display name from its directory slug,
+// e.g. the overwatch-2 in twitch.tv/directory/category/overwatch-2. ok is
+// false when the platform knows no such category.
+type CategoryLooker interface {
+	LookupCategory(ctx context.Context, s Session, slug string) (name string, ok bool, err error)
+}
+
+// GameIDLooker is optional: a game's platform id from its name, for box art
+// of games no campaign has named yet. ok is false when the platform knows
+// no such game.
+type GameIDLooker interface {
+	LookupGameID(ctx context.Context, s Session, name string) (id string, ok bool, err error)
+}
+
+// ReadyDropLister is optional: drops in the inventory that are fully watched and unclaimed,
+// whatever their game. Twitch only.
+type ReadyDropLister interface {
+	ReadyDrops(ctx context.Context, s Session) ([]ReadyDrop, error)
+}
+
+// ReadyDrop is one fully watched, unclaimed inventory drop and the campaign
+// it belongs to. Campaign carries name, game and link state, no Benefits.
+type ReadyDrop struct {
+	Campaign Campaign
+	Benefit  DropBenefit
+}
+
 type Registry struct {
 	backends map[string]Backend
 }

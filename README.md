@@ -40,7 +40,6 @@ services:
     restart: unless-stopped
     ports: ["8080:8080"]
     environment:
-      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?run keygen first}"
       GRUB_SECURE_COOKIES: "0"   # 1 behind HTTPS
       TZ: Europe/London
     volumes:
@@ -49,15 +48,14 @@ services:
 ```
 
 ```bash
-docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen   # save this key
 mkdir -p data && sudo chown 65532:65532 data
-GRUB_MASTER_KEY='AGE-SECRET-KEY-1...' docker compose up -d
+docker compose up -d
 ```
 
 Open http://localhost:8080 and create the admin login. A wizard then walks you
 through adding an account and picking games.
 
-- `GRUB_MASTER_KEY` must be an age key from `keygen`, and you must reuse the same key on every restart. It encrypts the stored sessions.
+- On first start the miner creates `data/master.key` and reuses it after that. It encrypts the stored sessions, so keep it with `miner.db`. To keep the key outside `./data`, set `GRUB_MASTER_KEY` to the output of `docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen`; it wins over the file.
 - The container runs as UID 65532, so `./data` must be writable by that user.
 - `GRUB_SECURE_COOKIES` must match how you reach the UI: `0` for plain HTTP, `1` for HTTPS. A mismatch causes "Invalid CSRF token".
 - The docker socket is only needed for Kick. The miner uses it to start a Chrome sidecar per Kick account. Drop the mount if you only mine Twitch.
@@ -83,12 +81,12 @@ paste again.
 
 ## Configuration
 
-Only `GRUB_MASTER_KEY` is required. Every variable is listed in
+No variable is required. Every variable is listed in
 [`deploy/docker-compose.yml`](deploy/docker-compose.yml).
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `GRUB_MASTER_KEY` | required | age key that encrypts stored sessions |
+| `GRUB_MASTER_KEY` | `master.key` next to the DB | age key that encrypts stored sessions; generated on first start when unset |
 | `GRUB_HTTP_ADDR` | `0.0.0.0:8080` | Listen address |
 | `GRUB_DB_PATH` | `/data/miner.db` | SQLite file |
 | `GRUB_SECURE_COOKIES` | `0` | `1` when served over HTTPS |
@@ -97,7 +95,7 @@ Only `GRUB_MASTER_KEY` is required. Every variable is listed in
 | `GRUB_TELEGRAM_BOT_TOKEN` | none | Telegram bot token, used when none is saved in Settings |
 | `GRUB_TELEGRAM_CHAT_ID` | none | Telegram chat ID, used when none is saved in Settings |
 | `GRUB_UPDATE_CHECK` | on | `0` turns off the GitHub release check |
-| `GRUB_UPDATE_INTERVAL` | `6h` | How often the release check runs |
+| `GRUB_UPDATE_INTERVAL` | `1h` | How often the release check runs |
 | `GRUB_AUTHCHECK_INTERVAL` | `1h` | How often every account's login is checked |
 | `GRUB_CANARY_INTERVAL` | Settings value | Overrides the accrual canary interval set in Settings |
 | `GRUB_LOG_RING` | `1000` | Recent log lines kept in memory |
@@ -141,7 +139,7 @@ SSO turns on when the first four variables are set. Password login still works.
 <p align="center">
   <img src="docs/screenshots/discover.png" width="32%" alt="Discover: current Twitch and Kick campaigns grouped by game">
   <img src="docs/screenshots/games.png" width="32%" alt="Games: chosen games in priority order, with a Lists rail for per-account game lists">
-  <img src="docs/screenshots/rewards.png" width="32%" alt="Rewards: drops in progress, Up next and claim history">
+  <img src="docs/screenshots/rewards.png" width="32%" alt="Inventory: drops in progress, Up next and claim history">
 </p>
 
 ## Development

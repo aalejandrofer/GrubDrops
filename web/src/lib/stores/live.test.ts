@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Api } from '$lib/api/client';
-import type { Claim, HealthEvent, Runner } from '$lib/api/types';
+import type { Claim, ForceChannel, HealthEvent, Runner } from '$lib/api/types';
 import { createLive, upsertBy, type EventSourceLike } from './live.svelte';
 
 class FakeSource implements EventSourceLike {
@@ -29,6 +29,7 @@ function setup(session: () => Promise<{ authed: boolean }> = async () => ({ auth
 		games: vi.fn(async () => ({ games: [], last_scan_at: null })),
 		accounts: vi.fn(async () => []),
 		claims: vi.fn(async () => ({ total: 0, items: [], games: [], accounts: [] })),
+		forceWatch: vi.fn(async () => ({ channels: [] as ForceChannel[] })),
 		session: vi.fn(session)
 	};
 	const sources: FakeSource[] = [];
@@ -106,7 +107,39 @@ describe('live events', () => {
 		expect(api.accounts).toHaveBeenCalledTimes(1);
 		expect(api.runners).toHaveBeenCalledTimes(1);
 		expect(api.overview).toHaveBeenCalledTimes(1);
+		// A removed account leaves force watch on the server; reload the list.
+		expect(api.forceWatch).toHaveBeenCalledTimes(1);
 		expect(api.games).not.toHaveBeenCalled();
+	});
+
+	it('force_watch event refetches the list and overview', async () => {
+		const { api, live, cur } = setup();
+		const c: ForceChannel = { platform: 'twitch', channel: 'keshaeuw', live: true, accounts: ['a'], watching: [] };
+		api.forceWatch.mockResolvedValueOnce({ channels: [c] });
+		cur().emit('force_watch', {});
+		await settle();
+		expect(api.forceWatch).toHaveBeenCalledTimes(1);
+		expect(api.overview).toHaveBeenCalledTimes(1);
+		expect(api.games).not.toHaveBeenCalled();
+		expect(live.forceWatch).toEqual([c]);
+	});
+
+	it('a runner entering or leaving force watching refetches overview and the force list', async () => {
+		const { api, cur } = setup();
+		const r = (id: string, state: Runner['state']) => ({ account_id: id, state }) as Runner;
+		const calls = () => [api.overview.mock.calls.length, api.forceWatch.mock.calls.length];
+		cur().emit('runner', r('a', 'watching'));
+		await settle();
+		expect(calls()).toEqual([0, 0]);
+		cur().emit('runner', r('a', 'force_watching'));
+		await settle();
+		expect(calls()).toEqual([1, 1]);
+		cur().emit('runner', r('a', 'force_watching'));
+		await settle();
+		expect(calls()).toEqual([1, 1]);
+		cur().emit('runner', r('a', 'idle'));
+		await settle();
+		expect(calls()).toEqual([2, 2]);
 	});
 
 	it('log event prepends, capped at 50', () => {
@@ -157,11 +190,11 @@ describe('live reconnect', () => {
 		await settle();
 		expect(live.unreachable).toBe(true);
 		pending.shift()!();
-		const before = [api.overview, api.runners, api.games, api.accounts, api.claims].map((m) => m.mock.calls.length);
+		const before = [api.overview, api.runners, api.games, api.accounts, api.claims, api.forceWatch].map((m) => m.mock.calls.length);
 		cur().onopen!();
 		await settle();
-		const after = [api.overview, api.runners, api.games, api.accounts, api.claims].map((m) => m.mock.calls.length);
-		expect(after.map((n, i) => n - before[i])).toEqual([1, 1, 1, 1, 1]);
+		const after = [api.overview, api.runners, api.games, api.accounts, api.claims, api.forceWatch].map((m) => m.mock.calls.length);
+		expect(after.map((n, i) => n - before[i])).toEqual([1, 1, 1, 1, 1, 1]);
 		expect(api.claims).toHaveBeenLastCalledWith({ limit: 10 });
 		expect(live.unreachable).toBe(false);
 		sources[1].onerror!();

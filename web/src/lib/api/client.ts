@@ -5,12 +5,15 @@ import type {
 	AccountGames,
 	AndroidLogin,
 	ApiErrorBody,
+	CampaignDetail,
 	Claim,
 	ClaimsQuery,
 	ClaimsResp,
 	DeviceStart,
 	DeviceStatus,
 	DiscoverResp,
+	ForceChannel,
+	ForceChannelPut,
 	GamesResp,
 	Game,
 	Health,
@@ -71,10 +74,15 @@ export interface Api {
 	/** refresh bypasses the server cache, at most once a minute. */
 	discover(refresh?: boolean): Promise<DiscoverResp>;
 	claims(q: ClaimsQuery): Promise<ClaimsResp>;
+	/** Every drop of one campaign with each account's state; 404 when unknown. */
+	campaign(platform: Platform, id: string): Promise<CampaignDetail>;
 	/** Marks a planned drop collected by hand. */
 	markCollected(accountId: string, benefitId: string): Promise<Claim>;
 	removeClaim(accountId: string, benefitId: string): Promise<void>;
 	accounts(): Promise<Account[]>;
+	forceWatch(): Promise<{ channels: ForceChannel[] }>;
+	/** Replaces the whole list; its order is the rank. */
+	putForceWatch(channels: ForceChannelPut[]): Promise<{ channels: ForceChannel[] }>;
 	addAccount(platform: Platform, name?: string): Promise<{ id: string }>;
 	renameAccount(id: string, name: string): Promise<void>;
 	setAccountOrder(ids: string[]): Promise<void>;
@@ -230,7 +238,11 @@ export function createClient(opts: ClientOpts): Api {
 			const qs = p.toString();
 			return get(`/api/claims${qs ? `?${qs}` : ''}`);
 		},
+		campaign: (platform, id) => get(`/api/campaigns/${enc(platform)}/${enc(id)}`),
 		accounts: () => get('/api/accounts'),
+		forceWatch: () => get('/api/force-watch'),
+		putForceWatch: (channels) =>
+			send('PUT', '/api/force-watch', { channels }) as Promise<{ channels: ForceChannel[] }>,
 		addAccount: (platform, name) => post('/api/accounts', name ? { platform, name } : { platform }),
 		markCollected: (accountId, benefitId) => post('/api/claims', { account_id: accountId, benefit_id: benefitId }),
 		removeClaim: (accountId, benefitId) =>

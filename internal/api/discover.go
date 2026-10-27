@@ -60,10 +60,31 @@ func (s *server) serveDiscover(w http.ResponseWriter, r *http.Request, refresh b
 		return
 	}
 	snap := s.d.Discover.Get(r.Context(), refresh)
-	writeJSON(w, http.StatusOK, discoverView(snap, s.d.Discover))
+	writeJSON(w, http.StatusOK, discoverView(snap, s.d.Discover, s.chosenTwitchArt(r)))
 }
 
-func discoverView(snap discover.Snapshot, svc *discover.Service) discoverJSON {
+// chosenTwitchArt maps each chosen game with a known Twitch id, by
+// gameslug.Slug of its name, to its id-form box art. Empty on error.
+func (s *server) chosenTwitchArt(r *http.Request) map[string]string {
+	out := map[string]string{}
+	if s.d.Chosen == nil {
+		return out
+	}
+	chosen, err := s.d.Chosen.List(r.Context())
+	if err != nil {
+		return out
+	}
+	for _, c := range chosen {
+		if u := twitch.BoxArtURL("", c.TwitchGameID); u != "" {
+			out[gameslug.Slug(c.Name)] = u
+		}
+	}
+	return out
+}
+
+// discoverView builds the Discover body. chosenArt fills in, after the
+// snapshot's own Twitch art, for games only a chosen game's id covers.
+func discoverView(snap discover.Snapshot, svc *discover.Service, chosenArt map[string]string) discoverJSON {
 	out := discoverJSON{
 		FetchedAt:     rfc3339(snap.FetchedAt),
 		NextRefreshAt: rfc3339(svc.NextRefresh()),
@@ -74,6 +95,11 @@ func discoverView(snap discover.Snapshot, svc *discover.Service) discoverJSON {
 		out.Platforms[name] = discoverPlatformJSON{OK: res.Err == nil, Error: discover.ErrCode(res.Err), Count: len(res.Campaigns)}
 	}
 	art := twitchArtBySlug(snap)
+	for k, u := range chosenArt {
+		if art[k] == "" {
+			art[k] = u
+		}
+	}
 	for _, res := range snap.Results {
 		for _, c := range res.Campaigns {
 			out.Campaigns = append(out.Campaigns, discoverCampaign(c, art))
@@ -112,7 +138,7 @@ func twitchArtBySlug(snap discover.Snapshot) map[string]string {
 // campaignBoxArt is the image the SPA loads for a campaign's game. Twitch:
 // the GQL game.boxArtURL, then the IGDB id form. Kick: the category image
 // through the /api/img/kick proxy, then the same game's Twitch art in this
-// snapshot. Both end with the name-keyed Twitch URL, which only older games
+// snapshot or from its chosen game's Twitch id. Both end with the name-keyed Twitch URL, which only older games
 // answer.
 func campaignBoxArt(c platform.Campaign, twitchArt map[string]string) string {
 	switch c.Platform {

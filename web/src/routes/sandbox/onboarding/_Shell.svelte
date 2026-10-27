@@ -6,7 +6,7 @@
 	import './_ob.css';
 
 	let { tabs = true, children }: { tabs?: boolean; children: Snippet } = $props();
-	const items = ['nav.home', 'nav.games', 'nav.rewards', 'nav.settings'];
+	const items = ['nav.home', 'nav.games', 'nav.inventory', 'nav.settings'];
 </script>
 
 <div class="ob">

@@ -28,10 +28,25 @@ type Collector struct {
 	// OnFound is called after each inventory-found claim OnScan records. nil
 	// = no-op. Set it before the first scan.
 	OnFound func(ctx context.Context, e store.ClaimEntry)
+	// LookupTwitchGameID finds a game's Twitch id by name, for chosen games
+	// no Twitch campaign has named yet. nil = no lookup. Set it before the
+	// first scan.
+	LookupTwitchGameID func(ctx context.Context, name string) (id string, ok bool, err error)
 
 	mu   sync.Mutex
 	last map[string]map[string]store.DropState // account -> benefit -> state
+
+	idMu    sync.Mutex
+	idTried map[string]time.Time // game row id -> last lookup, while one is due or running
+	lookups sync.WaitGroup
 }
+
+// twitchIDRetry spaces lookups of a game Twitch did not know, such as a
+// Kick-only category.
+const twitchIDRetry = 6 * time.Hour
+
+// twitchIDTimeout bounds one batch of Twitch game id lookups.
+const twitchIDTimeout = 30 * time.Second
 
 var _ runner.ClaimLog = (*Collector)(nil)
 
@@ -44,6 +59,7 @@ func New(db *sql.DB, q *gen.Queries) *Collector {
 		Chosen:  store.NewChosenGames(db, q),
 		Board:   NewBoard(),
 		last:    map[string]map[string]store.DropState{},
+		idTried: map[string]time.Time{},
 	}
 }
 
@@ -123,6 +139,7 @@ func (c *Collector) storeTwitchGameIDs(ctx context.Context, s runner.Scan) {
 	for i, g := range chosen {
 		games[i] = plan.Game{Name: g.Name, Slug: g.Slug}
 	}
+	named := map[int]bool{}
 	for _, camp := range s.Campaigns {
 		if camp.Platform != "twitch" || camp.GameID == "" {
 			continue
@@ -131,10 +148,63 @@ func (c *Collector) storeTwitchGameIDs(ctx context.Context, s runner.Scan) {
 		if !ok {
 			continue
 		}
+		named[i] = true
 		if err := c.Chosen.Q.SetGameTwitchID(ctx, gen.SetGameTwitchIDParams{TwitchGameID: camp.GameID, ID: chosen[i].ID}); err != nil {
 			c.logErr("collect: store twitch game id failed", s.AccountID, err)
 		}
 	}
+	var missing []store.ChosenGame
+	for i, g := range chosen {
+		if g.TwitchGameID == "" && !named[i] {
+			missing = append(missing, g)
+		}
+	}
+	c.lookUpTwitchGameIDs(missing)
+}
+
+// lookUpTwitchGameIDs asks Twitch, in the background, for the ids of games
+// that are due a lookup. A found id is saved; a miss waits twitchIDRetry;
+// an error retries on the next scan.
+func (c *Collector) lookUpTwitchGameIDs(games []store.ChosenGame) {
+	if c.LookupTwitchGameID == nil || len(games) == 0 {
+		return
+	}
+	now := c.now()
+	var due []store.ChosenGame
+	c.idMu.Lock()
+	for _, g := range games {
+		if t, ok := c.idTried[g.ID]; ok && now.Sub(t) < twitchIDRetry {
+			continue
+		}
+		c.idTried[g.ID] = now
+		due = append(due, g)
+	}
+	c.idMu.Unlock()
+	if len(due) == 0 {
+		return
+	}
+	c.lookups.Add(1)
+	go func() {
+		defer c.lookups.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), twitchIDTimeout)
+		defer cancel()
+		for _, g := range due {
+			id, ok, err := c.LookupTwitchGameID(ctx, g.Name)
+			if err != nil {
+				slog.Debug("collect: twitch game id lookup failed", "game", g.Name, "err", err)
+				c.idMu.Lock()
+				delete(c.idTried, g.ID)
+				c.idMu.Unlock()
+				continue
+			}
+			if !ok {
+				continue
+			}
+			if err := c.Chosen.Q.SetGameTwitchID(ctx, gen.SetGameTwitchIDParams{TwitchGameID: id, ID: g.ID}); err != nil {
+				c.logErr("collect: store twitch game id failed", "", err)
+			}
+		}
+	}()
 }
 
 // OnProgress advances cached drop states from fresh inventory progress.

@@ -9,7 +9,7 @@ import {
 	readPageSize,
 	validPageSize,
 	writePageSize
-} from './rewards';
+} from './inventory';
 
 const R = () => structuredClone(runnersMining) as Runner[];
 

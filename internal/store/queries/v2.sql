@@ -111,6 +111,11 @@ WHERE (sqlc.arg(game) = '' OR game = sqlc.arg(game))
 -- name: ListClaimLogGames :many
 SELECT DISTINCT game FROM claim_log WHERE game <> '' ORDER BY game ASC;
 
+-- name: ListClaimLogForCampaign :many
+-- Every claim of one campaign on one platform, oldest first.
+SELECT * FROM claim_log WHERE platform = ? AND campaign_id = ?
+ORDER BY claimed_at ASC, account_id ASC, benefit_id ASC;
+
 -- name: GetClaimLog :one
 SELECT * FROM claim_log WHERE account_id = ? AND benefit_id = ?;
 

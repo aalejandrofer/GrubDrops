@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Claim, Game, Overview, Runner } from '$lib/api/types';
+import type { Account, Claim, Game, Overview, Runner } from '$lib/api/types';
+import accountsFx from '$lib/fixtures/accounts.json';
 import claims from '$lib/fixtures/claims.json';
 import games from '$lib/fixtures/games.json';
 import first from '$lib/fixtures/overview.first_run.json';
@@ -7,10 +8,22 @@ import mining from '$lib/fixtures/overview.mining.json';
 import nothing from '$lib/fixtures/overview.nothing_live.json';
 import many from '$lib/fixtures/runners.many.json';
 import runnersMining from '$lib/fixtures/runners.mining.json';
-import { foldRows, gameCards, groupClaims, homeView, fitCount, normName, visibleCards, type GameCard } from './home';
+import {
+	cardCampaign,
+	foldRows,
+	gameCards,
+	groupClaims,
+	homeView,
+	fitCount,
+	normName,
+	notMining,
+	visibleCards,
+	type GameCard
+} from './home';
 
 const G = () => structuredClone(games.games) as Game[];
 const R = () => structuredClone(runnersMining) as Runner[];
+const A = () => structuredClone(accountsFx) as Account[];
 
 describe('normName', () => {
 	it('trims, lowercases, collapses spaces', () => {
@@ -34,37 +47,54 @@ describe('gameCards', () => {
 		const c = gameCards(G(), r);
 		expect(c[0].rows.map((x) => x.runner.account_name)).toContain('hJune');
 	});
-	it('needs_login muted on card 1 only', () => {
+	it('cards hold only accounts mining their game', () => {
 		const c = gameCards(G(), R());
-		const muted = c.map((x) => x.rows.filter((y) => y.muted).length);
-		expect(muted).toEqual([1, 0, 0, 0]);
+		expect(c.map((x) => x.rows.length)).toEqual([2, 0, 0, 0]);
+		expect(c[0].rows.map((x) => x.runner.account_id)).not.toContain('acc-kick');
 	});
 	it('rows sorted most advanced first', () => {
 		const c = gameCards(G(), R());
-		const live = c[0].rows.filter((x) => !x.muted);
-		expect(live.map((x) => x.runner.account_name)).toEqual(['hJune', 'grub_alt']);
-		expect(live[0].progress).toBeCloseTo(42 / 60);
-		expect(c[0].rows[c[0].rows.length - 1].muted).toBe(true);
+		expect(c[0].rows.map((x) => x.runner.account_name)).toEqual(['hJune', 'grub_alt']);
+		expect(c[0].rows[0].progress).toBeCloseTo(42 / 60);
 	});
 	it("moreInUpNext counts that game's queued drops", () => {
 		const c = gameCards(G(), R());
 		expect(c[0].moreInUpNext).toBe(1);
 		expect(c[1].moreInUpNext).toBe(1);
 		expect(c[1].queued.map((t) => t.game)).toEqual(['Marvel Rivals']);
-		expect(c[1].queuedBy).toBe('hJune');
+		expect(c[1].waitFor).toEqual({ kind: 'account', account: 'hJune' });
 		expect(c[3].moreInUpNext).toBe(0);
+	});
+	it('an idle account with the drop queued waits for a live channel', () => {
+		const r = R();
+		r[0].current = null;
+		r[0].state = 'idle';
+		const t = r[0].up_next.find((x) => x.game === 'Marvel Rivals')!;
+		t.channels = ['oilrats', 'a', 'b'];
+		t.channel_count = 5;
+		const c = gameCards(G(), r);
+		expect(c[1].waitFor).toEqual({ kind: 'live', channels: ['oilrats', 'a', 'b'], more: 2 });
+	});
+	it('a busy account waits for the account even if another is signed out', () => {
+		const r = R();
+		r[2].up_next = [structuredClone(r[0].up_next[1])];
+		const c = gameCards(G(), r);
+		expect(c[1].waitFor).toEqual({ kind: 'account', account: 'hJune' });
+	});
+	it('nothing queued waits for nothing', () => {
+		const c = gameCards(G(), R());
+		expect(c[3].waitFor).toBeNull();
 	});
 	it('same drop queued on several accounts counts once', () => {
 		const c = gameCards(G(), structuredClone(many) as Runner[]);
 		expect(c[0].moreInUpNext).toBe(1);
 	});
-	it('needs_login with a stale current lands on card 1 only', () => {
+	it('needs_login with a stale current is on no card', () => {
 		const r = R();
 		r[2].current = structuredClone(r[1].current);
 		r[2].current!.game = 'Marvel Rivals';
 		const c = gameCards(G(), r);
-		expect(c[1].rows.map((x) => x.runner.account_name)).not.toContain('kick_main');
-		expect(c[0].rows.filter((x) => x.muted)).toHaveLength(1);
+		expect(c.flatMap((x) => x.rows.map((y) => y.runner.account_name))).not.toContain('kick_main');
 	});
 	it('rows matched by slug', () => {
 		const r = R();
@@ -72,32 +102,89 @@ describe('gameCards', () => {
 		const c = gameCards(G(), r);
 		expect(c[1].rows.map((x) => x.runner.account_name)).toContain('grub_alt');
 	});
-	it('a paused account is muted on card 1 and queues nothing', () => {
+	it('a paused account is on no card and queues nothing', () => {
 		const c = gameCards(G(), R(), new Set(['acc-hjune']));
-		const row = c[0].rows.find((x) => x.runner.account_id === 'acc-hjune')!;
-		expect(row.muted).toBe(true);
-		expect(row.paused).toBe(true);
-		expect(c[1].rows.map((x) => x.runner.account_id)).not.toContain('acc-hjune');
+		expect(c.flatMap((x) => x.rows.map((y) => y.runner.account_id))).not.toContain('acc-hjune');
 		expect(c[1].queued).toHaveLength(0);
 	});
-	it('card 1 lists idle accounts', () => {
+	it('idle accounts are on no card', () => {
 		const c = gameCards(G(), structuredClone(many) as Runner[]);
-		expect(c[0].rows).toHaveLength(10);
+		expect(c[0].rows).toHaveLength(8);
+		expect(c.flatMap((x) => x.rows).every((x) => x.runner.current !== null)).toBe(true);
 	});
 });
 
 describe('foldRows', () => {
-	it('folds 10 runners to 3', () => {
+	it('folds 8 mining rows to 3', () => {
 		const rows = gameCards(G(), structuredClone(many) as Runner[])[0].rows;
 		const f = foldRows(rows);
 		expect(f.shown).toHaveLength(3);
-		expect(f.hidden).toBe(7);
-		expect(f.mining).toBe(8);
-		expect(f.idle).toBe(2);
+		expect(f.hidden).toBe(5);
 		expect(f.shown[0].progress).toBeGreaterThan(f.shown[2].progress);
 	});
 	it('few rows hide nothing', () => {
 		expect(foldRows(gameCards(G(), R())[0].rows).hidden).toBe(0);
+	});
+});
+
+describe('notMining', () => {
+	const ids = (a: Account[], r: Runner[]) => notMining(a, r).map((x) => `${x.id}:${x.state}`);
+	it('lists accounts no card holds', () => {
+		expect(ids(A(), R())).toEqual(['acc-kick:signed_out']);
+	});
+	it('orders idle, then signed out, then paused', () => {
+		const a = A();
+		const r = R();
+		a[0].enabled = false;
+		r[1].current = null;
+		r[1].state = 'idle';
+		expect(ids(a, r)).toEqual(['acc-alt:idle', 'acc-kick:signed_out', 'acc-hjune:paused']);
+	});
+	it('keeps account order within a state', () => {
+		const a = A();
+		const r = R();
+		for (const x of r) {
+			x.current = null;
+			x.state = 'idle';
+		}
+		a[2].needs_login = false;
+		expect(ids(a, r)).toEqual(['acc-hjune:idle', 'acc-alt:idle', 'acc-kick:idle']);
+	});
+	it('an account without a runner is idle', () => {
+		expect(ids(A(), R().slice(0, 2))).toEqual(['acc-kick:signed_out']);
+		expect(ids(A(), [])).toEqual(['acc-hjune:idle', 'acc-alt:idle', 'acc-kick:signed_out']);
+	});
+	it('a paused account mining a stale drop is listed as paused', () => {
+		const a = A();
+		a[1].enabled = false;
+		expect(ids(a, R())).toEqual(['acc-kick:signed_out', 'acc-alt:paused']);
+	});
+	it('leaves out force watching accounts', () => {
+		const r = R();
+		r[0].current = null;
+		r[0].state = 'force_watching';
+		expect(ids(A(), r)).toEqual(['acc-kick:signed_out']);
+	});
+	it('is empty when every account mines', () => {
+		const a = A().slice(0, 2);
+		expect(notMining(a, R())).toEqual([]);
+	});
+});
+
+describe('cardCampaign', () => {
+	it('names the campaign an account mines', () => {
+		const r = R();
+		r[0].current!.campaign_id = 'camp-rust-wk2';
+		r[0].current!.campaign_name = 'Rust Week 2';
+		expect(cardCampaign(gameCards(G(), r)[0])).toEqual({ platform: 'twitch', id: 'camp-rust-wk2', name: 'Rust Week 2' });
+	});
+	it("falls back to the game's first campaign", () => {
+		const c = gameCards(G(), R()).find((x) => x.game.name === 'Apex Legends')!;
+		expect(cardCampaign(c)).toEqual({ platform: 'kick', id: 'camp-apex-kick', name: 'Apex Legends Drops' });
+	});
+	it('a game with no campaign names none', () => {
+		const c = gameCards(G(), R()).find((x) => x.game.name === 'Delta Force')!;
+		expect(cardCampaign(c)).toBeNull();
 	});
 });
 
@@ -169,6 +256,26 @@ describe('homeView', () => {
 		const g = G().map((x) => ({ ...x, state: 'no_campaign' as const }));
 		expect(homeView({ ...base, overview: fourAccounts('idle'), games: g })).toBe('nothing_live');
 	});
+	it('no games with force watch channels keeps the dashboard', () => {
+		const o = fourAccounts('idle');
+		o.force_watch = { live: [], more: 0, total: 2 };
+		expect(homeView({ ...base, overview: o, games: [] })).not.toBe('no_games');
+		expect(homeView({ ...base, overview: o, games: [] })).toBe('nothing_live');
+		o.force_watch = null;
+		expect(homeView({ ...base, overview: o, games: [] })).toBe('no_games');
+	});
+	it('no games with force channels nobody can watch is no games', () => {
+		// The server reports no_games when no channel has an enabled account.
+		const o = fourAccounts('no_games');
+		o.force_watch = { live: [], more: 0, total: 2 };
+		expect(homeView({ ...base, overview: o, games: [] })).toBe('no_games');
+	});
+	it('no games while an account force watches keeps the dashboard', () => {
+		const o = fourAccounts('no_games');
+		o.force_watch = null;
+		expect(homeView({ ...base, overview: o, games: [], forceWatching: true })).not.toBe('no_games');
+		expect(homeView({ ...base, overview: o, games: [], forceWatching: false })).toBe('no_games');
+	});
 	it('mining is healthy', () => {
 		expect(homeView({ ...base, overview: O(mining) })).toBe('healthy');
 	});
@@ -224,10 +331,10 @@ describe('visibleCards', () => {
 			pos: i + 1,
 			size: 'sm' as const,
 			rows: active.includes(i + 1)
-				? [{ runner: { current: { game: 'x' } } as Runner, progress: 0, muted: false, paused: false }]
+				? [{ runner: { current: { game: 'x' } } as Runner, progress: 0 }]
 				: [],
 			queued: [],
-			queuedBy: null,
+			waitFor: null,
 			moreInUpNext: 0
 		}));
 	it('shows all when within the cap', () => {

@@ -98,6 +98,21 @@ type Runner struct {
 	linkRefused map[string]time.Time
 	// linkNotified holds benefits whose link refusal was already notified.
 	linkNotified map[string]bool
+	// forceCheckAt is when the force watch last rechecked the plan and its
+	// channels (force.go).
+	forceCheckAt time.Time
+	// forceClaimed holds ready drops this runner claimed while force
+	// watching, so a lagging inventory cannot claim one twice.
+	forceClaimed map[string]bool
+	// forceClaimRetry holds ready drops whose claim failed, until when the
+	// next attempt waits. forceClaimFails counts consecutive failures; at
+	// claimFailSkipThreshold the drop is left alone for this run.
+	forceClaimRetry map[string]time.Time
+	forceClaimFails map[string]int
+	// forceFailed holds force channels whose watch failed to start, until
+	// when liveForce passes them over (recheckInterval), so a broken one
+	// cannot block a live lower-ranked one.
+	forceFailed map[string]time.Time
 	// Repeat-line suppression: each logs once per change.
 	logStepErr, logPicked, logStart, logProgress onceLog
 
@@ -236,6 +251,8 @@ func (r *Runner) Snapshot() Snapshot {
 	switch r.state {
 	case StateNeedsLogin, StateNoGames:
 		// Stopped: nothing is scheduled.
+	case StateForceWatching:
+		s.NextScanAt = r.forceCheckAt.Add(recheckInterval)
 	case StateSleeping, StateAwaitingConnect:
 		if !r.nextRecheck.IsZero() {
 			s.NextScanAt = r.nextRecheck
@@ -303,6 +320,8 @@ func (r *Runner) step(ctx context.Context) error {
 		return r.start(ctx)
 	case StateWatching:
 		return r.tick(ctx)
+	case StateForceWatching:
+		return r.forceTick(ctx)
 	case StateClaiming:
 		return r.claim(ctx)
 	case StateSleeping, StateAwaitingConnect:
@@ -356,19 +375,31 @@ func (r *Runner) clearSkip(id string) {
 }
 
 func (r *Runner) pick(ctx context.Context) error {
-	if len(r.cfg.Games) == 0 {
+	force := r.forceChannels()
+	if len(r.cfg.Games) == 0 && len(force) == 0 {
 		r.setState(ctx, StateNoGames)
 		return nil
 	}
-	res, err := r.scan(ctx, nil, false)
-	if err != nil {
-		if errors.Is(err, platform.ErrIntegrityBlocked) {
-			slog.Warn("runner integrity blocked; login needed",
-				"kind", "auth", "account", r.cfg.AccountID, "err", err)
-			r.setState(ctx, StateNeedsLogin)
-			return nil
+	// No games: nothing to plan, only force channels to watch.
+	var res plan.Result
+	if len(r.cfg.Games) > 0 {
+		var err error
+		res, err = r.scan(ctx, nil, false)
+		if err != nil {
+			if errors.Is(err, platform.ErrIntegrityBlocked) {
+				slog.Warn("runner integrity blocked; login needed",
+					"kind", "auth", "account", r.cfg.AccountID, "err", err)
+				r.setState(ctx, StateNeedsLogin)
+				return nil
+			}
+			if len(force) == 0 {
+				return err
+			}
+			// A failed scan has no queue: force watch until the next recheck.
+			slog.Warn("runner scan failed; trying force channels", "kind", "error",
+				"account", r.cfg.AccountID, "err", err)
+			res = plan.Result{}
 		}
-		return err
 	}
 
 	r.mu.Lock()
@@ -409,6 +440,20 @@ func (r *Runner) pick(ctx context.Context) error {
 		}
 	}
 	r.mu.Unlock()
+	if len(force) > 0 {
+		// The queue is empty: watch a force channel until a drop shows up.
+		started, err := r.startForce(ctx, force)
+		if started {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		// None live: recheck at the 5-minute pace so one going live is seen.
+		r.mu.Lock()
+		r.sleepNoStream = true
+		r.mu.Unlock()
+	}
 	if awaiting {
 		r.setState(ctx, StateAwaitingConnect)
 	} else {
@@ -687,7 +732,7 @@ func (r *Runner) Run(ctx context.Context) error {
 
 		var d time.Duration
 		switch {
-		case after == StateWatching:
+		case after == StateWatching || after == StateForceWatching:
 			d = r.untilNextBeat()
 		case after != before:
 			continue
@@ -737,18 +782,25 @@ func (r *Runner) untilNextBeat() time.Duration {
 }
 
 // wait sleeps d, returning early when the state moves off st (a PubSub claim
-// or stream-down push). It returns false when ctx ends.
+// or stream-down push). A force watch also returns on Rescan, which ends it.
+// It returns false when ctx ends.
 func (r *Runner) wait(ctx context.Context, d time.Duration, st State) bool {
 	if d <= 0 {
 		return ctx.Err() == nil
 	}
 	timer := time.NewTimer(d)
 	defer timer.Stop()
+	var rescan <-chan struct{} // nil blocks: a plan watch takes Rescan on its next poll
+	if st == StateForceWatching {
+		rescan = r.rescan
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return false
 		case <-timer.C:
+			return true
+		case <-rescan:
 			return true
 		case <-r.switchCh:
 			if r.switchNow.Load() {

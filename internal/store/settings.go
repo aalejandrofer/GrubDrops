@@ -349,13 +349,13 @@ func (s *Settings) SetPriorityMode(ctx context.Context, v string) error {
 	return s.setEnum(ctx, keyPriorityMode, v, "ordered", "ending_soonest")
 }
 
-// UILanguage is the UI and notification language: en, es or zh-CN. Default en.
+// UILanguage is the UI and notification language: en, es, zh-CN or tr. Default en.
 func (s *Settings) UILanguage(ctx context.Context) (string, error) {
-	return s.enumString(ctx, keyUILanguage, "en", "en", "es", "zh-CN")
+	return s.enumString(ctx, keyUILanguage, "en", "en", "es", "zh-CN", "tr")
 }
 
 func (s *Settings) SetUILanguage(ctx context.Context, v string) error {
-	return s.setEnum(ctx, keyUILanguage, v, "en", "es", "zh-CN")
+	return s.setEnum(ctx, keyUILanguage, v, "en", "es", "zh-CN", "tr")
 }
 
 // UITimeFormat is 24h or 12h. Default 24h.

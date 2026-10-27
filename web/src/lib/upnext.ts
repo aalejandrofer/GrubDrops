@@ -136,3 +136,187 @@ export function foldQueue<T>(items: readonly T[], expanded: boolean, limit = 5):
 	const more = Math.max(0, items.length - limit);
 	return { rows: expanded || more === 0 ? items.slice() : items.slice(0, limit), more };
 }
+
+export type GroupDrop = { target: Target; accountId: string; accountName: string; platform: Platform };
+
+export type GroupCampaign = {
+	id: string;
+	platform: Platform;
+	name: string;
+	endsAt: string | null;
+	drops: GroupDrop[];
+};
+
+export type GameGroup = {
+	game: string;
+	campaigns: GroupCampaign[];
+	/** Accounts with this game queued, in runner order. */
+	accounts: { id: string; name: string; platform: Platform }[];
+	/** Queued drops summed over every campaign and account. */
+	drops: number;
+	/** Watch minutes still needed for every queued drop. */
+	minutesLeft: number;
+};
+
+/**
+ * Up next folded to one entry per game. A game's place is the earliest queue
+ * position any account has for it; ties go to runner order. Campaigns keep the
+ * same order. Drops are listed per account in runner order, each in queue order.
+ */
+export function byGame(qs: readonly Queue[]): GameGroup[] {
+	const groups = new Map<string, GameGroup>();
+	const depth = qs.reduce((n, q) => Math.max(n, q.items.length), 0);
+	for (let i = 0; i < depth; i++) {
+		for (const q of qs) {
+			const x = q.items[i];
+			if (!x) continue;
+			let g = groups.get(x.game);
+			if (!g) {
+				g = { game: x.game, campaigns: [], accounts: [], drops: 0, minutesLeft: 0 };
+				groups.set(x.game, g);
+			}
+			let c = g.campaigns.find((c) => c.platform === x.platform && c.id === x.campaign_id);
+			if (!c) {
+				c = { id: x.campaign_id, platform: x.platform, name: x.campaign_name, endsAt: x.ends_at, drops: [] };
+				g.campaigns.push(c);
+			}
+			c.drops.push({ target: x, accountId: q.accountId, accountName: q.accountName, platform: q.platform });
+			if (!g.accounts.some((a) => a.id === q.accountId))
+				g.accounts.push({ id: q.accountId, name: q.accountName, platform: q.platform });
+			g.drops++;
+			g.minutesLeft += Math.max(0, x.required_minutes - x.minutes);
+		}
+	}
+	const order = new Map(qs.map((q, i) => [q.accountId, i]));
+	for (const g of groups.values()) {
+		g.accounts.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+		for (const c of g.campaigns) c.drops.sort((a, b) => order.get(a.accountId)! - order.get(b.accountId)!);
+	}
+	return [...groups.values()];
+}
+
+/**
+ * Runners with each queue stable-sorted by the game order `order`, so drops of
+ * one game keep their order. A game missing from `order` keeps its relative
+ * place at the end. A runner whose queue comes out the same is returned as the
+ * same object.
+ */
+export function reorderByGame(runners: Runner[], order: readonly string[]): Runner[] {
+	const rank = new Map(order.map((g, i) => [g, i]));
+	const at = (g: string) => rank.get(g) ?? order.length;
+	return runners.map((r) => {
+		const next = r.up_next
+			.map((x, i) => ({ x, i }))
+			.sort((a, b) => at(a.x.game) - at(b.x.game) || a.i - b.i)
+			.map((e) => e.x);
+		if (next.every((x, i) => x === r.up_next[i])) return r;
+		return { ...r, up_next: next, order_custom: true };
+	});
+}
+
+/**
+ * Sort every queue to the game order `order`: apply it locally, save every
+ * runner whose queue changed, then replace the list with the server's. On
+ * failure the server list wins; if that fetch also fails, the previous list is
+ * restored. Returns true when every save succeeded.
+ */
+export async function commitGameOrder(io: OrderIO, order: readonly string[]): Promise<boolean> {
+	const before = io.get();
+	const next = reorderByGame(before, order);
+	const changed = next.filter((r, i) => r !== before[i]);
+	if (changed.length === 0) return true;
+	io.set(next);
+	let ok = true;
+	try {
+		await Promise.all(
+			changed.map((r) =>
+				io.setOrder(
+					r.account_id,
+					r.up_next.map((x) => x.benefit_id)
+				)
+			)
+		);
+	} catch {
+		ok = false;
+	}
+	try {
+		io.set(await io.fetchRunners());
+	} catch {
+		if (!ok) io.set(before);
+	}
+	return ok;
+}
+
+/**
+ * Groups in the dropped game order. Games not in `order` follow in their
+ * derived order; games in `order` that are gone are ignored.
+ */
+export function inGameOrder(groups: readonly GameGroup[], order: readonly string[] | null): GameGroup[] {
+	if (!order || order.length === 0) return groups.slice();
+	const rank = new Map(order.map((g, i) => [g, i]));
+	const at = (g: string) => rank.get(g) ?? order.length;
+	return groups
+		.map((g, i) => ({ g, i }))
+		.sort((a, b) => at(a.g.game) - at(b.g.game) || a.i - b.i)
+		.map((e) => e.g);
+}
+
+/**
+ * The game order Inventory shows after a drag. `custom` is true once a runner
+ * had a custom order while it was set, so a later reset, here or on Home,
+ * clears it.
+ */
+export type GameOrder = { games: string[]; custom: boolean };
+
+export const GAME_ORDER_KEY = 'grubdrops.upnext.game_order';
+
+/**
+ * The stored order after the runners change: null when the queues went back
+ * to the Games order, else marked custom once any runner is. An empty runner
+ * list means not loaded yet and keeps the order.
+ */
+export function settleGameOrder(o: GameOrder | null, runners: Runner[]): GameOrder | null {
+	if (!o || runners.length === 0) return o;
+	const custom = anyCustom(runners);
+	if (o.custom && !custom) return null;
+	if (custom && !o.custom) return { ...o, custom: true };
+	return o;
+}
+
+type KV = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+function session(): KV | null {
+	try {
+		return sessionStorage;
+	} catch {
+		return null;
+	}
+}
+
+export function readGameOrder(store: KV | null = session()): GameOrder | null {
+	try {
+		const v = JSON.parse(store?.getItem(GAME_ORDER_KEY) ?? 'null');
+		if (!v || !Array.isArray(v.games) || !v.games.every((g: unknown) => typeof g === 'string')) return null;
+		return { games: v.games, custom: v.custom === true };
+	} catch {
+		return null;
+	}
+}
+
+export function writeGameOrder(o: GameOrder | null, store: KV | null = session()): void {
+	try {
+		if (o) store?.setItem(GAME_ORDER_KEY, JSON.stringify(o));
+		else store?.removeItem(GAME_ORDER_KEY);
+	} catch {
+		/* storage unavailable: the order lasts until the page reloads */
+	}
+}
+
+/** Runners with one account's queued drop removed, e.g. after it is marked collected. */
+export function withoutDrop(runners: Runner[], accountId: string, benefitId: string): Runner[] {
+	return runners.map((r) =>
+		r.account_id === accountId && r.up_next.some((x) => x.benefit_id === benefitId)
+			? { ...r, up_next: r.up_next.filter((x) => x.benefit_id !== benefitId) }
+			: r
+	);
+}

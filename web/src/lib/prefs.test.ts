@@ -14,3 +14,11 @@ test('applyPrefs never stores a zone Intl rejects', () => {
 	applyPrefs(s);
 	expect(prefs.zone).toBe('UTC');
 });
+
+test('applyPrefs carries the drop priority mode for Up next and Games', () => {
+	const s = structuredClone(settings) as Settings;
+	applyPrefs({ ...s, priority_mode: 'ending_soonest' });
+	expect(prefs.priorityMode).toBe('ending_soonest');
+	applyPrefs({ ...s, priority_mode: 'ordered' });
+	expect(prefs.priorityMode).toBe('ordered');
+});

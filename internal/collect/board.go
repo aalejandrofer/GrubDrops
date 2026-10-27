@@ -31,6 +31,7 @@ type GameStatus struct {
 	Game       plan.Game
 	Campaigns  []CampaignSummary // active, non-reward, at least one drop; deduped by platform+ID; EndsAt ascending
 	NeedsLink  []LinkNeed        // one per account, AccountID ascending
+	Queued     bool              // some account has a drop of this game left to mine
 	LastScanAt time.Time         // latest successful scan of any account; zero = none yet
 }
 
@@ -120,6 +121,12 @@ func (b *Board) Games(games []plan.Game) []GameStatus {
 		for _, t := range s.Result.NeedsLink {
 			if i, ok := plan.Match(games, t.Campaign.Game); ok {
 				addLinkNeed(out, links, i, s, t.Campaign)
+				out[i].Queued = true
+			}
+		}
+		for _, t := range s.Result.Queue {
+			if i, ok := plan.Match(games, t.Campaign.Game); ok {
+				out[i].Queued = true
 			}
 		}
 		for _, bl := range s.Result.Blocked {
@@ -180,4 +187,105 @@ func (b *Board) Games(games []plan.Game) []GameStatus {
 		})
 	}
 	return out
+}
+
+// CampaignCell is one account's state on one drop, as Derive classifies it.
+type CampaignCell struct {
+	AccountID, Platform string
+	State, Reason       string
+	Minutes             int
+}
+
+// CampaignDrop is one benefit of a campaign with every account that has a
+// state for it, in account ID order.
+type CampaignDrop struct {
+	ID, Name, ImageURL string
+	RequiredMinutes    int
+	Cells              []CampaignCell
+}
+
+// CampaignDetail is one campaign merged across every account scan that sees
+// it. Campaign holds the first matching account's copy, Benefits included.
+type CampaignDetail struct {
+	Campaign platform.Campaign
+	LinkURL  string         // first safe AccountLinkURL seen, "" when none
+	Drops    []CampaignDrop // RequiredMinutes ascending, then ID
+}
+
+// Campaign returns the campaign with this platform and ID from the latest
+// scans, or false when no account sees it. The result shares no state with
+// the board.
+func (b *Board) Campaign(platformName, id string) (CampaignDetail, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	accounts := make([]string, 0, len(b.scans))
+	for acct := range b.scans {
+		accounts = append(accounts, acct)
+	}
+	sort.Strings(accounts)
+
+	var out CampaignDetail
+	found := false
+	drops := map[string]int{}
+	addDrop := func(ben platform.DropBenefit) int {
+		if i, ok := drops[ben.ID]; ok {
+			return i
+		}
+		drops[ben.ID] = len(out.Drops)
+		out.Drops = append(out.Drops, CampaignDrop{
+			ID: ben.ID, Name: ben.Name, ImageURL: ben.ImageURL, RequiredMinutes: ben.RequiredMinutes,
+		})
+		return drops[ben.ID]
+	}
+	for _, acct := range accounts {
+		s := b.scans[acct]
+		var c *platform.Campaign
+		for i := range s.Campaigns {
+			cp := &s.Campaigns[i]
+			pf := cp.Platform
+			if pf == "" {
+				pf = s.Platform
+			}
+			if cp.ID == id && pf == platformName {
+				c = cp
+				break
+			}
+		}
+		if c == nil {
+			continue
+		}
+		if !found {
+			found = true
+			out.Campaign = *c
+			out.Campaign.Benefits = append([]platform.DropBenefit(nil), c.Benefits...)
+		}
+		if out.LinkURL == "" {
+			out.LinkURL = SafeLinkURL(c.AccountLinkURL)
+		}
+		for _, ben := range c.Benefits {
+			addDrop(ben)
+		}
+		seen := map[string]bool{}
+		for _, r := range Derive(s, time.Time{}) {
+			if r.CampaignID != id || seen[r.BenefitID] {
+				continue
+			}
+			seen[r.BenefitID] = true
+			i := addDrop(platform.DropBenefit{ID: r.BenefitID, Name: r.BenefitName, ImageURL: r.ImageURL, RequiredMinutes: r.RequiredMinutes})
+			out.Drops[i].Cells = append(out.Drops[i].Cells, CampaignCell{
+				AccountID: s.AccountID, Platform: s.Platform, State: r.State, Reason: r.Reason, Minutes: r.Minutes,
+			})
+		}
+	}
+	if !found {
+		return CampaignDetail{}, false
+	}
+	sort.SliceStable(out.Drops, func(x, y int) bool {
+		if out.Drops[x].RequiredMinutes != out.Drops[y].RequiredMinutes {
+			return out.Drops[x].RequiredMinutes < out.Drops[y].RequiredMinutes
+		}
+		return out.Drops[x].ID < out.Drops[y].ID
+	})
+	return out, true
 }

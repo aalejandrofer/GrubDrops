@@ -107,15 +107,34 @@ func (r *Runner) claim(ctx context.Context) error {
 func (r *Runner) finishClaim(ctx context.Context, benefit platform.DropBenefit, channel string) {
 	r.stopWatch(ctx)
 
-	// A failed record is logged, never retried: a DB hiccup must not re-claim.
 	r.mu.Lock()
 	var target *plan.Target
 	if r.current != nil {
 		t := *r.current
 		target = &t
-		r.lastClaimed, r.lastClaimedAt = &t, time.Now()
 	}
 	r.mu.Unlock()
+	r.recordClaimed(ctx, target, benefit, channel, nil)
+
+	r.mu.Lock()
+	r.current = nil
+	r.unpinLocked(benefit.ID)
+	r.mu.Unlock()
+	r.setState(ctx, StatePicking)
+}
+
+// recordClaimed settles the bookkeeping of a successful claim: it marks target
+// as last claimed for reward codes, records it in the claim log, logs it and
+// sends the "claim" notification with extra merged in. A nil target is only
+// logged and notified.
+func (r *Runner) recordClaimed(ctx context.Context, target *plan.Target, benefit platform.DropBenefit, channel string, extra map[string]any) {
+	if target != nil {
+		t := *target
+		r.mu.Lock()
+		r.lastClaimed, r.lastClaimedAt = &t, time.Now()
+		r.mu.Unlock()
+	}
+	// A failed record is logged, never retried: a DB hiccup must not re-claim.
 	if r.cfg.Claims != nil && target != nil {
 		// Detached: a cancelled run ctx must not drop the claim log row.
 		rctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -131,17 +150,15 @@ func (r *Runner) finishClaim(ctx context.Context, benefit platform.DropBenefit, 
 		"benefit", benefit.ID, "benefit_name", benefit.Name, "channel", channel)
 	if r.cfg.Notifier != nil {
 		// A claim implies the requirement was met, so the bar reads full.
-		_ = r.cfg.Notifier.Notify(ctx, "claim", r.notifyFields(map[string]any{
+		f := map[string]any{
 			"drop": benefit.Name, "channel": channel,
 			"cur_min": benefit.RequiredMinutes, "req_min": benefit.RequiredMinutes,
-		}))
+		}
+		for k, v := range extra {
+			f[k] = v
+		}
+		_ = r.cfg.Notifier.Notify(ctx, "claim", r.notifyFields(f))
 	}
-
-	r.mu.Lock()
-	r.current = nil
-	r.unpinLocked(benefit.ID)
-	r.mu.Unlock()
-	r.setState(ctx, StatePicking)
 }
 
 // notifySwept fires the "claim" notification for a reward the multi-reward
@@ -282,4 +299,121 @@ func (r *Runner) reapRewards(ctx context.Context, camps []platform.Campaign) {
 		slog.Info("runner reward claimed", "kind", "claim", "account", r.cfg.AccountID,
 			"game", cr.Game, "title", cr.Title)
 	}
+}
+
+// claimReady claims inventory drops that are fully watched (ReadyDropLister
+// backends, Twitch) while force watching, whatever their game. Each is
+// recorded and notified like a normal claim. A drop the claim log already
+// holds, or this runner already claimed, is left alone: the inventory can lag
+// a claim. A failed claim waits recheckInterval and is given up after
+// claimFailSkipThreshold failures. A link refusal sends the link notice once
+// and is given up at once. A drop whose campaign the platform reports as
+// needing an account link is not attempted. The claim row and notice carry
+// the campaign's name and game.
+func (r *Runner) claimReady(ctx context.Context, channel string) {
+	rl, ok := r.cfg.Backend.(platform.ReadyDropLister)
+	if !ok {
+		return
+	}
+	drops, err := rl.ReadyDrops(ctx, r.cfg.Session)
+	if err != nil {
+		slog.Debug("runner ready drops read failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
+		return
+	}
+	if len(drops) == 0 {
+		return
+	}
+	var logged map[string]bool
+	if r.cfg.Claims != nil {
+		logged, err = r.cfg.Claims.ClaimedBenefitIDs(ctx, r.cfg.AccountID)
+		if err != nil {
+			// Claiming without the log could claim a drop twice.
+			slog.Warn("runner claim log read failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
+			return
+		}
+	}
+	for _, rd := range drops {
+		d, camp := rd.Benefit, rd.Campaign
+		camp.Benefits = nil
+		if camp.ID == "" {
+			camp.ID = d.CampaignID
+		}
+		if camp.Platform == "" {
+			camp.Platform = r.cfg.Platform
+		}
+		if plan.Unlinked(camp) {
+			// The claim would be refused until the account is linked.
+			slog.Debug("runner ready drop skipped: campaign needs account link", "kind", "claim",
+				"account", r.cfg.AccountID, "benefit", d.ID, "campaign", camp.ID)
+			continue
+		}
+		now := time.Now()
+		r.mu.Lock()
+		skip := logged[d.ID] || r.forceClaimed[d.ID] ||
+			r.forceClaimFails[d.ID] >= claimFailSkipThreshold || now.Before(r.forceClaimRetry[d.ID])
+		r.mu.Unlock()
+		if skip {
+			continue
+		}
+		if err := r.cfg.Backend.Claim(ctx, r.cfg.Session, d); err != nil {
+			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+				return
+			}
+			r.readyClaimFailed(ctx, d, err, now)
+			continue
+		}
+		t := plan.Target{Campaign: camp, Benefit: d, Minutes: d.RequiredMinutes}
+		r.mu.Lock()
+		delete(r.forceClaimRetry, d.ID)
+		delete(r.forceClaimFails, d.ID)
+		if r.forceClaimed == nil {
+			r.forceClaimed = map[string]bool{}
+		}
+		r.forceClaimed[d.ID] = true
+		r.mu.Unlock()
+		extra := map[string]any{}
+		if d.ImageURL != "" {
+			extra["image"] = d.ImageURL
+		}
+		if camp.Game != "" {
+			extra["game"] = camp.Game
+		}
+		if camp.Name != "" {
+			extra["campaign"] = camp.Name
+		}
+		r.recordClaimed(ctx, &t, d, channel, extra)
+	}
+}
+
+// readyClaimFailed counts a failed ready-drop claim and sets when it may be
+// retried. A link refusal notifies the user and gives the drop up.
+func (r *Runner) readyClaimFailed(ctx context.Context, d platform.DropBenefit, err error, now time.Time) {
+	needsLink := errors.Is(err, platform.ErrClaimNeedsLink)
+	r.mu.Lock()
+	if r.forceClaimRetry == nil {
+		r.forceClaimRetry = map[string]time.Time{}
+	}
+	if r.forceClaimFails == nil {
+		r.forceClaimFails = map[string]int{}
+	}
+	r.forceClaimRetry[d.ID] = now.Add(recheckInterval)
+	r.forceClaimFails[d.ID]++
+	if needsLink {
+		r.forceClaimFails[d.ID] = claimFailSkipThreshold
+	}
+	n := r.forceClaimFails[d.ID]
+	r.mu.Unlock()
+	if needsLink {
+		slog.Warn("runner ready drop claim needs account link; not retried", "kind", "claim",
+			"account", r.cfg.AccountID, "benefit", d.ID, "benefit_name", d.Name, "err", err)
+		r.notifyNeedsLink(ctx, d)
+		return
+	}
+	if n >= claimFailSkipThreshold {
+		slog.Warn("runner ready drop claim failed repeatedly; giving up", "kind", "claim",
+			"account", r.cfg.AccountID, "benefit", d.ID, "benefit_name", d.Name, "failures", n, "err", err)
+		return
+	}
+	slog.Warn("runner ready drop claim failed", "kind", "claim", "account", r.cfg.AccountID,
+		"benefit", d.ID, "benefit_name", d.Name, "err", err)
 }

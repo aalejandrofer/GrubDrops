@@ -1,16 +1,22 @@
-import type { Claim, Game, Overview, Runner, Target } from "$lib/api/types";
+import { accountStatus } from "$lib/accounts";
+import type {
+  Account,
+  Claim,
+  Game,
+  Overview,
+  Platform,
+  Runner,
+  Target,
+} from "$lib/api/types";
 import { dayBucket } from "$lib/format";
 
 export function normName(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-/** muted: signed out or paused, so not mining. */
 export type AccountRow = {
   runner: Runner;
   progress: number;
-  muted: boolean;
-  paused: boolean;
 };
 
 export type GameCard = {
@@ -21,27 +27,39 @@ export type GameCard = {
   size: "lg" | "sm";
   rows: AccountRow[];
   queued: Target[];
-  /** Name of the first account with this game queued. */
-  queuedBy: string | null;
+  /** What the game's queued drops wait for; null when none is queued. */
+  waitFor: WaitFor | null;
   moreInUpNext: number;
 };
 
-function row(r: Runner, paused: boolean): AccountRow {
+/**
+ * live: an idle account has a drop queued, so it waits for an eligible
+ * channel to go live; channels is empty when any channel qualifies, more
+ * counts the channels not named. account: every account with a drop queued
+ * is mining something else.
+ */
+export type WaitFor =
+  | { kind: "live"; channels: string[]; more: number }
+  | { kind: "account"; account: string };
+
+function row(r: Runner): AccountRow {
   const c = r.current;
   const progress =
     c && c.required_minutes > 0 ? c.minutes / c.required_minutes : 0;
-  return {
-    runner: r,
-    progress,
-    muted: paused || r.state === "needs_login",
-    paused,
-  };
+  return { runner: r, progress };
+}
+
+/** A runner on a card: it has a current drop and is neither paused nor signed out. */
+function onCard(r: Runner, paused: ReadonlySet<string>): boolean {
+  return (
+    r.current !== null && r.state !== "needs_login" && !paused.has(r.account_id)
+  );
 }
 
 /**
- * Cards in priority order. Rank 1 also lists signed-out, paused and idle
- * accounts, since they have no current game to match. A runner game matches
- * the card by name or slug, like the Go planner.
+ * Cards in priority order. A card lists only the accounts mining its game;
+ * notMining lists the rest. A runner game matches the card by name or slug,
+ * like the Go planner.
  */
 export function gameCards(
   g: Game[],
@@ -55,17 +73,22 @@ export function gameCards(
       [normName(game.name), normName(game.slug ?? "")].filter(Boolean),
     );
     const isThis = (name: string) => keys.has(normName(name));
-    const off = (x: Runner) =>
-      paused.has(x.account_id) || x.state === "needs_login" || !x.current;
     const rows = r
-      .filter((x) => (off(x) ? rank === 1 : isThis(x.current!.game)))
-      .map((x) => row(x, paused.has(x.account_id)))
+      .filter((x) => onCard(x, paused) && isThis(x.current!.game))
+      .map(row)
       .sort((a, b) => b.progress - a.progress);
-    const targets: { t: Target; by: string }[] = [];
+    const targets: { t: Target; by: string; idle: boolean; out: boolean }[] =
+      [];
     for (const x of r) {
       if (paused.has(x.account_id)) continue;
       for (const t of x.up_next)
-        if (isThis(t.game)) targets.push({ t, by: x.account_name });
+        if (isThis(t.game))
+          targets.push({
+            t,
+            by: x.account_name,
+            idle: !x.current,
+            out: x.state === "needs_login",
+          });
     }
     const seen = new Set<string>();
     const queued = targets
@@ -78,10 +101,22 @@ export function gameCards(
       size: rank <= 2 ? "lg" : "sm",
       rows,
       queued,
-      queuedBy: targets[0]?.by ?? null,
+      waitFor: waitFor(targets.filter((x) => !x.out)),
       moreInUpNext: queued.length,
     };
   });
+}
+
+function waitFor(
+  targets: { t: Target; by: string; idle: boolean }[],
+): WaitFor | null {
+  const idle = targets.find((x) => x.idle);
+  if (idle) {
+    const channels = idle.t.channels ?? [];
+    const more = Math.max(0, (idle.t.channel_count ?? 0) - channels.length);
+    return { kind: "live", channels, more };
+  }
+  return targets.length > 0 ? { kind: "account", account: targets[0].by } : null;
 }
 
 /**
@@ -95,8 +130,7 @@ export function visibleCards(
   max = 7,
 ): { shown: GameCard[]; hidden: number } {
   const tier = (c: GameCard) =>
-    c.game.state === "mining" ||
-    c.rows.some((r) => !r.muted && r.runner.current !== null)
+    c.game.state === "mining" || c.rows.length > 0
       ? 0
       : c.game.state === "waiting" || c.queued.length > 0
         ? 1
@@ -136,17 +170,55 @@ export function fitCount(
 export function foldRows(
   rows: AccountRow[],
   limit = 3,
-): { shown: AccountRow[]; hidden: number; mining: number; idle: number } {
-  const mining = rows.filter(
-    (x) => !x.muted && x.runner.current !== null,
-  ).length;
-  const idle = rows.filter((x) => !x.muted && x.runner.current === null).length;
+): { shown: AccountRow[]; hidden: number } {
   return {
     shown: rows.slice(0, limit),
     hidden: Math.max(0, rows.length - limit),
-    mining,
-    idle,
   };
+}
+
+export type IdleState = "idle" | "signed_out" | "paused";
+
+export type IdleChip = {
+  id: string;
+  name: string;
+  platform: Platform;
+  state: IdleState;
+};
+
+const IDLE_ORDER: IdleState[] = ["idle", "signed_out", "paused"];
+
+/**
+ * Accounts no card lists, for the chips under the last card: idle, then
+ * signed out, then paused, each in account order. Force watching accounts are
+ * left out; the force watch tile names them.
+ */
+export function notMining(accounts: Account[], runners: Runner[]): IdleChip[] {
+  const paused = new Set(accounts.filter((a) => !a.enabled).map((a) => a.id));
+  const chips: IdleChip[] = [];
+  for (const a of accounts) {
+    const r = runners.find((x) => x.account_id === a.id);
+    if (r && onCard(r, paused)) continue;
+    const s = accountStatus(a, r);
+    if (s === "mining" || s === "force_watching") continue;
+    chips.push({ id: a.id, name: a.name, platform: a.platform, state: s });
+  }
+  return IDLE_ORDER.flatMap((s) => chips.filter((c) => c.state === s));
+}
+
+/** The campaign a card names: the one an account mines, else the game's first. */
+export function cardCampaign(
+  card: GameCard,
+): { platform: Platform; id: string; name: string } | null {
+  const cur = card.rows.find((r) => r.runner.current)?.runner.current;
+  if (cur)
+    return {
+      platform: cur.platform,
+      id: cur.campaign_id,
+      name: cur.campaign_name,
+    };
+  const c = card.game.campaigns[0];
+  return c ? { platform: c.platform, id: c.id, name: c.name } : null;
 }
 
 /**
@@ -171,6 +243,8 @@ export type HomeInput = {
   overviewFailed: boolean;
   gamesFailed: boolean;
   unreachable: boolean;
+  /** Some account is force watching now. */
+  forceWatching?: boolean;
 };
 
 export function homeView(i: HomeInput): HomeView {
@@ -178,7 +252,14 @@ export function homeView(i: HomeInput): HomeView {
   if (!o)
     return i.unreachable ? "offline" : i.overviewFailed ? "error" : "loading";
   if (o.status.state === "no_accounts") return "first_run";
-  if (o.status.state === "no_games" || i.games?.length === 0) return "no_games";
+  // Force watch channels keep accounts busy without games, so Home shows the
+  // dashboard with the force watch tile instead of the empty state. The
+  // server still says no_games when no channel has an enabled account.
+  const forced =
+    (o.force_watch != null && o.status.state !== "no_games") ||
+    i.forceWatching === true;
+  if (!forced && (o.status.state === "no_games" || i.games?.length === 0))
+    return "no_games";
   // Signed out wins over paused, as on the Accounts list.
   const signedOut = new Set(
     o.problems.filter((p) => p.kind === "needs_login").map((p) => p.account_id),

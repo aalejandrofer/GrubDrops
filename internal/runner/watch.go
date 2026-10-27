@@ -96,6 +96,12 @@ func (r *Runner) start(ctx context.Context) error {
 		r.noStream = map[string]bool{}
 		r.sleepNoStream = true
 		r.mu.Unlock()
+		// Nothing queued can be watched: a live force channel fills the gap.
+		if login, s, ok := r.liveForce(ctx, r.forceChannels()); ok {
+			slog.Info("runner no eligible streams live in any queued campaign; force watching",
+				"kind", "discovery", "account", r.cfg.AccountID, "campaign", camp.Name)
+			return r.beginForce(ctx, login, s)
+		}
 		slog.Info("runner no eligible streams live in any queued campaign; sleeping",
 			"kind", "discovery", "account", r.cfg.AccountID, "campaign", camp.Name)
 		r.setState(ctx, StateSleeping)
@@ -189,14 +195,8 @@ func (r *Runner) tick(ctx context.Context) error {
 	r.mu.Unlock()
 	benefit := target.Benefit
 
-	if err := r.cfg.Backend.Heartbeat(ctx, handle); err != nil {
-		slog.Error("runner heartbeat failed", "kind", "error", "account", r.cfg.AccountID,
-			"channel", handle.Channel, "err", err)
-		return fmt.Errorf("heartbeat: %w", err)
-	}
-	slog.Info("runner heartbeat sent", "kind", "heartbeat", "account", r.cfg.AccountID, "channel", handle.Channel)
-	if r.cfg.OnBeat != nil {
-		r.cfg.OnBeat(ctx, r.cfg.AccountID)
+	if err := r.beat(ctx, handle); err != nil {
+		return err
 	}
 
 	every := max(1, int(liveCheckEvery/r.cfg.TickInterval))
@@ -247,18 +247,7 @@ func (r *Runner) tick(ctx context.Context) error {
 		}
 	}
 
-	// Multi-reward sweep (Kick): one watch advances many rewards at once, so
-	// claim every sibling that hit 100% and notify it once.
-	if sweeper, ok := r.cfg.Backend.(platform.CompletedSweeper); ok {
-		if swept, serr := sweeper.SweepCompletedClaims(ctx, r.cfg.Session); serr != nil {
-			slog.Debug("runner completed-claim sweep failed", "kind", "error", "account", r.cfg.AccountID, "err", serr)
-		} else {
-			for _, cr := range swept {
-				slog.Info("runner swept completed reward", "kind", "claim", "account", r.cfg.AccountID, "title", cr.Title)
-				r.notifySwept(ctx, cr)
-			}
-		}
-	}
+	r.sweepCompleted(ctx)
 
 	matched := false
 	for _, p := range progress {
@@ -362,6 +351,39 @@ func (r *Runner) tick(ctx context.Context) error {
 	r.mu.Unlock()
 	r.maybeNotifyProgress(ctx, cur, benefit.RequiredMinutes)
 	return nil
+}
+
+// beat sends one heartbeat on handle and fires OnBeat.
+func (r *Runner) beat(ctx context.Context, handle platform.WatchHandle) error {
+	if err := r.cfg.Backend.Heartbeat(ctx, handle); err != nil {
+		slog.Error("runner heartbeat failed", "kind", "error", "account", r.cfg.AccountID,
+			"channel", handle.Channel, "err", err)
+		return fmt.Errorf("heartbeat: %w", err)
+	}
+	slog.Debug("runner heartbeat sent", "kind", "heartbeat", "account", r.cfg.AccountID, "channel", handle.Channel)
+	if r.cfg.OnBeat != nil {
+		r.cfg.OnBeat(ctx, r.cfg.AccountID)
+	}
+	return nil
+}
+
+// sweepCompleted runs the multi-reward sweep (Kick): one watch advances many
+// rewards at once, so it claims every reward that hit 100% and notifies each
+// once.
+func (r *Runner) sweepCompleted(ctx context.Context) {
+	sweeper, ok := r.cfg.Backend.(platform.CompletedSweeper)
+	if !ok {
+		return
+	}
+	swept, err := sweeper.SweepCompletedClaims(ctx, r.cfg.Session)
+	if err != nil {
+		slog.Debug("runner completed-claim sweep failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
+		return
+	}
+	for _, cr := range swept {
+		slog.Info("runner swept completed reward", "kind", "claim", "account", r.cfg.AccountID, "title", cr.Title)
+		r.notifySwept(ctx, cr)
+	}
 }
 
 // maybePreempt switches drops when Config.Preempt is on and the fresh plan

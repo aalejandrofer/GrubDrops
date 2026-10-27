@@ -48,6 +48,9 @@ describe('isInteractive', () => {
 			expect(isInteractive(fake(t))).toBe(true);
 		}
 	});
+	it('skips a campaign link, so a click opens the drawer instead of dragging', () => {
+		expect(isInteractive(fake('[data-campaign]'))).toBe(true);
+	});
 	it('allows plain content', () => {
 		expect(isInteractive(fake(null))).toBe(false);
 	});

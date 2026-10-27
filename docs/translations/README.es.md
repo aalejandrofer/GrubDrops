@@ -41,7 +41,6 @@ services:
     restart: unless-stopped
     ports: ["8080:8080"]
     environment:
-      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?run keygen first}"
       GRUB_SECURE_COOKIES: "0"   # 1 behind HTTPS
       TZ: Europe/London
     volumes:
@@ -50,15 +49,14 @@ services:
 ```
 
 ```bash
-docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen   # save this key
 mkdir -p data && sudo chown 65532:65532 data
-GRUB_MASTER_KEY='AGE-SECRET-KEY-1...' docker compose up -d
+docker compose up -d
 ```
 
 Abre http://localhost:8080 y crea el usuario administrador. Después, un
 asistente te guía para añadir una cuenta y elegir juegos.
 
-- `GRUB_MASTER_KEY` debe ser una clave age generada con `keygen`, y debes usar la misma clave en cada reinicio. Cifra las sesiones guardadas.
+- En el primer arranque el minero crea `data/master.key` y lo reutiliza después. Cifra las sesiones guardadas, así que guárdalo junto a `miner.db`. Para tener la clave fuera de `./data`, pon en `GRUB_MASTER_KEY` la salida de `docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen`; tiene prioridad sobre el archivo.
 - El contenedor se ejecuta con el UID 65532, así que ese usuario debe poder escribir en `./data`.
 - `GRUB_SECURE_COOKIES` debe coincidir con cómo accedes a la interfaz: `0` para HTTP, `1` para HTTPS. Si no coincide, aparece "Invalid CSRF token".
 - El socket de Docker solo hace falta para Kick. El minero lo usa para arrancar un sidecar de Chrome por cada cuenta de Kick. Quita el montaje si solo minas Twitch.
@@ -84,12 +82,12 @@ y pegarlo.
 
 ## Configuración
 
-Solo `GRUB_MASTER_KEY` es obligatoria. Todas las variables están en
+Ninguna variable es obligatoria. Todas las variables están en
 [`deploy/docker-compose.yml`](../../deploy/docker-compose.yml).
 
 | Variable | Por defecto | Uso |
 |-----|---------|---------|
-| `GRUB_MASTER_KEY` | obligatoria | Clave age que cifra las sesiones guardadas |
+| `GRUB_MASTER_KEY` | `master.key` junto a la base de datos | Clave age que cifra las sesiones guardadas; se genera en el primer arranque si no está definida |
 | `GRUB_HTTP_ADDR` | `0.0.0.0:8080` | Dirección de escucha |
 | `GRUB_DB_PATH` | `/data/miner.db` | Archivo SQLite |
 | `GRUB_SECURE_COOKIES` | `0` | `1` si se sirve por HTTPS |
@@ -130,7 +128,7 @@ con contraseña sigue funcionando.
 <p align="center">
   <img src="../screenshots/discover.png" width="32%" alt="Descubrir: campañas actuales de Twitch y Kick agrupadas por juego">
   <img src="../screenshots/games.png" width="32%" alt="Juegos: juegos elegidos en orden de prioridad">
-  <img src="../screenshots/rewards.png" width="32%" alt="Recompensas: drops en curso, A continuación e historial de reclamos">
+  <img src="../screenshots/rewards.png" width="32%" alt="Inventario: drops en curso, A continuación e historial de reclamos">
 </p>
 
 ## Desarrollo

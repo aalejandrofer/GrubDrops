@@ -11,15 +11,17 @@
 	import General from './General.svelte';
 	import Health from './Health.svelte';
 	import Notifications from './Notifications.svelte';
+	import Password from './Password.svelte';
 	import Updates from './Updates.svelte';
 
 	const LABELS = {
 		general: 'settings.general',
-		engine: 'settings.engine',
 		accounts: 'settings.accounts',
+		engine: 'settings.engine',
 		notifications: 'settings.notifications',
 		health: 'settings.health',
-		updates: 'settings.updates'
+		updates: 'settings.updates',
+		password: 'settings.password'
 	} as const;
 
 	let s = $state<Settings | null>(null);
@@ -70,7 +72,7 @@
 	function track(): void {
 		if (Date.now() < holdUntil) return;
 		if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
-			active = 'updates';
+			active = SECTIONS[SECTIONS.length - 1];
 			return;
 		}
 		let cur: Section = 'general';
@@ -108,11 +110,12 @@
 		</nav>
 		<div>
 			{#if s}<General {s} {save} {errs} />{:else}<section class="set" id="general"></section>{/if}
-			{#if s}<Engine {s} {save} {errs} />{:else}<section class="set" id="engine"></section>{/if}
 			<Accounts />
+			{#if s}<Engine {s} {save} {errs} />{:else}<section class="set" id="engine"></section>{/if}
 			{#if s}<Notifications {s} {save} {errs} />{:else}<section class="set" id="notifications"></section>{/if}
 			{#if s}<Health {s} {save} {errs} />{:else}<Health />{/if}
 			{#if s}<Updates {s} {save} {errs} />{:else}<section class="set" id="updates"></section>{/if}
+				<Password />
 		</div>
 	</div>
 </PageHead>

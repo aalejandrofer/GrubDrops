@@ -140,16 +140,21 @@ func (r *Runner) onDropClaim(dropID, instanceID string) {
 	r.setState(context.Background(), StateClaiming)
 }
 
-// onStreamDown swaps channel at once when the watched stream ends.
+// onStreamDown swaps channel at once when the watched stream ends. A force
+// watch has no target to restart, so it re-picks.
 func (r *Runner) onStreamDown(channelID string) {
 	r.mu.Lock()
 	if r.stream == nil || r.stream.ChannelID != channelID || r.handle == nil {
 		r.mu.Unlock()
 		return
 	}
+	next := StateStarting
+	if r.state == StateForceWatching {
+		next = StatePicking
+	}
 	r.mu.Unlock()
 	r.stopWatch(context.Background())
-	r.setState(context.Background(), StateStarting)
+	r.setState(context.Background(), next)
 }
 
 // onRewardCode logs a redemption code and stores it against the target the

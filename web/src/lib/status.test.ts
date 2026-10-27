@@ -23,6 +23,14 @@ describe('headerTone', () => {
 	});
 	it('mining with a problem is amber', () => expect(headerTone(o(mining), false)).toBe('amber'));
 	it('mining without problems is green', () => expect(headerTone(clean(), false)).toBe('green'));
+	it('force watching is green, amber with a problem', () => {
+		const x = withState('idle');
+		x.force_watch = { live: [{ platform: 'kick', channel: 'xqc', watchers: ['a'] }], more: 0, total: 1 };
+		x.problems = [];
+		expect(headerTone(x, false)).toBe('green');
+		x.problems = [{ kind: 'needs_login', account_id: 'b', account_name: 'b' }];
+		expect(headerTone(x, false)).toBe('amber');
+	});
 	it('nothing_live is grey', () => {
 		expect(headerTone(o(nothingLive), false)).toBe('grey');
 		expect(headerTone(null, false)).toBe('grey');
@@ -44,6 +52,16 @@ describe('statusText', () => {
 	});
 	it('nothing live', () => expect(statusText(o(nothingLive), false)).toBe('Idle · watching for campaigns'));
 	it('idle', () => expect(statusText(withState('idle'), false)).toBe('Idle'));
+	it('force watching when an account watches and none mines', () => {
+		const x = withState('idle');
+		x.force_watch = { live: [{ platform: 'twitch', channel: 'keshaeuw', watchers: ['Phluses'] }], more: 0, total: 1 };
+		expect(statusText(x, false)).toBe('Force watching');
+		x.force_watch.live[0].watchers = [];
+		expect(statusText(x, false)).toBe('Idle');
+		const m = o(mining);
+		m.force_watch = { live: [{ platform: 'twitch', channel: 'keshaeuw', watchers: ['Phluses'] }], more: 0, total: 1 };
+		expect(statusText(m, false)).toBe('Mining · 2 of 3 accounts');
+	});
 });
 
 describe('problemChip', () => {

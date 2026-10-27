@@ -103,6 +103,7 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 	snaps := s.d.Pool.Snapshots()
 	// ready counts healthy accounts that are not paused.
 	mining, healthy, ready, anyWork := 0, 0, 0, false
+	forceWatching := 0
 	var lastScan time.Time
 	problems := []overviewProblem{}
 	flagged := map[string]bool{}
@@ -113,6 +114,8 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 		switch sn.State {
 		case runner.StateWatching, runner.StateClaiming:
 			mining++
+		case runner.StateForceWatching:
+			forceWatching++
 		}
 		if sn.State == runner.StateNeedsLogin || signedOutIDs[sn.AccountID] {
 			flagged[sn.AccountID] = true
@@ -147,11 +150,14 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// With force channels set, no chosen games is not a stop: accounts still
+	// force watch. That needs a channel with at least one enabled account.
+	force, forceUsable := s.forceOverview(r, snaps, names, paused)
 	state := "idle"
 	switch {
 	case len(accts) == 0:
 		state = "no_accounts"
-	case s.noChosenGames(r):
+	case !forceUsable && forceWatching == 0 && s.noChosenGames(r):
 		state = "no_games"
 	case mining > 0:
 		state = "mining"
@@ -204,7 +210,8 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 			"claimed_today": claimedToday, "claimed_all_time": claimedAll,
 			"accounts_healthy": healthy,
 		},
-		"version": map[string]any{"current": s.d.Version, "latest": latest, "update_available": available},
+		"version":     map[string]any{"current": s.d.Version, "latest": latest, "update_available": available},
+		"force_watch": force,
 	})
 }
 

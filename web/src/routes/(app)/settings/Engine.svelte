@@ -90,7 +90,7 @@
 		<div class="row">
 			<div class="lbl">
 				<b id="pre-l">{t('settings.preempt')}</b>
-				<small>{s.preempt ? t('settings.preempt_on_sub') : t('settings.preempt_off_sub')}</small>
+				<small>{!s.preempt ? t('settings.preempt_off_sub') : s.priority_mode === 'ending_soonest' ? t('settings.preempt_on_sub_ending') : t('settings.preempt_on_sub')}</small>
 				{#if errs.preempt}<small class="bad">{t('settings.save_failed')}</small>{/if}
 			</div>
 			<button

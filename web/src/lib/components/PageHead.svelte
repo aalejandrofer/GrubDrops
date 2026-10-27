@@ -12,10 +12,11 @@
 	let {
 		title,
 		stamp,
+		lead,
 		status,
 		action,
 		children
-	}: { title: string; stamp?: string; status?: string; action?: Snippet; children?: Snippet } = $props();
+	}: { title: string; stamp?: string; lead?: string; status?: string; action?: Snippet; children?: Snippet } = $props();
 	const live = getLive();
 	const net = getNet();
 	const down = $derived(live.unreachable || net.down);
@@ -35,6 +36,7 @@
 	<div class="head-l">
 		<h1>{title}</h1>
 		{#if text}<span class="now {tone}"><span class="dot"></span>{text}</span>{/if}
+		{#if lead && !down}<span class="stamp">{lead}</span>{/if}
 		{#if down}
 			<span class="alert red" role="status"
 				><Icon name="alert" />{t('status.unreachable', { s: retryIn })}</span

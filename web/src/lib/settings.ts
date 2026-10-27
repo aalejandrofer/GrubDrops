@@ -1,7 +1,7 @@
 import { clock } from '$lib/format';
 import { t, tn } from '$lib/i18n/index.svelte';
 
-export const SECTIONS = ['general', 'engine', 'accounts', 'notifications', 'health', 'updates'] as const;
+export const SECTIONS = ['general', 'accounts', 'engine', 'notifications', 'health', 'updates', 'password'] as const;
 export type Section = (typeof SECTIONS)[number];
 
 export function sectionFromHash(hash: string): Section {

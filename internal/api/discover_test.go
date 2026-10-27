@@ -41,7 +41,7 @@ func newDiscoverEnv(t *testing.T, svc *discover.Service) *discoverEnv {
 	s := newServer(Deps{
 		DB: db, Q: gen.New(db), Session: sm, Version: "test", Hub: NewHub(),
 		SPA:      fstest.MapFS{"index.html": {Data: []byte("x")}},
-		Discover: svc,
+		Discover: svc, Chosen: store.NewChosenGames(db, gen.New(db)),
 	})
 	s.routesDiscover(s.protected)
 	srv := httptest.NewServer(s.handler())
@@ -140,6 +140,24 @@ func TestDiscover_BoxArtResolution(t *testing.T) {
 		got["kick/k-cod"].BoxArtURL)
 	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/1448964995_IGDB-144x192.jpg", got["kick/k-ak"].BoxArtURL, "twitch art by name")
 	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/Rust-144x192.jpg", got["kick/k-rust"].BoxArtURL)
+}
+
+// A Kick-only game with no category image uses the Twitch id the collector
+// looked up for the chosen game, not the name-keyed URL IGDB games never
+// answer (GRUB-33).
+func TestDiscover_KickArtFromChosenTwitchID(t *testing.T) {
+	e := newDiscoverEnv(t, discover.New(discover.Source{Platform: "kick", Timeout: time.Second,
+		Fetch: fixed([]platform.Campaign{{ID: "k-wd", Platform: "kick", Game: "WARDOGS"}}, nil)}))
+	ctx := context.Background()
+	q := e.s.d.Q
+	require.NoError(t, q.UpsertGame(ctx, gen.UpsertGameParams{ID: "g_wardogs", Name: "WARDOGS", Slug: "wardogs"}))
+	require.NoError(t, q.SetGameTwitchID(ctx, gen.SetGameTwitchIDParams{TwitchGameID: "743893402", ID: "g_wardogs"}))
+	require.NoError(t, e.s.d.Chosen.Set(ctx, []string{"g_wardogs"}))
+	_, b := e.do("GET", "/api/discover", "", nil)
+	var got discoverJSON
+	require.NoError(t, json.Unmarshal(b, &got))
+	require.Len(t, got.Campaigns, 1)
+	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/743893402_IGDB-144x192.jpg", got.Campaigns[0].BoxArtURL)
 }
 
 func TestDiscover_TwitchNeedsLinkOnlyForPublisherLink(t *testing.T) {

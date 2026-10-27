@@ -49,7 +49,8 @@ GRUB_DEV_API=http://127.0.0.1:18080 npm --prefix web run dev
 ```
 
 Create the admin with `POST /api/setup` (CSRF token from `GET /api/session`)
-when not seeding. Only `GRUB_MASTER_KEY` is required; see the README
+when not seeding. No env var is required (an unset `GRUB_MASTER_KEY` is
+generated into `master.key` next to the DB); see the README
 "Configuration" table for the rest (`GRUB_*` prefix).
 
 ## Layout

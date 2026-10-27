@@ -109,7 +109,7 @@
     <img src="screenshots/home.png" alt="GrubDrops Home page: what each account is mining across Twitch and Kick">
     <div class="row2">
       <img src="screenshots/games.png" alt="Games page: chosen games in priority order, with per-account game lists">
-      <img src="screenshots/rewards.png" alt="Rewards page: drops in progress and every claimed drop">
+      <img src="screenshots/rewards.png" alt="Inventory page: drops in progress and every claimed drop">
     </div>
   </div>
 
@@ -127,18 +127,20 @@
 
   <section>
     <h2>Run it</h2>
-    <p class="sub">Published image, single compose file. Open <code>http://localhost:8080</code> and create the admin login.</p>
+    <p class="sub">Published image, single compose file. Start it, open <code>http://localhost:8080</code> and create the admin login.</p>
     <pre>services:
   miner:
     image: ghcr.io/aalejandrofer/grubdrops:latest
     restart: unless-stopped
     ports: ["8080:8080"]
     environment:
-      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?generate one with docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen}"
-      GRUB_DB_PATH: /data/miner.db
+      GRUB_SECURE_COOKIES: "0"   # 1 behind HTTPS
+      TZ: Europe/London
     volumes:
       - ./data:/data
-      - /var/run/docker.sock:/var/run/docker.sock</pre>
+      - /var/run/docker.sock:/var/run/docker.sock   # Kick only</pre>
+    <pre>mkdir -p data &amp;&amp; sudo chown 65532:65532 data
+docker compose up -d</pre>
   </section>
 
   <footer>

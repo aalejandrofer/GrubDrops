@@ -40,7 +40,6 @@ services:
     restart: unless-stopped
     ports: ["8080:8080"]
     environment:
-      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?run keygen first}"
       GRUB_SECURE_COOKIES: "0"   # 1 behind HTTPS
       TZ: Europe/London
     volumes:
@@ -49,14 +48,13 @@ services:
 ```
 
 ```bash
-docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen   # save this key
 mkdir -p data && sudo chown 65532:65532 data
-GRUB_MASTER_KEY='AGE-SECRET-KEY-1...' docker compose up -d
+docker compose up -d
 ```
 
 打开 http://localhost:8080 并创建管理员账号。随后向导会引导你添加账号并选择游戏。
 
-- `GRUB_MASTER_KEY` 必须是 `keygen` 生成的 age 密钥，并且每次重启都要使用同一个密钥。它用于加密保存的会话。
+- 首次启动时，挖矿程序会创建 `data/master.key`，之后一直复用。它用于加密保存的会话，请和 `miner.db` 一起保管。如果想把密钥放在 `./data` 之外，把 `docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen` 的输出设为 `GRUB_MASTER_KEY`，它优先于该文件。
 - 容器以 UID 65532 运行，所以该用户必须能写入 `./data`。
 - `GRUB_SECURE_COOKIES` 必须与访问方式一致：HTTP 用 `0`，HTTPS 用 `1`。不一致会出现 "Invalid CSRF token"。
 - 只有 Kick 需要 Docker socket。挖矿程序用它为每个 Kick 账号启动一个 Chrome sidecar。只挖 Twitch 时可以去掉这个挂载。
@@ -81,12 +79,12 @@ GRUB_MASTER_KEY='AGE-SECRET-KEY-1...' docker compose up -d
 
 ## 配置
 
-只有 `GRUB_MASTER_KEY` 是必需的。全部变量见
+没有必需的变量。全部变量见
 [`deploy/docker-compose.yml`](../../deploy/docker-compose.yml)。
 
 | 变量 | 默认值 | 用途 |
 |-----|---------|---------|
-| `GRUB_MASTER_KEY` | 必需 | 加密已保存会话的 age 密钥 |
+| `GRUB_MASTER_KEY` | 数据库旁的 `master.key` | 加密已保存会话的 age 密钥；未设置时首次启动自动生成 |
 | `GRUB_HTTP_ADDR` | `0.0.0.0:8080` | 监听地址 |
 | `GRUB_DB_PATH` | `/data/miner.db` | SQLite 文件 |
 | `GRUB_SECURE_COOKIES` | `0` | 通过 HTTPS 提供时设为 `1` |
@@ -126,7 +124,7 @@ GRUB_MASTER_KEY='AGE-SECRET-KEY-1...' docker compose up -d
 <p align="center">
   <img src="../screenshots/discover.png" width="32%" alt="发现：按游戏分组的当前 Twitch 和 Kick 活动">
   <img src="../screenshots/games.png" width="32%" alt="游戏：按优先级排列的已选游戏">
-  <img src="../screenshots/rewards.png" width="32%" alt="奖励：进行中的掉宝、接下来和领取记录">
+  <img src="../screenshots/rewards.png" width="32%" alt="库存：进行中的掉宝、接下来和领取记录">
 </p>
 
 ## 开发

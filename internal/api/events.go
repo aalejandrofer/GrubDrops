@@ -19,6 +19,8 @@ const (
 	EventGames    = "games"
 	EventAccounts = "accounts"
 	EventLog      = "log"
+
+	EventForceWatch = "force_watch"
 )
 
 const subBuffer = 64

@@ -92,3 +92,25 @@ func TestListEligibleChannels_DirectoryUsesTwitchSlug(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "overwatch-2", dirSlug)
 }
+
+func TestLookupCategory_NameFromSlug(t *testing.T) {
+	srv := fakeGQL(t, map[string]func(map[string]any) string{
+		"GameBySlug": func(v map[string]any) string {
+			if v["slug"] == "overwatch-2" {
+				return `{"data":{"game":{"displayName":"Overwatch"}}}`
+			}
+			return `{"data":{"game":null}}`
+		},
+	})
+	defer srv.Close()
+
+	b := newForTest(srv.URL)
+	name, ok, err := b.LookupCategory(context.Background(), platform.Session{AccessToken: "tok"}, "overwatch-2")
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, "Overwatch", name)
+
+	_, ok, err = b.LookupCategory(context.Background(), platform.Session{AccessToken: "tok"}, "nope")
+	require.NoError(t, err)
+	assert.False(t, ok)
+}

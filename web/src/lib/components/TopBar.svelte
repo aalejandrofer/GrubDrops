@@ -11,7 +11,7 @@
 		{ href: '/', key: 'nav.home' },
 		{ href: '/discover', key: 'nav.discover' },
 		{ href: '/games', key: 'nav.games' },
-		{ href: '/rewards', key: 'nav.rewards' },
+		{ href: '/inventory', key: 'nav.inventory' },
 		{ href: '/settings', key: 'nav.settings' }
 	];
 	const on = (href: string) =>

@@ -89,7 +89,7 @@
 		{/if}
 		<div class="row">
 			<div class="lbl">
-				<b id="ua-l">{t('settings.check_auto')}</b><small>{t('settings.once_a_day')}</small>
+				<b id="ua-l">{t('settings.check_auto')}</b><small>{t('settings.check_hourly')}</small>
 				{#if errs.update_auto}<small class="bad">{t('settings.save_failed')}</small>{/if}
 			</div>
 			<button

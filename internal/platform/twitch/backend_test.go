@@ -103,6 +103,8 @@ func TestBackend_ListActiveCampaignsPopulatesAllowList(t *testing.T) {
 	// fetches only happen for the ACTIVE entry.
 	require.Len(t, camps, 2)
 	require.Equal(t, "active", camps[0].Status)
+	assert.Contains(t, camps[0].AllowedChannels, "fakestreamer", "the allow-list rides on the campaign")
+	assert.Equal(t, len(camps[0].AllowedChannels), camps[0].AllowedChannelCount)
 
 	// After ListActiveCampaigns, the allow-list cache should be populated
 	// from the fixture's allow.channels[].name field.

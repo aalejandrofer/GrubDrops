@@ -311,6 +311,7 @@ func (d *discovery) listActive(ctx context.Context, sess platform.Session) ([]pl
 				}
 				d.captureAllowed(c.ID, allowedLogins)
 				camp.Benefits = benefits
+				camp.AllowedChannels = allowedLogins
 				camp.AllowedChannelCount = len(allowedLogins)
 			}
 		case "UPCOMING":
@@ -502,5 +503,35 @@ func (d *discovery) inventory(ctx context.Context, sess platform.Session) ([]pla
 	// claimed" — emitting it made the watcher skip + falsely mark every new
 	// campaign granting an already-owned item (#24 follow-up). Per-drop
 	// IsClaimed from dropCampaignsInProgress above is the only claim truth.
+	return out, nil
+}
+
+// readyDrops returns inventory drops that are fully watched and unclaimed
+// with an instance id, whatever their game, each with its campaign's name,
+// game and link state.
+func (d *discovery) readyDrops(ctx context.Context, sess platform.Session) ([]platform.ReadyDrop, error) {
+	var inv inventoryData
+	if err := d.c.gql(ctx, sess.AccessToken, OpInventory, nil, &inv); err != nil {
+		return nil, fmt.Errorf("inventory: %w", err)
+	}
+	out := []platform.ReadyDrop{}
+	for _, camp := range inv.CurrentUser.Inventory.DropCampaignsInProgress {
+		c := platform.Campaign{
+			ID: camp.ID, Platform: "twitch", Name: camp.Name, Game: camp.Game.Name,
+			AccountLinked: camp.Self.IsAccountConnected, AccountLinkChecked: true, AccountLinkURL: camp.AccountLinkURL,
+		}
+		for _, td := range camp.TimeBasedDrops {
+			if td.Self.IsClaimed || td.Self.DropInstanceID == "" || td.Self.CurrentMinutesWatched < td.RequiredMinutesWatched {
+				continue
+			}
+			out = append(out, platform.ReadyDrop{Campaign: c, Benefit: platform.DropBenefit{
+				ID:              td.ID,
+				CampaignID:      camp.ID,
+				Name:            td.Name,
+				RequiredMinutes: td.RequiredMinutesWatched,
+				InstanceID:      td.Self.DropInstanceID,
+			}})
+		}
+	}
 	return out, nil
 }

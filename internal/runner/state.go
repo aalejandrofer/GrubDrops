@@ -21,6 +21,9 @@ const (
 	StateAwaitingConnect State = "awaiting_connect"
 	StateNeedsLogin      State = "needs_login"
 	StateNoGames         State = "no_games"
+	// StateForceWatching watches a force-watch channel while the plan queue
+	// is empty. Snapshot.Channel is the login and Current is nil.
+	StateForceWatching State = "force_watching"
 )
 
 // Notifier receives state, progress and claim events.
@@ -85,6 +88,12 @@ type Config struct {
 	// Preempt reports whether a rescan while watching may switch to a
 	// campaign that now outranks the current one. Read live; nil = never.
 	Preempt func() bool
+	// ForceChannels is this account's forced logins, panel order; read live;
+	// nil = none. With the plan queue empty the runner watches the first
+	// live one.
+	ForceChannels func() []string
+	// ForceLookup reports one forced channel's live stream; nil = feature off.
+	ForceLookup func(ctx context.Context, login string) (platform.Stream, bool, error)
 	// Hooks are nil-safe. Each may run on the Run goroutine or a PubSub
 	// goroutine and must not block for long. Payloads (Scan slices and maps,
 	// progress) are read-only and shared with the runner: copy before keeping

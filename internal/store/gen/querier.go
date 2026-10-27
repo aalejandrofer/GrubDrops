@@ -47,6 +47,7 @@ type Querier interface {
 	// live connection; deleting the children first makes the purge correct even if
 	// enforcement is ever off. Run them before DeleteAccount in one transaction.
 	DeleteAccountSession(ctx context.Context, accountID string) error
+	DeleteAllGlobalForceChannels(ctx context.Context) error
 	// Remove a stale claim row when inventory says the drop is NOT claimed.
 	// Used by the reconcile prune to undo false positives from shared-reward
 	// tiers that were wrongly marked collected.
@@ -62,6 +63,8 @@ type Querier interface {
 	GetSession(ctx context.Context, accountID string) (Session, error)
 	GetSettingString(ctx context.Context, key string) ([]byte, error)
 	InsertClaim(ctx context.Context, arg InsertClaimParams) error
+	InsertGlobalForceChannel(ctx context.Context, arg InsertGlobalForceChannelParams) (int64, error)
+	InsertGlobalForceChannelAccount(ctx context.Context, arg InsertGlobalForceChannelAccountParams) error
 	ListAccountChannels(ctx context.Context, accountID string) ([]ListAccountChannelsRow, error)
 	ListAccountGames(ctx context.Context, accountID string) ([]ListAccountGamesRow, error)
 	// Per-account link state for a campaign, joined with the account handle.
@@ -72,10 +75,12 @@ type Querier interface {
 	ListAllAccountChannels(ctx context.Context) ([]ListAllAccountChannelsRow, error)
 	ListAllAccounts(ctx context.Context) ([]Account, error)
 	ListAllDropStates(ctx context.Context) ([]DropState, error)
-	ListAllGames(ctx context.Context) ([]ListAllGamesRow, error)
+	ListAllGames(ctx context.Context) ([]Game, error)
 	ListBenefitsForCampaign(ctx context.Context, campaignID string) ([]Benefit, error)
 	ListChosenGames(ctx context.Context) ([]ListChosenGamesRow, error)
 	ListClaimLogBenefitIDs(ctx context.Context, accountID string) ([]string, error)
+	// Every claim of one campaign on one platform, oldest first.
+	ListClaimLogForCampaign(ctx context.Context, arg ListClaimLogForCampaignParams) ([]ClaimLog, error)
 	ListClaimLogGames(ctx context.Context) ([]string, error)
 	// An empty game, account_id or pattern matches any. The pattern is a LIKE pattern with bang as the escape char, applied through the like function.
 	ListClaimLogPage(ctx context.Context, arg ListClaimLogPageParams) ([]ClaimLog, error)
@@ -92,6 +97,9 @@ type Querier interface {
 	ListDropStatesForAccount(ctx context.Context, accountID string) ([]DropState, error)
 	ListEnabledAccounts(ctx context.Context) ([]Account, error)
 	ListForceChannels(ctx context.Context, accountID string) ([]ListForceChannelsRow, error)
+	ListGlobalForceChannelAccounts(ctx context.Context) ([]ForceChannelAccount, error)
+	ListGlobalForceChannels(ctx context.Context) ([]ForceChannel, error)
+	ListGlobalForceChannelsForAccount(ctx context.Context, accountID string) ([]string, error)
 	ListGlobalGames(ctx context.Context) ([]ListGlobalGamesRow, error)
 	ListKVByPrefix(ctx context.Context, dollar_1 sql.NullString) ([]Kv, error)
 	// Claims the user marked collected by hand.

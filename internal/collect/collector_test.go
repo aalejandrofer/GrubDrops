@@ -353,3 +353,89 @@ func TestCollector_ScanStoresTwitchGameID(t *testing.T) {
 	c.OnScan(ctx, s)
 	require.Equal(t, "263490", twitchID())
 }
+
+// A chosen game no Twitch campaign names (added from Kick, or no campaign
+// yet) gets its Twitch id looked up by name, so box art can use the id form.
+func TestCollector_LooksUpMissingTwitchGameIDs(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	q := gen.New(c.States.DB)
+	_, err := c.States.DB.Exec(`DELETE FROM games`)
+	require.NoError(t, err)
+	for _, g := range []gen.UpsertGameParams{
+		{ID: "rust", Name: "Rust", Slug: "rust"},
+		{ID: "bf6", Name: "Battlefield 6", Slug: "battlefield-6"},
+		{ID: "ko", Name: "Kick Only", Slug: "kick-only"},
+	} {
+		require.NoError(t, q.UpsertGame(ctx, g))
+	}
+	require.NoError(t, c.Chosen.Set(ctx, []string{"rust", "bf6", "ko"}))
+	now := cscanAt
+	c.Now = func() time.Time { return now }
+	var mu sync.Mutex
+	var asked []string
+	c.LookupTwitchGameID = func(_ context.Context, name string) (string, bool, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		asked = append(asked, name)
+		if name == "Battlefield 6" {
+			return "168648543", true, nil
+		}
+		return "", false, nil
+	}
+	twitchID := func(id string) string {
+		var v string
+		require.NoError(t, c.States.DB.QueryRow(`SELECT twitch_game_id FROM games WHERE id=?`, id).Scan(&v))
+		return v
+	}
+
+	s := cbaseScan()
+	s.Campaigns[0].GameID = "263490"
+	c.OnScan(ctx, s)
+	c.lookups.Wait()
+	require.Equal(t, "263490", twitchID("rust"))
+	require.Equal(t, "168648543", twitchID("bf6"))
+	require.ElementsMatch(t, []string{"Battlefield 6", "Kick Only"}, asked, "a campaign-named game needs no lookup")
+
+	asked = nil
+	c.OnScan(ctx, s)
+	c.lookups.Wait()
+	require.Empty(t, asked, "a miss is not retried until twitchIDRetry passes")
+
+	now = now.Add(twitchIDRetry + time.Minute)
+	c.OnScan(ctx, s)
+	c.lookups.Wait()
+	require.Equal(t, []string{"Kick Only"}, asked)
+
+	k := cbaseScan()
+	k.Platform = "kick"
+	k.Campaigns[0].Platform = "kick"
+	asked = nil
+	now = now.Add(twitchIDRetry + time.Minute)
+	c.OnScan(ctx, k)
+	c.lookups.Wait()
+	require.Empty(t, asked, "only Twitch scans trigger lookups")
+}
+
+// A failed lookup (no signed-in Twitch session yet) retries on the next scan.
+func TestCollector_TwitchGameIDLookupErrorRetries(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	q := gen.New(c.States.DB)
+	_, err := c.States.DB.Exec(`DELETE FROM games`)
+	require.NoError(t, err)
+	require.NoError(t, q.UpsertGame(ctx, gen.UpsertGameParams{ID: "bf6", Name: "Battlefield 6", Slug: "battlefield-6"}))
+	require.NoError(t, c.Chosen.Set(ctx, []string{"bf6"}))
+	calls := 0
+	c.LookupTwitchGameID = func(context.Context, string) (string, bool, error) {
+		calls++
+		return "", false, errors.New("no session")
+	}
+	s := cbaseScan()
+	s.Campaigns = nil
+	c.OnScan(ctx, s)
+	c.lookups.Wait()
+	c.OnScan(ctx, s)
+	c.lookups.Wait()
+	require.Equal(t, 2, calls)
+}

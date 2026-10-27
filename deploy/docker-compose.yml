@@ -8,9 +8,11 @@ services:
     ports:
       - "8080:8080"
     environment:
-      # Must be an age X25519 identity (AGE-SECRET-KEY-1...). Generate one with:
+      # Optional. Unset, the miner creates /data/master.key on first start and
+      # reuses it. Set it to keep the key outside the data folder; it must be an
+      # age X25519 identity (AGE-SECRET-KEY-1...) from:
       #   docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen
-      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?generate one with docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen}"
+      GRUB_MASTER_KEY: ${GRUB_MASTER_KEY:-}
       GRUB_DB_PATH: /data/miner.db
       GRUB_HTTP_ADDR: 0.0.0.0:8080
       # Timezone: sets the server-side clock for log timestamps and

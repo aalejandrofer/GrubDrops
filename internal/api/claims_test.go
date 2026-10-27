@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -72,7 +73,7 @@ func TestClaims_HandlerShape(t *testing.T) {
 	for k := range item {
 		keys = append(keys, k)
 	}
-	require.ElementsMatch(t, []string{"account_id", "account_name", "platform", "game", "campaign_name",
+	require.ElementsMatch(t, []string{"account_id", "account_name", "platform", "game", "campaign_id", "campaign_name",
 		"benefit_id", "benefit_name", "image_url", "code", "source", "claimed_at"}, keys)
 	require.Equal(t, "Alice", item["account_name"])
 	require.Equal(t, "b3", item["benefit_id"])
@@ -218,4 +219,72 @@ func TestClaims_MarkNeedsCSRF(t *testing.T) {
 	e, _, id := markEnv(t)
 	resp, _ := e.do("POST", "/api/claims", "", map[string]string{"account_id": id, "benefit_id": "b-cur"})
 	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+}
+
+// skipPlan builds the plan for one Rust drop with the account's stored skips.
+func skipPlan(t *testing.T, e *env, acct string) plan.Result {
+	t.Helper()
+	skips, err := store.NewSkips(e.s.d.Q).Skips(acct)
+	require.NoError(t, err)
+	return plan.Build(plan.Input{
+		Games: []plan.Game{{Name: "Rust", Slug: "rust"}},
+		Campaigns: []platform.Campaign{{
+			ID: "c1", Platform: "twitch", Game: "Rust", Name: "Rust drops", Status: "active",
+			StartsAt: time.Now().Add(-time.Hour), EndsAt: time.Now().Add(24 * time.Hour),
+			Benefits: []platform.DropBenefit{{ID: "b-skip", CampaignID: "c1", Name: "Hoodie", RequiredMinutes: 60}},
+		}},
+		Skipped: skips,
+	})
+}
+
+func TestClaims_RemoveClearsSkip(t *testing.T) {
+	e, c, id := markEnv(t)
+	_, tok := e.session()
+	skips := store.NewSkips(e.s.d.Q)
+	require.NoError(t, skips.RecordSkip(id, "b-skip"))
+	before := skipPlan(t, e, id)
+	require.Empty(t, before.Queue)
+	require.Len(t, before.Blocked, 1)
+	require.Equal(t, plan.ReasonSkipped, before.Blocked[0].Reason)
+
+	n := len(c.changedList())
+	resp, body := e.do("DELETE", "/api/claims/"+id+"/b-skip", tok, nil)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode, string(body))
+	_, err := e.s.d.Q.GetSettingString(context.Background(), store.SkipOverridePrefix+"b-skip:"+id)
+	require.ErrorIs(t, err, sql.ErrNoRows, "kv skip row gone")
+	require.Equal(t, []string{id}, c.changedList()[n:], "reload rebuilds the runner from the store")
+
+	after := skipPlan(t, e, id)
+	require.Len(t, after.Queue, 1, "planner queues the drop again")
+	require.Equal(t, "b-skip", after.Queue[0].Benefit.ID)
+	require.Empty(t, after.Blocked)
+}
+
+func TestClaims_RemoveClaimAndSkip(t *testing.T) {
+	e, _, id := markEnv(t)
+	_, tok := e.session()
+	require.NoError(t, store.NewSkips(e.s.d.Q).RecordSkip(id, "b-cur"))
+	recordClaim(t, e, id, "b-cur", "Rust", time.Now().Unix())
+	resp, body := e.do("DELETE", "/api/claims/"+id+"/b-cur", tok, nil)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode, string(body))
+	ids, err := e.s.d.Claims.ClaimedBenefitIDs(context.Background(), id)
+	require.NoError(t, err)
+	require.Empty(t, ids)
+	m, err := store.NewSkips(e.s.d.Q).Skips(id)
+	require.NoError(t, err)
+	require.Empty(t, m)
+}
+
+func TestClaims_RemoveNeither404(t *testing.T) {
+	e, c, id := markEnv(t)
+	_, tok := e.session()
+	require.NoError(t, store.NewSkips(e.s.d.Q).RecordSkip("acc_other", "b-x"))
+	n := len(c.changedList())
+	resp, body := e.do("DELETE", "/api/claims/"+id+"/b-x", tok, nil)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	require.Contains(t, string(body), "not_found")
+	require.Len(t, c.changedList(), n)
+	m, err := store.NewSkips(e.s.d.Q).Skips("acc_other")
+	require.NoError(t, err)
+	require.True(t, m["b-x"], "another account's skip stays")
 }

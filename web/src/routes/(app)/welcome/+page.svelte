@@ -171,7 +171,7 @@
 			{#if live.failed.overview || live.failed.games}
 				<div class="empty" role="alert">
 					<span>{t('home.load_failed')}</span>
-					<button type="button" class="btn" onclick={() => live.refetchAll().catch(() => {})}>{t('rewards.retry')}</button>
+					<button type="button" class="btn" onclick={() => live.refetchAll().catch(() => {})}>{t('inventory.retry')}</button>
 				</div>
 			{:else}
 				<p class="faint">{t('home.loading')}</p>

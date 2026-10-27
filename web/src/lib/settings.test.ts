@@ -22,12 +22,13 @@ beforeEach(() => setLang('en'));
 describe('settings helpers', () => {
 	it('sectionFromHash maps known hashes and falls back to general', () => {
 		expect(sectionFromHash('#health')).toBe('health');
+		expect(sectionFromHash('#password')).toBe('password');
 		expect(sectionFromHash('#nope')).toBe('general');
 		expect(sectionFromHash('')).toBe('general');
 	});
 
-	it('SECTIONS order is general first', () => {
-		expect([...SECTIONS]).toEqual(['general', 'engine', 'accounts', 'notifications', 'health', 'updates']);
+	it('SECTIONS order is general first and password last, under updates', () => {
+		expect([...SECTIONS]).toEqual(['general', 'accounts', 'engine', 'notifications', 'health', 'updates', 'password']);
 	});
 
 	it('zoneOptions starts with server default', () => {

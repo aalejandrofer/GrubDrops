@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
@@ -46,6 +47,45 @@ type sessionDeps struct {
 	// non-AuthChecker backend); Kick never reaches this branch at all
 	// (see the platform=="kick" short-circuit above).
 	verify func(ctx context.Context, s platform.Session) error
+	// fallbackLog keeps the verify-fallback warning to one per account and
+	// error. nil = warn every time.
+	fallbackLog *refreshFallbackLog
+}
+
+// refreshFallbackLog remembers, per account, the refresh error last logged
+// at Warn on the verify-fallback path. Every roster rebuild reruns
+// acquireSession, so without it the same warning repeats on each reload.
+type refreshFallbackLog struct {
+	mu sync.Mutex
+	m  map[string]string
+}
+
+// first records errText for accountID and reports whether it differs from
+// the error last recorded for it. A nil log always reports true.
+func (l *refreshFallbackLog) first(accountID, errText string) bool {
+	if l == nil {
+		return true
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.m == nil {
+		l.m = map[string]string{}
+	}
+	if prev, ok := l.m[accountID]; ok && prev == errText {
+		return false
+	}
+	l.m[accountID] = errText
+	return true
+}
+
+// reset forgets accountID, so its next fallback warns again.
+func (l *refreshFallbackLog) reset(accountID string) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.m, accountID)
 }
 
 // acquireSession loads (and refreshes, if needed) an account's session. See
@@ -122,11 +162,16 @@ func acquireSession(ctx context.Context, deps sessionDeps, a gen.Account, now ti
 					return platform.Session{}, "", ctx.Err()
 				}
 				if verifyErr := deps.verify(ctx, sess); verifyErr == nil {
-					deps.logger.Warn("session refresh failed but the current token still verifies; continuing with it",
+					logFallback := deps.logger.Debug
+					if deps.fallbackLog.first(a.ID, refreshErr.Error()) {
+						logFallback = deps.logger.Warn
+					}
+					logFallback("session refresh failed but the current token still verifies; continuing with it",
 						"account", a.ID, "platform", a.Platform, "err", refreshErr)
 					return sess, "", nil
 				}
 			}
+			deps.fallbackLog.reset(a.ID)
 			deps.logger.Warn("session refresh failed, will idle",
 				"account", a.ID, "platform", a.Platform, "err", refreshErr)
 			return platform.Session{}, idleReasonNeedsAuth, nil
@@ -149,6 +194,7 @@ func acquireSession(ctx context.Context, deps sessionDeps, a gen.Account, now ti
 		}
 	}
 
+	deps.fallbackLog.reset(a.ID)
 	deps.logger.Info("session refreshed", "account", a.ID, "platform", a.Platform)
 	return refreshed, "", nil
 }

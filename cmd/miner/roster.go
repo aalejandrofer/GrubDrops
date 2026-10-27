@@ -4,7 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
+	"slices"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -42,7 +45,8 @@ type roster struct {
 	pool        *runner.Pool
 	kick        kickRegistry // nil interface when Kick is not configured; see newRoster
 	logger      *slog.Logger
-	names       *accountNames // set by newRoster
+	names       *accountNames       // set by newRoster
+	fallbackLog *refreshFallbackLog // set by newRoster
 
 	backendFor func(gen.Account) (platform.Backend, error)
 	notifier   runner.Notifier
@@ -51,6 +55,89 @@ type roster struct {
 
 	// gamesDirty queues one games reload; see requestGamesReload.
 	gamesDirty chan struct{} // set by newRoster
+
+	// Force watch. force nil = feature off. forceLookup is the shared
+	// checker's Lookup; nil = runners never force watch.
+	force       *store.ForceWatch
+	forceLookup func(ctx context.Context, platform, login string) (platform.Stream, bool, error)
+	forceCache  *atomic.Pointer[[]store.ForceChannel] // set by newRoster; nil until read
+	forceMu     *sync.Mutex                           // set by newRoster; serializes list loads and change diffs
+	forceQueue  *accountQueue                         // set by newRoster; see forceChanged
+	loaded      *loadedSessions                       // set by newRoster
+	noLooker    *sync.Map                             // set by newRoster; platforms already warned about
+}
+
+// loadedSession is the backend and session a runner build last loaded for
+// one account.
+type loadedSession struct {
+	backend platform.Backend
+	session platform.Session
+}
+
+// loadedSessions maps account ID to its loaded session, so the force-watch
+// checker can borrow one without reloading it.
+type loadedSessions struct {
+	mu sync.Mutex
+	m  map[string]loadedSession
+}
+
+func (l *loadedSessions) set(id string, s loadedSession) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.m[id] = s
+}
+
+func (l *loadedSessions) get(id string) (loadedSession, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	s, ok := l.m[id]
+	return s, ok
+}
+
+func (l *loadedSessions) remove(id string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.m, id)
+}
+
+// accountQueue is a set of account IDs waiting for a reload, with a one-slot
+// wake channel. Adds fold into one pending set.
+type accountQueue struct {
+	mu   sync.Mutex
+	ids  map[string]bool
+	wake chan struct{}
+}
+
+func newAccountQueue() *accountQueue {
+	return &accountQueue{ids: map[string]bool{}, wake: make(chan struct{}, 1)}
+}
+
+func (q *accountQueue) add(ids map[string]bool) {
+	if len(ids) == 0 {
+		return
+	}
+	q.mu.Lock()
+	for id := range ids {
+		q.ids[id] = true
+	}
+	q.mu.Unlock()
+	select {
+	case q.wake <- struct{}{}:
+	default:
+	}
+}
+
+// take empties the set and returns its IDs sorted.
+func (q *accountQueue) take() []string {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	out := make([]string, 0, len(q.ids))
+	for id := range q.ids {
+		out = append(out, id)
+	}
+	clear(q.ids)
+	sort.Strings(out)
+	return out
 }
 
 // accountNames maps account ID to display name in memory, so the log hook can
@@ -101,8 +188,14 @@ func (ro *roster) accountName(id string) string { return ro.names.get(id) }
 func newRoster(r roster, k *kick.Backend) *roster {
 	ro := &r
 	ro.names = &accountNames{}
+	ro.fallbackLog = &refreshFallbackLog{}
 	ro.gamesDirty = make(chan struct{}, 1)
 	ro.runCfg = &atomic.Pointer[runSettings]{}
+	ro.forceCache = &atomic.Pointer[[]store.ForceChannel]{}
+	ro.forceMu = &sync.Mutex{}
+	ro.forceQueue = newAccountQueue()
+	ro.loaded = &loadedSessions{m: map[string]loadedSession{}}
+	ro.noLooker = &sync.Map{}
 	if k != nil {
 		ro.kick = k
 	}
@@ -110,6 +203,7 @@ func newRoster(r roster, k *kick.Backend) *roster {
 	ro.collector.OnFound = func(ctx context.Context, e store.ClaimEntry) {
 		ro.publishClaim(ctx, e.AccountID, e.BenefitID)
 	}
+	ro.collector.LookupTwitchGameID = ro.lookupTwitchGameID
 	return ro
 }
 
@@ -148,6 +242,8 @@ func (ro *roster) builder(a gen.Account) runner.Builder {
 		if fresh, err := ro.q.GetAccount(ctx, a.ID); err == nil {
 			a = fresh
 		}
+		// Only a build that gets to a runner leaves a session to borrow.
+		ro.loaded.remove(a.ID)
 		if a.Enabled == 0 {
 			return ro.idle(a, runner.StateIdle)
 		}
@@ -161,12 +257,13 @@ func (ro *roster) builder(a gen.Account) runner.Builder {
 			verify = ac.VerifyAuth
 		}
 		deps := sessionDeps{
-			get:     ro.sessions.Get,
-			refresh: b.RefreshSession,
-			put:     ro.sessions.Put,
-			logger:  ro.log(),
-			backoff: sessionRetryBackoff,
-			verify:  verify,
+			get:         ro.sessions.Get,
+			refresh:     b.RefreshSession,
+			put:         ro.sessions.Put,
+			logger:      ro.log(),
+			backoff:     sessionRetryBackoff,
+			verify:      verify,
+			fallbackLog: ro.fallbackLog,
 		}
 		sess, reason, err := acquireSession(ctx, deps, a, time.Now())
 		if err != nil {
@@ -187,6 +284,12 @@ func (ro *roster) builder(a gen.Account) runner.Builder {
 			}
 		}
 
+		lsess := sess
+		lsess.AccountID = a.ID
+		ro.loaded.set(a.ID, loadedSession{backend: b, session: lsess})
+
+		// A runner even with no games: it force watches when it has
+		// force channels, and idles itself as no_games otherwise.
 		r := runner.New(ro.runnerConfig(ctx, a, b, sess, ro.gamesFor(ctx, a)))
 		return runner.Entry{ID: a.ID, Unit: r}
 	}
@@ -255,6 +358,20 @@ func (ro *roster) runnerConfig(ctx context.Context, a gen.Account, b platform.Ba
 		},
 		ProgressNotifyStepPct: progressNotifyStepPct,
 		TickInterval:          0,
+		ForceChannels:         func() []string { return ro.forceFor(a.ID, a.Platform) },
+		ForceLookup:           ro.forceLookupFor(a.Platform),
+	}
+}
+
+// forceLookupFor binds the shared force-watch lookup to one platform; nil
+// when force watch is off.
+func (ro *roster) forceLookupFor(plat string) func(ctx context.Context, login string) (platform.Stream, bool, error) {
+	if ro.forceLookup == nil {
+		return nil
+	}
+	lookup := ro.forceLookup
+	return func(ctx context.Context, login string) (platform.Stream, bool, error) {
+		return lookup(ctx, plat, login)
 	}
 }
 
@@ -299,6 +416,7 @@ func (ro *roster) reloadAccount(id string) {
 	a, err := ro.q.GetAccount(ro.ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		ro.names.remove(id)
+		ro.loaded.remove(id)
 		ro.pool.ReloadAccount(id, nil)
 		return
 	}
@@ -313,6 +431,7 @@ func (ro *roster) reloadAccount(id string) {
 // accountRemoved drops a deleted account's runner and collected state.
 func (ro *roster) accountRemoved(id string) {
 	ro.names.remove(id)
+	ro.loaded.remove(id)
 	ro.pool.ReloadAccount(id, nil)
 	ro.collector.Forget(id)
 	ro.hub.Publish(api.Event{Name: api.EventAccounts, Data: struct{}{}})
@@ -422,3 +541,313 @@ func (ro *roster) scanEvery() time.Duration { return ro.runSettings().scan }
 
 // preempt is the switch-to-higher-rank setting.
 func (ro *roster) preempt() bool { return ro.runSettings().preempt }
+
+// errNoForceLookupAccount means no signed-in account can run a force-watch
+// lookup on the platform; the channel's live state stays unknown.
+var errNoForceLookupAccount = errors.New("force watch: no signed-in account for lookups")
+
+// forceList returns the cached force-watch list, reading it once after start
+// or after forceChanged. A failed read gives nil for that call and is not
+// cached.
+func (ro *roster) forceList() []store.ForceChannel {
+	if c := ro.forceCache.Load(); c != nil {
+		return *c
+	}
+	if ro.force == nil {
+		return nil
+	}
+	ro.forceMu.Lock()
+	defer ro.forceMu.Unlock()
+	if c := ro.forceCache.Load(); c != nil {
+		return *c
+	}
+	list, err := ro.loadForce()
+	if err != nil {
+		ro.log().Warn("read force watch list failed", "kind", "error", "err", err)
+		return nil
+	}
+	return list
+}
+
+// loadForce reads the list from the store and caches it. Callers hold forceMu.
+func (ro *roster) loadForce() ([]store.ForceChannel, error) {
+	ctx, cancel := context.WithTimeout(ro.ctx, 5*time.Second)
+	defer cancel()
+	list, err := ro.force.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ro.forceCache.Store(&list)
+	return list, nil
+}
+
+// forceFor is the account's force channels in panel order.
+func (ro *roster) forceFor(id, plat string) []string {
+	var out []string
+	for _, c := range ro.forceList() {
+		if c.Platform == plat && slices.Contains(c.Accounts, id) {
+			out = append(out, c.Channel)
+		}
+	}
+	return out
+}
+
+// forceMembers is the set of account/platform/channel assignments in list.
+func forceMembers(list []store.ForceChannel) map[[3]string]bool {
+	m := map[[3]string]bool{}
+	for _, c := range list {
+		for _, id := range c.Accounts {
+			m[[3]string{id, c.Platform, c.Channel}] = true
+		}
+	}
+	return m
+}
+
+// forceLookupWarm bounds the background lookup forceChanged starts for each
+// newly added channel.
+const forceLookupWarm = 30 * time.Second
+
+// forceChanged refreshes the cached list and tells every account added to
+// or removed from a channel, plus every runner force watching now. Runners
+// read the list live, so only a runner that has exited as no_games is
+// rebuilt, so it can start force watching. An idle runner re-picks and a
+// force-watching one rechecks at its next beat without restarting its watch.
+// An account starting, watching or claiming a drop is left alone: the list
+// only matters once it is idle. Each newly added channel gets a background
+// lookup so its live state fills in. It returns at once; runForceReloader
+// does the rebuilds.
+func (ro *roster) forceChanged() {
+	states := map[string]runner.State{}
+	for _, sn := range ro.pool.Snapshots() {
+		states[sn.AccountID] = sn.State
+	}
+	ids := map[string]bool{}
+	var added [][2]string
+	if ro.force != nil {
+		ro.forceMu.Lock()
+		var old []store.ForceChannel
+		if c := ro.forceCache.Load(); c != nil {
+			old = *c
+		}
+		list, err := ro.loadForce()
+		if err != nil {
+			// Drop the cache so the next read tries again.
+			ro.forceCache.Store(nil)
+			ro.log().Error("force watch changed: read list failed", "kind", "error", "err", err)
+		} else {
+			was, now := forceMembers(old), forceMembers(list)
+			for k := range was {
+				if !now[k] {
+					ids[k[0]] = true
+				}
+			}
+			for k := range now {
+				if !was[k] {
+					ids[k[0]] = true
+				}
+			}
+			added = addedChannels(old, list)
+		}
+		ro.forceMu.Unlock()
+	}
+	for id, st := range states {
+		if st == runner.StateForceWatching {
+			ids[id] = true
+		}
+	}
+	rebuild := map[string]bool{}
+	for id := range ids {
+		switch states[id] {
+		case runner.StateStarting, runner.StateWatching, runner.StateClaiming:
+		case runner.StateNoGames:
+			rebuild[id] = true
+		default:
+			ro.pool.ForceListChanged(id)
+		}
+	}
+	ro.forceQueue.add(rebuild)
+	ro.warmForce(added)
+}
+
+// addedChannels is the platform/channel pairs in list that old lacks, in
+// list order.
+func addedChannels(old, list []store.ForceChannel) [][2]string {
+	had := make(map[[2]string]bool, len(old))
+	for _, c := range old {
+		had[[2]string{c.Platform, c.Channel}] = true
+	}
+	var out [][2]string
+	for _, c := range list {
+		if k := [2]string{c.Platform, c.Channel}; !had[k] {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+// warmForce looks each channel up in the background, so the shared cache
+// knows its live state before the next refresh pass. It never blocks.
+func (ro *roster) warmForce(chans [][2]string) {
+	if ro.forceLookup == nil || len(chans) == 0 {
+		return
+	}
+	lookup := ro.forceLookup
+	go func() {
+		for _, c := range chans {
+			ctx, cancel := context.WithTimeout(ro.ctx, forceLookupWarm)
+			_, _, _ = lookup(ctx, c[0], c[1]) // failures are logged by the checker
+			cancel()
+		}
+	}()
+}
+
+// runForceReloader runs queued force-watch reloads until ro.ctx ends.
+func (ro *roster) runForceReloader() {
+	for {
+		select {
+		case <-ro.ctx.Done():
+			return
+		case <-ro.forceQueue.wake:
+			for _, id := range ro.forceQueue.take() {
+				if ro.ctx.Err() != nil {
+					return
+				}
+				ro.safeReloadAccount(id)
+			}
+		}
+	}
+}
+
+// safeReloadAccount keeps a builder panic from killing the reloader goroutine.
+func (ro *roster) safeReloadAccount(id string) {
+	defer func() {
+		if r := recover(); r != nil {
+			ro.log().Error("force watch changed: reload panicked", "kind", "error", "account", id, "panic", r)
+		}
+	}()
+	ro.reloadAccount(id)
+}
+
+// categoryLookupTimeout caps one account's category lookup, so a hung
+// account leaves time to try the next one.
+const categoryLookupTimeout = 7 * time.Second
+
+// lookupCategory resolves a category slug to its game name with the first
+// signed-in account on plat that can, trying the next one on error. It
+// returns the last lookup error, or api.ErrNoCategoryAccount when no
+// account could try.
+func (ro *roster) lookupCategory(ctx context.Context, plat, slug string) (string, bool, error) {
+	var name string
+	found, err := ro.lookupWithSession(ctx, plat, func(ctx context.Context, ls loadedSession) (bool, bool, error) {
+		cl, ok := ls.backend.(platform.CategoryLooker)
+		if !ok {
+			return false, false, nil
+		}
+		n, found, err := cl.LookupCategory(ctx, ls.session, slug)
+		name = n
+		return true, found, err
+	})
+	return name, found, err
+}
+
+// lookupTwitchGameID finds a game's Twitch id by name, the same way
+// lookupCategory finds a name, for box art of games no campaign named.
+func (ro *roster) lookupTwitchGameID(ctx context.Context, name string) (string, bool, error) {
+	var id string
+	found, err := ro.lookupWithSession(ctx, "twitch", func(ctx context.Context, ls loadedSession) (bool, bool, error) {
+		gl, ok := ls.backend.(platform.GameIDLooker)
+		if !ok {
+			return false, false, nil
+		}
+		v, found, err := gl.LookupGameID(ctx, ls.session, name)
+		id = v
+		return true, found, err
+	})
+	return id, found, err
+}
+
+// lookupWithSession runs try with each signed-in, already loaded session on
+// plat, each under categoryLookupTimeout, until one try runs without error.
+// try reports tried=false when the backend cannot do the lookup. It returns
+// the last error, or api.ErrNoCategoryAccount when nothing could try.
+func (ro *roster) lookupWithSession(ctx context.Context, plat string, try func(context.Context, loadedSession) (tried, found bool, err error)) (bool, error) {
+	accts, err := ro.q.ListEnabledAccounts(ctx)
+	if err != nil {
+		return false, err
+	}
+	states := map[string]runner.State{}
+	for _, sn := range ro.pool.Snapshots() {
+		states[sn.AccountID] = sn.State
+	}
+	var lastErr error
+	for _, a := range accts {
+		if a.Platform != plat || states[a.ID] == runner.StateNeedsLogin {
+			continue
+		}
+		ls, ok := ro.loaded.get(a.ID)
+		if !ok {
+			continue
+		}
+		actx, cancel := context.WithTimeout(ctx, categoryLookupTimeout)
+		tried, found, err := try(actx, ls)
+		cancel()
+		if !tried {
+			continue
+		}
+		if err == nil {
+			return found, nil
+		}
+		lastErr = err
+	}
+	if lastErr != nil {
+		return false, lastErr
+	}
+	return false, fmt.Errorf("%s: %w", plat, api.ErrNoCategoryAccount)
+}
+
+// lookupForce checks one channel with a session a runner build already
+// loaded: each enabled account on the platform in turn, skipping ones that
+// need a login, until one lookup succeeds. It returns the last lookup error,
+// or errNoForceLookupAccount when no account could try. It never loads a
+// session itself.
+func (ro *roster) lookupForce(ctx context.Context, plat, login string) (platform.Stream, bool, error) {
+	accts, err := ro.q.ListEnabledAccounts(ctx)
+	if err != nil {
+		return platform.Stream{}, false, err
+	}
+	states := map[string]runner.State{}
+	for _, sn := range ro.pool.Snapshots() {
+		states[sn.AccountID] = sn.State
+	}
+	var lastErr error
+	noLooker := false
+	for _, a := range accts {
+		if a.Platform != plat || states[a.ID] == runner.StateNeedsLogin {
+			continue
+		}
+		ls, ok := ro.loaded.get(a.ID)
+		if !ok {
+			continue
+		}
+		cl, ok := ls.backend.(platform.ChannelLooker)
+		if !ok {
+			noLooker = true
+			continue
+		}
+		s, live, err := cl.LookupChannel(ctx, ls.session, login)
+		if err == nil {
+			return s, live, nil
+		}
+		lastErr = err
+	}
+	if lastErr != nil {
+		return platform.Stream{}, false, lastErr
+	}
+	if noLooker {
+		if _, warned := ro.noLooker.LoadOrStore(plat, true); !warned {
+			ro.log().Warn("force watch: this platform backend cannot look up channels; its force channels stay unknown",
+				"kind", "error", "platform", plat)
+		}
+	}
+	return platform.Stream{}, false, fmt.Errorf("%w: %s", errNoForceLookupAccount, plat)
+}

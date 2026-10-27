@@ -53,10 +53,11 @@ type gamesJSON struct {
 }
 
 type gameHitJSON struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Chosen   bool   `json:"chosen"`
-	Priority *int   `json:"priority"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	BoxArtURL string `json:"box_art_url"`
+	Chosen    bool   `json:"chosen"`
+	Priority  *int   `json:"priority"`
 }
 
 // boxArtURL is the Twitch directory box art for a game: the IGDB id form
@@ -158,8 +159,11 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 		switch {
 		case mining[i]:
 			g.State = "mining"
-		case len(g.Campaigns) > 0:
+		case i < len(statuses) && statuses[i].Queued:
 			g.State = "waiting"
+		case len(g.Campaigns) > 0:
+			// Every drop is claimed or skipped on every account.
+			g.State = "done"
 		}
 		out.Games[i] = g
 	}
@@ -190,7 +194,7 @@ func gameRowID(name string) (string, bool) {
 // matchGameRow finds the stored row for a typed name. An existing row with
 // the same slug but another id (seeded by a migration) wins, since slug is
 // unique. It returns that row's id, or id unchanged when none matches.
-func matchGameRow(all []gen.ListAllGamesRow, id, name string) (string, bool) {
+func matchGameRow(all []gen.Game, id, name string) (string, bool) {
 	slug := gameslug.Slug(strings.TrimSpace(name))
 	for _, g := range all {
 		if g.ID == id || g.Slug == slug {
@@ -213,6 +217,13 @@ func (s *server) handleGamesAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	if !readJSON(w, r, &in) {
 		return
+	}
+	if plat, slug, isLink := parseCategoryLink(in.Name); isLink {
+		name, ok := s.categoryName(w, r, plat, slug)
+		if !ok {
+			return
+		}
+		in.Name = name
 	}
 	id, ok := gameRowID(in.Name)
 	if !ok {
@@ -331,7 +342,7 @@ func (s *server) handleGamesSearch(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(strings.ToLower(g.Name), q) {
 			continue
 		}
-		hit := gameHitJSON{ID: g.ID, Name: g.Name}
+		hit := gameHitJSON{ID: g.ID, Name: g.Name, BoxArtURL: boxArtURL(g.Name, g.TwitchGameID)}
 		if p, ok := prio[g.ID]; ok {
 			hit.Chosen, hit.Priority = true, &p
 		}

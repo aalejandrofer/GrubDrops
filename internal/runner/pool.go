@@ -345,6 +345,26 @@ func (p *Pool) RescanAll() {
 	}
 }
 
+// ForceListChanged passes a force-list edit to the account's unit. It
+// reports false when the unit cannot take one.
+func (p *Pool) ForceListChanged(accountID string) bool {
+	p.mu.Lock()
+	var unit Unit
+	for _, u := range p.units {
+		if u.entry.ID == accountID {
+			unit = u.entry.Unit
+			break
+		}
+	}
+	p.mu.Unlock()
+	fl, ok := unit.(interface{ ForceListChanged() })
+	if !ok {
+		return false
+	}
+	fl.ForceListChanged()
+	return true
+}
+
 // RecheckLinks runs the account runner's link recheck. ErrNotRunning when the
 // account has no running runner.
 func (p *Pool) RecheckLinks(ctx context.Context, accountID string) (LinkRecheck, error) {

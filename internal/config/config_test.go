@@ -41,11 +41,11 @@ func TestSplitList(t *testing.T) {
 	require.Equal(t, []string{"a", "b"}, splitList(" a , b "))
 }
 
-func TestLoad_RequiresMasterKey(t *testing.T) {
+func TestLoad_MasterKeyOptional(t *testing.T) {
 	t.Setenv("GRUB_MASTER_KEY", "")
-	_, err := Load()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "GRUB_MASTER_KEY")
+	cfg, err := Load()
+	require.NoError(t, err, "an unset key is generated at startup")
+	assert.Empty(t, cfg.MasterKey)
 }
 
 func TestLoad_DefaultsApplied(t *testing.T) {

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -87,9 +86,6 @@ func Load() (Config, error) {
 	cfg.OIDCProviderName = getenv("GRUB_OIDC_PROVIDER_NAME", "SSO")
 	cfg.OIDCAllowedEmails = splitList(os.Getenv("GRUB_OIDC_ALLOWED_EMAILS"))
 	cfg.OIDCAllowedGroups = splitList(os.Getenv("GRUB_OIDC_ALLOWED_GROUPS"))
-	if strings.TrimSpace(cfg.MasterKey) == "" {
-		return Config{}, fmt.Errorf("GRUB_MASTER_KEY is required")
-	}
 	// Timezone: TZ env var → time.Local (Docker-style).
 	cfg.Location = time.UTC
 	if tz := os.Getenv("TZ"); tz != "" {

@@ -153,13 +153,14 @@ export function androidErrorKey(code: string | undefined): string {
 	return (code && ANDROID_ERRORS.get(code)) || 'accounts.android_failed';
 }
 
-export type AccountStatus ='paused' | 'mining' | 'signed_out' | 'idle';
+export type AccountStatus = 'paused' | 'mining' | 'force_watching' | 'signed_out' | 'idle';
 
 /** Signed out wins, then paused: a paused account without a session still needs a login. */
 export function accountStatus(a: Account, r: Runner | undefined): AccountStatus {
 	if (a.needs_login || r?.state === 'needs_login') return 'signed_out';
 	if (!a.enabled) return 'paused';
 	if (r?.current && (r.state === 'watching' || r.state === 'claiming')) return 'mining';
+	if (r?.state === 'force_watching') return 'force_watching';
 	return 'idle';
 }
 
@@ -180,7 +181,8 @@ const STATE_KEYS = {
 	sleeping: 'accounts.state.sleeping',
 	awaiting_connect: 'accounts.state.awaiting_connect',
 	needs_login: 'accounts.state.needs_login',
-	no_games: 'accounts.state.no_games'
+	no_games: 'accounts.state.no_games',
+	force_watching: 'accounts.state.force_watching'
 } as const;
 
 export function accountLine(
@@ -200,6 +202,7 @@ export function accountLine(
 			req: c.required_minutes
 		});
 	}
+	if (status === 'force_watching' && r?.channel) return t('accounts.force_line', { channel: r.channel });
 	if (status === 'signed_out') {
 		const at = a.auth?.checked_at;
 		return at ? t('accounts.expired_at', { time: time(at) }) : t('accounts.not_signed_in');

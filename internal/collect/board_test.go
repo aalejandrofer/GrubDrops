@@ -2,6 +2,8 @@ package collect
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -171,5 +173,101 @@ func TestBoard_Forget(t *testing.T) {
 	b.Forget("a1")
 	if got := b.Games([]plan.Game{rust}); len(got[0].Campaigns) != 0 {
 		t.Fatalf("got %+v", got[0].Campaigns)
+	}
+}
+
+func TestBoard_CampaignMergesAccounts(t *testing.T) {
+	c := platform.Campaign{ID: "c1", Platform: "twitch", Game: "Rust", Name: "Rust Drops", EndsAt: oct30, Status: "active",
+		AccountLinkURL: "javascript:alert(1)",
+		Benefits: []platform.DropBenefit{
+			{ID: "b3", CampaignID: "c1", Name: "Late", RequiredMinutes: 120},
+			{ID: "b1", CampaignID: "c1", Name: "First", RequiredMinutes: 30},
+			{ID: "b0", CampaignID: "c1", Name: "Badge", RequiredMinutes: 0},
+			{ID: "b2", CampaignID: "c1", Name: "Second", RequiredMinutes: 30},
+		}}
+	c2 := c
+	c2.AccountLinkURL = "https://link.example/rust"
+	tgt := func(id string, min int) plan.Target {
+		for _, b := range c.Benefits {
+			if b.ID == id {
+				return plan.Target{Campaign: c, Benefit: b, Minutes: min}
+			}
+		}
+		t.Fatalf("no benefit %s", id)
+		return plan.Target{}
+	}
+	other := camp("c9", "twitch", "Rust", oct31, 1)
+	a1 := scan("a1", "twitch", oct30, other, c)
+	a1.Result = plan.Result{
+		Claimed: []plan.Target{tgt("b1", 0)},
+		Queue:   []plan.Target{tgt("b2", 12), {Campaign: other, Benefit: other.Benefits[0]}},
+	}
+	a2 := scan("a2", "twitch", oct30, c2)
+	a2.Result = plan.Result{
+		Queue:   []plan.Target{tgt("b1", 30)},
+		Blocked: []plan.Blocked{{Target: tgt("b2", 0), Reason: plan.ReasonPrecondition}},
+	}
+	b := NewBoard()
+	b.Observe(a2)
+	b.Observe(a1)
+	b.Observe(scan("k1", "kick", oct30, platform.Campaign{ID: "c1", Platform: "kick", Name: "Kick c1"}))
+
+	got, ok := b.Campaign("twitch", "c1")
+	if !ok {
+		t.Fatal("campaign not found")
+	}
+	if got.Campaign.Name != "Rust Drops" || got.LinkURL != "https://link.example/rust" {
+		t.Fatalf("meta = %q link %q", got.Campaign.Name, got.LinkURL)
+	}
+	var ids []string
+	for _, d := range got.Drops {
+		ids = append(ids, d.ID)
+	}
+	if want := "b0 b1 b2 b3"; strings.Join(ids, " ") != want {
+		t.Fatalf("drop order = %v, want %s", ids, want)
+	}
+	cells := func(i int) string {
+		var s []string
+		for _, c := range got.Drops[i].Cells {
+			s = append(s, fmt.Sprintf("%s:%s:%s:%d", c.AccountID, c.State, c.Reason, c.Minutes))
+		}
+		return strings.Join(s, ",")
+	}
+	if g := cells(0); g != "" {
+		t.Errorf("b0 cells = %q", g)
+	}
+	if g, want := cells(1), "a1:claimed::30,a2:claimable::30"; g != want {
+		t.Errorf("b1 cells = %q, want %q", g, want)
+	}
+	if g, want := cells(2), "a1:accruing::12,a2:blocked:precondition:0"; g != want {
+		t.Errorf("b2 cells = %q, want %q", g, want)
+	}
+
+	if _, ok := b.Campaign("twitch", "nope"); ok {
+		t.Error("unknown campaign found")
+	}
+	k, ok := b.Campaign("kick", "c1")
+	if !ok || k.Campaign.Name != "Kick c1" || len(k.Drops) != 0 {
+		t.Errorf("kick c1 = %+v %v", k, ok)
+	}
+}
+
+// A campaign every account has claimed or skipped stays listed but leaves
+// nothing queued.
+func TestBoard_QueuedOnlyWithWorkLeft(t *testing.T) {
+	b := NewBoard()
+	t1 := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	done := camp("c1", "twitch", "Rust", oct31, 1)
+	b.Observe(scan("a1", "twitch", t1, done))
+	ow := camp("o1", "twitch", "Overwatch", oct31, 1)
+	s := scan("a2", "twitch", t1, ow)
+	s.Result = plan.Result{Queue: []plan.Target{{Campaign: ow, Benefit: ow.Benefits[0]}}}
+	b.Observe(s)
+	got := b.Games([]plan.Game{rust, overwatch})
+	if len(got[0].Campaigns) != 1 || got[0].Queued {
+		t.Fatalf("rust %+v", got[0])
+	}
+	if !got[1].Queued {
+		t.Fatalf("overwatch %+v", got[1])
 	}
 }

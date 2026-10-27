@@ -3,19 +3,21 @@
 	import { etaShort, nextScanMin } from '$lib/format';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
+	import { prefs } from '$lib/prefs.svelte';
 	import { reorder } from '$lib/drag';
 	import { afterLabel, anyCustom, commitMineNow, commitMove, foldQueue, moveItem, queues } from '$lib/upnext';
 	import type { Runner } from '$lib/api/types';
+	import type { CampaignTarget } from './CampaignDrawer.svelte';
 	import PlatformMark from './PlatformMark.svelte';
+
+	/** Opens the campaign drawer; without it the campaign name is plain text. */
+	let { onopen }: { onopen?: (t: CampaignTarget) => void } = $props();
 
 	const live = getLive();
 	let failed = $state(false);
 	// Per-account Mine next state.
 	let mineBusy = $state<Record<string, boolean>>({});
 	let mineFailed = $state<Record<string, boolean>>({});
-	// Mark collected state, keyed by account:benefit.
-	let marking = $state<Record<string, boolean>>({});
-	let markFailed = $state(false);
 	let drag = $state<{ id: string; from: number; to: number } | null>(null);
 	// Accounts whose queue shows every row; not persisted.
 	let open = $state<Record<string, boolean>>({});
@@ -102,22 +104,6 @@
 		mineFailed[id] = !ok;
 	}
 
-	async function markCollected(id: string, benefitId: string): Promise<void> {
-		const k = `${id}:${benefitId}`;
-		if (marking[k]) return;
-		marking[k] = true;
-		markFailed = false;
-		try {
-			await api.markCollected(id, benefitId);
-			live.runners = live.runners.map((r) =>
-				r.account_id === id ? { ...r, up_next: r.up_next.filter((x) => x.benefit_id !== benefitId) } : r
-			);
-		} catch {
-			markFailed = true;
-		}
-		marking[k] = false;
-	}
-
 	// Why Mine next is unavailable for this account, or null when it can run.
 	function mineWhy(q: { canMine: boolean }, r: Runner | undefined): string | null {
 		if (!q.canMine) {
@@ -146,6 +132,9 @@
 <section class="panel">
 	<div class="panel-h">
 		<h2>{t('upnext.title')}</h2><span class="n">{total}</span>
+		{#if prefs.priorityMode === 'ending_soonest'}
+			<a class="mode" href="/games" title={t('settings.pm_ending_soonest_sub')}>{t('settings.pm_ending_soonest')}</a>
+		{/if}
 	</div>
 	{#if qs.length === 0}
 		<p class="empty">
@@ -160,7 +149,7 @@
 		{@const fold = foldQueue(full, open[q.accountId] === true)}
 		{@const why = mineWhy(q, r)}
 		<div class="acct">
-			{#if qs.length > 1}<PlatformMark platform={q.platform} size="sm" /><span class="pf-name {q.platform}">{q.accountName}</span>{/if}
+			<PlatformMark platform={q.platform} size="sm" /><span class="pf-name {q.platform}">{q.accountName}</span>
 			<button
 				class="mine"
 				type="button"
@@ -193,7 +182,21 @@
 					<span class="qn">{i + 1}</span>
 					<div class="qt">
 						<div class="d">{item.benefit_name}</div>
-						<div class="g">{item.game} · {item.campaign_name}</div>
+						{#if onopen && item.campaign_id}
+							<div class="g linked">
+								<span>{item.game} ·</span><button
+									type="button"
+									class="clink"
+									data-campaign
+									aria-haspopup="dialog"
+									title={t('campaign.open')}
+									onclick={() => onopen({ platform: item.platform, id: item.campaign_id, highlight: item.benefit_id })}
+									>{item.campaign_name}</button
+								>
+							</div>
+						{:else}
+							<div class="g">{item.game} · {item.campaign_name}</div>
+						{/if}
 						<div class="m">
 							<span class="pf-name {q.platform}">{q.accountName}</span> ·
 							{after
@@ -207,15 +210,6 @@
 								<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5 6 4.5l3 3" /></svg>
 							</button>
 						{/if}
-						<button
-							type="button"
-							aria-label={t('upnext.mark_collected', { drop: item.benefit_name })}
-							title={t('upnext.mark_collected', { drop: item.benefit_name })}
-							disabled={marking[`${q.accountId}:${item.benefit_id}`]}
-							onclick={() => markCollected(q.accountId, item.benefit_id)}
-						>
-							<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.8 6.2 2.2 2.2 4.2-4.6" /></svg>
-						</button>
 					</div>
 				</li>
 			{/each}
@@ -232,7 +226,6 @@
 		{/if}
 	{/each}
 	{#if failed}<p class="err" role="alert">{t('upnext.save_failed')}</p>{/if}
-	{#if markFailed}<p class="err" role="alert">{t('upnext.mark_failed')}</p>{/if}
 	<div class="panel-f">
 		<span>{perm[0]}<a href="/games" class="link">{t('nav.games')}</a>{perm[1] ?? ''}</span>
 		{#if custom}<button class="reset" type="button" onclick={reset}>{t('upnext.reset')}</button>{/if}
@@ -263,6 +256,22 @@
 		border-radius: 10px;
 		padding: 0 6px;
 	}
+	.mode {
+		margin-left: auto;
+		font-size: 12px;
+		padding: 1px 8px;
+		border-radius: 10px;
+		color: var(--accent);
+		background: var(--accent-soft);
+		white-space: nowrap;
+	}
+	.mode:hover {
+		text-decoration: underline;
+	}
+	.mode:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
 	.hint {
 		padding: 4px 14px 10px;
 		font-size: 12px;
@@ -277,6 +286,9 @@
 	}
 	.empty {
 		color: var(--t2);
+	}
+	.panel-h + .empty {
+		margin-top: 10px;
 	}
 	.err {
 		color: var(--red);
@@ -354,6 +366,44 @@
 		font-size: 12px;
 		color: var(--t3);
 		margin-top: 1px;
+	}
+	/* Each part ellipsizes itself, so the link's focus ring is not clipped. */
+	.g.linked {
+		display: flex;
+		gap: 4px;
+		overflow: visible;
+	}
+	.g.linked > * {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.g.linked > span {
+		flex: none;
+		max-width: 50%;
+	}
+	.clink {
+		font: inherit;
+		color: inherit;
+		text-align: left;
+		background: none;
+		border: 0;
+		padding: 0;
+		cursor: pointer;
+		white-space: nowrap;
+		text-decoration: underline dotted;
+		text-decoration-color: var(--t3);
+		text-underline-offset: 2px;
+	}
+	.clink:hover {
+		color: var(--text);
+		text-decoration-style: solid;
+		text-decoration-color: currentColor;
+	}
+	.clink:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+		border-radius: 3px;
 	}
 	.mv {
 		display: flex;
