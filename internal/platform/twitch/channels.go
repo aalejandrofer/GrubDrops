@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/aalejandrofer/grubdrops/internal/gameslug"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
@@ -26,6 +27,46 @@ const liveCheckConcurrency = 20
 
 type channels struct {
 	c *client
+	// slugs caches each game's directory slug, keyed by game id or
+	// "name:"+lowercased name.
+	slugs sync.Map
+}
+
+// gameSlugQuery resolves a game's directory slug. Twitch can rename a
+// category and keep its old slug ("Overwatch" lives at overwatch-2), so a
+// slug built from the display name can name no game at all.
+const gameSlugQuery = `query GameSlug($id: ID, $name: String) { game(id: $id, name: $name) { slug } }`
+
+// dirSlug returns the DirectoryPage_Game slug for a game, asking Twitch
+// once per game. It falls back to the slug derived from name when the
+// lookup fails (not cached, so it retries) or Twitch knows no such game.
+func (ch *channels) dirSlug(ctx context.Context, sess platform.Session, gameID, name string) string {
+	name = strings.TrimSpace(name)
+	key, vars := gameID, map[string]any{"id": gameID}
+	if gameID == "" {
+		key, vars = "name:"+strings.ToLower(name), map[string]any{"name": name}
+	}
+	if v, ok := ch.slugs.Load(key); ok {
+		return v.(string)
+	}
+	slug := gameslug.Slug(name)
+	if gameID == "" && name == "" {
+		return slug
+	}
+	var resp struct {
+		Game *struct {
+			Slug string `json:"slug"`
+		} `json:"game"`
+	}
+	if err := ch.c.gqlQuery(ctx, sess.AccessToken, "GameSlug", gameSlugQuery, vars, &resp); err != nil {
+		slog.Debug("twitch game slug lookup failed", "game", name, "err", err)
+		return slug
+	}
+	if resp.Game != nil && resp.Game.Slug != "" {
+		slug = resp.Game.Slug
+	}
+	ch.slugs.Store(key, slug)
+	return slug
 }
 
 // streamLiveData decodes the VideoPlayerStreamInfoOverlayChannel

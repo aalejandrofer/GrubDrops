@@ -4,6 +4,11 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [2.1.2] — 2026-10-27
+
+### Fixed
+- **Overwatch drops find channels again.** Twitch renamed "Overwatch 2" to "Overwatch" but kept the `overwatch-2` directory slug, and GrubDrops built the slug from the name (`overwatch`), which names no game, so campaigns open to any channel found nothing to watch. The Twitch backend now asks Twitch for each game's real directory slug once and caches it, falling back to the name-based slug if the lookup fails. Covers every renamed category, not only Overwatch. Reported in #76.
+
 ## [2.1.1] — 2026-10-27
 
 ### Changed

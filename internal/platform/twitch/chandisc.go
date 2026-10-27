@@ -135,7 +135,10 @@ func (d *discovery) listByChannels(ctx context.Context, sess platform.Session, c
 	// double the DirectoryPage_Game + AvailableDrops fan-out every tick.
 	seenSlugs := make(map[string]struct{}, len(sess.Games))
 	for _, game := range sess.Games {
-		slug := gameslug.Slug(game)
+		if gameslug.Slug(game) == "" {
+			continue
+		}
+		slug := ch.dirSlug(ctx, sess, "", game)
 		if slug == "" {
 			continue
 		}
