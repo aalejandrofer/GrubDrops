@@ -9,6 +9,10 @@ updates:
     groups:
       go-deps:
         patterns: ["*"]
+    # chromedp 0.21 moved to a generic Action API that breaks the browser
+    # sidecar (Kick watch path). Upgrade by hand with a live Kick drop check.
+    ignore:
+      - dependency-name: "github.com/chromedp/*"
 
   # Docker base images for the miner + browser sidecar.
   - package-ecosystem: docker

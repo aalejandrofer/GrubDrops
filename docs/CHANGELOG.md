@@ -5,6 +5,8 @@ All notable changes to GrubDrops.
 ## [Unreleased]
 
 ### Changed
+- Bumped grpc to 1.83.2, chi to 5.4.0, x/crypto to 0.55.0 and x/net to 0.58.0 (Dependabot security alerts).
+- Dependabot no longer proposes chromedp upgrades; chromedp 0.21 breaks the browser sidecar and needs a manual port.
 - PR and bug report templates match v2: UI check and test, locale and changelog checklist items, login method, version and full log from Settings.
 
 ### Removed
