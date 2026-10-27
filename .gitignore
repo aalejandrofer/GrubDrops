@@ -60,3 +60,7 @@ out/
 
 # impeccable skill binary (downloaded on first run)
 /.claude/skills/impeccable/scripts/bin/
+
+# Other agent tool folders
+/.agents/
+/.codex/
