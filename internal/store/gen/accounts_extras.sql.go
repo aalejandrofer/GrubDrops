@@ -71,7 +71,7 @@ func (q *Queries) DeleteAccountSession(ctx context.Context, accountID string) er
 }
 
 const listAllAccounts = `-- name: ListAllAccounts :many
-SELECT id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url, custom_name, sort_order FROM accounts ORDER BY sort_order ASC, created_at ASC
+SELECT id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url, custom_name, sort_order, own_games FROM accounts ORDER BY sort_order ASC, created_at ASC
 `
 
 func (q *Queries) ListAllAccounts(ctx context.Context) ([]Account, error) {
@@ -96,6 +96,7 @@ func (q *Queries) ListAllAccounts(ctx context.Context) ([]Account, error) {
 			&i.AvatarUrl,
 			&i.CustomName,
 			&i.SortOrder,
+			&i.OwnGames,
 		); err != nil {
 			return nil, err
 		}
@@ -108,6 +109,21 @@ func (q *Queries) ListAllAccounts(ctx context.Context) ([]Account, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setAccountOwnGames = `-- name: SetAccountOwnGames :exec
+UPDATE accounts SET own_games = ?, updated_at = ? WHERE id = ?
+`
+
+type SetAccountOwnGamesParams struct {
+	OwnGames  int64  `json:"own_games"`
+	UpdatedAt int64  `json:"updated_at"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) SetAccountOwnGames(ctx context.Context, arg SetAccountOwnGamesParams) error {
+	_, err := q.db.ExecContext(ctx, setAccountOwnGames, arg.OwnGames, arg.UpdatedAt, arg.ID)
+	return err
 }
 
 const setAccountSortOrder = `-- name: SetAccountSortOrder :exec

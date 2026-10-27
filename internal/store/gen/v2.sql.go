@@ -82,6 +82,23 @@ func (q *Queries) CountClaimLogSince(ctx context.Context, claimedAt int64) (int6
 	return count, err
 }
 
+const deleteClaimLog = `-- name: DeleteClaimLog :execrows
+DELETE FROM claim_log WHERE account_id = ? AND benefit_id = ?
+`
+
+type DeleteClaimLogParams struct {
+	AccountID string `json:"account_id"`
+	BenefitID string `json:"benefit_id"`
+}
+
+func (q *Queries) DeleteClaimLog(ctx context.Context, arg DeleteClaimLogParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteClaimLog, arg.AccountID, arg.BenefitID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteDropStatesForAccount = `-- name: DeleteDropStatesForAccount :exec
 DELETE FROM drop_states WHERE account_id = ?
 `
@@ -385,6 +402,34 @@ func (q *Queries) ListDropStatesForAccount(ctx context.Context, accountID string
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listManualClaimLogBenefitIDs = `-- name: ListManualClaimLogBenefitIDs :many
+SELECT benefit_id FROM claim_log WHERE account_id = ? AND source = 'manual'
+`
+
+// Claims the user marked collected by hand.
+func (q *Queries) ListManualClaimLogBenefitIDs(ctx context.Context, accountID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listManualClaimLogBenefitIDs, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var benefit_id string
+		if err := rows.Scan(&benefit_id); err != nil {
+			return nil, err
+		}
+		items = append(items, benefit_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

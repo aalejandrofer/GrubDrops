@@ -15,6 +15,14 @@ import (
 // skipped so one broken claim cannot wedge the queue.
 const claimFailSkipThreshold = 3
 
+// linkRefusal reports whether a Claim error means the game account must be
+// linked first. Twitch has no link-refusal error, so a refused claim on a
+// campaign it reports unlinked counts as one; transport errors never do.
+func linkRefusal(err error, c platform.Campaign) bool {
+	return errors.Is(err, platform.ErrClaimNeedsLink) ||
+		(plan.Unlinked(c) && errors.Is(err, platform.ErrClaimRefused))
+}
+
 // claim claims the completed current benefit.
 func (r *Runner) claim(ctx context.Context) error {
 	r.mu.Lock()
@@ -23,6 +31,7 @@ func (r *Runner) claim(ctx context.Context) error {
 		return errors.New("cannot claim: no current target")
 	}
 	benefit := r.current.Benefit
+	campaign := r.current.Campaign
 	channel := r.channel
 	if r.handle != nil && r.handle.Channel != "" {
 		channel = r.handle.Channel
@@ -33,7 +42,7 @@ func (r *Runner) claim(ctx context.Context) error {
 		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
 			return fmt.Errorf("claim: %w", err)
 		}
-		if errors.Is(err, platform.ErrClaimNeedsLink) {
+		if linkRefusal(err, campaign) {
 			r.blockNotLinked(ctx, benefit, err)
 			return nil
 		}

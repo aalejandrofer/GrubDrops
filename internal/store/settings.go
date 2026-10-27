@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -298,7 +299,55 @@ const (
 	keyUITheme            = "settings:ui_theme"
 	keyNotifyDailySummary = "settings:notify_daily_summary"
 	keyUpdateAuto         = "settings:update_auto"
+	keyPriorityMode       = "settings:priority_mode"
+	keyScanIntervalMin    = "settings:scan_interval_min"
+	keyPreempt            = "settings:preempt"
 )
+
+// ScanIntervals are the allowed scan paces, in minutes: 15 minutes to 24 hours.
+var ScanIntervals = []int{15, 30, 60, 180, 360, 720, 1440}
+
+// ScanIntervalMin is how often each account checks for new campaigns, in
+// minutes. One of ScanIntervals; default 60.
+func (s *Settings) ScanIntervalMin(ctx context.Context) (int, error) {
+	v, err := s.getString(ctx, keyScanIntervalMin)
+	if err != nil {
+		return 60, err
+	}
+	n, perr := strconv.Atoi(v)
+	if perr != nil || !slices.Contains(ScanIntervals, n) {
+		return 60, nil
+	}
+	return n, nil
+}
+
+func (s *Settings) SetScanIntervalMin(ctx context.Context, n int) error {
+	if !slices.Contains(ScanIntervals, n) {
+		return fmt.Errorf("invalid value %d for %s", n, keyScanIntervalMin)
+	}
+	return s.setString(ctx, keyScanIntervalMin, strconv.Itoa(n))
+}
+
+// Preempt reports whether a watching account switches to a campaign that now
+// outranks the current one. Off means it finishes the current drop first.
+// Default on.
+func (s *Settings) Preempt(ctx context.Context) (bool, error) {
+	return s.boolKey(ctx, keyPreempt, true)
+}
+
+func (s *Settings) SetPreempt(ctx context.Context, on bool) error {
+	return s.setBool(ctx, keyPreempt, on)
+}
+
+// PriorityMode orders the mining queue: ordered (game list order) or
+// ending_soonest (campaign ending first). Default ordered.
+func (s *Settings) PriorityMode(ctx context.Context) (string, error) {
+	return s.enumString(ctx, keyPriorityMode, "ordered", "ordered", "ending_soonest")
+}
+
+func (s *Settings) SetPriorityMode(ctx context.Context, v string) error {
+	return s.setEnum(ctx, keyPriorityMode, v, "ordered", "ending_soonest")
+}
 
 // UILanguage is the UI and notification language: en, es or zh-CN. Default en.
 func (s *Settings) UILanguage(ctx context.Context) (string, error) {

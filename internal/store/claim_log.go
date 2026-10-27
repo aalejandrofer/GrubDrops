@@ -13,6 +13,7 @@ const (
 	ClaimSourceGrubDrops = "grubdrops" // claimed by the runner
 	ClaimSourceInventory = "inventory" // found claimed by reconcile
 	ClaimSourceLegacy    = "1.x"       // copied from 1.x claims
+	ClaimSourceManual    = "manual"    // marked collected by the user
 )
 
 // unixOrZero maps the zero time to 0 so "unset" survives the integer column.
@@ -57,7 +58,15 @@ func (l *ClaimLog) Record(ctx context.Context, e ClaimEntry) error {
 }
 
 func (l *ClaimLog) ClaimedBenefitIDs(ctx context.Context, accountID string) (map[string]bool, error) {
-	ids, err := l.Q.ListClaimLogBenefitIDs(ctx, accountID)
+	return idSet(l.Q.ListClaimLogBenefitIDs(ctx, accountID))
+}
+
+// MarkedBenefitIDs is the account's claims with ClaimSourceManual.
+func (l *ClaimLog) MarkedBenefitIDs(ctx context.Context, accountID string) (map[string]bool, error) {
+	return idSet(l.Q.ListManualClaimLogBenefitIDs(ctx, accountID))
+}
+
+func idSet(ids []string, err error) (map[string]bool, error) {
 	if err != nil {
 		return nil, err
 	}
@@ -66,6 +75,13 @@ func (l *ClaimLog) ClaimedBenefitIDs(ctx context.Context, accountID string) (map
 		out[id] = true
 	}
 	return out, nil
+}
+
+// Delete removes one account's claim of a benefit and reports whether a row
+// was there.
+func (l *ClaimLog) Delete(ctx context.Context, accountID, benefitID string) (bool, error) {
+	n, err := l.Q.DeleteClaimLog(ctx, gen.DeleteClaimLogParams{AccountID: accountID, BenefitID: benefitID})
+	return n > 0, err
 }
 
 // Get returns one account's claim of a benefit.

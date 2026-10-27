@@ -2,11 +2,13 @@ package authcheck
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"sync"
 	"testing"
 
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
@@ -209,5 +211,34 @@ func TestPersist_FieldsCarryPlatformAndName(t *testing.T) {
 	}
 	if got["name"] != "MyKickAccount" {
 		t.Fatalf("name field = %v, want MyKickAccount", got["name"])
+	}
+}
+
+// CheckAccount probes one account on demand and returns what it stored.
+func TestCheckAccount_PersistsAndReturns(t *testing.T) {
+	q := testQueries(t)
+	ctx := context.Background()
+	if _, err := q.CreateAccount(ctx, gen.CreateAccountParams{
+		ID: "acc_1", Platform: "nope", DisplayName: "One", Status: "idle",
+		FingerprintJson: "{}", Enabled: 1, CreatedAt: 1, UpdatedAt: 1,
+	}); err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	c := New(q, nil, platform.NewRegistry())
+
+	res, err := c.CheckAccount(ctx, "acc_1")
+	if err != nil {
+		t.Fatalf("CheckAccount: %v", err)
+	}
+	if res.OK || res.Msg != "no backend for platform" || res.CheckedAt == 0 {
+		t.Fatalf("unexpected result %+v", res)
+	}
+	stored, ok := Load(ctx, q, "acc_1")
+	if !ok || stored != res {
+		t.Fatalf("stored %+v ok=%v, want %+v", stored, ok, res)
+	}
+
+	if _, err := c.CheckAccount(ctx, "acc_missing"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("missing account: got %v, want sql.ErrNoRows", err)
 	}
 }

@@ -79,7 +79,7 @@ func TestAccountSortOrderBackfill(t *testing.T) {
 			r.id, "kick", r.id, "idle", "{}", 1, r.at, r.at)
 		require.NoError(t, err)
 	}
-	require.NoError(t, goose.UpToContext(ctx, db, "migrations", 21))
+	require.NoError(t, goose.UpContext(ctx, db, "migrations"))
 
 	all, err := gen.New(db).ListAllAccounts(ctx)
 	require.NoError(t, err)

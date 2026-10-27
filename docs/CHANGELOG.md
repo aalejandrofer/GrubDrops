@@ -4,12 +4,48 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-10-26
+
+### Added
+- **Ending soonest drop priority.** A new Settings > Engine section, between General and Accounts, picks the drop priority: Game order (default) mines games in list order; Ending soonest mines the campaign that ends first across all chosen games, then the one with fewer minutes left, then game order. Campaigns with no end date go last. Mine now and the Up next order still win. The change replans every account at once, with no restart. Stored as `settings:priority_mode` (same key as 1.x); `GET/PUT /api/settings` gain `priority_mode`.
+- **Import a TwitchDropsMiner login.** The first-run wizard has an Import from TwitchDropsMiner tab next to Android login and TV code, Settings > Accounts offers it next to the other Twitch methods, and the Android login step has the same Import TwitchDropsMiner cookies.jar button. It reads the `auth-token` cookie from the file, in both the JSON format of newer aiohttp and the pickle format of older aiohttp, and signs in like a pasted Android URL, so the same Twitch user updates its existing account. The pickle reader only allows the cookie jar's own classes and runs no code. `POST /api/login/twitch/android` takes `jar` (base64) instead of `url`; a file with no Twitch token returns `tdm_no_token`. New dependency: `github.com/nlpodyssey/gopickle`.
+- **Scan interval.** Settings > Engine has Check for new campaigns every (15 minutes to 24 hours, default 1 hour). It sets how often a watching account rescans and how often an idle account with nothing to mine looks again. A change replans every account at once, with no restart. Stored as `settings:scan_interval_min`; `GET/PUT /api/settings` gain `scan_interval_min`.
+- **Switch to a higher-ranked drop.** On by default: when a higher-ranked campaign has a live stream at a rescan, the account leaves its current drop and mines that one. Turn it off in Settings > Engine to finish the current drop first. A Mine now pin still holds. Stored as `settings:preempt`; `GET/PUT /api/settings` gain `preempt`.
+- **Proxy in Settings.** Settings > Engine has a proxy URL (http, https or socks5), an on/off switch and Test, which fetches Twitch through the proxy and shows the time (`POST /api/settings/proxy-test`). The saved password shows as `***`. Applies after a restart. `GET /api/settings` gains `proxy`; `PUT` takes `proxy_url` and `proxy_enabled`.
+- **Advanced settings.** Collapsed Advanced blocks at the bottom of three tabs: Kick watch mode on Engine (applies after a restart); Drop progress and Canary failures notifications plus the notification avatar URL on Notifications; the canary interval (applies after a restart) and the Twitch and Kick canary channels on Health. `GET/PUT /api/settings` gain `kick_watch_mode`, `notify_avatar_url`, `canary` and `notify.progress` / `notify.canary`.
+- **Link-to-claim notification.** When a platform refuses a claim until the game account is linked, one error notification per drop says to link the account to claim it. It follows the Errors toggle and the UI language.
+- **Per-account game list.** The Games page has a Lists rail beside the shared list, with an own-list switch for each account. Turning it on opens the account's list in a dialog, and only Save keeps it on; the account then mines only its own ranked list instead of the shared list. Edit list reopens the dialog. Games are added from the same search as the Games page, or by typing a name, and reordered or removed in the dialog. The first time, the list starts as the 1.x per-account games if the account had any, otherwise as a copy of the global list. Turning it off keeps the stored list for next time. An account row in Settings > Accounts with its own list says so under its name, with a link to Games. Changing the shared list leaves accounts on their own list running. Games only on an account's own list do not show on the Games page. Migration `0022` adds `accounts.own_games`; `GET/PUT /api/accounts/{id}/games`, and accounts gain `own_games` and `own_game_count`.
+- **Mark collected and remove a claim.** Each drop in Up next and the In progress drop on Rewards have a Mark collected button: the drop is logged as claimed by hand and the account moves on. A claimed row on Rewards has a remove button (click twice) that deletes the claim record, so the account can mine that drop again; a drop the platform still reports as claimed comes back at the next inventory check. Claims marked by hand say so on Rewards. `POST /api/claims` and `DELETE /api/claims/{account}/{benefit}`.
+- **Check login and Restart runner.** An account's menu in Settings > Accounts has Check login now, which asks the platform if the session is still valid and shows the result on the row, and Restart runner, which restarts that account's runner. `POST /api/accounts/{id}/check-login` and `POST /api/accounts/{id}/restart`.
+- **Change the admin password.** Settings > General has Admin password: enter the current password and the new one twice. The session stays signed in; every other signed-in browser is signed out. `POST /api/settings/password`.
+- **Database snapshot.** Settings > General has Database snapshot, which downloads a consistent copy of the database (`VACUUM INTO`). Account sessions in it stay encrypted with the master key. `POST /api/settings/snapshot`.
+- **Test notification.** Settings > Notifications has a Test notification panel that sends a sample drop message to Discord or Telegram, with one button for each one that is set up. With neither set up, it says to connect one first. `POST /api/settings/notify-test`.
+- **Canary help.** The canary card on Settings > Health has a help tooltip that explains what the canary checks.
+- **Skip onboarding.** The first-run wizard has a Skip onboarding, go to Settings link.
+- More environment variables are documented in the README Configuration table: `GRUB_UPDATE_INTERVAL`, `GRUB_AUTHCHECK_INTERVAL`, `GRUB_CANARY_INTERVAL`, `GRUB_LOG_RING`, `GRUB_KICK_SIDECAR_TEMPLATE`, `GRUB_KICK_SIDECAR_PORT`, `GRUB_BROWSER_URL`, `GRUB_BROWSER_URLS`, `GRUB_TWITCH_BROWSER`, `GRUB_AUTH_BYPASS_LOCAL` and `GRUB_AUTHBYPASS`.
+
 ### Changed
+- **Unlinked games always mine.** A campaign the platform reports as not linked is mined like any other instead of being blocked; only a refused claim blocks the drop, and it is retried as before. Twitch has no link-refusal status, so a failed claim on a Twitch campaign it reports unlinked counts as a link refusal, not toward the 3-failure skip. The Games and Home link warnings also cover these campaigns, and the Home line now reads "Link your game account to claim". `plan.Result` gains `NeedsLink`.
+- **Add account in a dialog.** Add account in Settings > Accounts opens a dialog with the same sign-in steps as the first-run wizard instead of an inline panel.
+- **Account menu order.** The ⋯ menu in Settings > Accounts is grouped: Rename; Log in again and Check login now; Pause mining and Restart runner; Remove account.
+- **Runner settings read from memory.** Runners read the UI language, drop priority, scan interval and switch-to-higher-rank settings from memory instead of the database on every tick and status update. Saving settings refreshes them.
+- **TV code sign-in.** The step shows an Open Twitch activate button and a Copy button that copies the full activate link with the code in it; the code itself is no longer shown. Choosing TV code warns that the Discover tab won't work for that account.
+- **Onboarding spacing.** The first-run wizard steps have more even spacing.
+- **Scan cadence.** The default rescan while watching and the idle recheck are now 1 hour instead of 12 hours, and both follow the new scan interval setting.
 - Bumped grpc to 1.83.2, chi to 5.4.0, x/crypto to 0.55.0 and x/net to 0.58.0 (Dependabot security alerts).
 - Dependabot no longer proposes chromedp upgrades; chromedp 0.21 breaks the browser sidecar and needs a manual port.
 - PR and bug report templates match v2: UI check and test, locale and changelog checklist items, login method, version and full log from Settings.
 
+### Fixed
+- **Mark collected sticks.** A drop marked collected by hand stays claimed even when the platform inventory still shows it in progress.
+- **Proxy password kept on edit.** Changing the host or port of a saved proxy URL whose password shows as `***` keeps the stored password, for both Save and Test.
+- **Proxy auth and https proxies.** A socks5 proxy URL with a user and password now authenticates, and an https:// proxy now talks TLS to the proxy.
+- **Twitch claim errors.** A network or server error on a Twitch claim for a campaign Twitch reports unlinked counts as a claim failure, not as a link refusal, so it no longer sends a link notice.
+- **Switch to a higher-ranked drop loop.** An account no longer keeps leaving its drop for a higher-ranked campaign whose only streams stalled or failed to start; a failed switch target waits 3 hours.
+- **Link notices repeat.** The link-to-claim notification goes out once per drop and account, also across runner restarts and miner restarts.
+
 ### Removed
+- The unused 1.x `link_override:` kv read path (manual "I've linked it" override); unlinked campaigns mine without it.
 - Outdated design docs and 1.x UI mockups for features v2 dropped or replaced: SPA migration, channel whitelist, manual mark-collected, item pulling, settings tabs, SSO login UI.
 
 ## [2.0.0] — 2026-10-26
@@ -103,7 +139,7 @@ All notable changes to GrubDrops.
 - The collection migration is 0017 and safe to re-run. Databases at version 16 from the 1.x pipeline-v2 build skipped it, so Games search and Home failed on missing tables.
 - A swept reward is recorded only when its title resolves to one drop, looking in the current campaign, then the current game, then the rest of the plan. An ambiguous title records nothing.
 - A reward code is stored against the drop just claimed, within 10 minutes, never against the next drop. Each claim takes one code.
-- Progress notifications fire again (start, 50% and 100%) when turned on in Settings.
+- Progress notifications fire again (start, 50% and 100%) when turned on in Settings > Notifications > Advanced.
 - `log` events take the account name from memory, so logging never waits on the database.
 - Shutdown waits for background loops before closing the Twitch backends and the database, including after an HTTP listen failure.
 - Kick avatars on runners, the overview and `runner` events go through the Kick image proxy, so they load in the browser.

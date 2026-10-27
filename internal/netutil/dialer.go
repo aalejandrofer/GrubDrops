@@ -4,6 +4,8 @@ package netutil
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"net"
@@ -19,9 +21,23 @@ import (
 // utls/TLS/HTTP on top exactly as they would for a direct connection.
 type DialContextFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 
+// proxyRoots verifies an https:// proxy's certificate; nil uses the system
+// roots. Tests swap it.
+var proxyRoots *x509.CertPool
+
+// socksAuth is the user:pass in a socks5:// URL, or nil without one.
+func socksAuth(u *url.URL) *proxy.Auth {
+	if u.User == nil {
+		return nil
+	}
+	pw, _ := u.User.Password()
+	return &proxy.Auth{User: u.User.Username(), Password: pw}
+}
+
 // ProxyDialer returns a dialer for proxyURL. Empty → direct. socks5:// →
-// golang.org/x/net/proxy. http(s):// → HTTP CONNECT tunnel. Unsupported schemes
-// return an error so startup can surface a misconfiguration.
+// golang.org/x/net/proxy. http(s):// → HTTP CONNECT tunnel, over TLS to the
+// proxy for https://. Unsupported schemes return an error so startup can
+// surface a misconfiguration.
 func ProxyDialer(proxyURL string) (DialContextFunc, error) {
 	base := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
 	if proxyURL == "" {
@@ -34,7 +50,7 @@ func ProxyDialer(proxyURL string) (DialContextFunc, error) {
 	switch parsed.Scheme {
 	case "socks5":
 		return func(ctx context.Context, network, addr string) (net.Conn, error) {
-			d, err := proxy.SOCKS5("tcp", parsed.Host, nil, base)
+			d, err := proxy.SOCKS5("tcp", parsed.Host, socksAuth(parsed), base)
 			if err != nil {
 				return nil, fmt.Errorf("socks5 dialer: %w", err)
 			}
@@ -60,6 +76,14 @@ func ProxyDialer(proxyURL string) (DialContextFunc, error) {
 			conn, err := base.DialContext(ctx, "tcp", parsed.Host)
 			if err != nil {
 				return nil, fmt.Errorf("dial proxy: %w", err)
+			}
+			if parsed.Scheme == "https" {
+				tc := tls.Client(conn, &tls.Config{ServerName: parsed.Hostname(), RootCAs: proxyRoots, MinVersion: tls.VersionTLS12})
+				if err := tc.HandshakeContext(ctx); err != nil {
+					conn.Close()
+					return nil, fmt.Errorf("proxy tls: %w", err)
+				}
+				conn = tc
 			}
 			req := &http.Request{
 				Method: http.MethodConnect,

@@ -13,6 +13,9 @@
 	// Per-account Mine next state.
 	let mineBusy = $state<Record<string, boolean>>({});
 	let mineFailed = $state<Record<string, boolean>>({});
+	// Mark collected state, keyed by account:benefit.
+	let marking = $state<Record<string, boolean>>({});
+	let markFailed = $state(false);
 	let drag = $state<{ id: string; from: number; to: number } | null>(null);
 	// Accounts whose queue shows every row; not persisted.
 	let open = $state<Record<string, boolean>>({});
@@ -97,6 +100,22 @@
 		);
 		mineBusy[id] = false;
 		mineFailed[id] = !ok;
+	}
+
+	async function markCollected(id: string, benefitId: string): Promise<void> {
+		const k = `${id}:${benefitId}`;
+		if (marking[k]) return;
+		marking[k] = true;
+		markFailed = false;
+		try {
+			await api.markCollected(id, benefitId);
+			live.runners = live.runners.map((r) =>
+				r.account_id === id ? { ...r, up_next: r.up_next.filter((x) => x.benefit_id !== benefitId) } : r
+			);
+		} catch {
+			markFailed = true;
+		}
+		marking[k] = false;
 	}
 
 	// Why Mine next is unavailable for this account, or null when it can run.
@@ -188,6 +207,15 @@
 								<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5 6 4.5l3 3" /></svg>
 							</button>
 						{/if}
+						<button
+							type="button"
+							aria-label={t('upnext.mark_collected', { drop: item.benefit_name })}
+							title={t('upnext.mark_collected', { drop: item.benefit_name })}
+							disabled={marking[`${q.accountId}:${item.benefit_id}`]}
+							onclick={() => markCollected(q.accountId, item.benefit_id)}
+						>
+							<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.8 6.2 2.2 2.2 4.2-4.6" /></svg>
+						</button>
 					</div>
 				</li>
 			{/each}
@@ -204,6 +232,7 @@
 		{/if}
 	{/each}
 	{#if failed}<p class="err" role="alert">{t('upnext.save_failed')}</p>{/if}
+	{#if markFailed}<p class="err" role="alert">{t('upnext.mark_failed')}</p>{/if}
 	<div class="panel-f">
 		<span>{perm[0]}<a href="/games" class="link">{t('nav.games')}</a>{perm[1] ?? ''}</span>
 		{#if custom}<button class="reset" type="button" onclick={reset}>{t('upnext.reset')}</button>{/if}
@@ -271,7 +300,7 @@
 	}
 	.queue li {
 		display: grid;
-		grid-template-columns: 14px 14px minmax(0, 1fr) 22px;
+		grid-template-columns: 14px 14px minmax(0, 1fr) 46px;
 		gap: 8px;
 		align-items: center;
 		padding: 10px 8px 10px 10px;
@@ -326,6 +355,11 @@
 		color: var(--t3);
 		margin-top: 1px;
 	}
+	.mv {
+		display: flex;
+		justify-content: flex-end;
+		gap: 2px;
+	}
 	.mv button {
 		width: 22px;
 		height: 22px;
@@ -337,7 +371,11 @@
 		color: var(--t2);
 		cursor: pointer;
 	}
-	.mv button:hover {
+	.mv button:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+	.mv button:hover:not(:disabled) {
 		border-color: var(--border);
 		color: var(--text);
 		background: var(--surface-2);

@@ -14,6 +14,7 @@
 	import { prefs } from '$lib/prefs.svelte';
 	import { scanStamp } from '$lib/scan';
 	import { reorder } from '$lib/drag';
+	import AccountLists from './AccountLists.svelte';
 
 	const live = getLive();
 
@@ -208,127 +209,132 @@
 			</button>
 		</span>
 	{/snippet}
-	<section class="add" aria-label={t('games.add_label')}>
-		<label class="search">
-			<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-			<input
-				type="search"
-				bind:value={q}
-				oninput={onInput}
-				placeholder={t('games.add_ph')}
-				aria-label={t('games.add_label')}
-				autocomplete="off"
-			/>
-		</label>
-		{#if sugg.length > 0}
-			<ul class="sugg">
-				{#each sugg as s (s.kind === 'hit' ? `h:${s.hit.id}` : 'add')}
-					<li>
-						{#if s.kind === 'hit'}
-							{@const m = matchParts(s.hit.name, q)}
-							<span class="thumb" aria-hidden="true">{Array.from(s.hit.name)[0]?.toUpperCase() ?? '?'}</span>
-							<span class="nm">
-								<b>{m.pre}{#if m.hit}<mark>{m.hit}</mark>{/if}{m.post}</b>
-								{#if s.hit.chosen && s.hit.priority !== null}
-									<small>{t('games.already', { n: s.hit.priority })}</small>
+	<div class="cols" class:with-rail={live.accounts.length > 0}>
+		{#if live.accounts.length > 0}<AccountLists />{/if}
+		<div class="main">
+			<section class="add" aria-label={t('games.add_label')}>
+				<label class="search">
+					<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+					<input
+						type="search"
+						bind:value={q}
+						oninput={onInput}
+						placeholder={t('games.add_ph')}
+						aria-label={t('games.add_label')}
+						autocomplete="off"
+					/>
+				</label>
+				{#if sugg.length > 0}
+					<ul class="sugg">
+						{#each sugg as s (s.kind === 'hit' ? `h:${s.hit.id}` : 'add')}
+							<li>
+								{#if s.kind === 'hit'}
+									{@const m = matchParts(s.hit.name, q)}
+									<span class="thumb" aria-hidden="true">{Array.from(s.hit.name)[0]?.toUpperCase() ?? '?'}</span>
+									<span class="nm">
+										<b>{m.pre}{#if m.hit}<mark>{m.hit}</mark>{/if}{m.post}</b>
+										{#if s.hit.chosen && s.hit.priority !== null}
+											<small>{t('games.already', { n: s.hit.priority })}</small>
+										{/if}
+									</span>
+									<button
+										type="button"
+										class="add-btn"
+										disabled={s.hit.chosen || busy !== null}
+										onclick={() => add(s.hit.name)}>{s.hit.chosen ? t('games.added') : t('games.add')}</button
+									>
+								{:else}
+									<span class="thumb" aria-hidden="true">+</span>
+									<span class="nm"><b>{t('games.add_named', { name: s.name })}</b></span>
+									<button type="button" class="add-btn" disabled={busy !== null} onclick={() => add(s.name)}>{t('games.add')}</button>
 								{/if}
-							</span>
-							<button
-								type="button"
-								class="add-btn"
-								disabled={s.hit.chosen || busy !== null}
-								onclick={() => add(s.hit.name)}>{s.hit.chosen ? t('games.added') : t('games.add')}</button
-							>
-						{:else}
-							<span class="thumb" aria-hidden="true">+</span>
-							<span class="nm"><b>{t('games.add_named', { name: s.name })}</b></span>
-							<button type="button" class="add-btn" disabled={busy !== null} onclick={() => add(s.name)}>{t('games.add')}</button>
-						{/if}
-					</li>
-				{/each}
-			</ul>
-		{/if}
-		{#if dupe !== null}<p class="note" role="status">{t('games.already', { n: dupe })}</p>{/if}
-		{#if searchFailed}<p class="err" role="alert">{t('home.search_failed')}</p>{/if}
-		<p class="hint">
-			<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>{t('games.scan_hint')}
-		</p>
-	</section>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+				{#if dupe !== null}<p class="note" role="status">{t('games.already', { n: dupe })}</p>{/if}
+				{#if searchFailed}<p class="err" role="alert">{t('home.search_failed')}</p>{/if}
+				<p class="hint">
+					<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>{t('games.scan_hint')}
+				</p>
+			</section>
 
-	<div class="list-head">
-		<h2>{t('games.list_title')}</h2>
-		<p>{t('games.list_hint')}</p>
-		<div class="seg" role="group" aria-label={t('games.view_label')}>
-			<button type="button" aria-pressed={view === 'cards'} onclick={() => setView('cards')}>{t('games.view_cards')}</button>
-			<button type="button" aria-pressed={view === 'list'} onclick={() => setView('list')}>{t('games.view_list')}</button>
-		</div>
-	</div>
-	{#if failed}<p class="err" role="alert">{t('games.save_failed')}</p>{/if}
+			<div class="list-head">
+				<h2>{t('games.list_title')}</h2>
+				<p>{t('games.list_hint')}</p>
+				<div class="seg" role="group" aria-label={t('games.view_label')}>
+					<button type="button" aria-pressed={view === 'cards'} onclick={() => setView('cards')}>{t('games.view_cards')}</button>
+					<button type="button" aria-pressed={view === 'list'} onclick={() => setView('list')}>{t('games.view_list')}</button>
+				</div>
+			</div>
+			{#if failed}<p class="err" role="alert">{t('games.save_failed')}</p>{/if}
 
-	{#if live.games && games.length === 0}
-		<p class="empty">{t('games.empty')}</p>
-	{/if}
-	<div class="list" class:compact={view === 'list'} use:reorder={dragOpts}>
-		{#each rows as g, i (g.id)}
-			{#if view === 'list'}
-				<div class="game row" class:moved={moved === g.id} class:dragging={drag?.id === g.id}>
-					<span class="rk">{String(i + 1).padStart(2, '0')}</span>
-					{@render grip(g, i)}
-					<span class="rname">{g.name}</span>
-				</div>
-			{:else}
-			<article class="game" class:moved={moved === g.id} class:dragging={drag?.id === g.id}>
-				{@render grip(g, i)}
-				<div class="artw">
-					<BoxArt src={g.box_art_url} name={g.name} size="lg" />
-					<span class="rank">{String(i + 1).padStart(2, '0')}</span>
-				</div>
-				<div class="body">
-					<div class="status">
-						<h3 class="gname">{g.name}</h3>
-						<span class="state {g.state}">{stateText(g)}</span>
-						{#if confirming === g.id}
-							<span class="conf">
-								<span>{t('games.remove_confirm', { game: g.name })}</span>
-								<button type="button" class="danger" onclick={() => remove(g.id)}>{t('games.remove')}</button>
-								<button type="button" class="plain" onclick={() => (confirming = null)}>{t('games.cancel')}</button>
-							</span>
-						{:else}
-							<button type="button" class="rm" onclick={() => (confirming = g.id)}>
-								<Icon name="x" size={14} />{t('games.remove')}
-							</button>
-						{/if}
-					</div>
-					{#if g.campaigns.length > 0}
-						<ul class="camps">
-							{#each g.campaigns as c (`${c.platform}/${c.id}`)}
-								<li>
-									<PlatformMark platform={c.platform} /><span>{c.name}</span><small>{campaignLine(c, prefs.zone)}</small>
-								</li>
-							{/each}
-						</ul>
-					{:else}
-						<p class="muted">{t('games.nothing_live', { rel: relTime(lastScan, now) })}{#if nextText} · {nextText}{/if}</p>
-					{/if}
-					{#if g.needs_link?.length}
-						<ul class="links">
-							{#each g.needs_link as n (n.account_id)}
-								{@const href = linkHref(n.url)}
-								<li>
-									<Icon name="alert" size={14} />
-									<span>{t('games.needs_link', { account: n.account_name })}</span>
-									{#if href}
-										<a {href} target="_blank" rel="noopener noreferrer">{t('games.link_account')}</a>
-									{/if}
-									<LinkRecheck accountIds={[n.account_id]} />
-								</li>
-							{/each}
-						</ul>
-					{/if}
-				</div>
-			</article>
+			{#if live.games && games.length === 0}
+				<p class="empty">{t('games.empty')}</p>
 			{/if}
-		{/each}
+			<div class="list" class:compact={view === 'list'} use:reorder={dragOpts}>
+				{#each rows as g, i (g.id)}
+					{#if view === 'list'}
+						<div class="game row" class:moved={moved === g.id} class:dragging={drag?.id === g.id}>
+							<span class="rk">{String(i + 1).padStart(2, '0')}</span>
+							{@render grip(g, i)}
+							<span class="rname">{g.name}</span>
+						</div>
+					{:else}
+					<article class="game" class:moved={moved === g.id} class:dragging={drag?.id === g.id}>
+						{@render grip(g, i)}
+						<div class="artw">
+							<BoxArt src={g.box_art_url} name={g.name} size="lg" />
+							<span class="rank">{String(i + 1).padStart(2, '0')}</span>
+						</div>
+						<div class="body">
+							<div class="status">
+								<h3 class="gname">{g.name}</h3>
+								<span class="state {g.state}">{stateText(g)}</span>
+								{#if confirming === g.id}
+									<span class="conf">
+										<span>{t('games.remove_confirm', { game: g.name })}</span>
+										<button type="button" class="danger" onclick={() => remove(g.id)}>{t('games.remove')}</button>
+										<button type="button" class="plain" onclick={() => (confirming = null)}>{t('games.cancel')}</button>
+									</span>
+								{:else}
+									<button type="button" class="rm" onclick={() => (confirming = g.id)}>
+										<Icon name="x" size={14} />{t('games.remove')}
+									</button>
+								{/if}
+							</div>
+							{#if g.campaigns.length > 0}
+								<ul class="camps">
+									{#each g.campaigns as c (`${c.platform}/${c.id}`)}
+										<li>
+											<PlatformMark platform={c.platform} /><span>{c.name}</span><small>{campaignLine(c, prefs.zone)}</small>
+										</li>
+									{/each}
+								</ul>
+							{:else}
+								<p class="muted">{t('games.nothing_live', { rel: relTime(lastScan, now) })}{#if nextText} · {nextText}{/if}</p>
+							{/if}
+							{#if g.needs_link?.length}
+								<ul class="links">
+									{#each g.needs_link as n (n.account_id)}
+										{@const href = linkHref(n.url)}
+										<li>
+											<Icon name="alert" size={14} />
+											<span>{t('games.needs_link', { account: n.account_name })}</span>
+											{#if href}
+												<a {href} target="_blank" rel="noopener noreferrer">{t('games.link_account')}</a>
+											{/if}
+											<LinkRecheck accountIds={[n.account_id]} />
+										</li>
+									{/each}
+								</ul>
+							{/if}
+						</div>
+					</article>
+					{/if}
+				{/each}
+			</div>
+		</div>
 	</div>
 </PageHead>
 
@@ -351,6 +357,17 @@
 	{/snippet}
 
 <style>
+	.cols.with-rail {
+		display: grid;
+		grid-template-columns: 250px minmax(0, 1fr);
+		gap: 22px;
+		align-items: start;
+	}
+	@media (max-width: 860px) {
+		.cols.with-rail {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
 	.scan-now {
 		display: inline-flex;
 		align-items: center;

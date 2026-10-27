@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"log/slog"
-	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/api"
@@ -30,20 +30,24 @@ type kickRegistry interface {
 // and the SSE hub. ctx is the root context: every build and reload uses it,
 // never a request context.
 type roster struct {
-	ctx       context.Context
-	q         *gen.Queries
-	sessions  *store.SessionStore
-	chosen    *store.ChosenGames
-	skips     *store.Skips
-	collector *collect.Collector
-	hub       *api.Hub
-	pool      *runner.Pool
-	kick      kickRegistry // nil interface when Kick is not configured; see newRoster
-	logger    *slog.Logger
-	names     *accountNames // set by newRoster
+	ctx         context.Context
+	q           *gen.Queries
+	sessions    *store.SessionStore
+	chosen      *store.ChosenGames
+	own         *store.AccountGames // nil = every account mines the chosen list
+	skips       *store.Skips
+	linkNotices *store.LinkNotices
+	collector   *collect.Collector
+	hub         *api.Hub
+	pool        *runner.Pool
+	kick        kickRegistry // nil interface when Kick is not configured; see newRoster
+	logger      *slog.Logger
+	names       *accountNames // set by newRoster
 
 	backendFor func(gen.Account) (platform.Backend, error)
 	notifier   runner.Notifier
+	settings   *store.Settings              // nil = default priority
+	runCfg     *atomic.Pointer[runSettings] // set by newRoster; holds nil until read
 
 	// gamesDirty queues one games reload; see requestGamesReload.
 	gamesDirty chan struct{} // set by newRoster
@@ -98,6 +102,7 @@ func newRoster(r roster, k *kick.Backend) *roster {
 	ro := &r
 	ro.names = &accountNames{}
 	ro.gamesDirty = make(chan struct{}, 1)
+	ro.runCfg = &atomic.Pointer[runSettings]{}
 	if k != nil {
 		ro.kick = k
 	}
@@ -182,18 +187,32 @@ func (ro *roster) builder(a gen.Account) runner.Builder {
 			}
 		}
 
-		chosen, err := ro.chosen.List(ctx)
-		if err != nil {
-			ro.log().Error("load chosen games failed", "kind", "error", "account", a.ID, "err", err)
-		}
-		games := make([]plan.Game, 0, len(chosen))
-		for _, g := range chosen {
-			games = append(games, plan.Game{Name: g.Name, Slug: g.Slug})
-		}
-
-		r := runner.New(ro.runnerConfig(ctx, a, b, sess, games))
+		r := runner.New(ro.runnerConfig(ctx, a, b, sess, ro.gamesFor(ctx, a)))
 		return runner.Entry{ID: a.ID, Unit: r}
 	}
+}
+
+// gamesFor is the ranked game list the account mines: its own list while
+// own_games is on, else the global chosen list. A failed read logs and gives
+// an empty list, which idles the runner as no_games.
+func (ro *roster) gamesFor(ctx context.Context, a gen.Account) []plan.Game {
+	var (
+		list []store.ChosenGame
+		err  error
+	)
+	if a.OwnGames != 0 && ro.own != nil {
+		list, err = ro.own.List(ctx, a.ID)
+	} else {
+		list, err = ro.chosen.List(ctx)
+	}
+	if err != nil {
+		ro.log().Error("load games failed", "kind", "error", "account", a.ID, "own", a.OwnGames != 0, "err", err)
+	}
+	games := make([]plan.Game, 0, len(list))
+	for _, g := range list {
+		games = append(games, plan.Game{Name: g.Name, Slug: g.Slug})
+	}
+	return games
 }
 
 // progressNotifyStepPct fires progress notifications at start, 50% and 100%,
@@ -207,11 +226,15 @@ func (ro *roster) runnerConfig(ctx context.Context, a gen.Account, b platform.Ba
 		AccountID: a.ID, AccountLabel: store.AccountName(a), Platform: a.Platform,
 		Backend: b, Session: sess,
 		Games:       games,
-		ForceLinked: linkOverrideSet(ctx, ro.q),
 		Notifier:    ro.notifier,
 		Claims:      &claimLog{ro: ro},
 		Skips:       ro.skips,
+		LinkNotices: ro.linkNotices,
 		Order:       order,
+		Priority:    ro.priorityMode,
+		Lang:        ro.uiLanguage,
+		ScanEvery:   ro.scanEvery,
+		Preempt:     ro.preempt,
 		OnScan: func(ctx context.Context, s runner.Scan) {
 			ro.collector.OnScan(ctx, s)
 			ro.hub.Publish(api.Event{Name: api.EventGames, Data: struct{}{}})
@@ -250,6 +273,10 @@ func (l *claimLog) RecordClaim(ctx context.Context, accountID string, t plan.Tar
 
 func (l *claimLog) ClaimedBenefitIDs(ctx context.Context, accountID string) (map[string]bool, error) {
 	return l.ro.collector.ClaimedBenefitIDs(ctx, accountID)
+}
+
+func (l *claimLog) MarkedBenefitIDs(ctx context.Context, accountID string) (map[string]bool, error) {
+	return l.ro.collector.MarkedBenefitIDs(ctx, accountID)
 }
 
 // builders returns one Builder per account row, in ListAllAccounts order.
@@ -325,7 +352,8 @@ func (ro *roster) safeGamesChanged() {
 	ro.gamesChanged()
 }
 
-// gamesChanged rebuilds every runner so each picks up the new chosen games.
+// gamesChanged rebuilds every runner on the global list so each picks up the
+// new chosen games. Accounts on their own list keep running.
 func (ro *roster) gamesChanged() {
 	accts, err := ro.q.ListAllAccounts(ro.ctx)
 	if err != nil {
@@ -336,23 +364,61 @@ func (ro *roster) gamesChanged() {
 		if ro.ctx.Err() != nil {
 			return
 		}
+		if a.OwnGames != 0 && ro.own != nil {
+			continue
+		}
 		ro.reloadAccount(a.ID)
 	}
 	ro.hub.Publish(api.Event{Name: api.EventGames, Data: struct{}{}})
 }
 
-// linkOverrideSet reads the manual "I've linked it" campaign overrides from
-// kv (keys prefixed store.LinkOverridePrefix). Errors degrade to no overrides.
-func linkOverrideSet(ctx context.Context, q *gen.Queries) map[string]bool {
-	set := map[string]bool{}
-	rows, err := q.ListKVByPrefix(ctx, sql.NullString{String: store.LinkOverridePrefix, Valid: true})
-	if err == nil {
-		for _, kv := range rows {
-			if string(kv.Value) != "1" {
-				continue
-			}
-			set[strings.TrimPrefix(kv.Key, store.LinkOverridePrefix)] = true
-		}
-	}
-	return set
+// runSettings is the settings every runner reads on each tick and snapshot.
+type runSettings struct {
+	lang     string
+	priority plan.Priority
+	scan     time.Duration
+	preempt  bool
 }
+
+// runSettings returns the cached runner settings, reading them once after
+// start or after settingsChanged. A failed read gives the defaults for that
+// call: en, ordered, the runner's own scan pace, preempt on.
+func (ro *roster) runSettings() runSettings {
+	if c := ro.runCfg.Load(); c != nil {
+		return *c
+	}
+	c := runSettings{lang: "en", priority: plan.PriorityOrdered, preempt: true}
+	if ro.settings != nil {
+		ctx, cancel := context.WithTimeout(ro.ctx, 5*time.Second)
+		defer cancel()
+		lang, e1 := ro.settings.UILanguage(ctx)
+		p, e2 := ro.settings.PriorityMode(ctx)
+		n, e3 := ro.settings.ScanIntervalMin(ctx)
+		on, e4 := ro.settings.Preempt(ctx)
+		if err := errors.Join(e1, e2, e3, e4); err != nil {
+			// Not cached: the next read tries again.
+			ro.log().Warn("read runner settings failed", "kind", "error", "err", err)
+			return c
+		}
+		c = runSettings{lang: lang, priority: plan.Priority(p), scan: time.Duration(n) * time.Minute, preempt: on}
+	}
+	ro.runCfg.Store(&c)
+	return c
+}
+
+// settingsChanged drops the cached runner settings so the next read sees a
+// saved change.
+func (ro *roster) settingsChanged() { ro.runCfg.Store(nil) }
+
+// uiLanguage is the UI language for notification text.
+func (ro *roster) uiLanguage() string { return ro.runSettings().lang }
+
+// priorityMode is the queue priority, applied on the next plan without
+// rebuilding runners.
+func (ro *roster) priorityMode() plan.Priority { return ro.runSettings().priority }
+
+// scanEvery is the scan pace; 0 keeps the runner defaults.
+func (ro *roster) scanEvery() time.Duration { return ro.runSettings().scan }
+
+// preempt is the switch-to-higher-rank setting.
+func (ro *roster) preempt() bool { return ro.runSettings().preempt }

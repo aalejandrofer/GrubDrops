@@ -212,6 +212,10 @@ func (c *Collector) ClaimedBenefitIDs(ctx context.Context, accountID string) (ma
 	return c.Claims.ClaimedBenefitIDs(ctx, accountID)
 }
 
+func (c *Collector) MarkedBenefitIDs(ctx context.Context, accountID string) (map[string]bool, error) {
+	return c.Claims.MarkedBenefitIDs(ctx, accountID)
+}
+
 // Forget drops an account's board scan and cached drop states, e.g. after
 // the account is deleted. Stored rows go with the account's cascade.
 func (c *Collector) Forget(accountID string) {

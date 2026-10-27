@@ -33,7 +33,7 @@ func NewTransport(proxyURL string) *http.Transport {
 	switch parsed.Scheme {
 	case "socks5":
 		// Use golang.org/x/net/proxy for SOCKS5
-		dialer, err := proxy.SOCKS5("tcp", parsed.Host, nil, proxy.Direct)
+		dialer, err := proxy.SOCKS5("tcp", parsed.Host, socksAuth(parsed), proxy.Direct)
 		if err != nil {
 			return transport
 		}

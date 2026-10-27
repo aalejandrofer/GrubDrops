@@ -38,12 +38,12 @@ func (cl *claimer) claim(ctx context.Context, sess platform.Session, b platform.
 		return fmt.Errorf("claim %s: %w", id, err)
 	}
 	if out.ClaimDropRewards == nil {
-		return fmt.Errorf("claim %s: twitch returned no claim result (unknown or invalid drop instance)", id)
+		return fmt.Errorf("claim %s: twitch returned no claim result (unknown or invalid drop instance): %w", id, platform.ErrClaimRefused)
 	}
 	switch out.ClaimDropRewards.Status {
 	case "ELIGIBLE_FOR_ALL", "DROP_INSTANCE_ALREADY_CLAIMED", "":
 		return nil
 	default:
-		return fmt.Errorf("claim status: %s", out.ClaimDropRewards.Status)
+		return fmt.Errorf("claim status: %s: %w", out.ClaimDropRewards.Status, platform.ErrClaimRefused)
 	}
 }

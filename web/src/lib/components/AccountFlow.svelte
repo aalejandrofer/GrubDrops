@@ -3,7 +3,7 @@
 	import { api } from '$lib/app';
 	import { ApiError } from '$lib/api/client';
 	import type { DeviceStart, Platform } from '$lib/api/types';
-	import { androidErrorKey, createDeviceFlow, hasAndroidToken, type DeviceFlow, type DeviceState, type TwitchMethod } from '$lib/accounts';
+	import { activateURL, androidErrorKey, createDeviceFlow, hasAndroidToken, toBase64, type DeviceFlow, type DeviceState, type TwitchMethod } from '$lib/accounts';
 	import { t } from '$lib/i18n/index.svelte';
 	import { loginFlow } from '$lib/login-flow.svelte';
 	import CopyCommand from './CopyCommand.svelte';
@@ -54,6 +54,7 @@
 
 	let ds = $state<DeviceState>('idle');
 	let dcode = $state<DeviceStart | null>(null);
+	const activateHref = $derived(dcode ? activateURL(dcode.verification_url, dcode.user_code) : '');
 	let flow: DeviceFlow | null = null;
 	let cancelTimer: (() => void) | null = null;
 
@@ -167,6 +168,31 @@
 		}
 	}
 
+	async function onJar(e: Event & { currentTarget: HTMLInputElement }): Promise<void> {
+		const input = e.currentTarget;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file || saving) return;
+		androidMsg = '';
+		let jar: string;
+		try {
+			jar = toBase64(new Uint8Array(await file.arrayBuffer()));
+		} catch {
+			androidMsg = t('accounts.file_failed');
+			return;
+		}
+		saving = true;
+		try {
+			await api.twitchTdmLogin(jar, isNew ? undefined : id);
+			androidDone = true;
+			onadded?.();
+		} catch (e) {
+			androidMsg = t(androidErrorKey(e instanceof ApiError ? e.code : undefined));
+		} finally {
+			saving = false;
+		}
+	}
+
 	async function saveKick(): Promise<void> {
 		if (saving || busy) return;
 		if (!id && !(await createKick())) return;
@@ -226,6 +252,7 @@
 		loginFlow.id = first ?? null;
 		if (kind === 'twitch' && start === 'tv') void chooseTV();
 		else if (kind === 'twitch' && start === 'android') void chooseAndroid();
+		else if (kind === 'twitch' && start === 'tdm') method = 'tdm';
 	});
 
 	onDestroy(() => {
@@ -251,6 +278,7 @@
 			<div class="inline wrap">
 				<button type="button" class="btn primary" disabled={busy} onclick={chooseAndroid}>{t('accounts.method_android')}</button>
 				<button type="button" class="btn" disabled={busy} onclick={chooseTV}>{t('accounts.method_tv')}</button>
+				<button type="button" class="btn" disabled={busy} onclick={() => (method = 'tdm')}>{t('accounts.method_tdm')}</button>
 				{#if framed}<button type="button" class="btn" onclick={close}>{t('accounts.cancel')}</button>{/if}
 			</div>
 		{/if}
@@ -291,12 +319,30 @@
 			</div>
 			{#if androidMsg}<small class="bad" role="alert">{androidMsg}</small>{/if}
 		{/if}
+	{:else if kind === 'twitch' && method === 'tdm'}
+		{#if androidDone}
+			<p class="feedback">{t('accounts.device_done')}</p>
+			{#if ondone}<div class="inline"><button type="button" class="btn" onclick={ondone}>{t('accounts.done')}</button></div>{/if}
+		{:else}
+			<div class="tdm">
+				<label class="btn file">
+					{saving ? t('accounts.saving') : t('accounts.tdm_import')}
+					<input type="file" disabled={saving} onchange={onJar} />
+				</label>
+				<small class="help">{t('accounts.tdm_help')}</small>
+			</div>
+			{#if framed}<div class="inline"><button type="button" class="btn" onclick={close}>{t('accounts.cancel')}</button></div>{/if}
+			{#if androidMsg}<small class="bad" role="alert">{androidMsg}</small>{/if}
+		{/if}
 	{:else if kind === 'twitch'}
 		{#if ds === 'code' && dcode}
-			<p class="go">{t('accounts.device_go', { url: dcode.verification_url })}</p>
-			<div class="code">{dcode.user_code}</div>
-			<CopyCommand command={dcode.user_code} />
+			<p class="go">{t('accounts.device_go')}</p>
+			<a class="btn primary open" href={activateHref} target="_blank" rel="noopener noreferrer">
+				{t('accounts.device_open')}
+			</a>
+			<CopyCommand command={activateHref} />
 			<small class="wait">{t('accounts.device_waiting')}</small>
+			<small class="warn" role="note"><span aria-hidden="true">!</span>{t('accounts.tv_no_discovery')}</small>
 		{:else if ds === 'done'}
 			<p class="feedback">{t('accounts.device_done')}</p>
 		{:else if ds === 'expired'}
@@ -448,14 +494,12 @@
 		font-size: 12px;
 		color: var(--green);
 	}
+	.open {
+		justify-self: start;
+	}
 	.go {
 		margin: 0;
 		font-size: 13px;
-		overflow-wrap: anywhere;
-	}
-	.code {
-		font: 600 28px/1.1 var(--mono);
-		letter-spacing: 0.12em;
 		overflow-wrap: anywhere;
 	}
 	.wait {
@@ -487,6 +531,29 @@
 	.file:focus-within {
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
+	}
+	.tdm {
+		display: grid;
+		gap: 6px;
+		justify-items: start;
+	}
+	.warn {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		color: var(--amber);
+		font-size: 12px;
+	}
+	.warn span {
+		display: inline-grid;
+		place-items: center;
+		width: 15px;
+		height: 15px;
+		flex: none;
+		border-radius: 50%;
+		background: var(--amber-soft);
+		font-weight: 700;
+		font-size: 11px;
 	}
 	.steps {
 		margin: 0;

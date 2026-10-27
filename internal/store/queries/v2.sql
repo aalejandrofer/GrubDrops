@@ -15,6 +15,10 @@ ON CONFLICT(account_id, benefit_id) DO UPDATE SET
 -- name: ListClaimLogBenefitIDs :many
 SELECT benefit_id FROM claim_log WHERE account_id = ?;
 
+-- name: ListManualClaimLogBenefitIDs :many
+-- Claims the user marked collected by hand.
+SELECT benefit_id FROM claim_log WHERE account_id = ? AND source = 'manual';
+
 -- name: ListRecentClaimLog :many
 SELECT * FROM claim_log ORDER BY claimed_at DESC, benefit_id ASC LIMIT ?;
 
@@ -109,3 +113,6 @@ SELECT DISTINCT game FROM claim_log WHERE game <> '' ORDER BY game ASC;
 
 -- name: GetClaimLog :one
 SELECT * FROM claim_log WHERE account_id = ? AND benefit_id = ?;
+
+-- name: DeleteClaimLog :execrows
+DELETE FROM claim_log WHERE account_id = ? AND benefit_id = ?;

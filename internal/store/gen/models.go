@@ -21,6 +21,7 @@ type Account struct {
 	AvatarUrl       string         `json:"avatar_url"`
 	CustomName      string         `json:"custom_name"`
 	SortOrder       int64          `json:"sort_order"`
+	OwnGames        int64          `json:"own_games"`
 }
 
 type AccountCampaignLink struct {

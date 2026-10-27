@@ -496,7 +496,7 @@ func TestSweep_PrefersCurrentCampaign(t *testing.T) {
 
 func TestSweep_BlockedOnlyTitleRecordedUnderItsGame(t *testing.T) {
 	c := named(camp("c2", "Rust Console", ""), []string{"h1"}, []string{"Hoodie"})
-	c.AccountLinked, c.AccountLinkChecked = false, true
+	c.Benefits[0].Preconditions = []string{"unclaimed"}
 	r, n, cl, sweep := sweepWatching(t, c)
 	r.mu.Lock()
 	nb := len(r.blocked)

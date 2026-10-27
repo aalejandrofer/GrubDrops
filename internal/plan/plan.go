@@ -5,6 +5,7 @@ package plan
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
@@ -19,12 +20,26 @@ type Input struct {
 	// claimed unless Progress holds an unclaimed row for the benefit with fewer
 	// MinutesWatched than its RequiredMinutes (the inventory says it is not done).
 	// An inventory row with Claimed set always counts.
-	Claimed     map[string]bool
-	Skipped     map[string]bool // benefit IDs the runner gave up on
-	NotLinked   map[string]bool // benefit IDs whose claim the platform refused until linked
-	ForceLinked map[string]bool // campaign IDs the user asserted are linked
-	Order       []string        // session Up next override, benefit IDs
+	Claimed map[string]bool
+	// Benefit IDs the user marked collected by hand. They count as claimed
+	// whatever the inventory says.
+	Marked    map[string]bool
+	Skipped   map[string]bool // benefit IDs the runner gave up on
+	NotLinked map[string]bool // benefit IDs whose claim the platform refused until linked
+	Order     []string        // session Up next override, benefit IDs
+	Priority  Priority        // campaign order; zero value is PriorityOrdered
 }
+
+// Priority picks how campaigns are ordered in the queue.
+type Priority string
+
+const (
+	// PriorityOrdered mines games in the user's list order.
+	PriorityOrdered Priority = "ordered"
+	// PriorityEndingSoonest mines the campaign that ends first, across all
+	// chosen games. Campaigns without an end date go last.
+	PriorityEndingSoonest Priority = "ending_soonest"
+)
 
 type Target struct {
 	Campaign platform.Campaign
@@ -49,6 +64,9 @@ type Result struct {
 	Queue   []Target
 	Blocked []Blocked
 	Claimed []Target // chosen-game, active benefits that count as claimed
+	// Queued targets whose campaign the platform reports unlinked: they are
+	// mined, but the claim waits until the user links the game account.
+	NeedsLink []Target
 }
 
 // Match returns the index of the game whose name or slug equals game,
@@ -89,6 +107,8 @@ type entry struct {
 	rank       int
 	restricted bool
 	remaining  int
+	endsAt     time.Time
+	unlinked   bool
 	targets    []Target
 	blocked    []Blocked
 	claimed    []Target
@@ -120,6 +140,11 @@ func Build(in Input) Result {
 	for id := range invClaimed {
 		claimed[id] = true
 	}
+	for id, v := range in.Marked {
+		if v {
+			claimed[id] = true
+		}
+	}
 	for id, v := range in.Claimed {
 		if !v || invClaimed[id] {
 			continue
@@ -137,20 +162,12 @@ func Build(in Input) Result {
 		if !ok || (c.Status != "" && c.Status != "active") || c.Kind == "reward" {
 			continue
 		}
-		// Twitch leaves isAccountConnected false on campaigns that need no
-		// link, so only a publisher link page counts there.
-		var unlinked bool
-		if c.Platform == "twitch" {
-			unlinked = platform.TwitchNeedsLink(c)
-		} else {
-			unlinked = c.AccountLinkChecked && !c.AccountLinked
-		}
-		unlinked = unlinked && !in.ForceLinked[c.ID]
+		unlinked := Unlinked(c)
 
 		benefits := append([]platform.DropBenefit(nil), c.Benefits...)
 		sort.SliceStable(benefits, func(i, j int) bool { return benefits[i].RequiredMinutes < benefits[j].RequiredMinutes })
 
-		e := entry{rank: rank, restricted: len(c.AllowedChannels) > 0}
+		e := entry{rank: rank, restricted: len(c.AllowedChannels) > 0, endsAt: c.EndsAt, unlinked: unlinked}
 		for _, b := range benefits {
 			if b.RequiredMinutes <= 0 || seen[b.ID] {
 				continue
@@ -166,7 +183,7 @@ func Build(in Input) Result {
 			}
 			t := Target{Campaign: c, Benefit: b, Minutes: minutes[b.ID]}
 			switch {
-			case unlinked, in.NotLinked[b.ID]:
+			case in.NotLinked[b.ID]:
 				e.blocked = append(e.blocked, Blocked{t, ReasonNotLinked})
 			case in.Skipped[b.ID]:
 				e.blocked = append(e.blocked, Blocked{t, ReasonSkipped})
@@ -187,6 +204,18 @@ func Build(in Input) Result {
 
 	sort.SliceStable(entries, func(i, j int) bool {
 		a, b := entries[i], entries[j]
+		if in.Priority == PriorityEndingSoonest {
+			if !a.endsAt.Equal(b.endsAt) {
+				if a.endsAt.IsZero() || b.endsAt.IsZero() {
+					return b.endsAt.IsZero()
+				}
+				return a.endsAt.Before(b.endsAt)
+			}
+			if a.remaining != b.remaining {
+				return a.remaining < b.remaining
+			}
+			return a.rank < b.rank
+		}
 		if a.rank != b.rank {
 			return a.rank < b.rank
 		}
@@ -199,11 +228,24 @@ func Build(in Input) Result {
 	var res Result
 	for _, e := range entries {
 		res.Queue = append(res.Queue, e.targets...)
+		if e.unlinked {
+			res.NeedsLink = append(res.NeedsLink, e.targets...)
+		}
 		res.Blocked = append(res.Blocked, e.blocked...)
 		res.Claimed = append(res.Claimed, e.claimed...)
 	}
 	res.Queue = ApplyOrder(res.Queue, in.Order)
 	return res
+}
+
+// Unlinked reports whether the platform says the account is not linked for
+// the campaign. Twitch leaves isAccountConnected false on campaigns that need
+// no link, so only a publisher link page counts there.
+func Unlinked(c platform.Campaign) bool {
+	if c.Platform == "twitch" {
+		return platform.TwitchNeedsLink(c)
+	}
+	return c.AccountLinkChecked && !c.AccountLinked
 }
 
 func unmetPrecondition(b platform.DropBenefit, claimed map[string]bool) bool {

@@ -249,6 +249,18 @@ func (c *Checker) notifyTransition(ctx context.Context, accountID, plat, name st
 	}
 }
 
+// CheckAccount probes one account now, persists the result and returns it.
+// A missing account returns sql.ErrNoRows.
+func (c *Checker) CheckAccount(ctx context.Context, accountID string) (Result, error) {
+	a, err := c.q.GetAccount(ctx, accountID)
+	if err != nil {
+		return Result{}, err
+	}
+	c.checkOne(ctx, a.ID, a.Platform, store.AccountName(a))
+	res, _ := Load(ctx, c.q, a.ID)
+	return res, nil
+}
+
 // Load returns the stored auth-check result for an account (ok=false when
 // none has been recorded yet).
 func Load(ctx context.Context, q *gen.Queries, accountID string) (Result, bool) {

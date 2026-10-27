@@ -51,6 +51,7 @@ type Querier interface {
 	// Used by the reconcile prune to undo false positives from shared-reward
 	// tiers that were wrongly marked collected.
 	DeleteClaimFor(ctx context.Context, arg DeleteClaimForParams) error
+	DeleteClaimLog(ctx context.Context, arg DeleteClaimLogParams) (int64, error)
 	DeleteDropStatesForAccount(ctx context.Context, accountID string) error
 	DeleteKV(ctx context.Context, key string) error
 	GetAccount(ctx context.Context, id string) (Account, error)
@@ -93,6 +94,8 @@ type Querier interface {
 	ListForceChannels(ctx context.Context, accountID string) ([]ListForceChannelsRow, error)
 	ListGlobalGames(ctx context.Context) ([]ListGlobalGamesRow, error)
 	ListKVByPrefix(ctx context.Context, dollar_1 sql.NullString) ([]Kv, error)
+	// Claims the user marked collected by hand.
+	ListManualClaimLogBenefitIDs(ctx context.Context, accountID string) ([]string, error)
 	// Campaigns that have ended. Whitelist filtering is applied in Go.
 	ListPastCampaigns(ctx context.Context, arg ListPastCampaignsParams) ([]Campaign, error)
 	ListRecentClaimLog(ctx context.Context, limit int64) ([]ClaimLog, error)
@@ -110,6 +113,7 @@ type Querier interface {
 	RemoveAccountGame(ctx context.Context, arg RemoveAccountGameParams) error
 	RemoveForceChannel(ctx context.Context, arg RemoveForceChannelParams) error
 	SetAccountEnabled(ctx context.Context, arg SetAccountEnabledParams) error
+	SetAccountOwnGames(ctx context.Context, arg SetAccountOwnGamesParams) error
 	SetAccountSortOrder(ctx context.Context, arg SetAccountSortOrderParams) error
 	SetGameTwitchID(ctx context.Context, arg SetGameTwitchIDParams) error
 	SumAllWatchMinutes(ctx context.Context) (int64, error)

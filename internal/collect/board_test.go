@@ -133,6 +133,21 @@ func TestBoard_NeedsLink(t *testing.T) {
 	}
 }
 
+// Unlinked campaigns the planner still queues warn the same way as refused ones.
+func TestBoard_NeedsLinkFromQueued(t *testing.T) {
+	b := NewBoard()
+	tw := camp("t1", "twitch", "Rust", oct31, 1)
+	tw.AccountLinkURL = "https://www.twitch.tv/drops/link"
+	s := scan("a1", "twitch", time.Now(), tw)
+	s.Result = plan.Result{NeedsLink: []plan.Target{{Campaign: tw}}}
+	b.Observe(s)
+	got := b.Games([]plan.Game{rust})
+	want := LinkNeed{AccountID: "a1", Platform: "twitch", URL: "https://www.twitch.tv/drops/link"}
+	if len(got[0].NeedsLink) != 1 || got[0].NeedsLink[0] != want {
+		t.Fatalf("needs link %+v", got[0].NeedsLink)
+	}
+}
+
 func TestSafeLinkURL(t *testing.T) {
 	for in, want := range map[string]string{
 		"https://a.b/c":       "https://a.b/c",

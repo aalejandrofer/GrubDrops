@@ -148,6 +148,51 @@
 	const known = (id: string) => live.accounts.some((a) => a.id === id);
 	const removed = (c: Claim) => c.account_name === '' || (live.accounts.length > 0 && !known(c.account_id));
 	const anyFilter = $derived(game !== '' || account !== '');
+
+	// Row actions: mark an in-progress drop collected, remove a claim. Remove
+	// takes a second click on the same row within a few seconds.
+	let acting = $state<Record<string, boolean>>({});
+	let actErr = $state('');
+	let confirmKey = $state('');
+	let confirmTimer: ReturnType<typeof setTimeout> | undefined;
+	onDestroy(() => clearTimeout(confirmTimer));
+
+	async function markCollected(accountId: string, benefitId: string): Promise<void> {
+		const k = `${accountId}:${benefitId}`;
+		if (acting[k]) return;
+		acting[k] = true;
+		actErr = '';
+		try {
+			await api.markCollected(accountId, benefitId);
+			live.runners = live.runners.map((r) => (r.account_id === accountId && r.current?.benefit_id === benefitId ? { ...r, current: null } : r));
+		} catch {
+			actErr = t('rewards.mark_failed');
+		}
+		acting[k] = false;
+	}
+
+	async function removeClaim(c: Claim): Promise<void> {
+		const k = key(c);
+		if (confirmKey !== k) {
+			confirmKey = k;
+			clearTimeout(confirmTimer);
+			confirmTimer = setTimeout(() => (confirmKey = ''), 4000);
+			return;
+		}
+		clearTimeout(confirmTimer);
+		confirmKey = '';
+		acting[k] = true;
+		actErr = '';
+		try {
+			await api.removeClaim(c.account_id, c.benefit_id);
+			items = items.filter((x) => key(x) !== k);
+			live.recent = live.recent.filter((x) => key(x) !== k);
+			total = Math.max(0, total - 1);
+		} catch {
+			actErr = t('rewards.remove_failed');
+		}
+		acting[k] = false;
+	}
 	const searching = $derived(q !== '');
 </script>
 
@@ -181,6 +226,13 @@
 						<div class="eta">
 							{t('rewards.eta', { eta: etaShort(p.left) })}<span
 								>{t('rewards.eta_on', { account: p.runner.account_name })}</span
+							>
+							<button
+								type="button"
+								class="mark"
+								title={t('rewards.mark_collected_title')}
+								disabled={acting[`${p.runner.account_id}:${p.target.benefit_id}`]}
+								onclick={() => markCollected(p.runner.account_id, p.target.benefit_id)}>{t('rewards.mark_collected')}</button
 							>
 						</div>
 					</div>
@@ -237,9 +289,9 @@
 		<div class="panel">
 			{#if items.length > 0}
 				<div class="hist-h">
-					<span>{t('rewards.col_reward')}</span><span>{t('rewards.col_game')}</span><span>{t('rewards.col_account')}</span><span
+					<span>{t('rewards.col_reward')}</span><span>{t('rewards.col_game')}</span><span>{t('rewards.col_account')}</span><span class="tmh"
 						>{t('rewards.col_claimed')}</span
-					>
+					><span></span>
 				</div>
 				{#each items as c (key(c))}
 					{@const pf = platformOf(c.account_id)}
@@ -248,6 +300,7 @@
 							<span class="img"><BoxArt src={c.image_url || null} name={c.benefit_name} size="sm" /></span>
 							<span class="rwt">
 								<span class="nm">{c.benefit_name}</span>
+								{#if c.source === 'manual'}<span class="tag">{t('rewards.manual')}</span>{/if}
 								{#if c.code}<CopyCommand command={c.code} />{/if}
 							</span>
 						</div>
@@ -260,11 +313,27 @@
 							{/if}
 						</span>
 						<span class="tm">{claimStamp(c.claimed_at, now, prefs.zone, prefs.fmt)}</span>
+						<button
+							type="button"
+							class="rm"
+							class:sure={confirmKey === key(c)}
+							aria-label={confirmKey === key(c) ? t('rewards.remove_confirm') : t('rewards.remove_claim', { drop: c.benefit_name })}
+							title={confirmKey === key(c) ? t('rewards.remove_confirm') : t('rewards.remove_claim_title')}
+							disabled={acting[key(c)]}
+							onclick={() => removeClaim(c)}
+						>
+							{#if confirmKey === key(c)}
+								<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.8 6.2 2.2 2.2 4.2-4.6" /></svg>
+							{:else}
+								<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="m3.5 3.5 5 5m0-5-5 5" /></svg>
+							{/if}
+						</button>
 					</div>
 				{/each}
 			{:else if loaded && !busy && !failed}
 				<div class="empty">{searching ? t('rewards.no_match') : anyFilter ? t('rewards.empty_filtered') : t('rewards.empty')}</div>
 			{/if}
+			{#if actErr}<div class="empty err" role="alert">{actErr}</div>{/if}
 			{#if failed}
 				<div class="empty err" role="status">
 					{t('rewards.failed')}
@@ -435,6 +504,63 @@
 		color: var(--t3);
 		font-weight: 400;
 	}
+	.mark {
+		margin-top: 4px;
+		padding: 0;
+		font: inherit;
+		font-size: 12px;
+		font-weight: 400;
+		color: var(--t2);
+		background: none;
+		border: 0;
+		cursor: pointer;
+	}
+	.mark:hover:not(:disabled) {
+		color: var(--text);
+		text-decoration: underline;
+	}
+	.mark:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+	.tag {
+		font-size: 11px;
+		color: var(--t2);
+		background: var(--surface-3);
+		border-radius: 10px;
+		padding: 0 6px;
+		flex: none;
+	}
+	.rm {
+		width: 22px;
+		height: 22px;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		background: none;
+		border: 1px solid transparent;
+		border-radius: 4px;
+		color: var(--t3);
+		cursor: pointer;
+	}
+	.rm svg {
+		width: 12px;
+		height: 12px;
+	}
+	.rm:hover:not(:disabled) {
+		border-color: var(--border);
+		color: var(--text);
+		background: var(--surface-2);
+	}
+	.rm.sure,
+	.rm.sure:hover:not(:disabled) {
+		color: var(--red);
+		border-color: var(--red);
+	}
+	.rm:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
 
 	.filters {
 		display: flex;
@@ -480,7 +606,7 @@
 	.hist-h,
 	.hrow {
 		display: grid;
-		grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 1fr) 110px;
+		grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 1fr) 110px 22px;
 		gap: 12px;
 		align-items: center;
 		padding: 8px 14px;
@@ -493,7 +619,7 @@
 		font-weight: 600;
 		background: var(--surface-2);
 	}
-	.hist-h span:last-child,
+	.hist-h .tmh,
 	.hrow .tm {
 		text-align: right;
 	}
@@ -627,8 +753,8 @@
 			display: none;
 		}
 		.hrow {
-			grid-template-columns: minmax(0, 1fr) auto;
-			grid-template-areas: 'rw tm' 'gm ac';
+			grid-template-columns: minmax(0, 1fr) auto 22px;
+			grid-template-areas: 'rw tm rm' 'gm ac ac';
 			row-gap: 4px;
 			column-gap: 10px;
 		}
@@ -645,6 +771,9 @@
 		.hrow .ac {
 			grid-area: ac;
 			justify-self: end;
+		}
+		.rm {
+			grid-area: rm;
 		}
 	}
 </style>

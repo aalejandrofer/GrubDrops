@@ -11,6 +11,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/aalejandrofer/grubdrops/internal/plan"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/aalejandrofer/grubdrops/internal/runner"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
@@ -133,4 +136,86 @@ func TestClaims_Query(t *testing.T) {
 	require.Equal(t, 0, total)
 	require.Equal(t, strings.Repeat("é", 100), claimQuery(" "+strings.Repeat("é", 150)))
 	require.Equal(t, strings.Repeat("a", 99), claimQuery(strings.Repeat("a", 99)+" b"))
+}
+
+// markEnv is an authed accounts env with the claim routes and one Twitch
+// account whose runner plans b-cur (mining), b-next (Up next) and b-blk
+// (Blocked).
+func markEnv(t *testing.T) (*env, *calls, string) {
+	t.Helper()
+	e, c := accountsEnv(t)
+	e.s.d.Claims = store.NewClaimLog(e.s.d.Q)
+	e.s.routesClaims(e.s.protected)
+	id := e.createAccount("twitch", "Alpha")
+	camp := platform.Campaign{ID: "c1", Platform: "twitch", Game: "Rust", Name: "Rust drops"}
+	tgt := func(b string) plan.Target {
+		return plan.Target{Campaign: camp, Benefit: platform.DropBenefit{ID: b, Name: "name-" + b, ImageURL: "http://img/" + b}}
+	}
+	cur := tgt("b-cur")
+	e.s.d.Pool = snapPool{snaps: []runner.Snapshot{{
+		AccountID: id, Platform: "twitch", Current: &cur,
+		UpNext:  []plan.Target{tgt("b-next")},
+		Blocked: []plan.Blocked{{Target: tgt("b-blk"), Reason: plan.ReasonNotLinked}},
+	}}}
+	return e, c, id
+}
+
+func TestClaims_MarkCollected(t *testing.T) {
+	e, c, id := markEnv(t)
+	_, tok := e.session()
+	before := len(c.changedList())
+	for _, b := range []string{"b-cur", "b-next", "b-blk"} {
+		resp, body := e.do("POST", "/api/claims", tok, map[string]string{"account_id": id, "benefit_id": b})
+		require.Equal(t, http.StatusCreated, resp.StatusCode, string(body))
+		var got claimItem
+		unmarshal(t, body, &got)
+		require.Equal(t, store.ClaimSourceManual, got.Source)
+		require.Equal(t, "name-"+b, got.BenefitName)
+		require.Equal(t, "Rust", got.Game)
+		require.Equal(t, "Alpha", got.AccountName)
+	}
+	ids, err := e.s.d.Claims.ClaimedBenefitIDs(context.Background(), id)
+	require.NoError(t, err)
+	require.Equal(t, map[string]bool{"b-cur": true, "b-next": true, "b-blk": true}, ids)
+	require.Len(t, c.changedList(), before+3, "each mark reloads the runner")
+}
+
+func TestClaims_MarkRejectsUnplanned(t *testing.T) {
+	e, c, id := markEnv(t)
+	_, tok := e.session()
+	before := len(c.changedList())
+	resp, body := e.do("POST", "/api/claims", tok, map[string]string{"account_id": id, "benefit_id": "nope"})
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	require.Contains(t, string(body), "not_queued")
+	resp, _ = e.do("POST", "/api/claims", tok, map[string]string{"account_id": "acc_missing", "benefit_id": "b-cur"})
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	ids, err := e.s.d.Claims.ClaimedBenefitIDs(context.Background(), id)
+	require.NoError(t, err)
+	require.Empty(t, ids)
+	require.Len(t, c.changedList(), before)
+}
+
+func TestClaims_Remove(t *testing.T) {
+	e, c, id := markEnv(t)
+	_, tok := e.session()
+	require.NoError(t, e.s.d.Claims.Record(context.Background(), store.ClaimEntry{
+		AccountID: id, Platform: "twitch", BenefitID: "a/b c", Source: store.ClaimSourceGrubDrops,
+	}))
+	before := len(c.changedList())
+	path := "/api/claims/" + url.PathEscape(id) + "/" + url.PathEscape("a/b c")
+	resp, body := e.do("DELETE", path, tok, nil)
+	require.Equal(t, http.StatusNoContent, resp.StatusCode, string(body))
+	ids, err := e.s.d.Claims.ClaimedBenefitIDs(context.Background(), id)
+	require.NoError(t, err)
+	require.Empty(t, ids)
+	require.Equal(t, []string{id}, c.changedList()[before:])
+
+	resp, _ = e.do("DELETE", path, tok, nil)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+}
+
+func TestClaims_MarkNeedsCSRF(t *testing.T) {
+	e, _, id := markEnv(t)
+	resp, _ := e.do("POST", "/api/claims", "", map[string]string{"account_id": id, "benefit_id": "b-cur"})
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
 }

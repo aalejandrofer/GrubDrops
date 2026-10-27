@@ -81,3 +81,10 @@ func (s *kvSessionStore) All() (map[string][]byte, error) {
 	}
 	return out, rows.Err()
 }
+
+// deleteAllSessions ends every stored session. The request that calls it
+// commits its own session again when its response goes out.
+func deleteAllSessions(db *sql.DB) error {
+	_, err := db.Exec(`DELETE FROM kv WHERE key LIKE ?`, sessionPrefix+"%")
+	return err
+}

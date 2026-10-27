@@ -31,6 +31,10 @@ func (s *server) routesAccounts(r chi.Router) {
 	r.Get("/accounts/{id}/twitch/device", s.twitchDeviceStatus)
 	r.Post("/accounts/{id}/kick/session", s.kickSession)
 	r.Post("/accounts/{id}/recheck-links", s.postAccountRecheckLinks)
+	r.Post("/accounts/{id}/check-login", s.postAccountCheckLogin)
+	r.Post("/accounts/{id}/restart", s.postAccountRestart)
+	r.Get("/accounts/{id}/games", s.getAccountGames)
+	r.Put("/accounts/{id}/games", s.putAccountGames)
 	r.Get("/login/twitch/android", s.twitchAndroidURL)
 	r.Post("/login/twitch/android", s.twitchAndroidLogin)
 }
@@ -49,8 +53,10 @@ type accountJSON struct {
 	AvatarURL    string           `json:"avatar_url"`
 	State        string           `json:"state"`
 	NeedsLogin   bool             `json:"needs_login"`
-	Enabled      bool             `json:"enabled"` // false: paused, the runner idles
-	Auth         *accountAuthJSON `json:"auth"`    // null until a check has run
+	Enabled      bool             `json:"enabled"`        // false: paused, the runner idles
+	OwnGames     bool             `json:"own_games"`      // true: mines its own game list
+	OwnGameCount int              `json:"own_game_count"` // games on the own list, 0 while own_games is off
+	Auth         *accountAuthJSON `json:"auth"`           // null until a check has run
 }
 
 // checkedAt is nil when no check has run.
@@ -96,6 +102,14 @@ func (s *server) listAccounts(w http.ResponseWriter, r *http.Request) {
 			State:      state,
 			NeedsLogin: state == string(runner.StateNeedsLogin) || !hasSession,
 			Enabled:    a.Enabled != 0,
+			OwnGames:   a.OwnGames != 0,
+		}
+		if a.OwnGames != 0 && s.d.AccountGames != nil {
+			if list, err := s.d.AccountGames.List(ctx, a.ID); err == nil {
+				item.OwnGameCount = len(list)
+			} else {
+				slog.Warn("accounts: own game list lookup failed", "kind", "error", "account", a.ID, "err", err)
+			}
 		}
 		if res, ok := authcheck.Load(ctx, s.d.Q, a.ID); ok {
 			item.Auth = &accountAuthJSON{OK: res.OK, Detail: res.Msg, CheckedAt: checkedAt(res.CheckedAt)}
@@ -294,6 +308,167 @@ func (s *server) account(w http.ResponseWriter, r *http.Request, id string) (gen
 		return gen.Account{}, false
 	}
 	return acc, true
+}
+
+type accountGameJSON struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// accountGamesJSON is an account's own game list. Games is kept while Own is
+// off, so turning it on again brings the list back.
+type accountGamesJSON struct {
+	Own   bool              `json:"own"`
+	Games []accountGameJSON `json:"games"`
+}
+
+func (s *server) accountGamesView(ctx context.Context, a gen.Account) (accountGamesJSON, error) {
+	list, err := s.d.AccountGames.List(ctx, a.ID)
+	if err != nil {
+		return accountGamesJSON{}, err
+	}
+	out := accountGamesJSON{Own: a.OwnGames != 0, Games: make([]accountGameJSON, 0, len(list))}
+	for _, g := range list {
+		out.Games = append(out.Games, accountGameJSON{ID: g.ID, Name: g.Name})
+	}
+	return out, nil
+}
+
+func (s *server) getAccountGames(w http.ResponseWriter, r *http.Request) {
+	if s.d.AccountGames == nil {
+		writeErr(w, http.StatusServiceUnavailable, "unavailable")
+		return
+	}
+	a, ok := s.account(w, r, chi.URLParam(r, "id"))
+	if !ok {
+		return
+	}
+	v, err := s.accountGamesView(r.Context(), a)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	writeJSON(w, http.StatusOK, v)
+}
+
+// maxAccountGames caps one account's list.
+const maxAccountGames = 100
+
+// putAccountGames sets whether the account mines its own list and, when
+// games is sent, replaces that list in rank order. A game with an id must be
+// in the games table; one with only a name is added to it, like the Games
+// page does, but not to the global list.
+func (s *server) putAccountGames(w http.ResponseWriter, r *http.Request) {
+	if s.d.AccountGames == nil {
+		writeErr(w, http.StatusServiceUnavailable, "unavailable")
+		return
+	}
+	var in struct {
+		Own   bool              `json:"own"`
+		Games []accountGameJSON `json:"games"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	a, ok := s.account(w, r, chi.URLParam(r, "id"))
+	if !ok {
+		return
+	}
+	if len(in.Games) > maxAccountGames {
+		writeErr(w, http.StatusBadRequest, "bad_request")
+		return
+	}
+	ctx := r.Context()
+	var ids []string
+	if in.Games != nil {
+		all, err := s.d.Q.ListAllGames(ctx)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "internal")
+			return
+		}
+		known := make(map[string]bool, len(all))
+		for _, g := range all {
+			known[g.ID] = true
+		}
+		ids = make([]string, 0, len(in.Games))
+		var add []accountGameJSON
+		for _, g := range in.Games {
+			if g.ID != "" {
+				if !known[g.ID] {
+					writeErr(w, http.StatusBadRequest, "bad_request")
+					return
+				}
+				ids = append(ids, g.ID)
+				continue
+			}
+			id, ok := gameRowID(g.Name)
+			if !ok {
+				writeErr(w, http.StatusBadRequest, "bad_request")
+				return
+			}
+			id, exists := matchGameRow(all, id, g.Name)
+			if !exists && !known[id] {
+				add = append(add, accountGameJSON{ID: id, Name: g.Name})
+				known[id] = true
+			}
+			ids = append(ids, id)
+		}
+		for _, g := range add {
+			if err := s.insertGame(ctx, g.ID, g.Name); err != nil {
+				writeErr(w, http.StatusInternalServerError, "internal")
+				return
+			}
+		}
+	}
+	if err := s.d.AccountGames.Set(ctx, a.ID, in.Own, ids); err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	a.OwnGames = 0
+	if in.Own {
+		a.OwnGames = 1
+	}
+	v, err := s.accountGamesView(ctx, a)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	s.accountChanged(a.ID)
+	if s.d.Hub != nil {
+		s.d.Hub.Publish(Event{Name: EventAccounts, Data: struct{}{}})
+	}
+	writeJSON(w, http.StatusOK, v)
+}
+
+// postAccountCheckLogin runs the account's auth probe now and returns the result.
+func (s *server) postAccountCheckLogin(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, ok := s.account(w, r, id); !ok {
+		return
+	}
+	if s.d.CheckLogin == nil {
+		writeErr(w, http.StatusServiceUnavailable, "unavailable")
+		return
+	}
+	res, err := s.d.CheckLogin(r.Context(), id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	if s.d.Hub != nil {
+		s.d.Hub.Publish(Event{Name: EventAccounts, Data: struct{}{}})
+	}
+	writeJSON(w, http.StatusOK, accountAuthJSON{OK: res.OK, Detail: res.Msg, CheckedAt: checkedAt(res.CheckedAt)})
+}
+
+// postAccountRestart rebuilds the account's runner from its stored row.
+func (s *server) postAccountRestart(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, ok := s.account(w, r, id); !ok {
+		return
+	}
+	s.accountChanged(id)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *server) accountChanged(id string) {

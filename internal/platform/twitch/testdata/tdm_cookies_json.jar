@@ -1,0 +1,25 @@
+{
+  "www.twitch.tv|/": {
+    "unique_id": {
+      "key": "unique_id",
+      "value": "deviceid0123456789abcdef",
+      "coded_value": "deviceid0123456789abcdef",
+      "path": "/",
+      "host_only": true
+    },
+    "auth-token": {
+      "key": "auth-token",
+      "value": "abcdefghijklmnopqrstuvwxyz0123",
+      "coded_value": "abcdefghijklmnopqrstuvwxyz0123",
+      "path": "/",
+      "host_only": true
+    },
+    "persistent": {
+      "key": "persistent",
+      "value": "123456789",
+      "coded_value": "123456789",
+      "path": "/",
+      "host_only": true
+    }
+  }
+}

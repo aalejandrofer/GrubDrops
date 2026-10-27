@@ -1,7 +1,11 @@
 import type {
 	Account,
+	AccountAuth,
+	AccountGame,
+	AccountGames,
 	AndroidLogin,
 	ApiErrorBody,
+	Claim,
 	ClaimsQuery,
 	ClaimsResp,
 	DeviceStart,
@@ -67,6 +71,9 @@ export interface Api {
 	/** refresh bypasses the server cache, at most once a minute. */
 	discover(refresh?: boolean): Promise<DiscoverResp>;
 	claims(q: ClaimsQuery): Promise<ClaimsResp>;
+	/** Marks a planned drop collected by hand. */
+	markCollected(accountId: string, benefitId: string): Promise<Claim>;
+	removeClaim(accountId: string, benefitId: string): Promise<void>;
 	accounts(): Promise<Account[]>;
 	addAccount(platform: Platform, name?: string): Promise<{ id: string }>;
 	renameAccount(id: string, name: string): Promise<void>;
@@ -78,11 +85,25 @@ export interface Api {
 	twitchAndroidUrl(): Promise<{ login_url: string }>;
 	/** accountId signs that account in again; without it the server matches or creates the account. */
 	twitchAndroidLogin(url: string, accountId?: string): Promise<AndroidLogin>;
+	/** Signs in from a base64 TwitchDropsMiner cookies.jar; accountId as for twitchAndroidLogin. */
+	twitchTdmLogin(jar: string, accountId?: string): Promise<AndroidLogin>;
 	kickSession(id: string, cookiesTxt: string): Promise<{ verified: boolean }>;
 	recheckLinks(id: string): Promise<LinkRecheck>;
 	settings(): Promise<Settings>;
 	saveSettings(p: SettingsPatch): Promise<Settings>;
 	notifyTest(target?: 'discord' | 'telegram'): Promise<void>;
+	/** Fetches Twitch through the proxy; an empty url or the hint tests the saved one. */
+	proxyTest(url: string): Promise<{ status: number; ms: number }>;
+	changePassword(current: string, next: string): Promise<void>;
+	/** Runs the account's login check now. */
+	checkLogin(id: string): Promise<AccountAuth>;
+	/** Rebuilds the account's runner. */
+	restartAccount(id: string): Promise<void>;
+	accountGames(id: string): Promise<AccountGames>;
+	/** games null keeps the stored list. */
+	setAccountGames(id: string, own: boolean, games: AccountGame[] | null): Promise<AccountGames>;
+	/** A consistent copy of the database, as a file to save. */
+	snapshot(): Promise<{ blob: Blob; name: string }>;
 	health(filter: 'all' | 'problems' | 'claims'): Promise<Health>;
 	runCanary(): Promise<void>;
 	update(): Promise<UpdateInfo>;
@@ -101,6 +122,12 @@ function parseBody(text: string): ApiErrorBody | null {
 	return null;
 }
 
+/** The filename in a Content-Disposition attachment header, or a default. */
+export function attachmentName(header: string | null): string {
+	const m = header?.match(/filename="?([^";]+)"?/);
+	return m ? m[1] : 'grubdrops.db';
+}
+
 export function createClient(opts: ClientOpts): Api {
 	const doFetch: typeof fetch = opts.fetch ?? ((...a) => globalThis.fetch(...a));
 	let unauthorizedSent = false;
@@ -111,7 +138,7 @@ export function createClient(opts: ClientOpts): Api {
 		opts.onUnauthorized();
 	}
 
-	async function send(method: string, path: string, body?: unknown, redirect = true): Promise<unknown> {
+	async function send(method: string, path: string, body?: unknown, redirect = true, file = false): Promise<unknown> {
 		const unsafe = method !== 'GET' && method !== 'HEAD';
 		for (let attempt = 0; ; attempt++) {
 			const headers: Record<string, string> = {};
@@ -127,6 +154,10 @@ export function createClient(opts: ClientOpts): Api {
 			} catch {
 				opts.onUnreachable(true);
 				throw new Unreachable();
+			}
+			if (res.ok && file) {
+				opts.onUnreachable(false);
+				return { blob: await res.blob(), name: attachmentName(res.headers.get('Content-Disposition')) };
 			}
 			const text = res.status === 204 ? '' : await res.text();
 			if (res.ok) {
@@ -201,6 +232,9 @@ export function createClient(opts: ClientOpts): Api {
 		},
 		accounts: () => get('/api/accounts'),
 		addAccount: (platform, name) => post('/api/accounts', name ? { platform, name } : { platform }),
+		markCollected: (accountId, benefitId) => post('/api/claims', { account_id: accountId, benefit_id: benefitId }),
+		removeClaim: (accountId, benefitId) =>
+			send('DELETE', `/api/claims/${enc(accountId)}/${enc(benefitId)}`) as Promise<void>,
 		renameAccount: (id, name) => send('PATCH', `/api/accounts/${enc(id)}`, { name }) as Promise<void>,
 		setAccountOrder: (ids) => send('PUT', '/api/accounts/order', { ids }) as Promise<void>,
 		removeAccount: (id) => send('DELETE', `/api/accounts/${enc(id)}`) as Promise<void>,
@@ -211,12 +245,22 @@ export function createClient(opts: ClientOpts): Api {
 		twitchAndroidUrl: () => get('/api/login/twitch/android'),
 		twitchAndroidLogin: (url, accountId) =>
 			post('/api/login/twitch/android', accountId ? { url, account_id: accountId } : { url }),
+		twitchTdmLogin: (jar, accountId) =>
+			post('/api/login/twitch/android', accountId ? { jar, account_id: accountId } : { jar }),
 		kickSession: (id, cookiesTxt) =>
 			post(`/api/accounts/${enc(id)}/kick/session`, { cookies_txt: cookiesTxt, channels: [] }),
 		recheckLinks: (id) => post(`/api/accounts/${enc(id)}/recheck-links`),
+		checkLogin: (id) => post(`/api/accounts/${enc(id)}/check-login`),
+		restartAccount: (id) => post(`/api/accounts/${enc(id)}/restart`),
+		accountGames: (id) => get(`/api/accounts/${enc(id)}/games`),
+		setAccountGames: (id, own, games) =>
+			send('PUT', `/api/accounts/${enc(id)}/games`, games === null ? { own } : { own, games }) as Promise<AccountGames>,
 		settings: () => get('/api/settings'),
 		saveSettings: (p) => send('PUT', '/api/settings', p) as Promise<Settings>,
 		notifyTest: (target) => post(`/api/settings/notify-test${target ? `?target=${target}` : ''}`),
+		proxyTest: (url) => post('/api/settings/proxy-test', { url }),
+		changePassword: (current, next) => post('/api/settings/password', { current, new: next }),
+		snapshot: () => send('POST', '/api/settings/snapshot', undefined, true, true) as Promise<{ blob: Blob; name: string }>,
 		health: (filter) => get(`/api/health?filter=${filter}`),
 		runCanary: () => post('/api/health/canary'),
 		update: () => get('/api/update'),

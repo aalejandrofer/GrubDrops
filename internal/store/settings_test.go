@@ -137,3 +137,28 @@ func TestSettings_UIDefaults(t *testing.T) {
 	assert.Error(t, s.SetUILanguage(ctx, "fr"))
 	assert.Error(t, s.SetUITheme(ctx, "blue"))
 }
+
+func TestSettings_ScanAndPreempt(t *testing.T) {
+	db, err := Open(context.Background(), filepath.Join(t.TempDir(), "t.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	s := NewSettings(gen.New(db))
+	ctx := context.Background()
+
+	n, _ := s.ScanIntervalMin(ctx)
+	on, _ := s.Preempt(ctx)
+	assert.Equal(t, 60, n)
+	assert.True(t, on)
+
+	require.NoError(t, s.SetScanIntervalMin(ctx, 15))
+	require.NoError(t, s.SetPreempt(ctx, false))
+	n, _ = s.ScanIntervalMin(ctx)
+	on, _ = s.Preempt(ctx)
+	assert.Equal(t, 15, n)
+	assert.False(t, on)
+
+	assert.Error(t, s.SetScanIntervalMin(ctx, 5))
+	require.NoError(t, s.setString(ctx, keyScanIntervalMin, "7"))
+	n, _ = s.ScanIntervalMin(ctx)
+	assert.Equal(t, 60, n)
+}

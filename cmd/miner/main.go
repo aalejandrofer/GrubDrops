@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -189,7 +188,7 @@ func run(ctx context.Context) error {
 	if proxyEnabled && proxyURL != "" {
 		proxyTransport = netutil.NewTransport(proxyURL)
 		// Log proxy URL with credentials masked
-		safeURL := maskProxyURL(proxyURL)
+		safeURL := netutil.MaskProxyURL(proxyURL)
 		logger.Info("proxy enabled", "url", safeURL)
 	}
 	effectiveProxy := ""
@@ -198,7 +197,7 @@ func run(ctx context.Context) error {
 	}
 	if effectiveProxy != "" {
 		if _, err := netutil.ProxyDialer(effectiveProxy); err != nil {
-			return fmt.Errorf("proxy enabled but misconfigured (%s): %w", maskProxyURL(effectiveProxy), err)
+			return fmt.Errorf("proxy enabled but misconfigured (%s): %w", netutil.MaskProxyURL(effectiveProxy), err)
 		}
 	}
 
@@ -412,17 +411,20 @@ func run(ctx context.Context) error {
 	bg.Go(func() { hub.Run(ctx) })
 
 	ro := newRoster(roster{
-		ctx:        ctx,
-		q:          q,
-		sessions:   sessions,
-		chosen:     store.NewChosenGames(db, q),
-		skips:      store.NewSkips(q),
-		collector:  collector,
-		hub:        hub,
-		pool:       pool,
-		logger:     logger,
-		backendFor: backendFor,
-		notifier:   notifier,
+		ctx:         ctx,
+		q:           q,
+		sessions:    sessions,
+		chosen:      store.NewChosenGames(db, q),
+		own:         store.NewAccountGames(db, q),
+		skips:       store.NewSkips(q),
+		linkNotices: store.NewLinkNotices(q),
+		collector:   collector,
+		hub:         hub,
+		pool:        pool,
+		logger:      logger,
+		backendFor:  backendFor,
+		notifier:    notifier,
+		settings:    settingsStore,
 	}, kickBackend)
 
 	bg.Go(ro.runGamesReloader)
@@ -558,6 +560,7 @@ func run(ctx context.Context) error {
 		UpdateStatus: updateStatus,
 
 		Chosen:       ro.chosen,
+		AccountGames: ro.own,
 		Board:        collector.Board,
 		GamesChanged: ro.requestGamesReload,
 		Discover:     discoverSvc,
@@ -576,13 +579,17 @@ func run(ctx context.Context) error {
 		},
 		// Rename fires no reload; only the log name cache follows it.
 		AccountRenamed: ro.names.set,
+		CheckLogin:     authChecker.CheckAccount,
 
 		Settings:              settingsStore,
 		Notifier:              notifier,
 		WebhookFallback:       cfg.DiscordWebhookURL,
 		TelegramTokenFallback: cfg.TelegramBotToken,
 		TelegramChatFallback:  cfg.TelegramChatID,
-		OnSettingsUpdate:      onSettingsUpdate,
+		OnSettingsUpdate: func() {
+			onSettingsUpdate()
+			ro.settingsChanged()
+		},
 		SetZone: func(name string) {
 			displayZone.Set(timeutil.Resolve(name, os.Getenv("TZ")))
 		},
@@ -747,18 +754,6 @@ func kickSidecarLister(b *kick.Backend) func() []string {
 		defer cancel()
 		return b.RunningSidecarAddrs(ctx)
 	}
-}
-
-// maskProxyURL masks credentials in proxy URLs for safe logging.
-// e.g. "http://user:pass@host:port" -> "http://user:***@host:port"
-func maskProxyURL(rawURL string) string {
-	u, err := url.Parse(rawURL)
-	if err != nil || u.User == nil {
-		return rawURL
-	}
-	masked := *u
-	masked.User = url.UserPassword(u.User.Username(), "***")
-	return masked.String()
 }
 
 // settingOr logs a warning and returns the fallback when a settings read fails.

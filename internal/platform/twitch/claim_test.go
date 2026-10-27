@@ -73,7 +73,20 @@ func TestClaim_RejectsBadStatus(t *testing.T) {
 	cl := &claimer{c: c}
 	err := cl.claim(context.Background(), platform.Session{AccessToken: "tok"},
 		platform.DropBenefit{ID: "drop1"}, 0)
+	require.ErrorIs(t, err, platform.ErrClaimRefused)
+}
+
+func TestClaim_ServerErrorIsNotRefusal(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "down", http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	cl := &claimer{c: newTestClient(srv.URL)}
+	err := cl.claim(context.Background(), platform.Session{AccessToken: "tok"},
+		platform.DropBenefit{ID: "drop1"}, 0)
 	require.Error(t, err)
+	assert.NotErrorIs(t, err, platform.ErrClaimRefused)
 }
 
 // When InstanceID is empty, the claimer builds DevilXD's synthetic

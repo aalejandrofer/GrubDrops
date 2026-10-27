@@ -17,6 +17,12 @@ var ErrIntegrityBlocked = errors.New("integrity check failed")
 // counting a claim failure.
 var ErrClaimNeedsLink = errors.New("claim: account link required")
 
+// ErrClaimRefused is matched with errors.Is on a Claim error when the platform
+// answered and turned the claim down, as opposed to a transport or server
+// error. Twitch gives no reason, so the runner reads it as a link refusal on a
+// campaign the platform reports unlinked.
+var ErrClaimRefused = errors.New("claim refused")
+
 // LinkRechecker is an optional backend capability: forget the account's
 // link-refused claims, retry them now, and report what was claimed and how
 // many campaigns still need a link.

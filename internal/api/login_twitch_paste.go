@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -24,17 +25,29 @@ func (s *server) twitchAndroidURL(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"login_url": twitch.AndroidLoginURL()})
 }
 
-// twitchAndroidLogin stores the session from a pasted Android redirect URL.
-// With account_id it signs that account in again. Without it, the account
+// twitchAndroidLogin stores the session from a pasted Android redirect URL,
+// or from jar: a base64 TwitchDropsMiner cookies.jar. With account_id it signs that account in again. Without it, the account
 // whose session already belongs to the same Twitch user is updated, else a
 // new account named after the login is created.
 func (s *server) twitchAndroidLogin(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		URL       string `json:"url"`
+		Jar       string `json:"jar"`
 		AccountID string `json:"account_id"`
 	}
 	if !readJSON(w, r, &body) {
 		return
+	}
+	raw := body.URL
+	if body.Jar != "" {
+		b, err := base64.StdEncoding.DecodeString(body.Jar)
+		if err == nil {
+			raw, err = twitch.TokenFromTDMJar(b)
+		}
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "tdm_no_token")
+			return
+		}
 	}
 	ctx := r.Context()
 	backend, ok := s.d.Registry.Get("twitch")
@@ -55,7 +68,7 @@ func (s *server) twitchAndroidLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	sess, login, err := loginer.AndroidLogin(ctx, body.URL)
+	sess, login, err := loginer.AndroidLogin(ctx, raw)
 	switch {
 	case errors.Is(err, twitch.ErrNoAccessToken):
 		writeErr(w, http.StatusBadRequest, "android_no_token")

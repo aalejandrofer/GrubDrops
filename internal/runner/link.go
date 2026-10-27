@@ -2,10 +2,10 @@ package runner
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"time"
 
+	"github.com/aalejandrofer/grubdrops/internal/i18n"
 	"github.com/aalejandrofer/grubdrops/internal/plan"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
@@ -17,6 +17,7 @@ func (r *Runner) blockNotLinked(ctx context.Context, benefit platform.DropBenefi
 	slog.Warn("runner claim needs account link; drop blocked until linked",
 		"kind", "claim", "account", r.cfg.AccountID,
 		"benefit", benefit.ID, "benefit_name", benefit.Name, "err", err)
+	r.notifyNeedsLink(ctx, benefit)
 	r.stopWatch(ctx)
 	r.mu.Lock()
 	if r.linkRefused == nil {
@@ -28,6 +29,41 @@ func (r *Runner) blockNotLinked(ctx context.Context, benefit platform.DropBenefi
 	r.unpinLocked(benefit.ID)
 	r.mu.Unlock()
 	r.setState(ctx, StatePicking)
+}
+
+// notifyNeedsLink sends one "link your account to claim" error per drop, so a
+// retried refusal does not repeat it. Config.LinkNotices carries that across
+// runner rebuilds and restarts.
+func (r *Runner) notifyNeedsLink(ctx context.Context, benefit platform.DropBenefit) {
+	if r.cfg.Notifier == nil {
+		return
+	}
+	r.mu.Lock()
+	done := r.linkNotified[benefit.ID]
+	if r.linkNotified == nil {
+		r.linkNotified = map[string]bool{}
+	}
+	r.linkNotified[benefit.ID] = true
+	r.mu.Unlock()
+	if done {
+		return
+	}
+	if r.cfg.LinkNotices != nil {
+		first, err := r.cfg.LinkNotices.FirstLinkNotice(r.cfg.AccountID, benefit.ID)
+		if err != nil {
+			slog.Warn("runner link notice lookup failed; sending it", "kind", "error",
+				"account", r.cfg.AccountID, "benefit", benefit.ID, "err", err)
+		} else if !first {
+			return
+		}
+	}
+	lang := "en"
+	if r.cfg.Lang != nil {
+		lang = r.cfg.Lang()
+	}
+	_ = r.cfg.Notifier.Notify(ctx, "error", r.notifyFields(map[string]any{
+		"drop": benefit.Name, "msg": i18n.T(lang, "notify.needs_link"),
+	}))
 }
 
 // retryLinkRefused retries the claim of each completed, unclaimed benefit the
@@ -84,11 +120,12 @@ func (r *Runner) retryLinkRefused(ctx context.Context, camps []platform.Campaign
 			continue
 		}
 		err := r.cfg.Backend.Claim(ctx, r.cfg.Session, cd.t.Benefit)
+		needsLink := err != nil && linkRefusal(err, cd.t.Campaign)
 		r.mu.Lock()
 		switch {
 		case err == nil:
 			delete(r.linkRefused, id)
-		case errors.Is(err, platform.ErrClaimNeedsLink):
+		case needsLink:
 			if r.linkRefused == nil {
 				r.linkRefused = map[string]time.Time{}
 			}
@@ -104,7 +141,7 @@ func (r *Runner) retryLinkRefused(ctx context.Context, camps []platform.Campaign
 				"account", r.cfg.AccountID, "benefit", id, "benefit_name", cd.t.Benefit.Name)
 			claimed = setTrue(claimed, id)
 			r.recordLinkedClaim(ctx, cd.t)
-		case errors.Is(err, platform.ErrClaimNeedsLink):
+		case needsLink:
 			slog.Debug("runner claim still needs account link", "kind", "claim",
 				"account", r.cfg.AccountID, "benefit", id)
 			notLinked = setTrue(notLinked, id)

@@ -49,6 +49,7 @@ func newRosterEnv(t *testing.T) *rosterEnv {
 		ctx: ctx, q: q,
 		sessions:  store.NewSessionStore(db, q, cr),
 		chosen:    store.NewChosenGames(db, q),
+		own:       store.NewAccountGames(db, q),
 		skips:     store.NewSkips(q),
 		collector: collect.New(db, q),
 		hub:       hub, pool: pool,
@@ -252,12 +253,22 @@ func TestRoster_GamesChangedReloadsEach(t *testing.T) {
 		}, 5*time.Second, 20*time.Millisecond, id)
 	}
 
+	// a3 mines its own list: a global change leaves its runner alone.
+	e.account(t, "a3", 1, true)
+	require.NoError(t, e.ro.own.Set(e.ctx, "a3", true, nil))
+	bs, err = e.ro.builders(e.ctx)
+	require.NoError(t, err)
+	require.NoError(t, e.ro.pool.Reload(e.ctx, bs))
+	mu.Lock()
+	clear(builds)
+	mu.Unlock()
+
 	e.chooseRust(t)
 	e.rustDrop(10, false)
 	e.ro.gamesChanged()
 
 	mu.Lock()
-	assert.Equal(t, map[string]int{"a1": 2, "a2": 2}, builds)
+	assert.Equal(t, map[string]int{"a1": 1, "a2": 1}, builds)
 	mu.Unlock()
 	for _, id := range []string{"a1", "a2"} {
 		require.Eventually(t, func() bool {
@@ -423,4 +434,48 @@ func TestRoster_AccountNamesTrackRows(t *testing.T) {
 	require.NoError(t, err)
 	e.ro.reloadAccount("a1")
 	assert.Equal(t, "", e.ro.accountName("a1"))
+}
+
+func TestRoster_GamesForOwnList(t *testing.T) {
+	e := newRosterEnv(t)
+	all, err := e.q.ListAllGames(e.ctx)
+	require.NoError(t, err)
+	ids := map[string]string{}
+	for _, g := range all {
+		ids[g.Name] = g.ID
+	}
+	require.NotEmpty(t, ids["Rust"])
+	require.NotEmpty(t, ids["Valorant"])
+	e.chooseRust(t)
+	e.account(t, "a1", 1, true)
+	require.NoError(t, e.ro.own.Set(e.ctx, "a1", false, []string{ids["Valorant"]}))
+
+	names := func() []string {
+		a, err := e.q.GetAccount(e.ctx, "a1")
+		require.NoError(t, err)
+		var out []string
+		for _, g := range e.ro.gamesFor(e.ctx, a) {
+			out = append(out, g.Name)
+		}
+		return out
+	}
+	assert.Equal(t, []string{"Rust"}, names(), "flag off: the global list, stored rows ignored")
+	require.NoError(t, e.ro.own.Set(e.ctx, "a1", true, nil))
+	assert.Equal(t, []string{"Valorant"}, names(), "flag on: the account's own list")
+	require.NoError(t, e.ro.own.Set(e.ctx, "a1", true, []string{}))
+	assert.Empty(t, names(), "own list empty: nothing to mine")
+}
+
+// Runner settings are read once and cached until a settings save drops them.
+func TestRoster_RunSettingsCachedUntilChanged(t *testing.T) {
+	e := newRosterEnv(t)
+	e.ro.settings = store.NewSettings(e.q)
+	require.NoError(t, e.ro.settings.SetPriorityMode(e.ctx, string(plan.PriorityEndingSoonest)))
+	assert.Equal(t, plan.PriorityEndingSoonest, e.ro.priorityMode())
+
+	require.NoError(t, e.ro.settings.SetPriorityMode(e.ctx, string(plan.PriorityOrdered)))
+	assert.Equal(t, plan.PriorityEndingSoonest, e.ro.priorityMode(), "cached: no DB read")
+
+	e.ro.settingsChanged()
+	assert.Equal(t, plan.PriorityOrdered, e.ro.priorityMode())
 }

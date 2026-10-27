@@ -14,6 +14,7 @@
 		rowActions
 	} from '$lib/accounts';
 	import AccountFlow from '$lib/components/AccountFlow.svelte';
+	import AddAccount from '$lib/components/AddAccount.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { moveTarget } from '$lib/games';
@@ -31,25 +32,31 @@
 
 	const live = getLive();
 
+	/** Signing an existing account in again, shown under its row. */
 	interface Panel {
 		kind: Platform;
 		id: string;
-		isNew: boolean;
 	}
 
 	let panel = $state<Panel | null>(null);
+	// New accounts sign in through the dialog; its half-made account stays out of the rows.
+	let adding = $state<Platform | null>(null);
+	let addId = $state('');
+	let dlg = $state<HTMLDialogElement | null>(null);
 	let busy = $state(false);
 	let addError = $state('');
 	let menu = $state<string | null>(null);
 	let confirming = $state<string | null>(null);
 	let rowError = $state<Record<string, string>>({});
+	let rowInfo = $state<Record<string, { tone: 'ok' | 'wait'; text: string }>>({});
 	let renaming = $state<string | null>(null);
+	// The account whose own game list is open in the games dialog.
 	let renameValue = $state('');
 
 	let flowEl = $state<AccountFlow | null>(null);
 
 	const runnerOf = (id: string) => live.runners.find((r) => r.account_id === id);
-	const shown = (a: Account) => !(panel?.isNew && panel.id === a.id);
+	const shown = (a: Account) => !(adding && addId === a.id);
 
 	let ordering = $state(false);
 	let orderError = $state('');
@@ -100,12 +107,27 @@
 		return e instanceof ApiError && e.body.message ? e.body.message : fallback;
 	}
 
-	async function openFlow(kind: Platform, existing?: string): Promise<void> {
+	async function openFlow(kind: Platform, existing: string): Promise<void> {
 		if (busy) return;
 		menu = null;
 		addError = '';
 		if (panel) await closePanel();
-		panel = { kind, id: existing ?? '', isNew: existing === undefined };
+		panel = { kind, id: existing };
+	}
+
+	async function openAdd(kind: Platform = 'twitch'): Promise<void> {
+		if (busy) return;
+		menu = null;
+		addError = '';
+		if (panel) await closePanel();
+		addId = '';
+		adding = kind;
+		dlg?.showModal();
+	}
+
+	async function added(): Promise<void> {
+		dlg?.close();
+		await live.refetchAll().catch(() => {});
 	}
 
 	async function closePanel(): Promise<void> {
@@ -177,6 +199,41 @@
 		}
 	}
 
+	// A success note fades after a few seconds; errors stay until the next action.
+	function flash(id: string, text: string): void {
+		rowInfo[id] = { tone: 'ok', text };
+		setTimeout(() => {
+			if (rowInfo[id]?.text === text) delete rowInfo[id];
+		}, 6000);
+	}
+
+	async function checkLogin(a: Account): Promise<void> {
+		menu = null;
+		rowError[a.id] = '';
+		rowInfo[a.id] = { tone: 'wait', text: t('accounts.checking') };
+		try {
+			const res = await api.checkLogin(a.id);
+			delete rowInfo[a.id];
+			if (res.ok) flash(a.id, t('accounts.check_ok'));
+			else rowError[a.id] = t('accounts.check_bad', { detail: res.detail });
+		} catch (e) {
+			delete rowInfo[a.id];
+			rowError[a.id] = errMsg(e, t('accounts.check_failed'));
+		}
+	}
+
+	async function restart(a: Account): Promise<void> {
+		menu = null;
+		rowError[a.id] = '';
+		delete rowInfo[a.id];
+		try {
+			await api.restartAccount(a.id);
+			flash(a.id, t('accounts.restarted'));
+		} catch (e) {
+			rowError[a.id] = errMsg(e, t('accounts.restart_failed'));
+		}
+	}
+
 	function openMenu(id: string): void {
 		menu = menu === id ? null : id;
 		confirming = null;
@@ -195,7 +252,7 @@
 		const add = new URL(location.href).searchParams.get('add');
 		if (add === 'twitch' || add === 'kick') {
 			void goto(location.pathname + location.hash, { replace: true });
-			void openFlow(add);
+			void openAdd(add);
 		}
 	});
 
@@ -219,7 +276,7 @@
 				bind:id={panel.id}
 				bind:busy
 				kind={panel.kind}
-				existing={panel.isNew ? undefined : panel.id}
+				existing={panel.id}
 				onclose={() => (panel = null)}
 				ondone={finish}
 				onfail={(msg) => {
@@ -237,23 +294,13 @@
 			<h2 id="h-acc">{t('settings.accounts')}</h2>
 			<p>{t('accounts.intro')}</p>
 		</div>
-		<div class="menu-wrap">
-			<button type="button" class="btn" aria-haspopup="menu" aria-expanded={menu === 'add'} disabled={busy} onclick={() => openMenu('add')}>
-				<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>{t('accounts.add')}
-			</button>
-			{#if menu === 'add'}
-				<div class="menu" role="menu">
-					<div class="note">{t('accounts.sign_in_with')}</div>
-					<button type="button" role="menuitem" onclick={() => openFlow('twitch')}><PlatformMark platform="twitch" />{t('accounts.twitch')}</button>
-					<button type="button" role="menuitem" onclick={() => openFlow('kick')}><PlatformMark platform="kick" />{t('accounts.kick')}</button>
-				</div>
-			{/if}
-		</div>
+		<button type="button" class="btn" disabled={busy} onclick={() => openAdd()}>
+			<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>{t('accounts.add')}
+		</button>
 	</div>
 	{#if addError}<p class="bad top" role="alert">{addError}</p>{/if}
 	{#if orderError}<p class="bad top" role="alert">{orderError}</p>{/if}
-	<div class="panel" id="acct-list" class:none={!panel?.isNew && listed.length === 0} use:reorder={dragOpts}>
-		{#if panel?.isNew}{@render flowPanel()}{/if}
+	<div class="panel" id="acct-list" class:none={listed.length === 0} use:reorder={dragOpts}>
 		{#each rows as a, i (a.id)}
 			{@const r = runnerOf(a.id)}
 			{@const st = accountStatus(a, r)}
@@ -303,7 +350,9 @@
 						<b><button type="button" class="nm" title={t('accounts.rename_label', { name: a.name })} onclick={() => startRename(a)}>{a.name}</button></b>
 					{/if}
 					<small>{accountLine(a, r)}</small>
+					{#if a.own_games}<a class="own" href="/games">{t('accounts.games_own_on')}</a>{/if}
 					{#if rowError[a.id]}<small class="bad" role="alert">{rowError[a.id]}</small>{/if}
+					{#if rowInfo[a.id]}<small class="info {rowInfo[a.id].tone}" role="status">{rowInfo[a.id].text}</small>{/if}
 				</div>
 				<span class="st {st}">{t(STATUS_KEYS[st])}</span>
 				{#if acts.includes('login')}
@@ -335,12 +384,21 @@
 								</div>
 							{:else}
 								<button type="button" role="menuitem" onclick={() => startRename(a)}>{t('accounts.rename')}</button>
+								<hr />
 								{#if !acts.includes('login')}
 									<button type="button" role="menuitem" disabled={busy} onclick={() => openFlow(a.platform, a.id)}>{t('accounts.log_in_again')}</button>
 								{/if}
+								<button type="button" role="menuitem" disabled={rowInfo[a.id]?.tone === 'wait'} onclick={() => checkLogin(a)}>
+									{t('accounts.check_login')}
+								</button>
+								<hr />
 								<button type="button" role="menuitem" onclick={() => setEnabled(a, !a.enabled)}>
 									{t(a.enabled ? 'accounts.pause' : 'accounts.resume')}
 								</button>
+								{#if a.enabled}
+									<button type="button" role="menuitem" onclick={() => restart(a)}>{t('accounts.restart')}</button>
+								{/if}
+								<hr />
 								<button type="button" role="menuitem" class="danger" onclick={() => (confirming = a.id)}>
 									<Icon name="x" />{t('accounts.remove')}
 								</button>
@@ -349,12 +407,63 @@
 					{/if}
 				</div>
 			</div>
-			{#if panel && !panel.isNew && panel.id === a.id}{@render flowPanel()}{/if}
+			{#if panel?.id === a.id}{@render flowPanel()}{/if}
 		{/each}
 	</div>
 </section>
 
+<dialog
+	class="add"
+	bind:this={dlg}
+	aria-labelledby="add-h"
+	onclose={() => ((adding = null), (addId = ''))}
+	onclick={(e) => e.target === dlg && dlg?.close()}
+>
+	{#if adding}
+		<div class="add-head">
+			<h2 id="add-h">{t('welcome.account_title')}</h2>
+			<button type="button" class="ico" aria-label={t('accounts.cancel')} onclick={() => dlg?.close()}>
+				<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+			</button>
+		</div>
+		<AddAccount
+			platform={adding}
+			bind:id={addId}
+			onadded={added}
+			onpick={() => (addError = '')}
+			onfail={(msg) => {
+				addError = msg;
+				dlg?.close();
+			}}
+		/>
+	{/if}
+</dialog>
+
 <style>
+	.add {
+		width: min(560px, calc(100vw - 32px));
+		max-height: calc(100dvh - 32px);
+		padding: 20px;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: var(--bg);
+		color: var(--text);
+	}
+	.add::backdrop {
+		background: rgb(0 0 0 / 0.55);
+	}
+	.add-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		margin-bottom: 16px;
+	}
+	.add-head h2 {
+		margin: 0;
+		font-size: 17px;
+		font-weight: 600;
+	}
 	.panel.none {
 		display: none;
 	}
@@ -367,8 +476,21 @@
 		font-size: 12.5px;
 		margin: 0;
 	}
-	small.bad {
+	small.bad,
+	small.info,
+	a.own {
 		display: block;
+	}
+	a.own {
+		color: var(--accent);
+		font-size: 12px;
+		text-decoration: underline;
+	}
+	.info.ok {
+		color: var(--green);
+	}
+	.info.wait {
+		color: var(--t2);
 	}
 	.menu-wrap {
 		position: relative;
@@ -407,6 +529,11 @@
 	.menu button:focus-visible {
 		outline: 2px solid var(--accent);
 		outline-offset: -2px;
+	}
+	.menu hr {
+		margin: 4px 2px;
+		border: 0;
+		border-top: 1px solid var(--border);
 	}
 	.menu .danger {
 		color: var(--red);
@@ -452,12 +579,14 @@
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
 	}
-	section .btn.primary {
+	section .btn.primary,
+	.add :global(.btn.primary) {
 		background: var(--accent-strong);
 		border-color: var(--accent-strong);
 		color: #fff;
 	}
-	section .btn.primary:hover:not(:disabled) {
+	section .btn.primary:hover:not(:disabled),
+	.add :global(.btn.primary:hover:not(:disabled)) {
 		background: color-mix(in srgb, var(--accent-strong) 85%, #fff);
 		border-color: color-mix(in srgb, var(--accent-strong) 85%, #fff);
 	}

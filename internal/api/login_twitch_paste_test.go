@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"testing"
 	"time"
@@ -24,7 +25,7 @@ func (b *androidBackend) Name() string { return "twitch" }
 
 func (b *androidBackend) AndroidLogin(_ context.Context, raw string) (platform.Session, string, error) {
 	switch raw {
-	case "good":
+	case "good", "abcdefghijklmnopqrstuvwxyz0123":
 		return platform.Session{AccessToken: "tok-a", ClientID: twitch.ClientAndroid, UserID: "42", ExpiresAt: time.Now().Add(time.Hour)}, "alice", nil
 	case "other":
 		return platform.Session{AccessToken: "tok-b", ClientID: twitch.ClientAndroid, UserID: "7", ExpiresAt: time.Now().Add(time.Hour)}, "bob", nil
@@ -133,4 +134,22 @@ func TestTwitchAndroid_Errors(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, accs, 1, "failed logins create nothing")
 	assert.Empty(t, c.changedList())
+}
+
+func TestTwitchAndroid_TDMJar(t *testing.T) {
+	e, _ := accountsEnv(t, &androidBackend{Fake: platformtest.NewFake()})
+	_, tok := e.session()
+	jar := `{"www.twitch.tv|/": {"auth-token": {"key": "auth-token", "value": "abcdefghijklmnopqrstuvwxyz0123"}}}`
+	resp, b := e.do("POST", "/api/login/twitch/android", tok, map[string]string{"jar": base64.StdEncoding.EncodeToString([]byte(jar))})
+	require.Equal(t, 200, resp.StatusCode, string(b))
+	assert.Equal(t, "alice", jsonField(t, b, "login"))
+
+	for name, in := range map[string]string{
+		"not base64": "%%%",
+		"no token":   base64.StdEncoding.EncodeToString([]byte(`{"www.twitch.tv|/": {}}`)),
+	} {
+		resp, b := e.do("POST", "/api/login/twitch/android", tok, map[string]string{"jar": in})
+		assert.Equal(t, 400, resp.StatusCode, name)
+		assert.Contains(t, string(b), "tdm_no_token", name)
+	}
 }

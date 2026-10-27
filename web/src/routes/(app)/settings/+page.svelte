@@ -7,6 +7,7 @@
 	import { applyPrefs } from '$lib/prefs.svelte';
 	import { SECTIONS, sectionFromHash, type Section } from '$lib/settings';
 	import Accounts from './Accounts.svelte';
+	import Engine from './Engine.svelte';
 	import General from './General.svelte';
 	import Health from './Health.svelte';
 	import Notifications from './Notifications.svelte';
@@ -14,6 +15,7 @@
 
 	const LABELS = {
 		general: 'settings.general',
+		engine: 'settings.engine',
 		accounts: 'settings.accounts',
 		notifications: 'settings.notifications',
 		health: 'settings.health',
@@ -106,9 +108,10 @@
 		</nav>
 		<div>
 			{#if s}<General {s} {save} {errs} />{:else}<section class="set" id="general"></section>{/if}
+			{#if s}<Engine {s} {save} {errs} />{:else}<section class="set" id="engine"></section>{/if}
 			<Accounts />
 			{#if s}<Notifications {s} {save} {errs} />{:else}<section class="set" id="notifications"></section>{/if}
-			<Health />
+			{#if s}<Health {s} {save} {errs} />{:else}<Health />{/if}
 			{#if s}<Updates {s} {save} {errs} />{:else}<section class="set" id="updates"></section>{/if}
 		</div>
 	</div>
@@ -402,6 +405,50 @@
 		font-size: 12.5px;
 		font-weight: 600;
 		color: var(--t2);
+	}
+	.settings :global(.row + .card-body) {
+		border-top: 1px solid var(--border-soft);
+	}
+	.settings :global(details.adv) {
+		margin-top: 18px;
+	}
+	.settings :global(details.adv > summary) {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		margin-bottom: 8px;
+		font-size: 12.5px;
+		font-weight: 600;
+		color: var(--t2);
+		list-style: none;
+		cursor: pointer;
+		border-radius: 4px;
+	}
+	.settings :global(details.adv > summary::-webkit-details-marker) {
+		display: none;
+	}
+	.settings :global(details.adv > summary::before) {
+		content: '';
+		width: 6px;
+		height: 6px;
+		border-right: 1.5px solid currentColor;
+		border-bottom: 1.5px solid currentColor;
+		transform: rotate(-45deg);
+		transition: transform 0.15s;
+	}
+	.settings :global(details.adv[open] > summary::before) {
+		transform: rotate(45deg);
+	}
+	.settings :global(details.adv > summary:hover) {
+		color: var(--text);
+	}
+	.settings :global(details.adv > summary:focus-visible) {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
+	.settings :global(.sw:disabled) {
+		opacity: 0.45;
+		cursor: default;
 	}
 
 	@media (max-width: 720px) {

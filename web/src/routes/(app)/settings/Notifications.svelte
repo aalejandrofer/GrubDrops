@@ -3,7 +3,7 @@
 	import { ApiError } from '$lib/api/client';
 	import type { Settings, SettingsPatch } from '$lib/api/types';
 	import { t } from '$lib/i18n/index.svelte';
-	import { isDiscordWebhook, isTelegramChat, isTelegramToken } from '$lib/settings';
+	import { isAvatarURL, isDiscordWebhook, isTelegramChat, isTelegramToken } from '$lib/settings';
 
 	let {
 		s,
@@ -160,6 +160,26 @@
 		{ key: 'errors', title: 'settings.n_errors', sub: 'settings.n_errors_sub' },
 		{ key: 'daily_summary', title: 'settings.n_daily', sub: 'settings.n_daily_sub' }
 	] as const;
+	const ADV_KINDS = [
+		{ key: 'progress', title: 'settings.n_progress', sub: 'settings.n_progress_sub' },
+		{ key: 'canary', title: 'settings.n_canary', sub: 'settings.n_canary_sub' }
+	] as const;
+
+	let avatar = $state('');
+	let avatarDirty = $state(false);
+	let avatarBad = $state(false);
+	$effect(() => {
+		if (!avatarDirty) avatar = s.notify_avatar_url;
+	});
+
+	async function saveAvatar(): Promise<void> {
+		const v = avatar.trim();
+		if (!isAvatarURL(v)) {
+			avatarBad = true;
+			return;
+		}
+		if (await save('notify_avatar_url', { notify_avatar_url: v })) avatarDirty = false;
+	}
 </script>
 
 <section class="set" id="notifications" aria-labelledby="h-not">
@@ -201,13 +221,11 @@
 						{/if}
 					{:else}
 						<input class="inp" id="discord-webhook" type="text" value={s.discord.webhook_hint} readonly />
-						<button type="button" class="btn" disabled={testing} onclick={sendTest}>{t('settings.send_test')}</button>
 						<button type="button" class="btn" onclick={change}>{t('settings.change')}</button>
 					{/if}
 				</div>
 				{#if invalid}<span class="feedback bad" role="alert">{t('settings.webhook_invalid')}</span>{/if}
 				{#if errs.webhook}<span class="feedback bad">{t('settings.save_failed')}</span>{/if}
-				{#if feedback}<span class="feedback" class:bad={!feedback.ok} role="status">{feedback.text}</span>{/if}
 			</div>
 		</div>
 		<div class="card-body">
@@ -272,7 +290,6 @@
 					</div>
 				</div>
 				<div class="inline wrap">
-					<button type="button" class="btn" disabled={tgTesting} onclick={tgSendTest}>{t('settings.send_test')}</button>
 					<button type="button" class="btn" onclick={tgChange}>{t('settings.change')}</button>
 				</div>
 			{/if}
@@ -280,7 +297,6 @@
 			{#if tgTokenBad}<span class="feedback bad" role="alert">{t('settings.token_invalid')}</span>{/if}
 			{#if tgChatBad}<span class="feedback bad" role="alert">{t('settings.chat_invalid')}</span>{/if}
 			{#if errs.telegram}<span class="feedback bad">{t('settings.save_failed')}</span>{/if}
-			{#if tgFeedback}<span class="feedback" class:bad={!tgFeedback.ok} role="status">{tgFeedback.text}</span>{/if}
 		</div>
 	</div>
 
@@ -303,6 +319,74 @@
 			</div>
 		{/each}
 	</div>
+
+	<div class="panel test">
+		<div class="row">
+			<div class="lbl">
+				<b>{t('settings.test_notify')}</b>
+				<small>{s.discord.configured || s.telegram.configured ? t('settings.test_notify_sub') : t('settings.test_notify_none')}</small>
+				{#if feedback}<small class:bad={!feedback.ok} role="status">{feedback.text}</small>{/if}
+				{#if tgFeedback}<small class:bad={!tgFeedback.ok} role="status">{tgFeedback.text}</small>{/if}
+			</div>
+			<div class="inline wrap">
+				{#if s.discord.configured}
+					<button type="button" class="btn" disabled={testing} onclick={sendTest}>{t('settings.test_discord')}</button>
+				{/if}
+				{#if s.telegram.configured}
+					<button type="button" class="btn" disabled={tgTesting} onclick={tgSendTest}>{t('settings.test_telegram')}</button>
+				{/if}
+			</div>
+		</div>
+	</div>
+
+	<details class="adv">
+		<summary>{t('settings.advanced')}</summary>
+		<div class="panel">
+			{#each ADV_KINDS as k (k.key)}
+				<div class="row">
+					<div class="lbl">
+						<b id="n-{k.key}">{t(k.title)}</b><small>{t(k.sub)}</small>
+						{#if errs[`notify.${k.key}`]}<small class="bad">{t('settings.save_failed')}</small>{/if}
+					</div>
+					<button
+						type="button"
+						class="sw"
+						role="switch"
+						aria-checked={s.notify[k.key]}
+						aria-labelledby="n-{k.key}"
+						onclick={() => save(`notify.${k.key}`, { notify: { [k.key]: !s.notify[k.key] } })}
+					></button>
+				</div>
+			{/each}
+			<div class="card-body">
+				<div class="field">
+					<label for="avatar-url">{t('settings.avatar_url')}</label>
+					<div class="inline wrap">
+						<input
+							class="inp grow"
+							id="avatar-url"
+							name="avatar-url"
+							type="url"
+							inputmode="url"
+							autocomplete="off"
+							spellcheck="false"
+							placeholder="https://…/avatar.png"
+							aria-invalid={avatarBad ? true : undefined}
+							bind:value={avatar}
+							oninput={() => ((avatarDirty = true), (avatarBad = false))}
+							onkeydown={(e) => {
+								if (e.key === 'Enter' && e.isTrusted && avatarDirty) void saveAvatar();
+							}}
+						/>
+						<button type="button" class="btn" disabled={!avatarDirty} onclick={saveAvatar}>{t('accounts.save')}</button>
+					</div>
+					<small class="help">{t('settings.avatar_help')}</small>
+					{#if avatarBad}<span class="feedback bad" role="alert">{t('settings.avatar_invalid')}</span>{/if}
+					{#if errs.notify_avatar_url}<span class="feedback bad">{t('settings.save_failed')}</span>{/if}
+				</div>
+			</div>
+		</div>
+	</details>
 </section>
 
 <style>
@@ -316,5 +400,12 @@
 	.help {
 		color: var(--t2);
 		font-size: 12px;
+	}
+	.test {
+		margin-top: 14px;
+	}
+	.grow {
+		flex: 1;
+		min-width: 0;
 	}
 </style>

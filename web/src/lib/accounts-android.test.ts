@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { androidErrorKey, hasAndroidToken } from './accounts';
+import { androidErrorKey, hasAndroidToken, toBase64 } from './accounts';
 
 const TOK = 'abcdefghijklmnopqrstuvwxyz0123';
 
@@ -28,10 +28,22 @@ describe('androidErrorKey', () => {
 		expect(androidErrorKey('android_no_token')).toBe('accounts.android_no_token');
 		expect(androidErrorKey('android_wrong_client')).toBe('accounts.android_wrong_client');
 		expect(androidErrorKey('android_invalid_token')).toBe('accounts.android_invalid_token');
+		expect(androidErrorKey('tdm_no_token')).toBe('accounts.tdm_no_token');
 	});
 	it('falls back for anything else', () => {
 		expect(androidErrorKey('upstream')).toBe('accounts.android_failed');
 		expect(androidErrorKey(undefined)).toBe('accounts.android_failed');
 		expect(androidErrorKey('toString')).toBe('accounts.android_failed');
+	});
+});
+
+describe('toBase64', () => {
+	it('encodes binary bytes', () => {
+		expect(toBase64(new Uint8Array([0x80, 0x05, 0x95, 0x00, 0xff]))).toBe('gAWVAP8=');
+		expect(toBase64(new Uint8Array())).toBe('');
+	});
+	it('encodes past one chunk', () => {
+		const big = new Uint8Array(0x8000 * 2 + 3).fill(0x41);
+		expect(atob(toBase64(big))).toBe('A'.repeat(big.length));
 	});
 });

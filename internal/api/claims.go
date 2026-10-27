@@ -2,12 +2,15 @@ package api
 
 import (
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/aalejandrofer/grubdrops/internal/plan"
+	"github.com/aalejandrofer/grubdrops/internal/runner"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 )
 
@@ -48,6 +51,104 @@ func ClaimJSON(e store.ClaimEntry, accountName string) claimItem {
 
 func (s *server) routesClaims(r chi.Router) {
 	r.Get("/claims", s.getClaims)
+	r.Post("/claims", s.postClaim)
+	r.Delete("/claims/{account}/{benefit}", s.deleteClaim)
+}
+
+// queuedTarget finds a drop in the account's current runner plan: the drop
+// it mines, Up next or Blocked.
+func queuedTarget(snaps []runner.Snapshot, accountID, benefitID string) (plan.Target, bool) {
+	for _, sn := range snaps {
+		if sn.AccountID != accountID {
+			continue
+		}
+		if sn.Current != nil && sn.Current.Benefit.ID == benefitID {
+			return *sn.Current, true
+		}
+		for _, t := range sn.UpNext {
+			if t.Benefit.ID == benefitID {
+				return t, true
+			}
+		}
+		for _, b := range sn.Blocked {
+			if b.Target.Benefit.ID == benefitID {
+				return b.Target, true
+			}
+		}
+	}
+	return plan.Target{}, false
+}
+
+// pathParam is a route value with any percent-escapes decoded. chi matches on
+// the raw path, so an escaped ID arrives still escaped.
+func pathParam(r *http.Request, key string) string {
+	v := chi.URLParam(r, key)
+	if u, err := url.PathUnescape(v); err == nil {
+		return u
+	}
+	return v
+}
+
+// postClaim marks a planned drop collected by hand, so the runner stops
+// mining it. Only drops in the account's plan can be marked.
+func (s *server) postClaim(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		AccountID string `json:"account_id"`
+		BenefitID string `json:"benefit_id"`
+	}
+	if !readJSON(w, r, &body) {
+		return
+	}
+	a, ok := s.account(w, r, body.AccountID)
+	if !ok {
+		return
+	}
+	if s.d.Pool == nil {
+		writeErr(w, http.StatusConflict, "not_running")
+		return
+	}
+	t, ok := queuedTarget(s.d.Pool.Snapshots(), a.ID, body.BenefitID)
+	if !ok {
+		writeErr(w, http.StatusNotFound, "not_queued")
+		return
+	}
+	e := store.ClaimEntry{
+		AccountID: a.ID, Platform: a.Platform, Game: t.Campaign.Game,
+		CampaignID: t.Campaign.ID, CampaignName: t.Campaign.Name,
+		BenefitID: t.Benefit.ID, BenefitName: t.Benefit.Name, ImageURL: t.Benefit.ImageURL,
+		Source: store.ClaimSourceManual, ClaimedAt: s.overviewNow(),
+	}
+	if err := s.d.Claims.Record(r.Context(), e); err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	s.accountChanged(a.ID)
+	item := ClaimJSON(e, store.AccountName(a))
+	if s.d.Hub != nil {
+		s.d.Hub.Publish(Event{Name: EventClaim, Data: item})
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+// deleteClaim forgets one claim, so the runner may mine the drop again. A
+// drop the platform shows as claimed comes back on the next scan.
+func (s *server) deleteClaim(w http.ResponseWriter, r *http.Request) {
+	acct, benefit := pathParam(r, "account"), pathParam(r, "benefit")
+	found, err := s.d.Claims.Delete(r.Context(), acct, benefit)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	if !found {
+		writeErr(w, http.StatusNotFound, "not_found")
+		return
+	}
+	s.accountChanged(acct)
+	if s.d.Hub != nil {
+		// Refreshes the overview counts and the runners in every open tab.
+		s.d.Hub.Publish(Event{Name: EventAccounts, Data: struct{}{}})
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // queryInt reads a non-negative integer query value. A missing value gives

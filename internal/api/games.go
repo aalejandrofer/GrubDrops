@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -176,6 +177,36 @@ func (s *server) handleGamesList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, v)
 }
 
+// gameRowID is the games-table id for a typed name; false when the name has
+// no usable slug.
+func gameRowID(name string) (string, bool) {
+	name = strings.TrimSpace(name)
+	if name == "" || gameslug.Slug(name) == "" {
+		return "", false
+	}
+	return gameslug.ID(name), true
+}
+
+// matchGameRow finds the stored row for a typed name. An existing row with
+// the same slug but another id (seeded by a migration) wins, since slug is
+// unique. It returns that row's id, or id unchanged when none matches.
+func matchGameRow(all []gen.ListAllGamesRow, id, name string) (string, bool) {
+	slug := gameslug.Slug(strings.TrimSpace(name))
+	for _, g := range all {
+		if g.ID == id || g.Slug == slug {
+			return g.ID, true
+		}
+	}
+	return id, false
+}
+
+// insertGame adds a games row for a typed name. Stored rows keep their name
+// and slug, so callers insert only when matchGameRow found none.
+func (s *server) insertGame(ctx context.Context, id, name string) error {
+	name = strings.TrimSpace(name)
+	return s.d.Q.UpsertGame(ctx, gen.UpsertGameParams{ID: id, Name: name, Slug: gameslug.Slug(name)})
+}
+
 func (s *server) handleGamesAdd(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name string `json:"name"`
@@ -183,29 +214,17 @@ func (s *server) handleGamesAdd(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &in) {
 		return
 	}
-	name := strings.TrimSpace(in.Name)
-	id := gameslug.ID(name)
-	slug := gameslug.Slug(name)
-	if name == "" || slug == "" {
+	id, ok := gameRowID(in.Name)
+	if !ok {
 		writeErr(w, http.StatusBadRequest, "bad_request")
 		return
 	}
-	// Keep the stored name and slug of an existing row; insert only when missing.
-	// An existing row with the same slug but another id (seeded by a migration)
-	// wins, since slug is unique.
 	all, err := s.d.Q.ListAllGames(r.Context())
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
 	}
-	exists := false
-	for _, g := range all {
-		if g.ID == id || g.Slug == slug {
-			id = g.ID
-			exists = true
-			break
-		}
-	}
+	id, exists := matchGameRow(all, id, in.Name)
 	chosen, err := s.d.Chosen.List(r.Context())
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "internal")
@@ -220,7 +239,7 @@ func (s *server) handleGamesAdd(w http.ResponseWriter, r *http.Request) {
 		ids = append(ids, c.ID)
 	}
 	if !exists {
-		if err := s.d.Q.UpsertGame(r.Context(), gen.UpsertGameParams{ID: id, Name: name, Slug: slug}); err != nil {
+		if err := s.insertGame(r.Context(), id, in.Name); err != nil {
 			writeErr(w, http.StatusInternalServerError, "internal")
 			return
 		}

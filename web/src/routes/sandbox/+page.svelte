@@ -12,6 +12,15 @@
 
 	const mockups: Mockup[] = [
 		{
+			slug: 'account-games',
+			created: '2026-10-26',
+			title: 'Per-account game lists on Games, three layouts',
+			desc: 'Where the own-list switch and editor live on Games: a section below the shared list with a modal, a left rail with a modal, or a left rail that swaps the main list.',
+			tags: ['games', 'accounts'],
+			done: true,
+			chosen: 'Variant B, now live on /games as the Lists rail'
+		},
+		{
 			slug: 'light-mode',
 			created: '2026-10-26',
 			title: 'Light mode, three darker options',

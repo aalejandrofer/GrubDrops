@@ -19,7 +19,7 @@ test('no {@html} anywhere in src', () => {
 // list keyed by its own item text crashes on two equal entries, so only
 // lists that cannot repeat may do it.
 test('each blocks keyed by the bare item are lists that cannot repeat', () => {
-	const unique = new Set(['ICONS[name]', 'SECTIONS', 'games']);
+	const unique = new Set(['ICONS[name]', 'SECTIONS', 'games', 'scanOptions', 'canaryIntervals']);
 	const re = /\{#each\s+([\w.[\]]+)\s+as\s+(\w+)\s*\(\2\)\s*\}/g;
 	const bad: string[] = [];
 	for (const f of walk('src').filter((f) => f.endsWith('.svelte'))) {

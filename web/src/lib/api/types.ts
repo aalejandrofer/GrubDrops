@@ -195,6 +195,13 @@ export interface ClaimsResp {
 	accounts: { id: string; name: string }[];
 }
 
+/** Last login check for an account. */
+export interface AccountAuth {
+	ok: boolean;
+	detail: string;
+	checked_at: string | null;
+}
+
 export interface Account {
 	id: string;
 	platform: Platform;
@@ -207,7 +214,23 @@ export interface Account {
 	needs_login: boolean;
 	/** false: paused, the runner idles. */
 	enabled: boolean;
-	auth: { ok: boolean; detail: string; checked_at: string | null } | null;
+	/** true: mines its own game list, not the global one. */
+	own_games: boolean;
+	/** Games on the own list, 0 while own_games is off. */
+	own_game_count: number;
+	auth: AccountAuth | null;
+}
+
+/** One game in an account's own list. A game without an id is added by name. */
+export interface AccountGame {
+	id: string;
+	name: string;
+}
+
+/** GET/PUT /api/accounts/{id}/games. games is kept while own is off. */
+export interface AccountGames {
+	own: boolean;
+	games: AccountGame[];
 }
 
 export interface Settings {
@@ -221,8 +244,21 @@ export interface Settings {
 	discord: { configured: boolean; webhook_hint: string };
 	/** token_hint is empty when the token comes from the env default. */
 	telegram: { configured: boolean; token_hint: string; chat_id: string };
-	notify: { claim: boolean; auth: boolean; errors: boolean; daily_summary: boolean };
+	notify: { claim: boolean; auth: boolean; errors: boolean; daily_summary: boolean; progress: boolean; canary: boolean };
 	update_auto: boolean;
+	/** ordered mines games in list order; ending_soonest mines the campaign that ends first. */
+	priority_mode: 'ordered' | 'ending_soonest';
+	/** Minutes between campaign scans; one of SCAN_INTERVALS. */
+	scan_interval_min: number;
+	/** Leave a drop when a higher-ranked campaign goes live. */
+	preempt: boolean;
+	/** url hides the password as ***. Applies after a restart. */
+	proxy: { enabled: boolean; url: string };
+	/** Applies after a restart. */
+	kick_watch_mode: 'auto' | 'browser' | 'ws';
+	notify_avatar_url: string;
+	/** interval_sec 0 means off; the interval applies after a restart. */
+	canary: { twitch_channel: string; kick_channel: string; interval_sec: number };
 }
 
 export interface SettingsPatch {
@@ -232,6 +268,15 @@ export interface SettingsPatch {
 	timezone?: string;
 	notify?: Partial<Settings['notify']>;
 	update_auto?: boolean;
+	priority_mode?: Settings['priority_mode'];
+	scan_interval_min?: number;
+	preempt?: boolean;
+	proxy_enabled?: boolean;
+	/** The GET hint means unchanged. */
+	proxy_url?: string;
+	kick_watch_mode?: Settings['kick_watch_mode'];
+	notify_avatar_url?: string;
+	canary?: Settings['canary'];
 	discord_webhook?: string;
 	telegram_bot_token?: string;
 	telegram_chat_id?: string;

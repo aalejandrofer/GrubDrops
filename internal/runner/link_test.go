@@ -2,10 +2,12 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/aalejandrofer/grubdrops/internal/i18n"
 	"github.com/aalejandrofer/grubdrops/internal/plan"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/platform/platformtest"
@@ -57,6 +59,118 @@ func TestClaim_LinkRefusalBlocksAndMovesOn(t *testing.T) {
 	}
 	if len(cl.recorded()) != 0 {
 		t.Fatalf("rec=%v", cl.recorded())
+	}
+}
+
+// A link refusal notifies once per drop, however often the claim is refused.
+func TestClaim_LinkRefusalNotifiesOnce(t *testing.T) {
+	f := platformtest.NewFake()
+	r, n, _, _ := claimSetup(f, 2)
+	r.cfg.Lang = func() string { return "es" }
+	toClaiming(t, r)
+	f.ClaimErr = errLink
+	for i := 0; i < 2; i++ {
+		if i > 0 {
+			r.mu.Lock()
+			r.current = &plan.Target{Campaign: f.Campaigns[0], Benefit: f.Campaigns[0].Benefits[0]}
+			r.mu.Unlock()
+		}
+		if err := r.claim(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := n.of("error")
+	if len(got) != 1 {
+		t.Fatalf("error notifications=%d, want 1", len(got))
+	}
+	f0 := got[0].fields
+	if f0["drop"] != f.Campaigns[0].Benefits[0].Name || f0["game"] != "Rust" || f0["msg"] != i18n.T("es", "notify.needs_link") {
+		t.Fatalf("fields=%+v", f0)
+	}
+}
+
+type memNotices map[string]bool
+
+func (m memNotices) FirstLinkNotice(acc, benefit string) (bool, error) {
+	k := acc + "/" + benefit
+	if m[k] {
+		return false, nil
+	}
+	m[k] = true
+	return true, nil
+}
+
+// The notice store carries the once-per-drop rule across runner rebuilds.
+func TestClaim_LinkNoticeSurvivesRebuild(t *testing.T) {
+	notices := memNotices{}
+	sent := 0
+	for i := 0; i < 2; i++ {
+		f := platformtest.NewFake()
+		r, n, _, _ := claimSetup(f, 2)
+		r.cfg.LinkNotices = notices
+		toClaiming(t, r)
+		f.ClaimErr = errLink
+		if err := r.claim(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		sent += len(n.of("error"))
+	}
+	if sent != 1 {
+		t.Fatalf("error notifications=%d across two runners, want 1", sent)
+	}
+}
+
+// Twitch has no link-refusal error: any claim failure on a campaign it reports
+// unlinked blocks the drop as not linked instead of counting toward a skip.
+func TestClaim_TwitchUnlinkedFailureBlocksNotLinked(t *testing.T) {
+	f := platformtest.NewFake()
+	r, n, _, sk := claimSetup(f, 2)
+	f.Campaigns[0].Platform = "twitch"
+	f.Campaigns[0].AccountLinked = false
+	f.Campaigns[0].AccountLinkURL = "https://account.riotgames.com/#connected-accounts"
+	toClaiming(t, r)
+	f.ClaimErr = fmt.Errorf("claim status: UNKNOWN: %w", platform.ErrClaimRefused)
+	for i := 0; i < claimFailSkipThreshold; i++ {
+		r.mu.Lock()
+		r.current = &plan.Target{Campaign: f.Campaigns[0], Benefit: f.Campaigns[0].Benefits[0]}
+		r.mu.Unlock()
+		if err := r.claim(context.Background()); err != nil {
+			t.Fatalf("attempt %d: %v", i, err)
+		}
+	}
+	if len(sk.recorded) != 0 || len(r.claimFailures) != 0 {
+		t.Fatalf("skips=%v failures=%v", sk.recorded, r.claimFailures)
+	}
+	steps(t, r, 1)
+	if got := blockedReason(r, "d1"); got != plan.ReasonNotLinked {
+		t.Fatalf("d1 reason=%q", got)
+	}
+	if len(n.of("error")) != 1 {
+		t.Fatalf("error notifications=%d", len(n.of("error")))
+	}
+}
+
+// A transport error is no link refusal, even on a campaign Twitch reports
+// unlinked: it counts toward the failure skip and sends no link notice.
+func TestClaim_TwitchUnlinkedTransportErrorCountsAsFailure(t *testing.T) {
+	f := platformtest.NewFake()
+	r, n, _, _ := claimSetup(f, 2)
+	f.Campaigns[0].Platform = "twitch"
+	f.Campaigns[0].AccountLinked = false
+	f.Campaigns[0].AccountLinkURL = "https://account.riotgames.com/#connected-accounts"
+	toClaiming(t, r)
+	f.ClaimErr = errors.New("gql: 503 Service Unavailable")
+	r.mu.Lock()
+	r.current = &plan.Target{Campaign: f.Campaigns[0], Benefit: f.Campaigns[0].Benefits[0]}
+	r.mu.Unlock()
+	if err := r.claim(context.Background()); err == nil {
+		t.Fatal("transport error should fail the claim")
+	}
+	if r.claimFailures["d1"] != 1 || r.linkRefused["d1"] != (time.Time{}) {
+		t.Fatalf("failures=%v linkRefused=%v", r.claimFailures, r.linkRefused)
+	}
+	if len(n.of("error")) != 0 {
+		t.Fatalf("error notifications=%d", len(n.of("error")))
 	}
 }
 

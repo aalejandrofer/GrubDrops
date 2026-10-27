@@ -3,6 +3,7 @@ package plan
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
@@ -104,12 +105,10 @@ func TestBuild_BlockedReasons(t *testing.T) {
 	tw := camp("tw", "twitch", "Rust", ben("t1", 10))
 	tw.AccountLinked = false
 	tw.AccountLinkURL = "https://account.riotgames.com/#connected-accounts"
-	res := Build(Input{Games: rust, Campaigns: []platform.Campaign{tw}})
+	res := Build(Input{Games: rust, Campaigns: []platform.Campaign{tw}, NotLinked: map[string]bool{"t1": true}})
 	if len(res.Queue) != 0 || len(res.Blocked) != 1 || res.Blocked[0].Reason != ReasonNotLinked {
-		t.Fatalf("unlinked: %+v", res)
+		t.Fatalf("refused: %+v", res)
 	}
-	res = Build(Input{Games: rust, Campaigns: []platform.Campaign{tw}, ForceLinked: map[string]bool{"tw": true}})
-	eq(t, ids(res.Queue), []string{"t1"})
 
 	k := camp("k", "kick", "Rust", ben("k1", 10))
 	k.AccountLinked, k.AccountLinkChecked = false, false
@@ -225,6 +224,18 @@ func TestBuild_InventoryPartialOverridesLog(t *testing.T) {
 	eq(t, claimedIDs(res), []string{})
 }
 
+func TestBuild_MarkedClaimBeatsPartialInventory(t *testing.T) {
+	res := Build(Input{
+		Games:     rust,
+		Campaigns: []platform.Campaign{camp("c", "kick", "Rust", ben("b1", 60))},
+		Claimed:   map[string]bool{"b1": true},
+		Marked:    map[string]bool{"b1": true},
+		Progress:  []platform.Progress{{BenefitID: "b1", MinutesWatched: 20}},
+	})
+	eq(t, ids(res.Queue), []string{})
+	eq(t, claimedIDs(res), []string{"b1"})
+}
+
 func TestBuild_LogClaimSurvivesFullUnclaimedRow(t *testing.T) {
 	res := Build(Input{
 		Games:     rust,
@@ -298,4 +309,55 @@ func TestBuild_NotLinkedBenefitBlocked(t *testing.T) {
 	if len(res.Blocked) != 1 || res.Blocked[0].Benefit.ID != "d1" || res.Blocked[0].Reason != ReasonNotLinked {
 		t.Fatalf("blocked=%+v", res.Blocked)
 	}
+}
+
+// A campaign the platform reports unlinked is still mined; it is listed in
+// NeedsLink so the UI can ask the user to link before the claim.
+func TestBuild_UnlinkedCampaignMinesAndNeedsLink(t *testing.T) {
+	tw := camp("tw", "twitch", "Rust", ben("t1", 10))
+	tw.AccountLinked = false
+	tw.AccountLinkURL = "https://account.riotgames.com/#connected-accounts"
+	k := camp("k", "kick", "Rust", ben("k1", 20))
+	k.AccountLinked = false
+	res := Build(Input{Games: rust, Campaigns: []platform.Campaign{tw, k}})
+	eq(t, ids(res.Queue), []string{"t1", "k1"})
+	eq(t, ids(res.NeedsLink), []string{"t1", "k1"})
+	if len(res.Blocked) != 0 {
+		t.Fatalf("blocked %+v", res.Blocked)
+	}
+}
+
+func TestBuild_EndingSoonestIgnoresGameRank(t *testing.T) {
+	now := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	at := func(c platform.Campaign, d time.Duration) platform.Campaign {
+		c.EndsAt = now.Add(d)
+		return c
+	}
+	games := []Game{{Name: "Rust"}, {Name: "Overwatch"}}
+	camps := []platform.Campaign{
+		camp("noend", "kick", "Rust", ben("n1", 10)),
+		at(camp("late", "kick", "Rust", ben("l1", 10)), 10*24*time.Hour),
+		at(camp("soon", "kick", "Overwatch", ben("s1", 10)), 24*time.Hour),
+	}
+	res := Build(Input{Games: games, Campaigns: camps})
+	eq(t, ids(res.Queue), []string{"n1", "l1", "s1"})
+	res = Build(Input{Games: games, Campaigns: camps, Priority: PriorityEndingSoonest})
+	eq(t, ids(res.Queue), []string{"s1", "l1", "n1"})
+	res = Build(Input{Games: games, Campaigns: camps, Priority: PriorityEndingSoonest, Order: []string{"n1"}})
+	eq(t, ids(res.Queue), []string{"n1", "s1", "l1"})
+}
+
+func TestBuild_EndingSoonestTiesByRemainingThenRank(t *testing.T) {
+	end := time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
+	mk := func(id, game string, min int) platform.Campaign {
+		c := camp(id, "kick", game, ben(id+"1", min))
+		c.EndsAt = end
+		return c
+	}
+	res := Build(Input{
+		Games:     []Game{{Name: "Rust"}, {Name: "Overwatch"}},
+		Campaigns: []platform.Campaign{mk("a", "Overwatch", 60), mk("b", "Rust", 60), mk("c", "Overwatch", 30)},
+		Priority:  PriorityEndingSoonest,
+	})
+	eq(t, ids(res.Queue), []string{"c1", "b1", "a1"})
 }

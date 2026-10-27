@@ -11,6 +11,8 @@ const acct = (id: string, needs_login: boolean): Account => ({
 	state: 'idle',
 	needs_login,
 	enabled: true,
+	own_games: false,
+	own_game_count: 0,
 	auth: null
 });
 

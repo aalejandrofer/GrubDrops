@@ -4,7 +4,7 @@ import type { Account, DeviceStatus, Runner } from '$lib/api/types';
 import accountsFx from '$lib/fixtures/accounts.json';
 import runnersMining from '$lib/fixtures/runners.mining.json';
 import { prefs } from '$lib/prefs.svelte';
-import { MAX_POLL_FAILS, POLL_MS, accountLine, accountStatus, commitAccountOrder, createDeviceFlow, renameRequest, rowActions } from './accounts';
+import { MAX_POLL_FAILS, POLL_MS, accountLine, activateURL, accountStatus, commitAccountOrder, createDeviceFlow, renameRequest, rowActions } from './accounts';
 import { moveTarget } from './games';
 import { moveItem } from './upnext';
 
@@ -315,5 +315,21 @@ describe('commitAccountOrder', () => {
 		const x = io({ save: async () => Promise.reject(new Error('x')), fetch: async () => Promise.reject(new Error('y')) });
 		expect(await commitAccountOrder(x.io, [acc('c'), acc('a'), acc('b')])).toBe(false);
 		expect(x.cur()).toEqual(['a', 'b', 'c']);
+	});
+});
+
+describe('activateURL', () => {
+	it('fills the code into the activate page', () => {
+		expect(activateURL('https://www.twitch.tv/activate', 'FHXBWYFQ')).toBe('https://www.twitch.tv/activate?device-code=FHXBWYFQ');
+	});
+	it('keeps a code Twitch already put in the URL', () => {
+		expect(activateURL('https://www.twitch.tv/activate?public=true&device-code=ABCD', 'FHXBWYFQ')).toBe(
+			'https://www.twitch.tv/activate?public=true&device-code=ABCD'
+		);
+	});
+	it('falls back to the default page for a non-Twitch or non-https URL', () => {
+		for (const bad of ['javascript:alert(1)', 'https://evil.example/activate', 'http://www.twitch.tv/activate', 'https://twitch.tv.evil.example/', '']) {
+			expect(activateURL(bad, 'X1')).toBe('https://www.twitch.tv/activate?device-code=X1');
+		}
 	});
 });

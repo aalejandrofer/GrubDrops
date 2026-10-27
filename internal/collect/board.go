@@ -114,8 +114,14 @@ func (b *Board) Games(games []plan.Game) []GameStatus {
 		if s.At.After(last) {
 			last = s.At
 		}
-		// Unclaimed drops the planner blocked as not linked (Twitch), then
-		// campaigns whose claim the platform rejected until linked (Kick).
+		// Drops mined while the platform reports the account unlinked, drops
+		// whose claim was refused until linked, then campaigns whose claim
+		// the platform rejected until linked (Kick).
+		for _, t := range s.Result.NeedsLink {
+			if i, ok := plan.Match(games, t.Campaign.Game); ok {
+				addLinkNeed(out, links, i, s, t.Campaign)
+			}
+		}
 		for _, bl := range s.Result.Blocked {
 			if bl.Reason != plan.ReasonNotLinked {
 				continue

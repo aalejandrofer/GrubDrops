@@ -3,9 +3,8 @@
 	import { goto } from '$app/navigation';
 	import logo from '../../../../../assets/img/logo.png';
 	import { api } from '$lib/app';
-	import type { Game, Platform, SearchHit } from '$lib/api/types';
-	import type { TwitchMethod } from '$lib/accounts';
-	import AccountFlow from '$lib/components/AccountFlow.svelte';
+	import type { Game, SearchHit } from '$lib/api/types';
+	import AddAccount from '$lib/components/AddAccount.svelte';
 	import BoxArt from '$lib/components/BoxArt.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { commitGames, dupePriority, moveGame, suggestions, withoutId } from '$lib/games';
@@ -36,8 +35,6 @@
 	const titles = $derived([t('welcome.account_title'), t('welcome.games_title')]);
 
 	// Step 1
-	let kind = $state<Platform>('twitch');
-	let method = $state<TwitchMethod>('android');
 	let addError = $state('');
 	// Fixed when the step opens, so an account that signs in mid-flow does not unmount the flow.
 	let showFlow = $state(true);
@@ -166,7 +163,7 @@
 <div class="ob">
 	<header class="top">
 		<span class="brand"><img src={logo} alt="" /><span>{t('app.name')}</span></span>
-		<a class="quiet-link" href="/settings">{t('nav.settings')}</a>
+		<a class="quiet-link" href="/settings">{t('welcome.skip')}</a>
 	</header>
 
 	<main class="wiz">
@@ -210,47 +207,7 @@
 				{/if}
 				{#if addError}<p class="bad" role="alert">{addError}</p>{/if}
 				{#if showFlow}
-					<div class="tiles" role="radiogroup" aria-label={t('welcome.platform')}>
-					{#each ['twitch', 'kick'] as const as p (p)}
-						<button
-							type="button"
-							class="tile"
-							class:on={kind === p}
-							role="radio"
-							aria-checked={kind === p}
-							onclick={() => {
-								kind = p;
-								addError = '';
-							}}
-						>
-							<PlatformMark platform={p} /><b>{t(p === 'twitch' ? 'accounts.twitch' : 'accounts.kick')}</b>
-							<span class="faint">{t(p === 'twitch' ? 'welcome.twitch_hint' : 'welcome.kick_hint')}</span>
-						</button>
-					{/each}
-				</div>
-
-				{#if kind === 'twitch'}
-					<div class="tabs2" role="tablist" aria-label={t('welcome.method')}>
-						<button type="button" role="tab" aria-selected={method === 'android'} class:on={method === 'android'} onclick={() => (method = 'android')}>
-							{t('welcome.android')}<span class="rec">{t('welcome.recommended')}</span>
-						</button>
-						<button type="button" role="tab" aria-selected={method === 'tv'} class:on={method === 'tv'} onclick={() => (method = 'tv')}>
-							{t('accounts.method_tv')}
-						</button>
-					</div>
-				{/if}
-
-				<div class="panel flowp">
-					{#key `${kind}:${method}`}
-						<AccountFlow
-							{kind}
-							start={kind === 'twitch' ? method : null}
-							framed={false}
-							onadded={onAdded}
-							onfail={(msg) => (addError = msg)}
-						/>
-					{/key}
-				</div>
+					<AddAccount onadded={onAdded} onfail={(msg) => (addError = msg)} onpick={() => (addError = '')} />
 					{#if ready.length > 0}
 						<button type="button" class="btn quiet more" onclick={() => ((showFlow = false), (addError = ''))}>{t('welcome.cancel_add')}</button>
 					{/if}
@@ -526,8 +483,6 @@
 	}
 	.btn:focus-visible,
 	.quiet-link:focus-visible,
-	.tile:focus-visible,
-	.tabs2 button:focus-visible,
 	.ico:focus-visible {
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
@@ -540,82 +495,12 @@
 	}
 
 	/* Step 1 */
-	.tiles {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 10px;
-	}
-	.tile {
-		display: grid;
-		grid-template-columns: auto 1fr;
-		align-items: center;
-		gap: 2px 10px;
-		text-align: left;
-		font: inherit;
-		color: var(--text);
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 10px;
-		padding: 12px 14px;
-		cursor: pointer;
-	}
-	.tile b {
-		font-weight: 500;
-	}
-	.tile span {
-		grid-column: 2;
-		font-size: 12px;
-	}
-	.tile:hover:not(.on) {
-		border-color: var(--t3);
-	}
-	.tile.on {
-		border-color: var(--accent);
-		background: var(--accent-soft);
-	}
-	.tabs2 {
-		display: flex;
-		gap: 18px;
-		margin: 22px 0 0;
-		border-bottom: 1px solid var(--border-soft);
-	}
-	.tabs2 button {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-		font: inherit;
-		font-size: 13px;
-		background: none;
-		border: 0;
-		color: var(--t2);
-		padding: 0 0 8px;
-		cursor: pointer;
-	}
-	.tabs2 button:hover {
-		color: var(--text);
-	}
-	.tabs2 .on {
-		color: var(--text);
-		font-weight: 500;
-		box-shadow: inset 0 -2px 0 var(--accent);
-	}
-	.rec {
-		font-size: 11px;
-		font-weight: 500;
-		color: var(--green);
-		background: var(--green-soft);
-		border-radius: 10px;
-		padding: 0 7px;
-	}
-	.flowp {
-		margin-top: 14px;
-	}
 	.more {
 		margin-top: 14px;
 	}
 	.accts {
 		list-style: none;
-		margin: 0;
+		margin: 0 0 14px;
 		padding: 0;
 	}
 	.accts li {
@@ -815,9 +700,6 @@
 		}
 		.wiz {
 			padding: 24px 16px 48px;
-		}
-		.tiles {
-			grid-template-columns: 1fr;
 		}
 		.meta {
 			display: none;

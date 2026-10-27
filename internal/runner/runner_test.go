@@ -40,6 +40,7 @@ type claimRec struct {
 type fakeClaims struct {
 	mu     sync.Mutex
 	ids    map[string]bool
+	marked map[string]bool
 	idsErr error
 	recs   []claimRec
 }
@@ -57,6 +58,14 @@ func (c *fakeClaims) ClaimedBenefitIDs(context.Context, string) (map[string]bool
 		return nil, c.idsErr
 	}
 	return c.ids, nil
+}
+func (c *fakeClaims) MarkedBenefitIDs(context.Context, string) (map[string]bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.idsErr != nil {
+		return nil, c.idsErr
+	}
+	return c.marked, nil
 }
 
 // recorded returns "acc:benefit:code" per RecordClaim call.
@@ -149,7 +158,8 @@ func TestRunner_NothingMinableSleeps(t *testing.T) {
 	}
 }
 
-func TestRunner_OnlyUnlinkedAwaitsConnect(t *testing.T) {
+// An unlinked campaign is mined anyway; only a refused claim blocks it.
+func TestRunner_UnlinkedCampaignStillMines(t *testing.T) {
 	f := platformtest.NewFake()
 	c := camp("c1", "Rust", "d1")
 	c.Platform, c.AccountLinked = "twitch", false
@@ -160,7 +170,7 @@ func TestRunner_OnlyUnlinkedAwaitsConnect(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := r.Snapshot()
-	if s.State != StateAwaitingConnect || len(s.Blocked) != 1 || s.Blocked[0].Reason != plan.ReasonNotLinked {
+	if s.State != StateStarting || s.Current == nil || s.Current.Benefit.ID != "d1" || len(s.Blocked) != 0 {
 		t.Fatalf("%+v", s)
 	}
 }
@@ -330,16 +340,19 @@ func TestRunner_IdleKeepsStateDuringWait(t *testing.T) {
 }
 
 func TestIdleWait(t *testing.T) {
-	if idleRecheck != 12*time.Hour || recheckInterval != 5*time.Minute {
+	if idleRecheck != time.Hour || recheckInterval != 5*time.Minute {
 		t.Fatalf("idleRecheck=%v recheckInterval=%v", idleRecheck, recheckInterval)
 	}
-	if got := idleWait(StateSleeping, false); got != idleRecheck {
+	if got := idleWait(StateSleeping, false, 0); got != idleRecheck {
 		t.Fatalf("empty-queue sleep wait=%v", got)
 	}
-	if got := idleWait(StateSleeping, true); got != recheckInterval {
+	if got := idleWait(StateSleeping, false, 3*time.Hour); got != 3*time.Hour {
+		t.Fatalf("empty-queue sleep wait with pace=%v", got)
+	}
+	if got := idleWait(StateSleeping, true, 3*time.Hour); got != recheckInterval {
 		t.Fatalf("no-stream sleep wait=%v", got)
 	}
-	if got := idleWait(StateAwaitingConnect, false); got != recheckInterval {
+	if got := idleWait(StateAwaitingConnect, false, 3*time.Hour); got != recheckInterval {
 		t.Fatalf("awaiting connect wait=%v", got)
 	}
 }

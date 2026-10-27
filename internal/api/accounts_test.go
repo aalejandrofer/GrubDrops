@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/aalejandrofer/grubdrops/internal/authcheck"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/runner"
 	"github.com/aalejandrofer/grubdrops/internal/store"
@@ -298,4 +299,55 @@ func TestAccounts_ListAuthCheckedAtRFC3339(t *testing.T) {
 		assert.Equal(t, "2023-11-14T22:13:20Z", *it.Auth.CheckedAt)
 		assert.Equal(t, "fine", it.Auth.Detail)
 	}
+}
+
+func TestAccounts_CheckLogin(t *testing.T) {
+	e, _ := accountsEnv(t)
+	id := e.createAccount("twitch", "Alpha")
+	_, tok := e.session()
+
+	resp, _ := e.do("POST", "/api/accounts/"+id+"/check-login", tok, nil)
+	assert.Equal(t, 503, resp.StatusCode, "no checker wired")
+
+	var got string
+	e.s.d.CheckLogin = func(_ context.Context, acc string) (authcheck.Result, error) {
+		got = acc
+		return authcheck.Result{OK: false, CheckedAt: 1700000000, Msg: "token expired"}, nil
+	}
+	resp, body := e.do("POST", "/api/accounts/"+id+"/check-login", "", nil)
+	assert.Equal(t, 403, resp.StatusCode, "needs CSRF")
+	assert.Empty(t, got)
+
+	resp, body = e.do("POST", "/api/accounts/"+id+"/check-login", tok, nil)
+	require.Equal(t, 200, resp.StatusCode, string(body))
+	assert.Equal(t, id, got)
+	var res struct {
+		OK        bool    `json:"ok"`
+		Detail    string  `json:"detail"`
+		CheckedAt *string `json:"checked_at"`
+	}
+	unmarshal(t, body, &res)
+	assert.False(t, res.OK)
+	assert.Equal(t, "token expired", res.Detail)
+	require.NotNil(t, res.CheckedAt)
+
+	resp, _ = e.do("POST", "/api/accounts/acc_missing/check-login", tok, nil)
+	assert.Equal(t, 404, resp.StatusCode)
+}
+
+func TestAccounts_Restart(t *testing.T) {
+	e, c := accountsEnv(t)
+	id := e.createAccount("kick", "Beta")
+	_, tok := e.session()
+	before := len(c.changedList())
+
+	resp, _ := e.do("POST", "/api/accounts/"+id+"/restart", "", nil)
+	assert.Equal(t, 403, resp.StatusCode)
+	resp, _ = e.do("POST", "/api/accounts/"+id+"/restart", tok, nil)
+	assert.Equal(t, 204, resp.StatusCode)
+	assert.Equal(t, append(make([]string, 0), id), c.changedList()[before:])
+
+	resp, _ = e.do("POST", "/api/accounts/acc_missing/restart", tok, nil)
+	assert.Equal(t, 404, resp.StatusCode)
+	assert.Len(t, c.changedList(), before+1)
 }

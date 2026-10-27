@@ -33,6 +33,8 @@ type ClaimLog interface {
 	// RecordClaim upserts a claim for t. A non-empty code is stored with it.
 	RecordClaim(ctx context.Context, accountID string, t plan.Target, code string) error
 	ClaimedBenefitIDs(ctx context.Context, accountID string) (map[string]bool, error)
+	// MarkedBenefitIDs is the subset the user marked collected by hand.
+	MarkedBenefitIDs(ctx context.Context, accountID string) (map[string]bool, error)
 }
 
 // Scan is one completed scan of an account: campaigns, inventory and the plan.
@@ -49,6 +51,12 @@ type Scan struct {
 }
 
 // SkipStore persists benefits the runner gave up on.
+// LinkNoticeStore remembers sent link notices across runner rebuilds.
+type LinkNoticeStore interface {
+	// FirstLinkNotice records the notice and reports whether it is new.
+	FirstLinkNotice(accountID, benefitID string) (bool, error)
+}
+
 type SkipStore interface {
 	Skips(accountID string) (map[string]bool, error)
 	RecordSkip(accountID, benefitID string) error
@@ -64,11 +72,19 @@ type Config struct {
 	Backend                           platform.Backend
 	Session                           platform.Session
 	Games                             []plan.Game
-	ForceLinked                       map[string]bool
-	Notifier                          Notifier        // nil-safe
-	Claims                            ClaimLog        // nil-safe
-	Skips                             SkipStore       // nil-safe
-	Order                             func() []string // nil = no override
+	Notifier                          Notifier             // nil-safe
+	Claims                            ClaimLog             // nil-safe
+	Skips                             SkipStore            // nil-safe
+	LinkNotices                       LinkNoticeStore      // nil = one notice per drop per runner
+	Order                             func() []string      // nil = no override
+	Priority                          func() plan.Priority // read at each plan; nil = ordered
+	Lang                              func() string        // notification language; nil = en
+	// ScanEvery is the plan rebuild pace, while watching and while sleeping
+	// with an empty queue. Read live; nil or <=0 = the package defaults.
+	ScanEvery func() time.Duration
+	// Preempt reports whether a rescan while watching may switch to a
+	// campaign that now outranks the current one. Read live; nil = never.
+	Preempt func() bool
 	// Hooks are nil-safe. Each may run on the Run goroutine or a PubSub
 	// goroutine and must not block for long. Payloads (Scan slices and maps,
 	// progress) are read-only and shared with the runner: copy before keeping

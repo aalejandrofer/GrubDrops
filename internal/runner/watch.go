@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sort"
 	"time"
 
@@ -24,6 +25,9 @@ const (
 	freezeThreshold = 5
 	// stalledChannelCooldown keeps a frozen channel out of the pick.
 	stalledChannelCooldown = 30 * time.Minute
+	// preemptCooldown keeps a campaign a preempt could not watch from
+	// triggering another switch at every rescan.
+	preemptCooldown = 3 * time.Hour
 	// liveCheckEvery is the stream-liveness re-probe cadence.
 	liveCheckEvery = 5 * time.Minute
 	// maxProbe caps AvailableDropIDs calls per pick.
@@ -52,23 +56,16 @@ func (r *Runner) start(ctx context.Context) error {
 
 	r.mu.Lock()
 	now := time.Now()
-	for ch, until := range r.stalled {
-		if now.After(until) {
-			delete(r.stalled, ch)
-		}
-	}
-	if len(r.stalled) > 0 {
-		filtered := make([]platform.Stream, 0, len(streams))
-		for _, s := range streams {
-			if until, ok := r.stalled[s.Channel]; ok && now.Before(until) {
-				continue
-			}
-			filtered = append(filtered, s)
-		}
-		streams = filtered
-	}
+	streams = r.unstalledLocked(streams, now)
 	if len(streams) == 0 {
 		r.noStream[camp.ID] = true
+		if r.preemptTo == camp.ID {
+			r.preemptTo = ""
+			if r.preemptBlocked == nil {
+				r.preemptBlocked = map[string]time.Time{}
+			}
+			r.preemptBlocked[camp.ID] = now.Add(preemptCooldown)
+		}
 		// A Mine now target with no stream is unmineable: back to the plan.
 		if r.pinned != nil && r.pinned.Campaign.ID == camp.ID {
 			r.pinned = nil
@@ -148,6 +145,9 @@ func (r *Runner) start(ctx context.Context) error {
 	}
 
 	r.mu.Lock()
+	if r.preemptTo == camp.ID {
+		r.preemptTo = ""
+	}
 	r.stream = &s
 	r.handle = &h
 	r.channel = s.Channel
@@ -234,15 +234,16 @@ func (r *Runner) tick(ctx context.Context) error {
 	}
 	// Rebuild the plan from this poll. It never touches current, the handle or
 	// the state, so a failure leaves the watch running.
-	if r.forceScan.Swap(false) || time.Since(lastScan) >= rescanEvery {
+	if r.forceScan.Swap(false) || time.Since(lastScan) >= rescanPace(r.scanEvery()) {
 		select {
 		case <-r.rescan:
 		default:
 		}
-		if _, err := r.scan(ctx, progress, true); err != nil {
+		if res, err := r.scan(ctx, progress, true); err != nil {
 			slog.Warn("runner rescan failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
 		} else {
 			r.changed()
+			r.maybePreempt(ctx, res, target)
 		}
 	}
 
@@ -357,6 +358,79 @@ func (r *Runner) tick(ctx context.Context) error {
 	r.mu.Unlock()
 	r.maybeNotifyProgress(ctx, cur, benefit.RequiredMinutes)
 	return nil
+}
+
+// maybePreempt switches drops when Config.Preempt is on and the fresh plan
+// ranks another campaign above the current one. It reuses the Mine now
+// switch, so pick takes the new top of the queue. A Mine now pin holds, and
+// a candidate with no live stream is not worth dropping the watch for. A
+// candidate start could not watch after a preempt waits preemptCooldown.
+func (r *Runner) maybePreempt(ctx context.Context, res plan.Result, cur plan.Target) {
+	if r.cfg.Preempt == nil || !r.cfg.Preempt() {
+		return
+	}
+	r.mu.Lock()
+	pinned := r.pinned != nil
+	r.mu.Unlock()
+	if pinned {
+		return
+	}
+	// The current campaign must still be queued, below the top. A target the
+	// plan dropped is handled by the claim and skip paths.
+	i := slices.IndexFunc(res.Queue, func(t plan.Target) bool { return t.Campaign.ID == cur.Campaign.ID })
+	if i <= 0 {
+		return
+	}
+	top := res.Queue[0]
+	r.mu.Lock()
+	blocked := time.Now().Before(r.preemptBlocked[top.Campaign.ID])
+	r.mu.Unlock()
+	if blocked {
+		return
+	}
+	streams, err := r.cfg.Backend.ListEligibleChannels(ctx, r.cfg.Session, top.Campaign)
+	if err != nil {
+		return
+	}
+	// Start skips stalled channels, so a candidate with only those is not live.
+	r.mu.Lock()
+	streams = r.unstalledLocked(streams, time.Now())
+	if len(streams) > 0 {
+		r.preemptTo = top.Campaign.ID
+	}
+	r.mu.Unlock()
+	if len(streams) == 0 {
+		return
+	}
+	slog.Info("runner preempting drop for a higher-ranked campaign", "kind", "state",
+		"account", r.cfg.AccountID, "campaign", cur.Campaign.ID, "drop", cur.Benefit.ID,
+		"next_campaign", top.Campaign.ID, "next_drop", top.Benefit.ID)
+	r.switchNow.Store(true)
+	select {
+	case r.switchCh <- struct{}{}:
+	default:
+	}
+}
+
+// unstalledLocked drops expired stalled marks and returns streams without the
+// channels still cooling down. Caller holds r.mu.
+func (r *Runner) unstalledLocked(streams []platform.Stream, now time.Time) []platform.Stream {
+	for ch, until := range r.stalled {
+		if now.After(until) {
+			delete(r.stalled, ch)
+		}
+	}
+	if len(r.stalled) == 0 {
+		return streams
+	}
+	out := make([]platform.Stream, 0, len(streams))
+	for _, s := range streams {
+		if until, ok := r.stalled[s.Channel]; ok && now.Before(until) {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
 }
 
 // skipCurrent gives up on the benefit: remembers and persists the skip, stops

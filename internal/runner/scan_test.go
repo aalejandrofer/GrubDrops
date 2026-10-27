@@ -325,8 +325,8 @@ func TestSnapshot_NextScanAt_Sleeping(t *testing.T) {
 	r.mu.Lock()
 	last := r.lastScanTry
 	r.mu.Unlock()
-	if got := r.Snapshot().NextScanAt; !got.Equal(last.Add(12 * time.Hour)) {
-		t.Fatalf("fallback NextScanAt=%v want %v", got, last.Add(12*time.Hour))
+	if got := r.Snapshot().NextScanAt; !got.Equal(last.Add(idleRecheck)) {
+		t.Fatalf("fallback NextScanAt=%v want %v", got, last.Add(idleRecheck))
 	}
 	r.mu.Lock()
 	r.state = StateAwaitingConnect
@@ -370,8 +370,8 @@ func TestSnapshot_NextScanAt_NoStreamSleep(t *testing.T) {
 	r.mu.Lock()
 	last = r.lastScanTry
 	r.mu.Unlock()
-	if got := r.Snapshot().NextScanAt; !got.Equal(last.Add(12 * time.Hour)) {
-		t.Fatalf("empty-queue NextScanAt=%v want %v", got, last.Add(12*time.Hour))
+	if got := r.Snapshot().NextScanAt; !got.Equal(last.Add(idleRecheck)) {
+		t.Fatalf("empty-queue NextScanAt=%v want %v", got, last.Add(idleRecheck))
 	}
 }
 
@@ -399,5 +399,149 @@ func TestRunner_RescanForcesWatchScan(t *testing.T) {
 	steps(t, r, 1)
 	if n := f.CallCount("List"); n != 2 {
 		t.Fatalf("force cleared: list=%d", n)
+	}
+}
+
+// Config.ScanEvery paces the watching rescan, the idle wait and NextScanAt.
+func TestRunner_ScanEveryConfig(t *testing.T) {
+	pace := 3 * time.Hour
+	f := platformtest.NewFake()
+	r := watching(t, f, func(c *Config) { c.ScanEvery = func() time.Duration { return pace } })
+	r.mu.Lock()
+	last := r.lastScanTry
+	r.mu.Unlock()
+	if got := r.Snapshot().NextScanAt; !got.Equal(last.Add(pace)) {
+		t.Fatalf("NextScanAt=%v want %v", got, last.Add(pace))
+	}
+	// Not due yet: a tick makes no extra campaigns call.
+	steps(t, r, 1)
+	if n := f.CallCount("List"); n != 1 {
+		t.Fatalf("list=%d", n)
+	}
+	// Due: the next tick rescans.
+	r.mu.Lock()
+	r.lastScanTry = time.Now().Add(-pace)
+	r.mu.Unlock()
+	steps(t, r, 1)
+	if n := f.CallCount("List"); n != 2 {
+		t.Fatalf("list after pace=%d", n)
+	}
+
+	idle := newRunner(platformtest.NewFake(), func(c *Config) { c.ScanEvery = func() time.Duration { return pace } })
+	steps(t, idle, 1)
+	if idle.State() != StateSleeping {
+		t.Fatal(idle.State())
+	}
+	idle.mu.Lock()
+	last = idle.lastScanTry
+	idle.mu.Unlock()
+	if got := idle.Snapshot().NextScanAt; !got.Equal(last.Add(pace)) {
+		t.Fatalf("idle NextScanAt=%v want %v", got, last.Add(pace))
+	}
+}
+
+// preemptSetup watches Rust/c1, then a Valorant campaign ranked above it
+// appears for the next rescan.
+func preemptSetup(t *testing.T, preempt bool) (*platformtest.Fake, *Runner) {
+	t.Helper()
+	old := rescanEvery
+	t.Cleanup(func() { rescanEvery = old })
+	f := platformtest.NewFake()
+	games := []plan.Game{{Name: "Valorant", Slug: "valorant"}, {Name: "Rust", Slug: "rust"}}
+	r := watching(t, f, func(c *Config) {
+		c.Games = games
+		c.Preempt = func() bool { return preempt }
+	})
+	f.Mu.Lock()
+	f.Campaigns = append(f.Campaigns, camp("c0", "Valorant", "v1"))
+	f.Streams["c0"] = []platform.Stream{{Channel: "b", ChannelID: "idb", ViewerCount: 5}}
+	f.Mu.Unlock()
+	rescanEvery = 0
+	return f, r
+}
+
+func TestRunner_PreemptSwitchesToHigherRank(t *testing.T) {
+	_, r := preemptSetup(t, true)
+	steps(t, r, 1)
+	if !r.switchNow.Load() {
+		t.Fatal("no switch requested")
+	}
+	if !r.takeSwitch() {
+		t.Fatal("takeSwitch=false")
+	}
+	r.stopWatch(context.Background())
+	r.setState(context.Background(), StatePicking)
+	steps(t, r, 1)
+	if c := r.Snapshot().Current; c == nil || c.Benefit.ID != "v1" {
+		t.Fatalf("current=%+v", c)
+	}
+}
+
+func TestRunner_PreemptOffKeepsCurrent(t *testing.T) {
+	_, r := preemptSetup(t, false)
+	steps(t, r, 1)
+	if r.switchNow.Load() {
+		t.Fatal("switch requested with preempt off")
+	}
+}
+
+func TestRunner_PreemptHoldsMineNowPin(t *testing.T) {
+	_, r := preemptSetup(t, true)
+	r.mu.Lock()
+	p := *r.current
+	r.pinned = &p
+	r.mu.Unlock()
+	steps(t, r, 1)
+	if r.switchNow.Load() {
+		t.Fatal("pin preempted")
+	}
+}
+
+func TestRunner_PreemptSkipsOfflineCandidate(t *testing.T) {
+	f, r := preemptSetup(t, true)
+	f.Mu.Lock()
+	delete(f.Streams, "c0")
+	f.Mu.Unlock()
+	steps(t, r, 1)
+	if r.switchNow.Load() {
+		t.Fatal("switched to a campaign with no stream")
+	}
+}
+
+func TestRunner_PreemptSkipsStalledOnlyCandidate(t *testing.T) {
+	_, r := preemptSetup(t, true)
+	r.mu.Lock()
+	r.stalled["b"] = time.Now().Add(time.Hour)
+	r.mu.Unlock()
+	steps(t, r, 1)
+	if r.switchNow.Load() {
+		t.Fatal("switched to a campaign whose only channel is stalled")
+	}
+}
+
+// A preempt whose target start cannot watch falls back to the old drop and
+// does not switch again at the next rescan.
+func TestRunner_PreemptFailedTargetCoolsDown(t *testing.T) {
+	f, r := preemptSetup(t, true)
+	steps(t, r, 1)
+	if !r.takeSwitch() {
+		t.Fatal("no switch requested")
+	}
+	f.Mu.Lock()
+	streams := f.Streams["c0"]
+	delete(f.Streams, "c0")
+	f.Mu.Unlock()
+	r.stopWatch(context.Background())
+	r.setState(context.Background(), StatePicking)
+	steps(t, r, 2) // pick, then start
+	if c := r.Snapshot().Current; c == nil || c.Benefit.ID == "v1" {
+		t.Fatalf("current=%+v, want the fallback drop", c)
+	}
+	f.Mu.Lock()
+	f.Streams["c0"] = streams
+	f.Mu.Unlock()
+	steps(t, r, 1)
+	if r.switchNow.Load() {
+		t.Fatal("preempted again to a campaign start could not watch")
 	}
 }

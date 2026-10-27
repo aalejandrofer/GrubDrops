@@ -39,3 +39,6 @@ UPDATE accounts SET custom_name = ?, updated_at = ? WHERE id = ?;
 
 -- name: SetAccountSortOrder :exec
 UPDATE accounts SET sort_order = ? WHERE id = ?;
+
+-- name: SetAccountOwnGames :exec
+UPDATE accounts SET own_games = ?, updated_at = ? WHERE id = ?;

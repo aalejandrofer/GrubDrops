@@ -338,3 +338,51 @@ func TestClaimLog_PageQuery(t *testing.T) {
 		require.Equal(t, c.total, total, c.name)
 	}
 }
+
+func TestClaimLog_Delete(t *testing.T) {
+	_, q := openV2(t)
+	l := NewClaimLog(q)
+	ctx := context.Background()
+	require.NoError(t, l.Record(ctx, ClaimEntry{AccountID: "a1", Platform: "twitch", BenefitID: "b1", Source: ClaimSourceManual}))
+	require.NoError(t, l.Record(ctx, ClaimEntry{AccountID: "a2", Platform: "twitch", BenefitID: "b1", Source: ClaimSourceManual}))
+
+	ok, err := l.Delete(ctx, "a1", "b1")
+	require.NoError(t, err)
+	require.True(t, ok)
+	ok, err = l.Delete(ctx, "a1", "b1")
+	require.NoError(t, err)
+	require.False(t, ok, "second delete finds no row")
+
+	ids, err := l.ClaimedBenefitIDs(ctx, "a1")
+	require.NoError(t, err)
+	require.Empty(t, ids)
+	ids, err = l.ClaimedBenefitIDs(ctx, "a2")
+	require.NoError(t, err)
+	require.True(t, ids["b1"], "other account's claim stays")
+}
+
+func TestClaimLog_MarkedBenefitIDs(t *testing.T) {
+	_, q := openV2(t)
+	l := NewClaimLog(q)
+	ctx := context.Background()
+	require.NoError(t, l.Record(ctx, ClaimEntry{AccountID: "a1", Platform: "twitch", BenefitID: "hand", Source: ClaimSourceManual}))
+	require.NoError(t, l.Record(ctx, ClaimEntry{AccountID: "a1", Platform: "twitch", BenefitID: "auto", Source: ClaimSourceGrubDrops}))
+	require.NoError(t, l.Record(ctx, ClaimEntry{AccountID: "a2", Platform: "twitch", BenefitID: "other", Source: ClaimSourceManual}))
+
+	ids, err := l.MarkedBenefitIDs(ctx, "a1")
+	require.NoError(t, err)
+	require.Equal(t, map[string]bool{"hand": true}, ids)
+}
+
+func TestLinkNotices_FirstOnce(t *testing.T) {
+	_, q := openV2(t)
+	n := NewLinkNotices(q)
+	for i, want := range []bool{true, false} {
+		got, err := n.FirstLinkNotice("a1", "b1")
+		require.NoError(t, err)
+		require.Equal(t, want, got, "call %d", i)
+	}
+	got, err := n.FirstLinkNotice("a2", "b1")
+	require.NoError(t, err)
+	require.True(t, got, "other account has its own notice")
+}

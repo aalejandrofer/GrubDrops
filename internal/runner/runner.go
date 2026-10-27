@@ -28,16 +28,17 @@ var (
 // Safeguard values carried over from 1.x. idleRecheck, recheckInterval,
 // stepErrBackoff and rescanEvery are vars so tests can shrink them.
 var (
-	// idleRecheck is the wait while sleeping with an empty plan queue. A
-	// games or account change rebuilds the runner, which scans at once.
-	idleRecheck = 12 * time.Hour
+	// idleRecheck is the wait while sleeping with an empty plan queue, unless
+	// Config.ScanEvery sets one. A games or account change rebuilds the
+	// runner, which scans at once.
+	idleRecheck = time.Hour
 	// recheckInterval is the wait in every other idle state: queued
 	// campaigns with no live stream, or awaiting a channel connect.
 	recheckInterval = 5 * time.Minute
 	stepErrBackoff  = 5 * time.Second
-	// rescanEvery is how often a watching runner rebuilds the plan. Rescan
-	// forces one sooner.
-	rescanEvery = 12 * time.Hour
+	// rescanEvery is how often a watching runner rebuilds the plan, unless
+	// Config.ScanEvery sets one. Rescan forces one sooner.
+	rescanEvery = time.Hour
 )
 
 const (
@@ -80,6 +81,10 @@ type Runner struct {
 	blocked  []plan.Blocked
 	skipped  map[string]bool
 	noStream map[string]bool // campaign IDs with no live channel this cycle
+	// preemptTo is the campaign a preempt switched to, until start settles it.
+	// preemptBlocked holds campaigns a preempt could not watch, until when.
+	preemptTo      string
+	preemptBlocked map[string]time.Time
 
 	// claimFailures counts consecutive Claim failures per benefit (Task 5).
 	claimFailures map[string]int
@@ -91,6 +96,8 @@ type Runner struct {
 	// blocks them as not linked; a scan retries each at most once per
 	// recheckInterval.
 	linkRefused map[string]time.Time
+	// linkNotified holds benefits whose link refusal was already notified.
+	linkNotified map[string]bool
 	// Repeat-line suppression: each logs once per change.
 	logStepErr, logPicked, logStart, logProgress onceLog
 
@@ -212,6 +219,7 @@ func (r *Runner) takeSwitch() bool {
 
 // Snapshot returns a copy of the observable state.
 func (r *Runner) Snapshot() Snapshot {
+	pace := r.scanEvery()
 	r.mu.Lock()
 	s := Snapshot{
 		AccountID:      r.cfg.AccountID,
@@ -232,11 +240,11 @@ func (r *Runner) Snapshot() Snapshot {
 		if !r.nextRecheck.IsZero() {
 			s.NextScanAt = r.nextRecheck
 		} else if !r.lastScanTry.IsZero() {
-			s.NextScanAt = r.lastScanTry.Add(idleWait(r.state, r.sleepNoStream))
+			s.NextScanAt = r.lastScanTry.Add(idleWait(r.state, r.sleepNoStream, pace))
 		}
 	default:
 		if !r.lastScanTry.IsZero() {
-			s.NextScanAt = r.lastScanTry.Add(rescanEvery)
+			s.NextScanAt = r.lastScanTry.Add(rescanPace(pace))
 		}
 	}
 	var rest []plan.Target
@@ -305,11 +313,32 @@ func (r *Runner) step(ctx context.Context) error {
 	return errIdle
 }
 
+// scanEvery reads Config.ScanEvery: the user's scan pace, or 0 for the
+// defaults.
+func (r *Runner) scanEvery() time.Duration {
+	if r.cfg.ScanEvery == nil {
+		return 0
+	}
+	return max(0, r.cfg.ScanEvery())
+}
+
+// rescanPace is how often a watching runner rebuilds the plan: pace, or
+// rescanEvery when pace is 0.
+func rescanPace(pace time.Duration) time.Duration {
+	if pace > 0 {
+		return pace
+	}
+	return rescanEvery
+}
+
 // idleWait is how long Run waits after errIdle in state s. Only a sleep with
-// an empty plan queue waits idleRecheck; noStream means campaigns are queued
-// but none has an eligible live stream.
-func idleWait(s State, noStream bool) time.Duration {
+// an empty plan queue waits the scan pace (idleRecheck when pace is 0);
+// noStream means campaigns are queued but none has an eligible live stream.
+func idleWait(s State, noStream bool, pace time.Duration) time.Duration {
 	if s == StateSleeping && !noStream {
+		if pace > 0 {
+			return pace
+		}
 		return idleRecheck
 	}
 	return recheckInterval
@@ -463,9 +492,12 @@ func (r *Runner) scan(ctx context.Context, progress []platform.Progress, havePro
 	}
 	r.reapRewards(ctx, camps)
 
-	var claimed map[string]bool
+	var claimed, marked map[string]bool
 	if r.cfg.Claims != nil {
 		m, err := r.cfg.Claims.ClaimedBenefitIDs(ctx, r.cfg.AccountID)
+		if err == nil {
+			marked, err = r.cfg.Claims.MarkedBenefitIDs(ctx, r.cfg.AccountID)
+		}
 		if err != nil {
 			// Planning without the log could re-queue a just-claimed drop:
 			// fail the scan and keep the previous queue.
@@ -490,15 +522,20 @@ func (r *Runner) scan(ctx context.Context, progress []platform.Progress, havePro
 		skipped[id] = true
 	}
 	r.mu.Unlock()
+	var priority plan.Priority
+	if r.cfg.Priority != nil {
+		priority = r.cfg.Priority()
+	}
 	res := plan.Build(plan.Input{
-		Games:       r.cfg.Games,
-		Campaigns:   camps,
-		Progress:    progress,
-		Claimed:     claimed,
-		Skipped:     skipped,
-		NotLinked:   notLinked,
-		ForceLinked: r.cfg.ForceLinked,
-		Order:       order,
+		Games:     r.cfg.Games,
+		Campaigns: camps,
+		Progress:  progress,
+		Claimed:   claimed,
+		Marked:    marked,
+		Skipped:   skipped,
+		NotLinked: notLinked,
+		Order:     order,
+		Priority:  priority,
 	})
 
 	now := time.Now()
@@ -606,8 +643,9 @@ func (r *Runner) Run(ctx context.Context) error {
 			return nil
 		case errors.Is(err, errIdle):
 			backoff = 0
+			pace := r.scanEvery()
 			r.mu.Lock()
-			wait := idleWait(before, r.sleepNoStream)
+			wait := idleWait(before, r.sleepNoStream, pace)
 			timer := time.NewTimer(wait)
 			r.nextRecheck = time.Now().Add(wait)
 			r.mu.Unlock()

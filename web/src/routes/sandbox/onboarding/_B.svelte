@@ -39,7 +39,7 @@
 				<button type="button" role="tab" aria-selected="true" class="on">{t('accounts.method_tv')}</button>
 			</div>
 			<div class="code panel">
-				<p>{t('accounts.device_go', { url: fake.activate })}</p>
+				<p>{t('accounts.device_go')}</p>
 				<div class="code-row">
 					<span class="big mono">{fake.code}</span>
 					<button type="button" class="btn">Copy</button>

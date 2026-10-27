@@ -97,8 +97,21 @@ Only `GRUB_MASTER_KEY` is required. Every variable is listed in
 | `GRUB_TELEGRAM_BOT_TOKEN` | none | Telegram bot token, used when none is saved in Settings |
 | `GRUB_TELEGRAM_CHAT_ID` | none | Telegram chat ID, used when none is saved in Settings |
 | `GRUB_UPDATE_CHECK` | on | `0` turns off the GitHub release check |
+| `GRUB_UPDATE_INTERVAL` | `6h` | How often the release check runs |
+| `GRUB_AUTHCHECK_INTERVAL` | `1h` | How often every account's login is checked |
+| `GRUB_CANARY_INTERVAL` | Settings value | Overrides the accrual canary interval set in Settings |
+| `GRUB_LOG_RING` | `1000` | Recent log lines kept in memory |
 | `GRUB_KICK_SIDECAR_IMAGE` | `ghcr.io/aalejandrofer/grubdrops-browser:latest` | Kick sidecar image |
 | `GRUB_KICK_SIDECAR_NETWORK` | auto-detected | Docker network for Kick sidecars |
+| `GRUB_KICK_SIDECAR_TEMPLATE` | `grubdrops-browser-{slug}` | Kick sidecar container name; `{slug}` is the Kick username |
+| `GRUB_KICK_SIDECAR_PORT` | `9090` | gRPC port inside each Kick sidecar |
+| `GRUB_BROWSER_URL` | none | Always-on browser sidecar (`host:port`) for login and display |
+| `GRUB_BROWSER_URLS` | none | Comma-separated sidecar pool; Kick accounts are spread across it |
+| `GRUB_TWITCH_BROWSER` | off | `1` mines Twitch through the browser sidecar instead of direct HTTP. Needs `GRUB_BROWSER_URL` |
+| `GRUB_AUTH_BYPASS_LOCAL` | off | `1` skips login for requests from loopback |
+| `GRUB_AUTHBYPASS` | off | `1` turns off all login. Use only on a network you trust |
+
+Durations use Go syntax: `90s`, `30m`, `6h`.
 
 ### Single sign-on (OIDC)
 

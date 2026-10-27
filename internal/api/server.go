@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
+	"github.com/aalejandrofer/grubdrops/internal/authcheck"
 	"github.com/aalejandrofer/grubdrops/internal/collect"
 	"github.com/aalejandrofer/grubdrops/internal/discover"
 	mlog "github.com/aalejandrofer/grubdrops/internal/log"
@@ -49,6 +50,7 @@ type Deps struct {
 
 	// Games.
 	Chosen       *store.ChosenGames
+	AccountGames *store.AccountGames // per-account lists; nil serves 503
 	Board        *collect.Board
 	GamesChanged func() // nil-safe; must return at once, the reload runs in the background
 
@@ -63,6 +65,8 @@ type Deps struct {
 	AccountChanged func(id string)       // nil-safe
 	AccountRemoved func(id string)       // nil-safe
 	AccountRenamed func(id, name string) // nil-safe; must not block
+	// CheckLogin runs one account's auth probe now; nil serves 503.
+	CheckLogin func(ctx context.Context, id string) (authcheck.Result, error)
 
 	// Settings and notifications.
 	Settings        *store.Settings
@@ -148,6 +152,7 @@ func (s *server) routesProtected(r chi.Router) {
 	s.routesAccounts(r)
 	s.routesSettings(r)
 	s.routesHealth(r)
+	s.routesAdmin(r)
 }
 
 // notBuiltHTML is served with 503 when the embedded SPA has no index.html.

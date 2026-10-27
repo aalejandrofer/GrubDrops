@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/app';
+	import { ApiError } from '$lib/api/client';
 	import type { Settings, SettingsPatch } from '$lib/api/types';
 	import { LANGS, t, type Lang } from '$lib/i18n/index.svelte';
 	import { prefs } from '$lib/prefs.svelte';
-	import { timeExample, zoneOptions } from '$lib/settings';
+	import { passwordErrorKey, passwordProblem, timeExample, zoneOptions } from '$lib/settings';
 
 	let {
 		s,
@@ -35,6 +36,54 @@
 			return;
 		}
 		await goto('/login');
+	}
+
+	let pwCurrent = $state('');
+	let pwNew = $state('');
+	let pwConfirm = $state('');
+	let pwBusy = $state(false);
+	let pwFeedback = $state<{ ok: boolean; text: string } | null>(null);
+
+	async function changePassword(e: SubmitEvent): Promise<void> {
+		e.preventDefault();
+		if (pwBusy) return;
+		const problem = passwordProblem(pwNew, pwConfirm);
+		if (problem) {
+			pwFeedback = { ok: false, text: t(problem) };
+			return;
+		}
+		pwBusy = true;
+		pwFeedback = null;
+		try {
+			await api.changePassword(pwCurrent, pwNew);
+			pwCurrent = pwNew = pwConfirm = '';
+			pwFeedback = { ok: true, text: t('settings.password_saved') };
+		} catch (err) {
+			pwFeedback = { ok: false, text: t(passwordErrorKey(err instanceof ApiError ? err.code : undefined)) };
+		} finally {
+			pwBusy = false;
+		}
+	}
+
+	let snapBusy = $state(false);
+	let snapFailed = $state(false);
+
+	async function downloadSnapshot(): Promise<void> {
+		snapBusy = true;
+		snapFailed = false;
+		try {
+			const { blob, name } = await api.snapshot();
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = name;
+			a.click();
+			setTimeout(() => URL.revokeObjectURL(url), 1000);
+		} catch {
+			snapFailed = true;
+		} finally {
+			snapBusy = false;
+		}
 	}
 </script>
 
@@ -105,6 +154,47 @@
 			<button type="button" class="btn" onclick={signOut}>{t('settings.sign_out')}</button>
 		</div>
 	</div>
+
+	<h3 class="sub-h">{t('settings.password')}</h3>
+	<form class="panel" onsubmit={changePassword}>
+		<div class="card-body">
+			<small class="help">{t('settings.password_sub')}</small>
+			<div class="field">
+				<label for="pw-cur">{t('settings.password_current')}</label>
+				<input class="inp" id="pw-cur" name="current-password" type="password" autocomplete="current-password" required bind:value={pwCurrent} />
+			</div>
+			<div class="two">
+				<div class="field">
+					<label for="pw-new">{t('settings.password_new')}</label>
+					<input class="inp" id="pw-new" name="new-password" type="password" autocomplete="new-password" required bind:value={pwNew} />
+				</div>
+				<div class="field">
+					<label for="pw-conf">{t('settings.password_confirm')}</label>
+					<input class="inp" id="pw-conf" name="confirm-password" type="password" autocomplete="new-password" required bind:value={pwConfirm} />
+				</div>
+			</div>
+			<div class="inline wrap">
+				<button type="submit" class="btn" disabled={pwBusy || pwCurrent === '' || pwNew === ''}>
+					{pwBusy ? t('settings.password_saving') : t('settings.password_save')}
+				</button>
+				{#if pwFeedback}<span class="feedback" class:bad={!pwFeedback.ok} role="status">{pwFeedback.text}</span>{/if}
+			</div>
+		</div>
+	</form>
+
+	<h3 class="sub-h">{t('settings.backup')}</h3>
+	<div class="panel">
+		<div class="row">
+			<div class="lbl">
+				<b>{t('settings.snapshot')}</b>
+				<small>{t('settings.snapshot_sub')}</small>
+				{#if snapFailed}<small class="bad" role="alert">{t('settings.snapshot_failed')}</small>{/if}
+			</div>
+			<button type="button" class="btn" disabled={snapBusy} onclick={downloadSnapshot}>
+				{snapBusy ? t('settings.snapshot_busy') : t('settings.snapshot_download')}
+			</button>
+		</div>
+	</div>
 </section>
 
 <style>
@@ -113,5 +203,9 @@
 	}
 	.bad {
 		color: var(--red);
+	}
+	.help {
+		color: var(--t2);
+		font-size: 12px;
 	}
 </style>

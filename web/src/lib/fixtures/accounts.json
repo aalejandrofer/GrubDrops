@@ -8,6 +8,8 @@
 		"state": "watching",
 		"needs_login": false,
 		"enabled": true,
+		"own_games": false,
+		"own_game_count": 0,
 		"auth": {
 			"ok": true,
 			"detail": "token valid",
@@ -23,6 +25,8 @@
 		"state": "watching",
 		"needs_login": false,
 		"enabled": true,
+		"own_games": false,
+		"own_game_count": 0,
 		"auth": {
 			"ok": true,
 			"detail": "token valid",
@@ -38,6 +42,8 @@
 		"state": "needs_login",
 		"needs_login": true,
 		"enabled": true,
+		"own_games": false,
+		"own_game_count": 0,
 		"auth": {
 			"ok": false,
 			"detail": "session expired",

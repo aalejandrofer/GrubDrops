@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, Unreachable, createClient } from './client';
+import { ApiError, Unreachable, attachmentName, createClient } from './client';
 
 type Call = { url: string; init: RequestInit };
 type Reply = { status: number; body?: string } | Error;
@@ -153,5 +153,77 @@ describe('client', () => {
 		const { api, hooks } = setup([{ status: 200, body: '<!doctype html><html></html>' }]);
 		await expect(api.games()).rejects.toBeInstanceOf(Unreachable);
 		expect(hooks.onUnreachable).toHaveBeenLastCalledWith(true);
+	});
+
+	it('changePassword posts current and new with CSRF', async () => {
+		const { api, calls } = setup([{ status: 204 }]);
+		await api.changePassword('old', 'newpass12');
+		expect(calls[0].url).toBe('/api/settings/password');
+		expect(hdr(calls[0], 'X-CSRF-Token')).toBe('tok');
+		expect(JSON.parse(calls[0].init.body as string)).toEqual({ current: 'old', new: 'newpass12' });
+	});
+
+	it('changePassword 400 keeps the error code', async () => {
+		const { api } = setup([{ status: 400, body: '{"error":"wrong_password"}' }]);
+		await expect(api.changePassword('x', 'y')).rejects.toMatchObject({ status: 400, code: 'wrong_password' });
+	});
+
+	it('snapshot returns the file and its name', async () => {
+		const f = vi.fn(async () => new Response('SQLite format 3', { status: 200, headers: { 'Content-Disposition': 'attachment; filename="grubdrops-20261026-2130.db"' } }));
+		const api = createClient({ fetch: f as unknown as typeof fetch, csrf: () => 'tok', refreshCsrf: async () => {}, onUnauthorized: () => {}, onUnreachable: () => {} });
+		const r = await api.snapshot();
+		expect(r.name).toBe('grubdrops-20261026-2130.db');
+		expect(await r.blob.text()).toBe('SQLite format 3');
+	});
+
+	it('snapshot error is an ApiError', async () => {
+		const { api } = setup([{ status: 503, body: '{"error":"unavailable"}' }]);
+		await expect(api.snapshot()).rejects.toMatchObject({ status: 503 });
+	});
+
+	it('attachmentName reads the filename or falls back', () => {
+		expect(attachmentName('attachment; filename="a.db"')).toBe('a.db');
+		expect(attachmentName('attachment; filename=b.db')).toBe('b.db');
+		expect(attachmentName(null)).toBe('grubdrops.db');
+	});
+
+	it('checkLogin and restartAccount post with CSRF to the account', async () => {
+		const { api, calls } = setup([{ status: 200, body: '{"ok":true,"detail":"ok","checked_at":null}' }, { status: 204 }]);
+		expect(await api.checkLogin('acc 1')).toEqual({ ok: true, detail: 'ok', checked_at: null });
+		await api.restartAccount('acc 1');
+		expect(calls.map((c) => [c.init.method, c.url])).toEqual([
+			['POST', '/api/accounts/acc%201/check-login'],
+			['POST', '/api/accounts/acc%201/restart']
+		]);
+		for (const c of calls) expect(hdr(c, 'X-CSRF-Token')).toBe('tok');
+	});
+
+	it('markCollected posts the pair and removeClaim deletes the escaped path', async () => {
+		const claim = '{"account_id":"a 1","benefit_id":"b/1","source":"manual"}';
+		const { api, calls } = setup([{ status: 201, body: claim }, { status: 204 }]);
+		expect((await api.markCollected('a 1', 'b/1')).source).toBe('manual');
+		await api.removeClaim('a 1', 'b/1');
+		expect(calls.map((c) => [c.init.method, c.url])).toEqual([
+			['POST', '/api/claims'],
+			['DELETE', '/api/claims/a%201/b%2F1']
+		]);
+		expect(JSON.parse(calls[0].init.body as string)).toEqual({ account_id: 'a 1', benefit_id: 'b/1' });
+		for (const c of calls) expect(hdr(c, 'X-CSRF-Token')).toBe('tok');
+	});
+
+	it('setAccountGames sends the list only when given one', async () => {
+		const view = '{"own":true,"games":[{"id":"g1","name":"Rust"}]}';
+		const { api, calls } = setup([{ status: 200, body: view }, { status: 200, body: view }, { status: 200, body: view }]);
+		expect((await api.accountGames('a/1')).games[0].name).toBe('Rust');
+		await api.setAccountGames('a/1', true, [{ id: '', name: 'Rust' }]);
+		await api.setAccountGames('a/1', false, null);
+		expect(calls.map((c) => [c.init.method ?? 'GET', c.url])).toEqual([
+			['GET', '/api/accounts/a%2F1/games'],
+			['PUT', '/api/accounts/a%2F1/games'],
+			['PUT', '/api/accounts/a%2F1/games']
+		]);
+		expect(JSON.parse(calls[1].init.body as string)).toEqual({ own: true, games: [{ id: '', name: 'Rust' }] });
+		expect(JSON.parse(calls[2].init.body as string)).toEqual({ own: false });
+		expect(hdr(calls[1], 'X-CSRF-Token')).toBe('tok');
 	});
 });

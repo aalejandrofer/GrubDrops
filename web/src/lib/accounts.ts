@@ -111,7 +111,22 @@ export function createDeviceFlow(deps: DeviceFlowDeps): DeviceFlow {
 }
 
 /** Twitch sign-in method: Android paste login or the TV device code. */
-export type TwitchMethod = 'android' | 'tv';
+export type TwitchMethod = 'android' | 'tv' | 'tdm';
+
+const ACTIVATE_URL = 'https://www.twitch.tv/activate';
+
+/** Twitch activate page with the device code filled in. Anything but an https twitch.tv URL falls back to the default page. */
+export function activateURL(verificationURL: string, userCode: string): string {
+	let u: URL;
+	try {
+		u = new URL(verificationURL);
+	} catch {
+		u = new URL(ACTIVATE_URL);
+	}
+	if (u.protocol !== 'https:' || (u.hostname !== 'twitch.tv' && !u.hostname.endsWith('.twitch.tv'))) u = new URL(ACTIVATE_URL);
+	if (userCode && !u.searchParams.has('device-code')) u.searchParams.set('device-code', userCode);
+	return u.toString();
+}
 
 /** True when the pasted text holds a token: the #access_token= redirect URL or a bare token. The server validates it. */
 export function hasAndroidToken(text: string): boolean {
@@ -119,10 +134,18 @@ export function hasAndroidToken(text: string): boolean {
 	return /(?:^|[#&?])access_token=\w+/.test(v) || /^\w{20,64}$/.test(v);
 }
 
+/** Standard base64 of bytes, for file uploads in a JSON body. */
+export function toBase64(bytes: Uint8Array): string {
+	let s = '';
+	for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+	return btoa(s);
+}
+
 const ANDROID_ERRORS = new Map([
 	['android_no_token', 'accounts.android_no_token'],
 	['android_wrong_client', 'accounts.android_wrong_client'],
-	['android_invalid_token', 'accounts.android_invalid_token']
+	['android_invalid_token', 'accounts.android_invalid_token'],
+	['tdm_no_token', 'accounts.tdm_no_token']
 ]);
 
 /** i18n key for an Android login error code from the API. */

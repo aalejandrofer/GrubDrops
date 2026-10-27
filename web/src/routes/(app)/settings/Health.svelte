@@ -1,13 +1,25 @@
 <script lang="ts">
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import { api } from '$lib/app';
-	import type { Health, HealthEvent, Platform } from '$lib/api/types';
+	import type { Health, HealthEvent, Platform, Settings, SettingsPatch } from '$lib/api/types';
 	import { clock, relTime, uptime } from '$lib/format';
 	import { runNowState, type CanaryStamps } from '$lib/canary';
 	import { eventText, isProblem, kindLabel } from '$lib/health';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
+	import { CANARY_INTERVALS, isChannel, minutesLabel } from '$lib/settings';
+
+	let {
+		s,
+		save,
+		errs = {}
+	}: {
+		/** Settings for the Advanced block; it hides until they load. */
+		s?: Settings;
+		save?: (key: string, p: SettingsPatch) => Promise<boolean>;
+		errs?: Record<string, boolean>;
+	} = $props();
 
 	type Filter = 'all' | 'problems' | 'claims';
 	const FILTERS: { id: Filter; key: string }[] = [
@@ -129,6 +141,36 @@
 	const minerLine = $derived(
 		h?.miner.started_at ? t('health.running', { uptime: uptime(h.miner.started_at, now) }).trim() : '–'
 	);
+	let twitchCh = $state('');
+	let kickCh = $state('');
+	let chDirty = $state(false);
+	let chBad = $state(false);
+	$effect(() => {
+		if (s && !chDirty) {
+			twitchCh = s.canary.twitch_channel;
+			kickCh = s.canary.kick_channel;
+		}
+	});
+	const canaryIntervals = $derived(
+		!s || CANARY_INTERVALS.includes(s.canary.interval_sec) ? CANARY_INTERVALS : [...CANARY_INTERVALS, s.canary.interval_sec]
+	);
+	const intervalLabel = (sec: number): string => (sec === 0 ? t('settings.canary_off') : minutesLabel(Math.round(sec / 60)));
+
+	async function saveChannels(): Promise<void> {
+		if (!s || !save) return;
+		const tw = twitchCh.trim();
+		const kc = kickCh.trim();
+		if (!isChannel(tw) || !isChannel(kc)) {
+			chBad = true;
+			return;
+		}
+		if (await save('canary_channels', { canary: { ...s.canary, twitch_channel: tw, kick_channel: kc } })) chDirty = false;
+	}
+
+	function chKey(e: KeyboardEvent): void {
+		if (e.key === 'Enter' && e.isTrusted && chDirty) void saveChannels();
+	}
+
 	const levelClass = (e: HealthEvent): string =>
 		e.level === 'ERROR' ? 'err' : e.level === 'WARN' ? 'warn' : e.kind === 'claim' ? 'ok' : 'info';
 </script>
@@ -146,33 +188,6 @@
 			<div><small class="ok">{t('health.miner')}</small><b>{minerLine}</b></div>
 			<div><small class={sidecars > 0 ? 'ok' : ''}>{t('health.sidecar')}</small><b>{tn('health.sidecars', sidecars)}</b></div>
 			<div><small class={h.last_scan_at ? 'ok' : ''}>{t('health.last_scan')}</small><b>{relTime(h.last_scan_at, now)}</b></div>
-		</div>
-		<div class="panel canary">
-			<div class="row">
-				<div class="lbl">
-					<b>{t('health.canary')}</b>
-					{#if canaryFailed}<small class="bad" role="alert">{t('health.run_failed')}</small>{/if}
-					{#if canaryNoResult}<small role="status">{t('health.canary_no_result')}</small>{/if}
-				</div>
-				<button type="button" class="btn" disabled={canaryBusy} onclick={runCanary}>{canaryBusy ? t('health.canary_running') : t('health.run_now')}</button>
-			</div>
-			{#each PLATFORMS as p (p.id)}
-				{@const c = canaryOf(p.id)}
-				<div class="row">
-					<div class="lbl">
-						<b>{t(p.key)}</b>
-						{#if !c || (c.ok && !c.checked_at)}
-							<small>{t('health.canary_none')}</small>
-						{:else if c.skipped}
-							<small>{t('health.canary_skipped', { platform: t(p.key) })}</small>
-						{:else if c.ok}
-							<small class="good">{t('health.canary_ok', { rel: relTime(c.checked_at, now) })}</small>
-						{:else}
-							<small class="bad">{t('health.canary_fail', { detail: c.detail })}</small>
-						{/if}
-					</div>
-				</div>
-			{/each}
 		</div>
 		<div class="panel">
 			<div class="row filters">
@@ -209,11 +224,117 @@
 			</div>
 		</div>
 	{/if}
+	{#if h || (s && save)}
+		<details class="adv">
+			<summary>{t('settings.advanced')}</summary>
+			{#if h}
+				<div class="panel canary">
+					<div class="row">
+						<div class="lbl">
+							<b class="tip-wrap"
+								>{t('health.canary')}<button type="button" class="tip" aria-label={t('health.canary')} aria-describedby="canary-tip">?</button><span
+									class="tip-text"
+									id="canary-tip"
+									role="tooltip">{t('health.canary_help')}</span
+								></b
+							>
+							{#if canaryFailed}<small class="bad" role="alert">{t('health.run_failed')}</small>{/if}
+							{#if canaryNoResult}<small role="status">{t('health.canary_no_result')}</small>{/if}
+						</div>
+						<button type="button" class="btn" disabled={canaryBusy} onclick={runCanary}>{canaryBusy ? t('health.canary_running') : t('health.run_now')}</button>
+					</div>
+					{#each PLATFORMS as p (p.id)}
+						{@const c = canaryOf(p.id)}
+						<div class="row">
+							<div class="lbl">
+								<b>{t(p.key)}</b>
+								{#if !c || (c.ok && !c.checked_at)}
+									<small>{t('health.canary_none')}</small>
+								{:else if c.skipped}
+									<small>{t('health.canary_skipped', { platform: t(p.key) })}</small>
+								{:else if c.ok}
+									<small class="good">{t('health.canary_ok', { rel: relTime(c.checked_at, now) })}</small>
+								{:else}
+									<small class="bad">{t('health.canary_fail', { detail: c.detail })}</small>
+								{/if}
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
+			{#if s && save}
+				<div class="panel">
+					<div class="row">
+						<div class="lbl">
+							<b><label for="canary-int">{t('settings.canary_interval')}</label></b>
+							<small>{t('settings.canary_interval_sub')} {t('settings.after_restart')}</small>
+							{#if errs.canary_interval}<small class="bad">{t('settings.save_failed')}</small>{/if}
+						</div>
+						<select
+							class="sel"
+							id="canary-int"
+							autocomplete="off"
+							value={s.canary.interval_sec}
+							onchange={(e) => {
+								const v = Number(e.currentTarget.value);
+								if (e.isTrusted && s && v !== s.canary.interval_sec) void save('canary_interval', { canary: { ...s.canary, interval_sec: v } });
+							}}
+						>
+							{#each canaryIntervals as sec (sec)}<option value={sec}>{intervalLabel(sec)}</option>{/each}
+						</select>
+					</div>
+					<div class="card-body">
+						<div class="two">
+							<div class="field">
+								<label for="canary-tw">{t('settings.canary_twitch')}</label>
+								<input
+									class="inp"
+									id="canary-tw"
+									type="text"
+									autocomplete="off"
+									spellcheck="false"
+									aria-invalid={chBad ? true : undefined}
+									bind:value={twitchCh}
+									oninput={() => ((chDirty = true), (chBad = false))}
+									onkeydown={chKey}
+								/>
+							</div>
+							<div class="field">
+								<label for="canary-kick">{t('settings.canary_kick')}</label>
+								<input
+									class="inp"
+									id="canary-kick"
+									type="text"
+									autocomplete="off"
+									spellcheck="false"
+									placeholder={t('settings.canary_kick_ph')}
+									aria-invalid={chBad ? true : undefined}
+									bind:value={kickCh}
+									oninput={() => ((chDirty = true), (chBad = false))}
+									onkeydown={chKey}
+								/>
+							</div>
+						</div>
+						<div class="inline wrap">
+							<button type="button" class="btn" disabled={!chDirty} onclick={saveChannels}>{t('accounts.save')}</button>
+						</div>
+						<small class="help">{t('settings.canary_channels_help')}</small>
+						{#if chBad}<span class="feedback bad" role="alert">{t('settings.canary_channel_invalid')}</span>{/if}
+						{#if errs.canary_channels}<span class="feedback bad">{t('settings.save_failed')}</span>{/if}
+					</div>
+				</div>
+			{/if}
+		</details>
+	{/if}
 </section>
 
 <style>
 	.bad {
 		color: var(--red);
+	}
+	.help {
+		color: var(--t2);
+		font-size: 12px;
 	}
 	.good {
 		color: var(--green);
@@ -252,6 +373,56 @@
 	}
 	.canary {
 		margin-bottom: 14px;
+	}
+	.tip-wrap {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.tip {
+		display: inline-grid;
+		place-items: center;
+		width: 16px;
+		height: 16px;
+		padding: 0;
+		border: 1px solid var(--border);
+		border-radius: 50%;
+		background: none;
+		color: var(--t2);
+		font: 600 10.5px/1 inherit;
+		cursor: help;
+		margin-left: 6px;
+	}
+	.tip:hover,
+	.tip:focus-visible {
+		color: var(--text);
+		outline: none;
+		border-color: var(--t2);
+	}
+	.tip-text {
+		position: absolute;
+		top: calc(100% + 6px);
+		left: 0;
+		z-index: 5;
+		width: max-content;
+		max-width: min(300px, 70vw);
+		padding: 8px 10px;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--surface-3);
+		color: var(--text);
+		font-size: 12px;
+		font-weight: 400;
+		line-height: 1.45;
+		visibility: hidden;
+		opacity: 0;
+		transition: opacity 0.12s;
+	}
+	.tip-wrap:hover .tip-text,
+	.tip:focus-visible + .tip-text {
+		visibility: visible;
+		opacity: 1;
 	}
 	.filters {
 		padding: 10px 16px;
