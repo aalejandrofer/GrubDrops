@@ -140,7 +140,7 @@ SSO turns on when the first four variables are set. Password login still works.
 
 <p align="center">
   <img src="docs/screenshots/discover.png" width="32%" alt="Discover: current Twitch and Kick campaigns grouped by game">
-  <img src="docs/screenshots/games.png" width="32%" alt="Games: chosen games in priority order">
+  <img src="docs/screenshots/games.png" width="32%" alt="Games: chosen games in priority order, with a Lists rail for per-account game lists">
   <img src="docs/screenshots/rewards.png" width="32%" alt="Rewards: drops in progress, Up next and claim history">
 </p>
 

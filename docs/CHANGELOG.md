@@ -4,6 +4,9 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Changed
+- README and landing page screenshots show 2.1.0: the Games page with the Lists rail, and Home, Discover and Rewards.
+
 ## [2.1.0] — 2026-10-26
 
 ### Added
