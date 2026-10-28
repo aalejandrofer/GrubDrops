@@ -90,3 +90,31 @@ export function nextScanMin(lastScanIso: string | null, now: number, everySec = 
 export function httpsOnly(url: string | null | undefined): string {
 	return url?.startsWith('https://') ? url : '';
 }
+
+export type NotePart = { text: string; kind: 'text' | 'bold' | 'code' };
+
+/**
+ * One release-note bullet as plain, bold and code runs, so the version
+ * popover shows **bold** and `code` without raw markdown. Links keep their
+ * text only; an unmatched marker stays literal.
+ */
+export function noteParts(s: string): NotePart[] {
+	const out: NotePart[] = [];
+	const push = (text: string, kind: NotePart['kind']): void => {
+		if (!text) return;
+		const last = out[out.length - 1];
+		if (last && last.kind === 'text' && kind === 'text') last.text += text;
+		else out.push({ text, kind });
+	};
+	const flat = s.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+	const re = /\*\*([^*]+)\*\*|`([^`]+)`/g;
+	let at = 0;
+	for (const m of flat.matchAll(re)) {
+		push(flat.slice(at, m.index), 'text');
+		if (m[1] !== undefined) push(m[1], 'bold');
+		else push(m[2], 'code');
+		at = m.index + m[0].length;
+	}
+	push(flat.slice(at), 'text');
+	return out;
+}

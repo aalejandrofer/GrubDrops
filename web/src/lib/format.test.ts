@@ -7,6 +7,7 @@ import {
 	etaShort,
 	formatInt,
 	nextScanMin,
+	noteParts,
 	relTime,
 	shortDate,
 	uptime
@@ -95,4 +96,16 @@ test('httpsOnly keeps https links only', () => {
 	expect(httpsOnly('javascript:alert(1)')).toBe('');
 	expect(httpsOnly('http://x')).toBe('');
 	expect(httpsOnly(undefined)).toBe('');
+});
+
+test('noteParts splits release-note markdown into plain, bold and code', () => {
+	expect(noteParts('**Force watch.** Old `/rewards` links redirect.')).toEqual([
+		{ text: 'Force watch.', kind: 'bold' },
+		{ text: ' Old ', kind: 'text' },
+		{ text: '/rewards', kind: 'code' },
+		{ text: ' links redirect.', kind: 'text' }
+	]);
+	expect(noteParts('See [the docs](https://x.dev) now')).toEqual([{ text: 'See the docs now', kind: 'text' }]);
+	expect(noteParts('a ** b')).toEqual([{ text: 'a ** b', kind: 'text' }]);
+	expect(noteParts('')).toEqual([]);
 });

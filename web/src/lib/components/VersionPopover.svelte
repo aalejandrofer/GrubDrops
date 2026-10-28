@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { UpdateInfo } from '$lib/api/types';
-	import { httpsOnly } from '$lib/format';
+	import { httpsOnly, noteParts } from '$lib/format';
 	import { t } from '$lib/i18n/index.svelte';
 	import CopyCommand from './CopyCommand.svelte';
 	import Icon from './Icon.svelte';
@@ -51,7 +51,12 @@
 			<h3>{t('version.available', { v: update.latest })}</h3>
 			{#if update.notes.length > 0}
 				<ul>
-					{#each update.notes as n, i (i)}<li>{n}</li>{/each}
+					{#each update.notes as n, i (i)}<li>
+							<span class="note"
+								>{#each noteParts(n) as p, j (j)}{#if p.kind === 'bold'}<strong>{p.text}</strong
+									>{:else if p.kind === 'code'}<code>{p.text}</code>{:else}{p.text}{/if}{/each}</span
+							>
+						</li>{/each}
 				</ul>
 			{/if}
 			<div class="cmdrow"><CopyCommand {command} /></div>
@@ -138,6 +143,24 @@
 	}
 	li::marker {
 		color: var(--t2);
+	}
+	.note {
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 3;
+		line-clamp: 3;
+		overflow: hidden;
+	}
+	.note strong {
+		color: var(--text);
+		font-weight: 600;
+	}
+	.note code {
+		font-family: var(--mono);
+		font-size: 0.9em;
+		padding: 0 4px;
+		border-radius: 4px;
+		background: var(--surface-2);
 	}
 	.cmdrow {
 		margin-top: 12px;
