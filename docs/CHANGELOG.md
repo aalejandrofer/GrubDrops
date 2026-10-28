@@ -4,6 +4,12 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [2.2.1] — 2026-10-28
+
+### Fixed
+- **Games Twitch renamed now get mined** ([#78](https://github.com/aalejandrofer/GrubDrops/issues/78)). Twitch renamed Overwatch 2 to Overwatch and Counter-Strike 2 to Counter-Strike, so their Twitch campaigns never matched the game on your list and nothing was queued. Adding Overwatch again said "Already in your list", because it resolved to the seeded Overwatch 2 row. Games now store the name Twitch uses (`games.twitch_name`, migration 0024), picked up from the campaigns and from the Twitch game lookup after a Twitch scan, and the planner matches a campaign by name, slug or Twitch name. Kick keeps matching the stored name, so Counter-Strike 2 still finds Kick's Counter-Strike 2 category. When a lookup saves a new Twitch name, every account rebuilds, including those on their own list, so the campaign is queued without a restart. Home and Discover match the same way, and `GET /api/games` carries `twitch_name`. The seeded Overwatch 2 row is renamed to Overwatch, the name Twitch and Kick both use now; it keeps its id, so lists and priorities stay as they were.
+- **Release notes in the version popover read cleanly.** The update popover in the top bar showed release-note bullets as raw markdown, with `**` and backticks on screen. Bold and code now render as bold and code, link markup keeps only its text, and each bullet is cut to 3 lines so the popover stays short. Full release notes has the rest.
+
 ## [2.2.0] — 2026-10-27
 
 ### Added
