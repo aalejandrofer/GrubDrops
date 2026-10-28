@@ -277,6 +277,23 @@ func TestRoster_GamesChangedReloadsEach(t *testing.T) {
 		}, 5*time.Second, 20*time.Millisecond, id)
 	}
 	e.waitEvent(t, func(ev api.Event) bool { return ev.Name == api.EventGames })
+
+	// A games row both lists share changed: own-list accounts rebuild too,
+	// and only for that one reload.
+	mu.Lock()
+	clear(builds)
+	mu.Unlock()
+	e.ro.requestAllGamesReload()
+	<-e.ro.gamesDirty
+	e.ro.gamesChanged()
+	mu.Lock()
+	assert.Equal(t, map[string]int{"a1": 1, "a2": 1, "a3": 1}, builds)
+	clear(builds)
+	mu.Unlock()
+	e.ro.gamesChanged()
+	mu.Lock()
+	assert.Equal(t, map[string]int{"a1": 1, "a2": 1}, builds)
+	mu.Unlock()
 }
 
 func TestRoster_GamesReloadQueuedAndCoalesced(t *testing.T) {

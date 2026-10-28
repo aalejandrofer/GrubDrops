@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,10 +29,14 @@ type Collector struct {
 	// OnFound is called after each inventory-found claim OnScan records. nil
 	// = no-op. Set it before the first scan.
 	OnFound func(ctx context.Context, e store.ClaimEntry)
-	// LookupTwitchGameID finds a game's Twitch id by name, for chosen games
-	// no Twitch campaign has named yet. nil = no lookup. Set it before the
-	// first scan.
-	LookupTwitchGameID func(ctx context.Context, name string) (id string, ok bool, err error)
+	// LookupTwitchGameID finds a game's Twitch id and Twitch name by name,
+	// for chosen games no Twitch campaign has named yet. nil = no lookup. Set
+	// it before the first scan.
+	LookupTwitchGameID func(ctx context.Context, name string) (id, twitchName string, ok bool, err error)
+	// OnGamesChanged is called after a lookup saves a Twitch name that
+	// matches campaigns the stored name and slug did not, so runners can
+	// rebuild with it. nil = no-op. Set it before the first scan.
+	OnGamesChanged func()
 
 	mu   sync.Mutex
 	last map[string]map[string]store.DropState // account -> benefit -> state
@@ -124,20 +129,21 @@ func (c *Collector) OnScan(ctx context.Context, s runner.Scan) {
 	}
 }
 
-// storeTwitchGameIDs saves each Twitch campaign's game ID onto the matching
-// chosen game, so box art can use the ID form. Unchanged IDs are no-op writes.
+// storeTwitchGameIDs saves each Twitch campaign's game ID and name onto the
+// matching game in use, so box art can use the ID form. Unchanged values are
+// no-op writes.
 func (c *Collector) storeTwitchGameIDs(ctx context.Context, s runner.Scan) {
 	if s.Platform != "twitch" || c.Chosen == nil {
 		return
 	}
-	chosen, err := c.Chosen.List(ctx)
+	chosen, err := c.Chosen.InUse(ctx)
 	if err != nil {
-		c.logErr("collect: list chosen games failed", s.AccountID, err)
+		c.logErr("collect: list games in use failed", s.AccountID, err)
 		return
 	}
 	games := make([]plan.Game, len(chosen))
 	for i, g := range chosen {
-		games[i] = plan.Game{Name: g.Name, Slug: g.Slug}
+		games[i] = plan.Game{Name: g.Name, Slug: g.Slug, TwitchName: g.TwitchName}
 	}
 	named := map[int]bool{}
 	for _, camp := range s.Campaigns {
@@ -152,19 +158,22 @@ func (c *Collector) storeTwitchGameIDs(ctx context.Context, s runner.Scan) {
 		if err := c.Chosen.Q.SetGameTwitchID(ctx, gen.SetGameTwitchIDParams{TwitchGameID: camp.GameID, ID: chosen[i].ID}); err != nil {
 			c.logErr("collect: store twitch game id failed", s.AccountID, err)
 		}
+		if _, err := c.Chosen.Q.SetGameTwitchName(ctx, gen.SetGameTwitchNameParams{TwitchName: camp.Game, ID: chosen[i].ID}); err != nil {
+			c.logErr("collect: store twitch game name failed", s.AccountID, err)
+		}
 	}
 	var missing []store.ChosenGame
 	for i, g := range chosen {
-		if g.TwitchGameID == "" && !named[i] {
+		if (g.TwitchGameID == "" || g.TwitchName == "") && !named[i] {
 			missing = append(missing, g)
 		}
 	}
 	c.lookUpTwitchGameIDs(missing)
 }
 
-// lookUpTwitchGameIDs asks Twitch, in the background, for the ids of games
-// that are due a lookup. A found id is saved; a miss waits twitchIDRetry;
-// an error retries on the next scan.
+// lookUpTwitchGameIDs asks Twitch, in the background, for the ids and names
+// of games that are due a lookup. A found id and name are saved; a miss waits
+// twitchIDRetry; an error retries on the next scan.
 func (c *Collector) lookUpTwitchGameIDs(games []store.ChosenGame) {
 	if c.LookupTwitchGameID == nil || len(games) == 0 {
 		return
@@ -188,8 +197,9 @@ func (c *Collector) lookUpTwitchGameIDs(games []store.ChosenGame) {
 		defer c.lookups.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), twitchIDTimeout)
 		defer cancel()
+		changed := false
 		for _, g := range due {
-			id, ok, err := c.LookupTwitchGameID(ctx, g.Name)
+			id, name, ok, err := c.LookupTwitchGameID(ctx, g.Name)
 			if err != nil {
 				slog.Debug("collect: twitch game id lookup failed", "game", g.Name, "err", err)
 				c.idMu.Lock()
@@ -203,6 +213,20 @@ func (c *Collector) lookUpTwitchGameIDs(games []store.ChosenGame) {
 			if err := c.Chosen.Q.SetGameTwitchID(ctx, gen.SetGameTwitchIDParams{TwitchGameID: id, ID: g.ID}); err != nil {
 				c.logErr("collect: store twitch game id failed", "", err)
 			}
+			if name == "" {
+				continue
+			}
+			n, err := c.Chosen.Q.SetGameTwitchName(ctx, gen.SetGameTwitchNameParams{TwitchName: name, ID: g.ID})
+			if err != nil {
+				c.logErr("collect: store twitch game name failed", "", err)
+				continue
+			}
+			if n > 0 && !strings.EqualFold(name, g.Name) && !strings.EqualFold(name, g.Slug) {
+				changed = true
+			}
+		}
+		if changed && c.OnGamesChanged != nil {
+			c.OnGamesChanged()
 		}
 	}()
 }

@@ -374,14 +374,14 @@ func TestCollector_LooksUpMissingTwitchGameIDs(t *testing.T) {
 	c.Now = func() time.Time { return now }
 	var mu sync.Mutex
 	var asked []string
-	c.LookupTwitchGameID = func(_ context.Context, name string) (string, bool, error) {
+	c.LookupTwitchGameID = func(_ context.Context, name string) (string, string, bool, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		asked = append(asked, name)
 		if name == "Battlefield 6" {
-			return "168648543", true, nil
+			return "168648543", "Battlefield 6", true, nil
 		}
-		return "", false, nil
+		return "", "", false, nil
 	}
 	twitchID := func(id string) string {
 		var v string
@@ -427,9 +427,9 @@ func TestCollector_TwitchGameIDLookupErrorRetries(t *testing.T) {
 	require.NoError(t, q.UpsertGame(ctx, gen.UpsertGameParams{ID: "bf6", Name: "Battlefield 6", Slug: "battlefield-6"}))
 	require.NoError(t, c.Chosen.Set(ctx, []string{"bf6"}))
 	calls := 0
-	c.LookupTwitchGameID = func(context.Context, string) (string, bool, error) {
+	c.LookupTwitchGameID = func(context.Context, string) (string, string, bool, error) {
 		calls++
-		return "", false, errors.New("no session")
+		return "", "", false, errors.New("no session")
 	}
 	s := cbaseScan()
 	s.Campaigns = nil
@@ -438,4 +438,89 @@ func TestCollector_TwitchGameIDLookupErrorRetries(t *testing.T) {
 	c.OnScan(ctx, s)
 	c.lookups.Wait()
 	require.Equal(t, 2, calls)
+}
+
+// A game Twitch knows under another name (seeded "Overwatch 2", Twitch
+// "Overwatch") stores that name so campaigns match it, and asks the runners
+// to rebuild. A Twitch name equal to the stored one needs no rebuild.
+func TestCollector_LookupStoresTwitchNameAndReloads(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	q := gen.New(c.States.DB)
+	_, err := c.States.DB.Exec(`DELETE FROM games`)
+	require.NoError(t, err)
+	for _, g := range []gen.UpsertGameParams{
+		{ID: "ow", Name: "Overwatch 2", Slug: "overwatch-2"},
+		{ID: "bf6", Name: "Battlefield 6", Slug: "battlefield-6"},
+	} {
+		require.NoError(t, q.UpsertGame(ctx, g))
+	}
+	require.NoError(t, c.Chosen.Set(ctx, []string{"bf6"}))
+	// ow is only on an account's own list.
+	_, err = c.States.DB.Exec(`INSERT INTO accounts (id, platform, display_name, own_games, created_at, updated_at) VALUES ('acc_own', 'twitch', 'own', 1, 0, 0)`)
+	require.NoError(t, err)
+	_, err = c.States.DB.Exec(`INSERT INTO account_games (account_id, game_id, rank) VALUES ('acc_own', 'ow', 0)`)
+	require.NoError(t, err)
+	names := map[string][2]string{
+		"Overwatch 2":   {"515025", "Overwatch"},
+		"Battlefield 6": {"168648543", "Battlefield 6"},
+	}
+	c.LookupTwitchGameID = func(_ context.Context, name string) (string, string, bool, error) {
+		v := names[name]
+		return v[0], v[1], true, nil
+	}
+	reloads := 0
+	c.OnGamesChanged = func() { reloads++ }
+	twitchName := func(id string) string {
+		var v string
+		require.NoError(t, c.States.DB.QueryRow(`SELECT twitch_name FROM games WHERE id=?`, id).Scan(&v))
+		return v
+	}
+
+	s := cbaseScan()
+	s.Campaigns = nil
+	c.OnScan(ctx, s)
+	c.lookups.Wait()
+	require.Equal(t, "Overwatch", twitchName("ow"))
+	require.Equal(t, "Battlefield 6", twitchName("bf6"))
+	require.Equal(t, 1, reloads)
+
+	chosen, err := c.Chosen.InUse(ctx)
+	require.NoError(t, err)
+	games := make([]plan.Game, len(chosen))
+	for i, g := range chosen {
+		games[i] = plan.Game{Name: g.Name, Slug: g.Slug, TwitchName: g.TwitchName}
+	}
+	i, ok := plan.Match(games, "Overwatch")
+	require.True(t, ok, "a campaign under the Twitch name matches")
+	require.Equal(t, "ow", chosen[i].ID)
+
+	c.Now = func() time.Time { return cscanAt.Add(twitchIDRetry + time.Minute) }
+	c.OnScan(ctx, s)
+	c.lookups.Wait()
+	require.Equal(t, 1, reloads, "a game with an id and Twitch name is not looked up again")
+}
+
+// A Twitch campaign that names a game stores its name with the id.
+func TestCollector_ScanStoresTwitchName(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	q := gen.New(c.States.DB)
+	_, err := c.States.DB.Exec(`DELETE FROM games`)
+	require.NoError(t, err)
+	require.NoError(t, q.UpsertGame(ctx, gen.UpsertGameParams{ID: "rust", Name: "Rust", Slug: "rust"}))
+	require.NoError(t, c.Chosen.Set(ctx, []string{"rust"}))
+	called := false
+	c.LookupTwitchGameID = func(context.Context, string) (string, string, bool, error) {
+		called = true
+		return "", "", false, nil
+	}
+	s := cbaseScan()
+	s.Campaigns[0].GameID = "263490"
+	c.OnScan(ctx, s)
+	c.lookups.Wait()
+	var name string
+	require.NoError(t, c.States.DB.QueryRow(`SELECT twitch_name FROM games WHERE id='rust'`).Scan(&name))
+	require.Equal(t, "Rust", name)
+	require.False(t, called)
 }

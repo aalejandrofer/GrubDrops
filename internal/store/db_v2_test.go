@@ -80,7 +80,7 @@ func TestOpen_BacksUpBeforeV2(t *testing.T) {
 	require.Equal(t, 1, count(t, bk, "accounts"))
 
 	require.NoError(t, db.QueryRow(`SELECT max(version_id) FROM goose_db_version`).Scan(&v))
-	require.Equal(t, 23, v)
+	require.Equal(t, 24, v)
 	require.Equal(t, 1, count(t, db, "claim_log"), "seed claim imported from 1.x")
 }
 

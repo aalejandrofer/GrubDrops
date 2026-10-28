@@ -157,6 +157,7 @@ type Game struct {
 	Slug         string `json:"slug"`
 	Priority     int64  `json:"priority"`
 	TwitchGameID string `json:"twitch_game_id"`
+	TwitchName   string `json:"twitch_name"`
 }
 
 type GlobalGame struct {

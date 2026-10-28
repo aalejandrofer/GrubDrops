@@ -47,6 +47,14 @@ describe('gameCards', () => {
 		const c = gameCards(G(), r);
 		expect(c[0].rows.map((x) => x.runner.account_name)).toContain('hJune');
 	});
+	it('rows matched by Twitch name', () => {
+		const g = G();
+		g[0].twitch_name = 'Rust Renamed';
+		const r = R();
+		r[0].current!.game = 'Rust Renamed';
+		const c = gameCards(g, r);
+		expect(c[0].rows.map((x) => x.runner.account_name)).toContain('hJune');
+	});
 	it('cards hold only accounts mining their game', () => {
 		const c = gameCards(G(), R());
 		expect(c.map((x) => x.rows.length)).toEqual([2, 0, 0, 0]);

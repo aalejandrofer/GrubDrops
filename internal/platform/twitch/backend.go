@@ -445,24 +445,23 @@ func (b *Backend) LookupCategory(ctx context.Context, s platform.Session, slug s
 
 // LookupGameID satisfies platform.GameIDLooker: the game with this exact
 // name, else the category search hit the name only extends by a version
-// number ("Counter-Strike 2" is Twitch's "Counter-Strike").
-func (b *Backend) LookupGameID(ctx context.Context, s platform.Session, name string) (string, bool, error) {
+// number ("Counter-Strike 2" is Twitch's "Counter-Strike"). twitchName is
+// Twitch's current name, which differs from name when Twitch renamed it.
+func (b *Backend) LookupGameID(ctx context.Context, s platform.Session, name string) (id, twitchName string, ok bool, err error) {
 	b.c.bind(s)
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return "", false, nil
+		return "", "", false, nil
 	}
-	const byName = `query GameID($name: String) { game(name: $name) { id } }`
+	const byName = `query GameID($name: String) { game(name: $name) { id name } }`
 	var game struct {
-		Game *struct {
-			ID string `json:"id"`
-		} `json:"game"`
+		Game *searchHit `json:"game"`
 	}
 	if err := b.c.gqlQuery(ctx, s.AccessToken, "GameID", byName, map[string]any{"name": name}, &game); err != nil {
-		return "", false, fmt.Errorf("game id %s: %w", name, err)
+		return "", "", false, fmt.Errorf("game id %s: %w", name, err)
 	}
 	if game.Game != nil && game.Game.ID != "" {
-		return game.Game.ID, true, nil
+		return game.Game.ID, game.Game.Name, true, nil
 	}
 	const search = `query GameSearch($query: String!) { searchCategories(query: $query, first: 5) { edges { node { id name } } } }`
 	var found struct {
@@ -473,17 +472,17 @@ func (b *Backend) LookupGameID(ctx context.Context, s platform.Session, name str
 		} `json:"searchCategories"`
 	}
 	if err := b.c.gqlQuery(ctx, s.AccessToken, "GameSearch", search, map[string]any{"query": name}, &found); err != nil {
-		return "", false, fmt.Errorf("game search %s: %w", name, err)
+		return "", "", false, fmt.Errorf("game search %s: %w", name, err)
 	}
 	if found.SearchCategories == nil {
-		return "", false, nil
+		return "", "", false, nil
 	}
 	hits := make([]searchHit, 0, len(found.SearchCategories.Edges))
 	for _, e := range found.SearchCategories.Edges {
 		hits = append(hits, e.Node)
 	}
-	id, ok := searchHitID(name, hits)
-	return id, ok, nil
+	h, ok := searchHitFor(name, hits)
+	return h.ID, h.Name, ok, nil
 }
 
 type searchHit struct {
@@ -491,29 +490,29 @@ type searchHit struct {
 	Name string `json:"name"`
 }
 
-// searchHitID picks the hit named exactly name, ignoring case, else the hit
+// searchHitFor picks the hit named exactly name, ignoring case, else the hit
 // whose name plus " <number>" is name. Anything looser could be a different
 // game, so it is no match.
-func searchHitID(name string, hits []searchHit) (string, bool) {
+func searchHitFor(name string, hits []searchHit) (searchHit, bool) {
 	for _, h := range hits {
 		if h.ID != "" && strings.EqualFold(h.Name, name) {
-			return h.ID, true
+			return h, true
 		}
 	}
 	i := strings.LastIndexByte(name, ' ')
 	if i <= 0 {
-		return "", false
+		return searchHit{}, false
 	}
 	if strings.Trim(name[i+1:], "0123456789") != "" {
-		return "", false
+		return searchHit{}, false
 	}
 	base := name[:i]
 	for _, h := range hits {
 		if h.ID != "" && strings.EqualFold(h.Name, base) {
-			return h.ID, true
+			return h, true
 		}
 	}
-	return "", false
+	return searchHit{}, false
 }
 
 // ReadyDrops satisfies platform.ReadyDropLister.

@@ -61,7 +61,7 @@ func (q *Queries) ClearGlobalGames(ctx context.Context) error {
 }
 
 const listAccountGames = `-- name: ListAccountGames :many
-SELECT g.id, g.name, g.slug, ag.rank
+SELECT g.id, g.name, g.slug, g.twitch_game_id, g.twitch_name, ag.rank
 FROM account_games ag
 JOIN games g ON g.id = ag.game_id
 WHERE ag.account_id = ?
@@ -69,10 +69,12 @@ ORDER BY ag.rank ASC
 `
 
 type ListAccountGamesRow struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
-	Rank int64  `json:"rank"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Slug         string `json:"slug"`
+	TwitchGameID string `json:"twitch_game_id"`
+	TwitchName   string `json:"twitch_name"`
+	Rank         int64  `json:"rank"`
 }
 
 func (q *Queries) ListAccountGames(ctx context.Context, accountID string) ([]ListAccountGamesRow, error) {
@@ -88,6 +90,8 @@ func (q *Queries) ListAccountGames(ctx context.Context, accountID string) ([]Lis
 			&i.ID,
 			&i.Name,
 			&i.Slug,
+			&i.TwitchGameID,
+			&i.TwitchName,
 			&i.Rank,
 		); err != nil {
 			return nil, err
@@ -104,7 +108,7 @@ func (q *Queries) ListAccountGames(ctx context.Context, accountID string) ([]Lis
 }
 
 const listAllGames = `-- name: ListAllGames :many
-SELECT id, name, slug, priority, twitch_game_id FROM games ORDER BY name
+SELECT id, name, slug, priority, twitch_game_id, twitch_name FROM games ORDER BY name
 `
 
 func (q *Queries) ListAllGames(ctx context.Context) ([]Game, error) {
@@ -122,6 +126,52 @@ func (q *Queries) ListAllGames(ctx context.Context) ([]Game, error) {
 			&i.Slug,
 			&i.Priority,
 			&i.TwitchGameID,
+			&i.TwitchName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGamesInUse = `-- name: ListGamesInUse :many
+SELECT DISTINCT g.id, g.name, g.slug, g.twitch_game_id, g.twitch_name
+FROM games g
+WHERE g.id IN (SELECT game_id FROM chosen_games)
+   OR g.id IN (SELECT ag.game_id FROM account_games ag JOIN accounts a ON a.id = ag.account_id WHERE a.own_games = 1)
+ORDER BY g.name
+`
+
+type ListGamesInUseRow struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Slug         string `json:"slug"`
+	TwitchGameID string `json:"twitch_game_id"`
+	TwitchName   string `json:"twitch_name"`
+}
+
+func (q *Queries) ListGamesInUse(ctx context.Context) ([]ListGamesInUseRow, error) {
+	rows, err := q.db.QueryContext(ctx, listGamesInUse)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListGamesInUseRow
+	for rows.Next() {
+		var i ListGamesInUseRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.TwitchGameID,
+			&i.TwitchName,
 		); err != nil {
 			return nil, err
 		}
@@ -204,6 +254,23 @@ type SetGameTwitchIDParams struct {
 func (q *Queries) SetGameTwitchID(ctx context.Context, arg SetGameTwitchIDParams) error {
 	_, err := q.db.ExecContext(ctx, setGameTwitchID, arg.TwitchGameID, arg.ID)
 	return err
+}
+
+const setGameTwitchName = `-- name: SetGameTwitchName :execrows
+UPDATE games SET twitch_name = ?1 WHERE id = ?2 AND twitch_name <> ?1
+`
+
+type SetGameTwitchNameParams struct {
+	TwitchName string `json:"twitch_name"`
+	ID         string `json:"id"`
+}
+
+func (q *Queries) SetGameTwitchName(ctx context.Context, arg SetGameTwitchNameParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setGameTwitchName, arg.TwitchName, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const upsertGame = `-- name: UpsertGame :exec

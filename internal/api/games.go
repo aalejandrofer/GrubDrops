@@ -36,14 +36,17 @@ type needsLinkJSON struct {
 }
 
 type gameJSON struct {
-	ID        string             `json:"id"`
-	Name      string             `json:"name"`
-	Slug      string             `json:"slug"`
-	Priority  int                `json:"priority"`
-	BoxArtURL string             `json:"box_art_url"`
-	State     string             `json:"state"`
-	Campaigns []gameCampaignJSON `json:"campaigns"`
-	NeedsLink []needsLinkJSON    `json:"needs_link"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+	// TwitchName is Twitch's name for the game, "" until known. Twitch
+	// campaigns can name a renamed game this way.
+	TwitchName string             `json:"twitch_name"`
+	Priority   int                `json:"priority"`
+	BoxArtURL  string             `json:"box_art_url"`
+	State      string             `json:"state"`
+	Campaigns  []gameCampaignJSON `json:"campaigns"`
+	NeedsLink  []needsLinkJSON    `json:"needs_link"`
 }
 
 type gamesJSON struct {
@@ -92,7 +95,7 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 	}
 	games := make([]plan.Game, len(chosen))
 	for i, c := range chosen {
-		games[i] = plan.Game{Name: c.Name, Slug: c.Slug}
+		games[i] = plan.Game{Name: c.Name, Slug: c.Slug, TwitchName: c.TwitchName}
 	}
 	var statuses []collect.GameStatus
 	if s.d.Board != nil {
@@ -129,7 +132,7 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 	var last time.Time
 	for i, c := range chosen {
 		g := gameJSON{
-			ID: c.ID, Name: c.Name, Slug: c.Slug, Priority: i + 1,
+			ID: c.ID, Name: c.Name, Slug: c.Slug, TwitchName: c.TwitchName, Priority: i + 1,
 			BoxArtURL: boxArtURL(c.Name, c.TwitchGameID), State: "no_campaign",
 			Campaigns: []gameCampaignJSON{}, NeedsLink: []needsLinkJSON{},
 		}

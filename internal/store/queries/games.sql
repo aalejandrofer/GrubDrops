@@ -1,5 +1,5 @@
 -- name: ListAllGames :many
-SELECT id, name, slug, priority, twitch_game_id FROM games ORDER BY name;
+SELECT id, name, slug, priority, twitch_game_id, twitch_name FROM games ORDER BY name;
 
 -- name: UpsertGame :exec
 INSERT INTO games (id, name, slug, priority)
@@ -7,7 +7,7 @@ VALUES (?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET name = excluded.name, slug = excluded.slug;
 
 -- name: ListAccountGames :many
-SELECT g.id, g.name, g.slug, ag.rank
+SELECT g.id, g.name, g.slug, g.twitch_game_id, g.twitch_name, ag.rank
 FROM account_games ag
 JOIN games g ON g.id = ag.game_id
 WHERE ag.account_id = ?
@@ -40,3 +40,13 @@ DELETE FROM global_games;
 
 -- name: SetGameTwitchID :exec
 UPDATE games SET twitch_game_id = sqlc.arg(twitch_game_id) WHERE id = sqlc.arg(id) AND twitch_game_id <> sqlc.arg(twitch_game_id);
+
+-- name: SetGameTwitchName :execrows
+UPDATE games SET twitch_name = sqlc.arg(twitch_name) WHERE id = sqlc.arg(id) AND twitch_name <> sqlc.arg(twitch_name);
+
+-- name: ListGamesInUse :many
+SELECT DISTINCT g.id, g.name, g.slug, g.twitch_game_id, g.twitch_name
+FROM games g
+WHERE g.id IN (SELECT game_id FROM chosen_games)
+   OR g.id IN (SELECT ag.game_id FROM account_games ag JOIN accounts a ON a.id = ag.account_id WHERE a.own_games = 1)
+ORDER BY g.name;

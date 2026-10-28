@@ -55,6 +55,9 @@ type roster struct {
 
 	// gamesDirty queues one games reload; see requestGamesReload.
 	gamesDirty chan struct{} // set by newRoster
+	// allGames makes the queued reload include accounts on their own list,
+	// for a change to a games row both lists share.
+	allGames *atomic.Bool // set by newRoster
 
 	// Force watch. force nil = feature off. forceLookup is the shared
 	// checker's Lookup; nil = runners never force watch.
@@ -190,6 +193,7 @@ func newRoster(r roster, k *kick.Backend) *roster {
 	ro.names = &accountNames{}
 	ro.fallbackLog = &refreshFallbackLog{}
 	ro.gamesDirty = make(chan struct{}, 1)
+	ro.allGames = &atomic.Bool{}
 	ro.runCfg = &atomic.Pointer[runSettings]{}
 	ro.forceCache = &atomic.Pointer[[]store.ForceChannel]{}
 	ro.forceMu = &sync.Mutex{}
@@ -204,6 +208,7 @@ func newRoster(r roster, k *kick.Backend) *roster {
 		ro.publishClaim(ctx, e.AccountID, e.BenefitID)
 	}
 	ro.collector.LookupTwitchGameID = ro.lookupTwitchGameID
+	ro.collector.OnGamesChanged = ro.requestAllGamesReload
 	return ro
 }
 
@@ -313,7 +318,7 @@ func (ro *roster) gamesFor(ctx context.Context, a gen.Account) []plan.Game {
 	}
 	games := make([]plan.Game, 0, len(list))
 	for _, g := range list {
-		games = append(games, plan.Game{Name: g.Name, Slug: g.Slug})
+		games = append(games, plan.Game{Name: g.Name, Slug: g.Slug, TwitchName: g.TwitchName})
 	}
 	return games
 }
@@ -446,6 +451,13 @@ func (ro *roster) requestGamesReload() {
 	}
 }
 
+// requestAllGamesReload queues a games reload that also rebuilds accounts on
+// their own list, such as after a game's Twitch name changed.
+func (ro *roster) requestAllGamesReload() {
+	ro.allGames.Store(true)
+	ro.requestGamesReload()
+}
+
 // runGamesReloader runs queued games reloads one at a time until ro.ctx ends.
 func (ro *roster) runGamesReloader() {
 	for {
@@ -472,8 +484,10 @@ func (ro *roster) safeGamesChanged() {
 }
 
 // gamesChanged rebuilds every runner on the global list so each picks up the
-// new chosen games. Accounts on their own list keep running.
+// new chosen games. Accounts on their own list keep running, unless the
+// queued reload asked for all accounts.
 func (ro *roster) gamesChanged() {
+	all := ro.allGames.Swap(false)
 	accts, err := ro.q.ListAllAccounts(ro.ctx)
 	if err != nil {
 		ro.log().Error("games changed: list accounts failed", "kind", "error", "err", err)
@@ -483,7 +497,7 @@ func (ro *roster) gamesChanged() {
 		if ro.ctx.Err() != nil {
 			return
 		}
-		if a.OwnGames != 0 && ro.own != nil {
+		if !all && a.OwnGames != 0 && ro.own != nil {
 			continue
 		}
 		ro.reloadAccount(a.ID)
@@ -750,20 +764,20 @@ func (ro *roster) lookupCategory(ctx context.Context, plat, slug string) (string
 	return name, found, err
 }
 
-// lookupTwitchGameID finds a game's Twitch id by name, the same way
-// lookupCategory finds a name, for box art of games no campaign named.
-func (ro *roster) lookupTwitchGameID(ctx context.Context, name string) (string, bool, error) {
-	var id string
+// lookupTwitchGameID finds a game's Twitch id and Twitch name by name, the
+// same way lookupCategory finds a name, for box art and renamed games.
+func (ro *roster) lookupTwitchGameID(ctx context.Context, name string) (string, string, bool, error) {
+	var id, twitchName string
 	found, err := ro.lookupWithSession(ctx, "twitch", func(ctx context.Context, ls loadedSession) (bool, bool, error) {
 		gl, ok := ls.backend.(platform.GameIDLooker)
 		if !ok {
 			return false, false, nil
 		}
-		v, found, err := gl.LookupGameID(ctx, ls.session, name)
-		id = v
+		v, n, found, err := gl.LookupGameID(ctx, ls.session, name)
+		id, twitchName = v, n
 		return true, found, err
 	})
-	return id, found, err
+	return id, twitchName, found, err
 }
 
 // lookupWithSession runs try with each signed-in, already loaded session on

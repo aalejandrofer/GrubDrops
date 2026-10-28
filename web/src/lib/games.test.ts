@@ -54,6 +54,7 @@ const game = (id: string): Game => ({
 	id,
 	name: id,
 	slug: id,
+	twitch_name: '',
 	priority: 1,
 	box_art_url: '',
 	state: 'no_campaign',

@@ -97,6 +97,7 @@ type Querier interface {
 	ListDropStatesForAccount(ctx context.Context, accountID string) ([]DropState, error)
 	ListEnabledAccounts(ctx context.Context) ([]Account, error)
 	ListForceChannels(ctx context.Context, accountID string) ([]ListForceChannelsRow, error)
+	ListGamesInUse(ctx context.Context) ([]ListGamesInUseRow, error)
 	ListGlobalForceChannelAccounts(ctx context.Context) ([]ForceChannelAccount, error)
 	ListGlobalForceChannels(ctx context.Context) ([]ForceChannel, error)
 	ListGlobalForceChannelsForAccount(ctx context.Context, accountID string) ([]string, error)
@@ -124,6 +125,7 @@ type Querier interface {
 	SetAccountOwnGames(ctx context.Context, arg SetAccountOwnGamesParams) error
 	SetAccountSortOrder(ctx context.Context, arg SetAccountSortOrderParams) error
 	SetGameTwitchID(ctx context.Context, arg SetGameTwitchIDParams) error
+	SetGameTwitchName(ctx context.Context, arg SetGameTwitchNameParams) (int64, error)
 	SumAllWatchMinutes(ctx context.Context) (int64, error)
 	// Lifetime watch minutes: sum of per-benefit progress. Persistent, so it
 	// survives restarts (unlike the heartbeat log ring used for today's count).

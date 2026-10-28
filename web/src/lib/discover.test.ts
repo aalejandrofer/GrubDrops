@@ -34,6 +34,9 @@ describe('isAdded', () => {
 	it('matches by slug', () => {
 		expect(isAdded(chosen, 'Counter-Strike 2')).toBe(true);
 	});
+	it('matches by Twitch name', () => {
+		expect(isAdded([{ name: 'Overwatch 2', slug: 'overwatch-2', twitch_name: 'Overwatch' }], 'Overwatch')).toBe(true);
+	});
 	it('misses other games', () => {
 		expect(isAdded(chosen, 'Rust')).toBe(false);
 		expect(isAdded([], 'Rust')).toBe(false);

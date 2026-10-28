@@ -11,19 +11,22 @@ export function gameSlug(name: string): string {
 	return out.replace(/-+$/, '');
 }
 
-/** Name keys a chosen game answers to: its normalized name and slug. */
-function chosenKeys(chosen: Pick<Game, 'name' | 'slug'>[]): Set<string> {
+type ChosenName = Pick<Game, 'name' | 'slug'> & { twitch_name?: string };
+
+/** Name keys a chosen game answers to: its normalized name, slug and Twitch name. */
+function chosenKeys(chosen: ChosenName[]): Set<string> {
 	const keys = new Set<string>();
 	for (const g of chosen) {
-		for (const k of [normName(g.name), normName(g.slug ?? ''), gameSlug(g.name), gameSlug(g.slug ?? '')]) {
+		const tw = g.twitch_name ?? '';
+		for (const k of [normName(g.name), normName(g.slug ?? ''), normName(tw), gameSlug(g.name), gameSlug(g.slug ?? ''), gameSlug(tw)]) {
 			if (k) keys.add(k);
 		}
 	}
 	return keys;
 }
 
-/** Whether a campaign game name is already chosen, by name or slug, as the planner matches. */
-export function isAdded(chosen: Pick<Game, 'name' | 'slug'>[], name: string): boolean {
+/** Whether a campaign game name is already chosen, by name, slug or Twitch name, as the planner matches. */
+export function isAdded(chosen: ChosenName[], name: string): boolean {
 	const keys = chosenKeys(chosen);
 	return keys.has(normName(name)) || keys.has(gameSlug(name));
 }
@@ -46,7 +49,7 @@ function endMs(c: DiscoverCampaign): number {
  * Campaigns grouped by game slug, games A to Z, campaigns soonest ending first.
  * Twitch box art wins: it is keyed by the Twitch game id.
  */
-export function groupByGame(campaigns: DiscoverCampaign[], chosen: Pick<Game, 'name' | 'slug'>[]): DiscoverGroup[] {
+export function groupByGame(campaigns: DiscoverCampaign[], chosen: ChosenName[]): DiscoverGroup[] {
 	const keys = chosenKeys(chosen);
 	const byKey = new Map<string, DiscoverGroup>();
 	for (const c of campaigns) {

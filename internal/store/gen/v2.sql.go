@@ -212,7 +212,7 @@ func (q *Queries) ListAllDropStates(ctx context.Context) ([]DropState, error) {
 }
 
 const listChosenGames = `-- name: ListChosenGames :many
-SELECT g.id, g.name, g.slug, g.twitch_game_id
+SELECT g.id, g.name, g.slug, g.twitch_game_id, g.twitch_name
 FROM chosen_games cg
 JOIN games g ON g.id = cg.game_id
 ORDER BY cg.rank ASC
@@ -223,6 +223,7 @@ type ListChosenGamesRow struct {
 	Name         string `json:"name"`
 	Slug         string `json:"slug"`
 	TwitchGameID string `json:"twitch_game_id"`
+	TwitchName   string `json:"twitch_name"`
 }
 
 func (q *Queries) ListChosenGames(ctx context.Context) ([]ListChosenGamesRow, error) {
@@ -239,6 +240,7 @@ func (q *Queries) ListChosenGames(ctx context.Context) ([]ListChosenGamesRow, er
 			&i.Name,
 			&i.Slug,
 			&i.TwitchGameID,
+			&i.TwitchName,
 		); err != nil {
 			return nil, err
 		}

@@ -136,6 +136,8 @@ export interface Game {
 	id: string;
 	name: string;
 	slug: string;
+	/** Twitch's name for the game, '' until known. Twitch campaigns of a renamed game use it. */
+	twitch_name: string;
 	priority: number;
 	box_art_url: string;
 	state: GameState;

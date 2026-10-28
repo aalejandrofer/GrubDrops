@@ -10,7 +10,10 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
-type Game struct{ Name, Slug string }
+// Game is a chosen game. TwitchName, when set, is Twitch's name for it, so a
+// game Twitch renamed still matches its Twitch campaigns while Kick keeps
+// matching Name.
+type Game struct{ Name, Slug, TwitchName string }
 
 type Input struct {
 	Games     []Game // chosen games, priority order (index 0 = top)
@@ -69,12 +72,12 @@ type Result struct {
 	NeedsLink []Target
 }
 
-// Match returns the index of the game whose name or slug equals game,
-// case-insensitively.
+// Match returns the index of the game whose name, slug or Twitch name
+// equals game, case-insensitively.
 func Match(games []Game, game string) (rank int, ok bool) {
 	g := strings.ToLower(game)
 	for i, c := range games {
-		if g == strings.ToLower(c.Name) || g == strings.ToLower(c.Slug) {
+		if g == strings.ToLower(c.Name) || g == strings.ToLower(c.Slug) || (c.TwitchName != "" && g == strings.ToLower(c.TwitchName)) {
 			return i, true
 		}
 	}

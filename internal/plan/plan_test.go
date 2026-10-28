@@ -144,6 +144,20 @@ func TestBuild_GameMatchLenient(t *testing.T) {
 	}
 }
 
+// A game Twitch renamed keeps its stored name for Kick and matches Twitch
+// campaigns by its Twitch name.
+func TestBuild_GameMatchTwitchName(t *testing.T) {
+	cs2 := []Game{{Name: "Counter-Strike 2", Slug: "counter-strike-2", TwitchName: "Counter-Strike"}}
+	res := Build(Input{Games: cs2, Campaigns: []platform.Campaign{
+		camp("t", "twitch", "Counter-Strike", ben("d1", 10)),
+		camp("k", "kick", "Counter-Strike 2", ben("d2", 10)),
+	}})
+	eq(t, ids(res.Queue), []string{"d1", "d2"})
+	if _, ok := Match([]Game{{Name: "Rust", Slug: "rust"}}, ""); ok {
+		t.Fatal("empty Twitch name matched an empty game")
+	}
+}
+
 func TestBuild_DuplicateBenefitQueuedOnce(t *testing.T) {
 	res := Build(Input{Games: rust, Campaigns: []platform.Campaign{
 		camp("a", "kick", "Rust", ben("d1", 10)),

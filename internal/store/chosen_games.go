@@ -7,7 +7,10 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
-type ChosenGame struct{ ID, Name, Slug, TwitchGameID string }
+// ChosenGame is a games row as the planner sees it. TwitchName is Twitch's
+// name for the game when it differs from Name or is known; empty until a
+// Twitch scan or lookup fills it.
+type ChosenGame struct{ ID, Name, Slug, TwitchGameID, TwitchName string }
 
 // ChosenGames is the ranked list of games the user wants to farm.
 type ChosenGames struct {
@@ -25,7 +28,21 @@ func (c *ChosenGames) List(ctx context.Context) ([]ChosenGame, error) {
 	}
 	out := make([]ChosenGame, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, ChosenGame{ID: r.ID, Name: r.Name, Slug: r.Slug, TwitchGameID: r.TwitchGameID})
+		out = append(out, ChosenGame{ID: r.ID, Name: r.Name, Slug: r.Slug, TwitchGameID: r.TwitchGameID, TwitchName: r.TwitchName})
+	}
+	return out, nil
+}
+
+// InUse returns every game on the global list or on an account's own list
+// that is turned on, each once.
+func (c *ChosenGames) InUse(ctx context.Context) ([]ChosenGame, error) {
+	rows, err := c.Q.ListGamesInUse(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ChosenGame, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, ChosenGame{ID: r.ID, Name: r.Name, Slug: r.Slug, TwitchGameID: r.TwitchGameID, TwitchName: r.TwitchName})
 	}
 	return out, nil
 }

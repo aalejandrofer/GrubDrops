@@ -76,7 +76,7 @@ ON CONFLICT(account_id) DO UPDATE SET
 SELECT * FROM account_scans ORDER BY account_id ASC;
 
 -- name: ListChosenGames :many
-SELECT g.id, g.name, g.slug, g.twitch_game_id
+SELECT g.id, g.name, g.slug, g.twitch_game_id, g.twitch_name
 FROM chosen_games cg
 JOIN games g ON g.id = cg.game_id
 ORDER BY cg.rank ASC;

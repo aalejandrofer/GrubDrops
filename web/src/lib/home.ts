@@ -58,8 +58,8 @@ function onCard(r: Runner, paused: ReadonlySet<string>): boolean {
 
 /**
  * Cards in priority order. A card lists only the accounts mining its game;
- * notMining lists the rest. A runner game matches the card by name or slug,
- * like the Go planner.
+ * notMining lists the rest. A runner game matches the card by name, slug or
+ * Twitch name, like the Go planner.
  */
 export function gameCards(
   g: Game[],
@@ -70,7 +70,11 @@ export function gameCards(
   return sorted.map((game, i) => {
     const rank = i + 1;
     const keys = new Set(
-      [normName(game.name), normName(game.slug ?? "")].filter(Boolean),
+      [
+        normName(game.name),
+        normName(game.slug ?? ""),
+        normName(game.twitch_name ?? ""),
+      ].filter(Boolean),
     );
     const isThis = (name: string) => keys.has(normName(name));
     const rows = r

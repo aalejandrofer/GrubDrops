@@ -27,7 +27,7 @@ func (a *AccountGames) List(ctx context.Context, accountID string) ([]ChosenGame
 	}
 	out := make([]ChosenGame, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, ChosenGame{ID: r.ID, Name: r.Name, Slug: r.Slug})
+		out = append(out, ChosenGame{ID: r.ID, Name: r.Name, Slug: r.Slug, TwitchGameID: r.TwitchGameID, TwitchName: r.TwitchName})
 	}
 	return out, nil
 }

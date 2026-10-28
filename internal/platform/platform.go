@@ -184,11 +184,12 @@ type CategoryLooker interface {
 	LookupCategory(ctx context.Context, s Session, slug string) (name string, ok bool, err error)
 }
 
-// GameIDLooker is optional: a game's platform id from its name, for box art
-// of games no campaign has named yet. ok is false when the platform knows
-// no such game.
+// GameIDLooker is optional: a game's platform id and the platform's own
+// name for it, from the name GrubDrops stores. The id gives box art to games
+// no campaign has named yet; the name matches campaigns of a renamed game.
+// ok is false when the platform knows no such game.
 type GameIDLooker interface {
-	LookupGameID(ctx context.Context, s Session, name string) (id string, ok bool, err error)
+	LookupGameID(ctx context.Context, s Session, name string) (id, platformName string, ok bool, err error)
 }
 
 // ReadyDropLister is optional: drops in the inventory that are fully watched and unclaimed,
