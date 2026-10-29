@@ -51,6 +51,7 @@ out/
 
 # playwright / scratch
 .playwright-mcp/
+.playwright-cli/
 /tmp/
 .superpowers/
 

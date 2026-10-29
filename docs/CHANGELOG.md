@@ -4,6 +4,9 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Changed
+- **`.playwright-cli/` is git-ignored.** Console logs and page snapshots from `playwright-cli` runs no longer show as untracked files.
+
 ## [2.2.1] — 2026-10-28
 
 ### Fixed
