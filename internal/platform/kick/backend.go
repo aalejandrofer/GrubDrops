@@ -73,6 +73,7 @@ type Backend struct {
 	campaignChannels map[string][]kickChannel // campaignID -> eligible channels (slug+id)
 	categoryChannels map[string][]kickChannel // game/category -> union of participating channels across campaigns
 	categorySlugs    map[string]string        // game display name -> authoritative category slug (payload-provided)
+	categoryIDs      map[string]string        // game display name -> numeric category id (payload or subcategory lookup)
 
 	// reaperCancel stops the sidecar reaper goroutine on Close().
 	reaperCancel context.CancelFunc
@@ -153,6 +154,7 @@ func New(c *browser.Client, ctl dockerctl.Controller, template string, port int,
 		campaignChannels: map[string][]kickChannel{},
 		categoryChannels: map[string][]kickChannel{},
 		categorySlugs:    map[string]string{},
+		categoryIDs:      map[string]string{},
 		links:            o.links,
 	}
 	if b.links != nil {
@@ -457,10 +459,16 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 			b.categorySlugs[c.Game] = c.GameSlug
 			b.mu.Unlock()
 		}
+		if c.Game != "" && c.GameID != "" {
+			b.mu.Lock()
+			b.categoryIDs[c.Game] = c.GameID
+			b.mu.Unlock()
+		}
 		camp := platform.Campaign{
 			ID:              c.ID,
 			Platform:        "kick",
 			Game:            c.Game,
+			BoxArtURL:       c.GameImage,
 			Name:            c.Name,
 			Benefits:        benefits,
 			AllowedChannels: slugs,
@@ -573,7 +581,7 @@ func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, 
 // LookupCategory satisfies platform.CategoryLooker. A 404 means no such
 // category.
 func (b *Backend) LookupCategory(ctx context.Context, s platform.Session, slug string) (string, bool, error) {
-	name, err := b.api.Subcategory(ctx, s, slug)
+	name, _, err := b.api.Subcategory(ctx, s, slug)
 	if err != nil {
 		var se *statusError
 		if errors.As(err, &se) && se.status == http.StatusNotFound {
@@ -646,7 +654,7 @@ func (b *Backend) probeLive(ctx context.Context, s platform.Session, c platform.
 }
 
 // discoverCategoryChannels is the open-campaign directory fallback: fetch the
-// public /stream/livestreams/{category} feed for the campaign's category,
+// public livestreams directory for the campaign's category id,
 // merge the discovered slugs into the category pool (so subsequent picks see
 // them without a re-fetch), and return the ones that are live and actually
 // streaming the campaign's category. Returns nil when the category slug can't
@@ -654,7 +662,7 @@ func (b *Backend) probeLive(ctx context.Context, s platform.Session, c platform.
 // through to the manual operator channels.
 func (b *Backend) discoverCategoryChannels(ctx context.Context, s platform.Session, c platform.Campaign) []platform.Stream {
 	b.mu.Lock()
-	slug := b.categorySlugs[c.Game]
+	slug, id := b.categorySlugs[c.Game], b.categoryIDs[c.Game]
 	b.mu.Unlock()
 	if slug == "" && c.Game != "" {
 		slug = gameslug.Slug(c.Game)
@@ -662,9 +670,21 @@ func (b *Backend) discoverCategoryChannels(ctx context.Context, s platform.Sessi
 	if slug == "" {
 		return nil
 	}
-	streams, err := b.api.DiscoverChannelsForCategory(ctx, s, slug, c.Game)
+	if id == "" {
+		// The directory is keyed by numeric id; resolve it from the slug once.
+		_, got, err := b.api.Subcategory(ctx, s, slug)
+		if err != nil || got == "" {
+			slog.Debug("kick category id lookup failed", "game", c.Game, "slug", slug, "err", err)
+			return nil
+		}
+		id = got
+		b.mu.Lock()
+		b.categoryIDs[c.Game] = id
+		b.mu.Unlock()
+	}
+	streams, err := b.api.DiscoverChannelsForCategory(ctx, s, id, slug, c.Game)
 	if err != nil {
-		slog.Debug("kick category directory fetch failed", "game", c.Game, "slug", slug, "err", err)
+		slog.Debug("kick category directory fetch failed", "game", c.Game, "slug", slug, "id", id, "err", err)
 		return nil
 	}
 	if len(streams) == 0 {

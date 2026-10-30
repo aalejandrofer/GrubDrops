@@ -58,6 +58,10 @@ type roster struct {
 	// allGames makes the queued reload include accounts on their own list,
 	// for a change to a games row both lists share.
 	allGames *atomic.Bool // set by newRoster
+	// settle is how long requestGamesReloadSoon waits for saves to stop
+	// before it queues the reload; 0 means gamesSettle.
+	settle      time.Duration
+	settleTimer *settleTimer // set by newRoster
 
 	// Force watch. force nil = feature off. forceLookup is the shared
 	// checker's Lookup; nil = runners never force watch.
@@ -194,6 +198,10 @@ func newRoster(r roster, k *kick.Backend) *roster {
 	ro.fallbackLog = &refreshFallbackLog{}
 	ro.gamesDirty = make(chan struct{}, 1)
 	ro.allGames = &atomic.Bool{}
+	ro.settleTimer = &settleTimer{}
+	if ro.settle == 0 {
+		ro.settle = gamesSettle
+	}
 	ro.runCfg = &atomic.Pointer[runSettings]{}
 	ro.forceCache = &atomic.Pointer[[]store.ForceChannel]{}
 	ro.forceMu = &sync.Mutex{}
@@ -449,6 +457,29 @@ func (ro *roster) requestGamesReload() {
 	case ro.gamesDirty <- struct{}{}:
 	default:
 	}
+}
+
+// gamesSettle is how long a saved game order waits before the miner applies
+// it. Each arrow click saves, so without it every click rebuilds the runners.
+const gamesSettle = 10 * time.Second
+
+// settleTimer holds the pending requestGamesReloadSoon timer.
+type settleTimer struct {
+	mu sync.Mutex
+	t  *time.Timer
+}
+
+// requestGamesReloadSoon queues a games reload once no further call has come
+// for ro.settle. Each call restarts the wait, so a burst of saves rebuilds
+// the runners once.
+func (ro *roster) requestGamesReloadSoon() {
+	st := ro.settleTimer
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if st.t != nil {
+		st.t.Stop()
+	}
+	st.t = time.AfterFunc(ro.settle, ro.requestGamesReload)
 }
 
 // requestAllGamesReload queues a games reload that also rebuilds accounts on

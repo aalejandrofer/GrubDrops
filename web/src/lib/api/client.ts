@@ -69,7 +69,8 @@ export interface Api {
 	games(): Promise<GamesResp>;
 	addGame(name: string): Promise<Game>;
 	scanGames(): Promise<void>;
-	setGames(ids: string[]): Promise<void>;
+	/** applies_in_s: seconds until the miner applies the order. */
+	setGames(ids: string[]): Promise<{ applies_in_s: number }>;
 	searchGames(q: string): Promise<SearchHit[]>;
 	/** refresh bypasses the server cache, at most once a minute. */
 	discover(refresh?: boolean): Promise<DiscoverResp>;
@@ -225,7 +226,7 @@ export function createClient(opts: ClientOpts): Api {
 		games: () => get('/api/games'),
 		addGame: (name) => post('/api/games', { name }),
 		scanGames: () => post('/api/games/scan'),
-		setGames: (ids) => send('PUT', '/api/games', { ids }) as Promise<void>,
+		setGames: (ids) => send('PUT', '/api/games', { ids }) as Promise<{ applies_in_s: number }>,
 		searchGames: (q) => get(`/api/games/search?q=${enc(q)}`),
 		discover: (refresh) => (refresh ? post('/api/discover/refresh') : get('/api/discover')),
 		claims(q) {

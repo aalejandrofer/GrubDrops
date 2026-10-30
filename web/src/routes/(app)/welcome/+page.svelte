@@ -128,7 +128,9 @@
 				set: (g) => {
 					if (live.games) live.games = { ...live.games, games: g.map((x, i) => ({ ...x, priority: i + 1 })) };
 				},
-				setGames: (ids) => api.setGames(ids),
+				setGames: async (ids) => {
+					await api.setGames(ids);
+				},
 				fetchGames: async () => (await api.games()).games
 			},
 			next

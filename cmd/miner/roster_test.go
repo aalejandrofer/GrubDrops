@@ -334,6 +334,25 @@ func TestRoster_GamesReloadQueuedAndCoalesced(t *testing.T) {
 	mu.Unlock()
 }
 
+// A burst of saves inside the settle window queues one reload, and only once
+// the saves stop: clicking an arrow five times restarts the miner once.
+func TestRoster_GamesReloadSoonSettles(t *testing.T) {
+	e := newRosterEnv(t)
+	e.ro.settle = 150 * time.Millisecond
+
+	for range 5 {
+		e.ro.requestGamesReloadSoon()
+		time.Sleep(50 * time.Millisecond)
+	}
+	// 250ms of saves, each under the settle apart: nothing queued yet.
+	assert.Len(t, e.ro.gamesDirty, 0)
+
+	require.Eventually(t, func() bool { return len(e.ro.gamesDirty) == 1 }, 2*time.Second, 10*time.Millisecond)
+	<-e.ro.gamesDirty
+	time.Sleep(300 * time.Millisecond)
+	assert.Len(t, e.ro.gamesDirty, 0, "the burst queues exactly one reload")
+}
+
 func TestRoster_RunnerEventCarriesRenamedAccount(t *testing.T) {
 	e := newRosterEnv(t)
 	e.flushHub(t)

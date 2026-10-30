@@ -585,7 +585,8 @@ func run(ctx context.Context) error {
 		Chosen:       ro.chosen,
 		AccountGames: ro.own,
 		Board:        collector.Board,
-		GamesChanged: ro.requestGamesReload,
+		GamesChanged: ro.requestGamesReloadSoon,
+		GamesSettle:  ro.settle,
 		Discover:     discoverSvc,
 
 		ForceWatch:     ro.force,

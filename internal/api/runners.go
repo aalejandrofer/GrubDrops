@@ -190,6 +190,14 @@ func (s *server) postAccountRecheckLinks(w http.ResponseWriter, r *http.Request)
 	case err != nil:
 		writeErr(w, http.StatusBadGateway, "recheck_failed")
 	default:
+		// The board's scan predates the recheck; drop its stale banner now
+		// instead of at the account's next scan.
+		if res.StillNeedsLink == 0 && s.d.Board != nil {
+			s.d.Board.ClearLinks(id)
+			if s.d.Hub != nil {
+				s.d.Hub.Publish(Event{Name: EventGames, Data: struct{}{}})
+			}
+		}
 		writeJSON(w, http.StatusOK, map[string]int{
 			"claimed": res.Claimed, "still_needs_link": res.StillNeedsLink,
 		})

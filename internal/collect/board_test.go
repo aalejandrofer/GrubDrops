@@ -135,6 +135,33 @@ func TestBoard_NeedsLink(t *testing.T) {
 	}
 }
 
+// A recheck that left nothing refused hides the account's link needs until
+// its next scan, which then decides again.
+func TestBoard_ClearLinks(t *testing.T) {
+	b := NewBoard()
+	k := camp("k1", "kick", "Rust", oct31, 1)
+	k.ClaimNeedsLink = true
+	tw := camp("t1", "twitch", "Rust", oct31, 1)
+	s := scan("a1", "kick", time.Now(), k, tw)
+	s.Result = plan.Result{
+		NeedsLink: []plan.Target{{Campaign: tw}},
+		Blocked:   []plan.Blocked{{Target: plan.Target{Campaign: k}, Reason: plan.ReasonNotLinked}},
+	}
+	b.Observe(s)
+	b.Observe(scan("a2", "kick", time.Now(), k))
+
+	b.ClearLinks("a1")
+	got := b.Games([]plan.Game{rust})
+	if len(got[0].NeedsLink) != 1 || got[0].NeedsLink[0].AccountID != "a2" {
+		t.Fatalf("after clear %+v", got[0].NeedsLink)
+	}
+
+	b.Observe(s)
+	if got := b.Games([]plan.Game{rust}); len(got[0].NeedsLink) != 2 {
+		t.Fatalf("next scan decides again %+v", got[0].NeedsLink)
+	}
+}
+
 // Unlinked campaigns the planner still queues warn the same way as refused ones.
 func TestBoard_NeedsLinkFromQueued(t *testing.T) {
 	b := NewBoard()

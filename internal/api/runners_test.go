@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/aalejandrofer/grubdrops/internal/collect"
 	"github.com/aalejandrofer/grubdrops/internal/plan"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/runner"
@@ -202,6 +203,38 @@ func TestAccounts_RecheckLinks(t *testing.T) {
 	resp, b = e.do("POST", "/api/accounts/b2/recheck-links", tok, nil)
 	assert.Equal(t, 502, resp.StatusCode)
 	assert.JSONEq(t, `{"error":"recheck_failed"}`, string(b))
+}
+
+// A recheck with nothing still refused clears the account's banner at once
+// and tells the SPA to refetch games; one with refusals left keeps it.
+func TestAccounts_RecheckLinksClearsBoard(t *testing.T) {
+	board := collect.NewBoard()
+	e := newResEnv(t, func(d *Deps) { d.Board = board })
+	e.s.routesAccounts(e.s.protected)
+	e.pool.snaps = []runner.Snapshot{{AccountID: "b2", Platform: "kick", State: runner.StatePicking}}
+	k := platform.Campaign{ID: "k1", Platform: "kick", Game: "Rust", Status: "active", ClaimNeedsLink: true,
+		Benefits: []platform.DropBenefit{{ID: "kb", RequiredMinutes: 60}}}
+	board.Observe(runner.Scan{AccountID: "b2", Platform: "kick", At: time.Now(), Campaigns: []platform.Campaign{k}})
+	rust := []plan.Game{{Name: "Rust", Slug: "rust"}}
+	_, tok := e.session()
+	events, cancel := e.s.d.Hub.Subscribe()
+	defer cancel()
+
+	e.pool.recheckRes = runner.LinkRecheck{StillNeedsLink: 1}
+	resp, _ := e.do("POST", "/api/accounts/b2/recheck-links", tok, nil)
+	require.Equal(t, 200, resp.StatusCode)
+	assert.Len(t, board.Games(rust)[0].NeedsLink, 1, "still refused keeps the banner")
+
+	e.pool.recheckRes = runner.LinkRecheck{}
+	resp, _ = e.do("POST", "/api/accounts/b2/recheck-links", tok, nil)
+	require.Equal(t, 200, resp.StatusCode)
+	assert.Empty(t, board.Games(rust)[0].NeedsLink)
+	select {
+	case ev := <-events:
+		assert.Equal(t, EventGames, ev.Name)
+	case <-time.After(time.Second):
+		t.Fatal("no games event")
+	}
 }
 
 func TestTargetJSON_Channels(t *testing.T) {

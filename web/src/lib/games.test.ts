@@ -6,6 +6,7 @@ import {
 	byEndingSoonest,
 	campaignLine,
 	commitGames,
+	restartCountdown,
 	dupePriority,
 	linkErrorKey,
 	linkHref,
@@ -236,5 +237,21 @@ describe('linkErrorKey', () => {
 	it('other failures are null', () => {
 		expect(linkErrorKey(new ApiError(500, { error: 'internal' }))).toBeNull();
 		expect(linkErrorKey(new Error('net'))).toBeNull();
+	});
+});
+
+describe('restartCountdown', () => {
+	it('counts whole seconds down to the restart', () => {
+		expect(restartCountdown(10_000, 0)).toBe(10);
+		expect(restartCountdown(10_000, 500)).toBe(10);
+		expect(restartCountdown(10_000, 9_001)).toBe(1);
+	});
+	it('holds at 0 while the restart line shows, then hides', () => {
+		expect(restartCountdown(10_000, 10_000)).toBe(0);
+		expect(restartCountdown(10_000, 11_999)).toBe(0);
+		expect(restartCountdown(10_000, 12_000)).toBeNull();
+	});
+	it('hides when nothing is pending', () => {
+		expect(restartCountdown(0, 5)).toBeNull();
 	});
 });

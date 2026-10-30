@@ -73,6 +73,21 @@ func boxArtURL(name, twitchID string) string {
 	return twitch.BoxArtByName(name)
 }
 
+// kickCategoryArt is the first Kick category image among cs, through the
+// /api/img/kick proxy, else fallback. A game with no Twitch id is often
+// Kick-only, and the name-keyed Twitch URL has nothing for it.
+func kickCategoryArt(cs []collect.CampaignSummary, fallback string) string {
+	for _, c := range cs {
+		if c.Platform != "kick" {
+			continue
+		}
+		if u := rewardImage("kick", c.BoxArtURL); u != "" {
+			return u
+		}
+	}
+	return fallback
+}
+
 func (s *server) routesGames(r chi.Router) {
 	r.Get("/games", s.handleGamesList)
 	r.Post("/games", s.handleGamesAdd)
@@ -137,6 +152,9 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 			Campaigns: []gameCampaignJSON{}, NeedsLink: []needsLinkJSON{},
 		}
 		if i < len(statuses) {
+			if c.TwitchGameID == "" {
+				g.BoxArtURL = kickCategoryArt(statuses[i].Campaigns, g.BoxArtURL)
+			}
 			for _, cs := range statuses[i].Campaigns {
 				cj := gameCampaignJSON{
 					ID: cs.ID, Platform: cs.Platform, Name: cs.Name, Drops: cs.Drops,
@@ -283,7 +301,7 @@ func (s *server) handleGamesReorder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.gamesChanged()
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusOK, map[string]int{"applies_in_s": int(s.d.GamesSettle.Round(time.Second) / time.Second)})
 }
 
 // handleGamesScan asks every runner to rescan campaigns now.

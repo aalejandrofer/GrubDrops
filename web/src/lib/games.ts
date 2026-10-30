@@ -112,6 +112,18 @@ export async function commitGames(io: GamesIO, next: Game[]): Promise<boolean> {
 	return ok;
 }
 
+/** How long the "Restarting the miner" line stays up once the countdown ends. */
+export const RESTART_HOLD_MS = 2000;
+
+/**
+ * Seconds left before a saved order restarts the miner, for the toast.
+ * 0 while the restart line holds after the countdown; null once the toast should hide.
+ */
+export function restartCountdown(at: number, now: number): number | null {
+	if (at <= 0 || now >= at + RESTART_HOLD_MS) return null;
+	return Math.max(0, Math.ceil((at - now) / 1000));
+}
+
 export function moveGame(games: Game[], from: number, to: number): Game[] {
 	return moveItem(games, from, to);
 }

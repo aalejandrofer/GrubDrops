@@ -17,6 +17,7 @@ type CampaignSummary struct {
 	ID, Platform, Name string
 	Drops              int // benefits with RequiredMinutes > 0
 	EndsAt             time.Time
+	BoxArtURL          string // platform game art; for Kick the category image
 }
 
 // LinkNeed is one account that must link an external account (Riot, Steam,
@@ -67,10 +68,13 @@ func addLinkNeed(out []GameStatus, idx []map[string]int, i int, s runner.Scan, c
 type Board struct {
 	mu    sync.Mutex
 	scans map[string]runner.Scan
+	// linked holds accounts whose link refusals a recheck cleared after
+	// their latest scan; their link needs stay hidden until the next scan.
+	linked map[string]bool
 }
 
 func NewBoard() *Board {
-	return &Board{scans: map[string]runner.Scan{}}
+	return &Board{scans: map[string]runner.Scan{}, linked: map[string]bool{}}
 }
 
 // Observe records s as the account's latest scan. Failed scans are ignored.
@@ -81,6 +85,16 @@ func (b *Board) Observe(s runner.Scan) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.scans[s.AccountID] = s
+	delete(b.linked, s.AccountID)
+}
+
+// ClearLinks hides accountID's link needs until its next scan, after a
+// recheck found nothing still refused. The scan it holds predates the
+// recheck, and a watching account rescans only at its next poll.
+func (b *Board) ClearLinks(accountID string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.linked[accountID] = true
 }
 
 // Forget drops an account's scan, e.g. after the account is deleted.
@@ -88,6 +102,7 @@ func (b *Board) Forget(accountID string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	delete(b.scans, accountID)
+	delete(b.linked, accountID)
 }
 
 // Games returns one status per game, in the given order. The result shares no
@@ -115,12 +130,15 @@ func (b *Board) Games(games []plan.Game) []GameStatus {
 		if s.At.After(last) {
 			last = s.At
 		}
+		linked := b.linked[id]
 		// Drops mined while the platform reports the account unlinked, drops
 		// whose claim was refused until linked, then campaigns whose claim
 		// the platform rejected until linked (Kick).
 		for _, t := range s.Result.NeedsLink {
 			if i, ok := plan.Match(games, t.Campaign.Game); ok {
-				addLinkNeed(out, links, i, s, t.Campaign)
+				if !linked {
+					addLinkNeed(out, links, i, s, t.Campaign)
+				}
 				out[i].Queued = true
 			}
 		}
@@ -130,7 +148,7 @@ func (b *Board) Games(games []plan.Game) []GameStatus {
 			}
 		}
 		for _, bl := range s.Result.Blocked {
-			if bl.Reason != plan.ReasonNotLinked {
+			if bl.Reason != plan.ReasonNotLinked || linked {
 				continue
 			}
 			if i, ok := plan.Match(games, bl.Campaign.Game); ok {
@@ -141,7 +159,7 @@ func (b *Board) Games(games []plan.Game) []GameStatus {
 			if (c.Status != "" && c.Status != "active") || c.Kind == "reward" {
 				continue
 			}
-			if c.ClaimNeedsLink {
+			if c.ClaimNeedsLink && !linked {
 				if i, ok := plan.Match(games, c.Game); ok {
 					addLinkNeed(out, links, i, s, c)
 				}
@@ -169,6 +187,7 @@ func (b *Board) Games(games []plan.Game) []GameStatus {
 			seen[i][key] = true
 			out[i].Campaigns = append(out[i].Campaigns, CampaignSummary{
 				ID: c.ID, Platform: c.Platform, Name: c.Name, Drops: drops, EndsAt: c.EndsAt,
+				BoxArtURL: c.BoxArtURL,
 			})
 		}
 	}

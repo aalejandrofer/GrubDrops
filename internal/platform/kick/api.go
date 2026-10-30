@@ -82,109 +82,73 @@ func newAPI() *api { return &api{d: newHTTPDoer(nil)} }
 
 // ---- Public channel discovery (no auth required) -------------------------
 
-// livestreamsResp is the /stream/livestreams/{category} shape (verified live
-// 2026-10-03). The feed is PAGINATED (per_page=5, ?page=N works) and — as of
-// that check — serves a GLOBAL feed that ignores the {category} path segment,
-// so entries must be filtered client-side against their embedded categories.
-// Each entry carries the channel slug and its own category list, which makes
-// that filter authoritative rather than inferred.
+// livestreamsResp is the web.kick.com/api/v1/livestreams shape (verified live
+// 2026-10-29). Filtered by numeric category_id; the slug-keyed
+// kick.com/stream/livestreams/{category} feed ignores its category and serves
+// a global 5-entry window, so it almost never held a stream of the wanted
+// game. Each entry carries its one category, which the client-side filter
+// re-checks.
 type livestreamsResp struct {
-	CurrentPage int `json:"current_page"`
-	NextPageURL any `json:"next_page_url"` // string or null
-	Data        []struct {
-		ID           int64  `json:"id"` // livestream id (used for the watch ping)
-		SessionTitle string `json:"session_title"`
-		IsLive       bool   `json:"is_live"`
-		ViewerCount  int    `json:"viewer_count"`
-		Channel      struct {
-			Slug string `json:"slug"` // channel login, e.g. "tippie"
-		} `json:"channel"`
-		Categories []struct {
-			Name string `json:"name"`
-			Slug string `json:"slug"`
-		} `json:"categories"`
+	Data struct {
+		Livestreams []struct {
+			ViewerCount int `json:"viewer_count"`
+			Channel     struct {
+				Slug string `json:"slug"` // channel login, e.g. "tippie"
+			} `json:"channel"`
+			Category struct {
+				Name string `json:"name"`
+				Slug string `json:"slug"`
+			} `json:"category"`
+		} `json:"livestreams"`
 	} `json:"data"`
 }
 
-// discoverMaxPages caps how many directory pages one fallback fetch walks
-// (per_page=5, so 4 pages ≈ 20 candidates — probeLive caps verification at
-// 12 anyway). Later watcher cycles keep scanning, so a category missing from
-// this window still gets picked up over successive picks.
-const discoverMaxPages = 4
+// discoverLimit is how many of a category's biggest live streams one
+// fallback fetch lists. probeLive caps verification at 12 anyway.
+const discoverLimit = 24
 
-// DiscoverChannelsForCategory lists currently-live channels in a Kick category
-// (game). Public endpoint — works without a logged-in session. This is the
-// auto-discovery that removes manual one-channel-at-a-time entry.
+// DiscoverChannelsForCategory lists the biggest live channels in a Kick
+// category (game) by its numeric id. Public endpoint — works without a
+// logged-in session. This is the auto-discovery that removes manual
+// one-channel-at-a-time entry.
 //
-// An entry qualifies when any of its embedded categories matches the wanted
-// one — by slug, or by display name against gameName (case/space-insensitive;
-// the campaign may only carry the display name). Matching client-side keeps
-// this correct whether or not the endpoint honors the category segment, and
-// the caller (probeLive) independently re-verifies every candidate is live
-// and on-category before it's committed, so a sloppy match can't produce a
-// junk pick.
-func (a *api) DiscoverChannelsForCategory(ctx context.Context, sess platform.Session, categorySlug, gameName string) ([]platform.Stream, error) {
+// An entry qualifies when its category matches the wanted one — by slug, or
+// by display name against gameName (case/space-insensitive; the campaign may
+// only carry the display name). The caller (probeLive) independently
+// re-verifies every candidate is live and on-category before it's committed,
+// so a sloppy match can't produce a junk pick.
+func (a *api) DiscoverChannelsForCategory(ctx context.Context, sess platform.Session, categoryID, categorySlug, gameName string) ([]platform.Stream, error) {
+	u := fmt.Sprintf("%s/api/v1/livestreams?limit=%d&sort=viewer_count_desc&category_id=%s", dropsBase, discoverLimit, url.QueryEscape(categoryID))
+	body, status, err := a.d.do(ctx, sess, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status != 200 {
+		return nil, fmt.Errorf("livestreams category %s: status %d", categoryID, status)
+	}
+	var resp livestreamsResp
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("decode livestreams: %w", err)
+	}
 	out := []platform.Stream{}
-	for page := 1; page <= discoverMaxPages; page++ {
-		url := fmt.Sprintf("%s/stream/livestreams/%s?page=%d", discoveryBase, categorySlug, page)
-		body, status, err := a.d.do(ctx, sess, http.MethodGet, url, nil)
-		if err != nil {
-			if page > 1 {
-				break // earlier pages already parsed — return what we have
-			}
-			return nil, err
+	for _, s := range resp.Data.Livestreams {
+		if s.Channel.Slug == "" || !entryMatchesCategory(s.Category.Name, s.Category.Slug, categorySlug, gameName) {
+			continue
 		}
-		if status != 200 {
-			if page > 1 {
-				break
-			}
-			return nil, fmt.Errorf("livestreams %s: status %d", categorySlug, status)
-		}
-		var resp livestreamsResp
-		if err := json.Unmarshal(body, &resp); err != nil {
-			if page > 1 {
-				break
-			}
-			return nil, fmt.Errorf("decode livestreams: %w", err)
-		}
-		for _, s := range resp.Data {
-			if !s.IsLive || s.Channel.Slug == "" {
-				continue
-			}
-			if !entryMatchesCategory(s.Categories, categorySlug, gameName) {
-				continue
-			}
-			out = append(out, platform.Stream{
-				Channel:      s.Channel.Slug,
-				ViewerCount:  s.ViewerCount,
-				DropsEnabled: true,
-				ChannelID:    fmt.Sprintf("%d", s.ID), // livestream id — used by the watch ping
-			})
-		}
-		if len(resp.Data) == 0 {
-			break
-		}
+		out = append(out, platform.Stream{Channel: s.Channel.Slug, ViewerCount: s.ViewerCount, DropsEnabled: true})
 	}
 	return out, nil
 }
 
-// entryMatchesCategory reports whether any of the entry's embedded categories
-// is the wanted one. Slug match is exact; name match is case/space-insensitive
+// entryMatchesCategory reports whether an entry's category (name, slug) is
+// the wanted one. Slug match is exact; name match is case/space-insensitive
 // against the game's display name ("PUBG: BATTLEGROUNDS" vs "PUBG:
 // Battlegrounds" etc).
-func entryMatchesCategory(cats []struct {
-	Name string `json:"name"`
-	Slug string `json:"slug"`
-}, categorySlug, gameName string) bool {
-	for _, c := range cats {
-		if categorySlug != "" && strings.EqualFold(strings.TrimSpace(c.Slug), strings.TrimSpace(categorySlug)) {
-			return true
-		}
-		if gameName != "" && strings.EqualFold(strings.TrimSpace(c.Name), strings.TrimSpace(gameName)) {
-			return true
-		}
+func entryMatchesCategory(name, slug, categorySlug, gameName string) bool {
+	if categorySlug != "" && strings.EqualFold(strings.TrimSpace(slug), strings.TrimSpace(categorySlug)) {
+		return true
 	}
-	return false
+	return gameName != "" && strings.EqualFold(strings.TrimSpace(name), strings.TrimSpace(gameName))
 }
 
 // Avatar returns the authenticated account's profile-picture URL. AUTHED.
@@ -229,6 +193,7 @@ type kickCampaign struct {
 	Name       string
 	Game       string
 	GameSlug   string // authoritative category slug when the payload carries one
+	GameID     string // numeric category id, which keys the live-channel directory
 	GameImage  string // category cover image (category.image_url), absolute
 	Status     string
 	StartsAt   string
@@ -277,6 +242,7 @@ func (a *api) Campaigns(ctx context.Context, sess platform.Session) ([]kickCampa
 			Name:       mstr(m, "name", "title"),
 			Game:       gameName(m),
 			GameSlug:   gameSlug(m),
+			GameID:     gameID(m),
 			GameImage:  gameImage(m),
 			Status:     mstr(m, "status", "state"),
 			StartsAt:   mstr(m, "starts_at", "startsAt", "start_at", "start_time"),
@@ -304,23 +270,21 @@ func (a *api) Campaigns(ctx context.Context, sess platform.Session) ([]kickCampa
 	return out, nil
 }
 
-// Subcategory returns a category's display name from its slug. Public
-// endpoint on kick.com.
-func (a *api) Subcategory(ctx context.Context, sess platform.Session, slug string) (string, error) {
+// Subcategory returns a category's display name and numeric id from its
+// slug. Public endpoint on kick.com.
+func (a *api) Subcategory(ctx context.Context, sess platform.Session, slug string) (name, id string, err error) {
 	body, status, err := a.d.do(ctx, sess, http.MethodGet, discoveryBase+"/api/v1/subcategories/"+url.PathEscape(slug), nil)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if status != 200 {
-		return "", &statusError{what: "subcategory " + slug, status: status}
+		return "", "", &statusError{what: "subcategory " + slug, status: status}
 	}
-	var r struct {
-		Name string `json:"name"`
-	}
+	var r map[string]any
 	if err := json.Unmarshal(body, &r); err != nil {
-		return "", fmt.Errorf("decode subcategory %s: %w", slug, err)
+		return "", "", fmt.Errorf("decode subcategory %s: %w", slug, err)
 	}
-	return strings.TrimSpace(r.Name), nil
+	return strings.TrimSpace(mstr(r, "name")), mstr(r, "id"), nil
 }
 
 // statusError is a non-200 HTTP response; callers can detect it with errors.As.
@@ -652,6 +616,23 @@ func gameSlug(m map[string]any) string {
 	for _, k := range []string{"game", "category"} {
 		if sub, ok := m[k].(map[string]any); ok {
 			if s := mstr(sub, "slug"); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+// gameID extracts the campaign's numeric category id: a top-level
+// category_id/game_id sibling, or a nested game/category object's id. Empty
+// when absent.
+func gameID(m map[string]any) string {
+	if s := mstr(m, "category_id", "categoryId", "game_id", "gameId"); s != "" {
+		return s
+	}
+	for _, k := range []string{"category", "game"} {
+		if sub, ok := m[k].(map[string]any); ok {
+			if s := mstr(sub, "id"); s != "" {
 				return s
 			}
 		}

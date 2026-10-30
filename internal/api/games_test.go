@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"testing"
 	"testing/fstest"
@@ -73,6 +74,7 @@ func newGamesEnv(t *testing.T, snaps ...runner.Snapshot) *gamesEnv {
 		SPA:    fstest.MapFS{"index.html": {Data: []byte("x")}},
 		Chosen: ge.chosen, Board: ge.board, Pool: gamesFakePool{snaps, &ge.rescans},
 		GamesChanged: func() { ge.changed++ },
+		GamesSettle:  10 * time.Second,
 	})
 	s.routesGames(s.protected)
 	srv := httptest.NewServer(s.handler())
@@ -130,6 +132,34 @@ func TestGames_ListDoneVersusWaiting(t *testing.T) {
 	assert.Equal(t, "done", got.Games[0].State)
 	assert.Len(t, got.Games[0].Campaigns, 1, "a done campaign is still listed")
 	assert.Equal(t, "waiting", got.Games[1].State)
+}
+
+// A Kick-only game has no Twitch art: its card takes the Kick category image
+// through the proxy. A known Twitch id still wins.
+func TestGames_ListKickCategoryArt(t *testing.T) {
+	g := newGamesEnv(t)
+	ids := g.seed("World of Warcraft: Forever", "Rust")
+	require.NoError(t, g.chosen.Set(context.Background(), ids))
+	require.NoError(t, g.q.SetGameTwitchID(context.Background(), gen.SetGameTwitchIDParams{ID: ids[1], TwitchGameID: "263490"}))
+	kick := func(id, game, art string) platform.Campaign {
+		return platform.Campaign{
+			ID: id, Platform: "kick", Game: game, Name: game, Status: "active", BoxArtURL: art,
+			EndsAt: time.Now().Add(24 * time.Hour), Benefits: []platform.DropBenefit{{ID: id + "b", RequiredMinutes: 1500}},
+		}
+	}
+	wowArt := "https://files.kick.com/images/subcategories/14374/banner/3181d56c.webp"
+	g.board.Observe(runner.Scan{AccountID: "a1", Platform: "kick", At: time.Now(), Campaigns: []platform.Campaign{
+		kick("k1", "World of Warcraft: Forever", wowArt),
+		kick("k2", "Rust", "https://files.kick.com/images/subcategories/1/banner/rust.webp"),
+	}})
+
+	resp, b := g.do("GET", "/api/games", "", nil)
+	require.Equal(t, 200, resp.StatusCode)
+	var got gamesJSON
+	require.NoError(t, json.Unmarshal(b, &got))
+	require.Len(t, got.Games, 2)
+	assert.Equal(t, "/api/img/kick?u="+url.QueryEscape(wowArt), got.Games[0].BoxArtURL)
+	assert.Equal(t, "https://static-cdn.jtvnw.net/ttv-boxart/263490_IGDB-144x192.jpg", got.Games[1].BoxArtURL)
 }
 
 func TestGames_ListStatesAndOrder(t *testing.T) {
@@ -250,8 +280,10 @@ func TestGames_PutReorderAndRemove(t *testing.T) {
 	a, b := ids[0], ids[1]
 	require.NoError(t, g.chosen.Set(context.Background(), ids))
 
-	resp, _ := g.do("PUT", "/api/games", g.csrf, map[string]any{"ids": []string{b, a}})
-	assert.Equal(t, 204, resp.StatusCode)
+	resp, body := g.do("PUT", "/api/games", g.csrf, map[string]any{"ids": []string{b, a}})
+	assert.Equal(t, 200, resp.StatusCode)
+	// The miner applies a saved order after the settle, so the UI can count down.
+	assert.JSONEq(t, `{"applies_in_s":10}`, string(body))
 	assert.Equal(t, []string{b, a}, g.chosenIDs())
 	assert.Equal(t, 1, g.changed)
 
@@ -264,7 +296,7 @@ func TestGames_PutReorderAndRemove(t *testing.T) {
 	assert.Equal(t, 400, resp.StatusCode)
 
 	resp, _ = g.do("PUT", "/api/games", g.csrf, map[string]any{"ids": []string{}})
-	assert.Equal(t, 204, resp.StatusCode)
+	assert.Equal(t, 200, resp.StatusCode)
 	assert.Empty(t, g.chosenIDs())
 }
 

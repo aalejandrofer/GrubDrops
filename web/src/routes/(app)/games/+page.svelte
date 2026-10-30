@@ -8,7 +8,7 @@
 	import PageHead from '$lib/components/PageHead.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { relTime } from '$lib/format';
-	import { byEndingSoonest, campaignLine, commitGames, dupePriority, linkErrorKey, linkHref, matchParts, moveGame, moveTarget, suggestions, withoutId } from '$lib/games';
+	import { byEndingSoonest, campaignLine, commitGames, dupePriority, linkErrorKey, linkHref, matchParts, moveGame, moveTarget, restartCountdown, suggestions, withoutId } from '$lib/games';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { applyPrefs, prefs } from '$lib/prefs.svelte';
@@ -164,6 +164,27 @@
 		await reload();
 	}
 
+	// The miner applies a saved order a few seconds after the last save; the
+	// toast counts down to it.
+	let restartAt = $state(0);
+	let restartNow = $state(Date.now());
+	let restartTick: ReturnType<typeof setInterval> | undefined;
+	const restartLeft = $derived(restartCountdown(restartAt, restartNow));
+
+	function countRestart(s: number): void {
+		if (s <= 0) return;
+		restartNow = Date.now();
+		restartAt = restartNow + s * 1000;
+		clearInterval(restartTick);
+		restartTick = setInterval(() => {
+			restartNow = Date.now();
+			if (restartCountdown(restartAt, restartNow) === null) {
+				clearInterval(restartTick);
+				restartAt = 0;
+			}
+		}, 250);
+	}
+
 	async function commit(next: Game[], id?: string): Promise<void> {
 		if (saving) return;
 		saving = true;
@@ -175,7 +196,7 @@
 				set: (g) => {
 					if (live.games) live.games = { ...live.games, games: g.map((x, i) => ({ ...x, priority: i + 1 })) };
 				},
-				setGames: (ids) => api.setGames(ids),
+				setGames: async (ids) => countRestart((await api.setGames(ids)).applies_in_s),
 				fetchGames: async () => (await api.games()).games
 			},
 			next
@@ -225,6 +246,7 @@
 		clearTimeout(scanTimer);
 		clearTimeout(timer);
 		clearTimeout(flash);
+		clearInterval(restartTick);
 	});
 </script>
 
@@ -306,9 +328,16 @@
 				{#if dupe !== null}<p class="note" role="status">{t('games.already', { n: dupe })}</p>{/if}
 				{#if linkErr}<p class="err" role="alert">{t(linkErr)}</p>{/if}
 				{#if searchFailed}<p class="err" role="alert">{t('home.search_failed')}</p>{/if}
+				<details class="help">
+					<summary>{t('games.help_names_q')}</summary>
+					<p>{t('games.help_names')}</p>
+				</details>
 			</section>
 
 			{#if failed}<p class="err" role="alert">{t('games.save_failed')}</p>{/if}
+			{#if restartLeft !== null}
+				<p class="toast" role="status">{restartLeft > 0 ? t('games.toast_restart_in', { n: restartLeft }) : t('games.toast_restarting')}</p>
+			{/if}
 
 			{#if live.games && games.length === 0}
 				<p class="empty">{t('games.empty')}</p>
@@ -591,6 +620,28 @@
 		background: none;
 		border-color: transparent;
 		cursor: default;
+	}
+	.help {
+		margin: 6px 2px 0;
+		font-size: 12px;
+		color: var(--t3);
+	}
+	.help summary {
+		cursor: pointer;
+		width: fit-content;
+	}
+	.help summary:hover {
+		color: var(--t2);
+	}
+	.help summary:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
+	.help p {
+		margin: 4px 0 0;
+		max-width: 60ch;
+		line-height: 1.45;
+		color: var(--t2);
 	}
 	.note {
 		margin: 8px 2px 0;
@@ -985,5 +1036,22 @@
 			grid-row: 2;
 			margin-top: -4px;
 		}
+	}
+	.toast {
+		position: fixed;
+		left: 50%;
+		bottom: 24px;
+		transform: translateX(-50%);
+		z-index: 50;
+		margin: 0;
+		padding: 10px 16px;
+		max-width: calc(100vw - 32px);
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--surface-2);
+		color: var(--text);
+		font-size: 13px;
+		font-variant-numeric: tabular-nums;
+		box-shadow: 0 6px 24px rgb(0 0 0 / 0.25);
 	}
 </style>

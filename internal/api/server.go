@@ -52,7 +52,8 @@ type Deps struct {
 	Chosen       *store.ChosenGames
 	AccountGames *store.AccountGames // per-account lists; nil serves 503
 	Board        *collect.Board
-	GamesChanged func() // nil-safe; must return at once, the reload runs in the background
+	GamesChanged func()        // nil-safe; must return at once, the reload runs in the background
+	GamesSettle  time.Duration // how long after a save GamesChanged's reload waits; reported to the UI
 	// LookupCategory turns a pasted category link's slug into the game's
 	// name; nil rejects links.
 	LookupCategory func(ctx context.Context, platform, slug string) (name string, ok bool, err error)

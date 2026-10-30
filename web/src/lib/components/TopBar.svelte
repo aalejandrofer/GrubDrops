@@ -16,12 +16,33 @@
 	];
 	const on = (href: string) =>
 		href === '/' ? page.url.pathname === '/' : page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
+
+	// On narrow screens the links scroll sideways; keep the current one in view.
+	let tabs: HTMLElement | undefined = $state();
+	$effect(() => {
+		void page.url.pathname;
+		const nav = tabs;
+		if (!nav) return;
+		const reveal = () => {
+			const a = nav.querySelector<HTMLElement>('a.on');
+			if (!a) return;
+			const t = nav.getBoundingClientRect();
+			const r = a.getBoundingClientRect();
+			if (r.right > t.right) nav.scrollLeft += r.right - t.right;
+			else if (r.left < t.left) nav.scrollLeft -= t.left - r.left;
+		};
+		reveal();
+		if (typeof ResizeObserver === 'undefined') return;
+		const ro = new ResizeObserver(reveal);
+		ro.observe(nav);
+		return () => ro.disconnect();
+	});
 </script>
 
 <header class="top">
 	<div class="top-in">
 		<a href="/" class="brand"><img src={logo} alt="" /><span>{t('app.name')}</span></a>
-		<nav class="tabs">
+		<nav class="tabs" bind:this={tabs}>
 			{#each items as it (it.href)}
 				<a href={it.href} class:on={on(it.href)} aria-current={on(it.href) ? 'page' : undefined}>{t(it.key)}</a>
 			{/each}
@@ -96,8 +117,21 @@
 		.brand span {
 			display: none;
 		}
+		/* Links scroll inside the bar when they don't fit, so the page never scrolls sideways. */
+		.tabs {
+			min-width: 0;
+			overflow-x: auto;
+			scrollbar-width: none;
+		}
+		.tabs::-webkit-scrollbar {
+			display: none;
+		}
 		.tabs a {
 			padding: 6px 8px;
+			white-space: nowrap;
+		}
+		.tabs a:focus-visible {
+			outline-offset: -2px;
 		}
 	}
 	@media (max-width: 420px) {
@@ -105,7 +139,7 @@
 			gap: 8px;
 		}
 		.tabs a {
-			padding: 6px 6px;
+			padding: 6px 5px;
 			font-size: 13px;
 		}
 	}

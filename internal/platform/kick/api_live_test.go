@@ -45,25 +45,20 @@ func TestLiveDiscovery(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// NOTE (2026-10-03): the feed currently serves a GLOBAL directory and
-	// ignores the {category} path segment, so this also exercises the
-	// client-side category filter — with a global feed, entries only match
-	// when their embedded categories really are Rust. A zero here may just
-	// mean no Rust stream is live in the scanned window; check manually with
-	// curl before treating it as a parsing failure.
-	chans, err := newAPI().DiscoverChannelsForCategory(ctx, sess, "rust", "Rust")
+	// Rust is Kick category id 13.
+	chans, err := newAPI().DiscoverChannelsForCategory(ctx, sess, "13", "rust", "Rust")
 	if err != nil {
 		t.Fatalf("discover channels: %v", err)
 	}
 	t.Logf("discovered %d live rust channels via utls (CF bypassed)", len(chans))
 	if len(chans) == 0 {
-		t.Log("no rust channels live in the scanned window (feed is global; not necessarily a failure)")
+		t.Log("no rust channels live right now")
 	}
 	for i, c := range chans {
 		if i >= 5 {
 			break
 		}
-		t.Logf("  %s  viewers=%d livestreamID=%s", c.Channel, c.ViewerCount, c.ChannelID)
+		t.Logf("  %s  viewers=%d", c.Channel, c.ViewerCount)
 	}
 }
 
