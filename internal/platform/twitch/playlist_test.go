@@ -45,6 +45,10 @@ func newHLSFake(t *testing.T, channel string) *hlsFake {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/gql", func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
+		if strings.Contains(string(b), `"ChannelPointsContext"`) {
+			_, _ = io.WriteString(w, `{"data":{"community":{"channel":{"id":"42","self":{"communityPoints":{"balance":123,"availableClaim":null}}}}}}`)
+			return
+		}
 		require.Contains(t, string(b), `"PlaybackAccessToken"`)
 		require.Contains(t, string(b), `"login":"`+channel+`"`)
 		_, _ = io.WriteString(w, `{"data":{"streamPlaybackAccessToken":{"value":"{\"channel\":\"x\"}","signature":"sig123"}}}`)

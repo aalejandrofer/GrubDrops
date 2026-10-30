@@ -62,6 +62,17 @@ type ClaimedReward struct {
 	Title string
 }
 
+// ChannelPointsBalanceReader reads a Twitch channel's points balance without
+// performing any actions that can change that balance.
+type ChannelPointsBalanceReader interface {
+	ChannelPointsBalance(ctx context.Context, s Session, channel string) (int, error)
+}
+
+// RaidJoiner joins a raid identified by Twitch's raid ID.
+type RaidJoiner interface {
+	JoinRaid(ctx context.Context, s Session, raidID string) error
+}
+
 // PubSubHooks is the per-account real-time callback surface a Watcher
 // installs into a PubSubAware backend. All callbacks may fire from any
 // goroutine; implementations must not block.
@@ -86,6 +97,9 @@ type PubSubHooks struct {
 	// notificationID dedupes; body is the raw notification text so
 	// the receiver can extract game/drop context.
 	OnRewardCode func(notificationID, code, body string)
+	// OnRaid fires for a raid announced on raid.<channelID>; channelID is
+	// the source broadcaster and raidID is the joinable Twitch raid ID.
+	OnRaid func(channelID, raidID string)
 }
 
 // PubSubAware is an optional backend capability. Backends that expose

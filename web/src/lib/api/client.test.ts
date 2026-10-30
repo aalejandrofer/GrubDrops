@@ -233,9 +233,12 @@ describe('client', () => {
 		expect(hdr(calls[1], 'X-CSRF-Token')).toBe('tok');
 	});
 	it('forceWatch gets the list and putForceWatch puts it with CSRF', async () => {
-		const list = '{"channels":[{"platform":"twitch","channel":"keshaeuw","live":true,"accounts":["a1"],"watching":[]}]}';
+		const list = '{"channels":[{"platform":"twitch","channel":"keshaeuw","live":true,"accounts":["a1"],"watching":[],"points":[{"account_id":"a1","balance":275,"updated_at":"2026-10-30T08:00:00Z"}]}]}';
 		const { api, calls } = setup([{ status: 200, body: list }, { status: 200, body: list }]);
-		expect((await api.forceWatch()).channels[0].channel).toBe('keshaeuw');
+		expect((await api.forceWatch()).channels[0]).toMatchObject({
+			channel: 'keshaeuw',
+			points: [{ account_id: 'a1', balance: 275, updated_at: '2026-10-30T08:00:00Z' }]
+		});
 		const sent = [{ platform: 'twitch' as const, channel: 'keshaeuw', accounts: ['a1'] }];
 		expect((await api.putForceWatch(sent)).channels).toHaveLength(1);
 		expect(calls.map((c) => [c.init.method ?? 'GET', c.url])).toEqual([
@@ -246,5 +249,28 @@ describe('client', () => {
 		expect(hdr(calls[1], 'X-CSRF-Token')).toBe('tok');
 		expect(hdr(calls[1], 'Content-Type')).toBe('application/json');
 		expect(JSON.parse(calls[1].init.body as string)).toEqual({ channels: sent });
+	});
+
+	it('reads and saves points safety and account settings through their contracts', async () => {
+		const safety = '{"sleep_enabled":true,"sleep_start":"02:00","sleep_end":"08:00","follow_raids":true}';
+		const { api, calls } = setup([
+			{ status: 200, body: safety },
+			{ status: 200, body: safety },
+			{ status: 204 },
+			{ status: 204 }
+		]);
+		expect(await api.pointsSafety()).toEqual(JSON.parse(safety));
+		await api.savePointsSafety(JSON.parse(safety));
+		await api.setAccountPoints('a/1', { points_enabled: true, points_only: false, points_streams: 100 });
+		await api.setAccountPoints('k1', { points_enabled: false, points_only: true });
+		expect(calls.map((c) => [c.init.method ?? 'GET', c.url])).toEqual([
+			['GET', '/api/points'],
+			['PUT', '/api/points/safety'],
+			['PUT', '/api/accounts/a%2F1/points'],
+			['PUT', '/api/accounts/k1/points']
+		]);
+		expect(JSON.parse(calls[1].init.body as string)).toEqual(JSON.parse(safety));
+		expect(JSON.parse(calls[2].init.body as string)).toEqual({ points_enabled: true, points_only: false, points_streams: 100 });
+		expect(JSON.parse(calls[3].init.body as string)).toEqual({ points_enabled: false, points_only: true });
 	});
 });

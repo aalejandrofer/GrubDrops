@@ -71,6 +71,7 @@ func (w *watch) start(ctx context.Context, sess platform.Session, stream platfor
 	if err != nil {
 		return platform.WatchHandle{}, fmt.Errorf("resolve user id: %w", err)
 	}
+	w.claimBonus(ctx, sess.AccessToken, stream.Channel)
 	return platform.WatchHandle{
 		Channel: stream.Channel,
 		Internal: watchInternal{
@@ -133,6 +134,7 @@ func (w *watch) heartbeat(ctx context.Context, h platform.WatchHandle) error {
 		return fmt.Errorf("invalid watch handle")
 	}
 
+	w.claimBonus(ctx, internal.Token, internal.Channel)
 	playErr := w.playlistHeartbeat(ctx, internal)
 	spadeErr := w.spadeHeartbeat(ctx, internal)
 
@@ -147,6 +149,15 @@ func (w *watch) heartbeat(ctx context.Context, h platform.WatchHandle) error {
 		return nil
 	default:
 		return errors.Join(fmt.Errorf("playlist: %w", playErr), fmt.Errorf("spade: %w", spadeErr))
+	}
+}
+
+func (w *watch) claimBonus(ctx context.Context, token, channel string) {
+	_, claimed, err := w.claimAvailableCommunityPoints(ctx, token, channel)
+	if err != nil {
+		slog.Warn("twitch channel points bonus claim failed", "channel", channel, "err", err)
+	} else if claimed {
+		slog.Info("claimed twitch channel points bonus", "channel", channel)
 	}
 }
 

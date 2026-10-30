@@ -491,22 +491,34 @@ func (r *Runner) stopWatch(ctx context.Context) {
 	r.mu.Lock()
 	h := r.handle
 	s := r.stream
+	extras := r.extraWatches
 	r.handle = nil
 	r.stream = nil
+	r.extraWatches = nil
+	r.extraChannels = nil
+	r.extraRetryAt = time.Time{}
 	r.clearWatchViewLocked()
 	r.mu.Unlock()
-	if h == nil {
+	if h == nil && len(extras) == 0 {
 		return
 	}
-	// Detached: a cancelled run ctx must not leak the handle or sidecar.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := r.cfg.Backend.StopWatch(ctx, *h); err != nil {
-		slog.Warn("runner stop watch failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
+	stop := func(h platform.WatchHandle, s platform.Stream) {
+		if err := r.cfg.Backend.StopWatch(ctx, h); err != nil {
+			slog.Warn("runner stop watch failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
+		}
+		if cs, ok := r.cfg.Backend.(platform.ChannelSubscriber); ok && s.ChannelID != "" {
+			cs.UnsubscribeChannel(r.cfg.AccountID, s.ChannelID)
+		}
 	}
-	if cs, ok := r.cfg.Backend.(platform.ChannelSubscriber); ok && s != nil && s.ChannelID != "" {
-		cs.UnsubscribeChannel(r.cfg.AccountID, s.ChannelID)
+	if h != nil && s != nil {
+		stop(*h, *s)
 	}
+	for _, extra := range extras {
+		stop(extra.handle, extra.stream)
+	}
+	r.changed()
 }
 
 // notifyFields builds the notification payload for the current target.

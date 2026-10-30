@@ -13,7 +13,7 @@ export interface LiveDeps {
 	eventSource: (url: string) => EventSourceLike;
 	/** Run fn once after ms; returns a cancel function. */
 	schedule?: (fn: () => void, ms: number) => () => void;
-	/** Run fn every ms; returns a cancel function. Drives the retryIn countdown. */
+	/** Run fn every ms; returns a cancel function. */
 	tick?: (fn: () => void, ms: number) => () => void;
 	now?: () => number;
 	onUnauthorized: () => void;
@@ -42,6 +42,8 @@ export interface LiveStore {
 export const BACKOFF = [1, 2, 4, 8, 16, 30];
 const MAX_RECENT = 10;
 const MAX_LOG = 50;
+// Poll just after the API's one-hour balance cache expires.
+const POINTS_REFRESH_MS = 65 * 60 * 1000;
 
 /** Replace the item with the same key in place, else prepend it. */
 export function upsertBy<T>(list: T[], item: T, key: (x: T) => string): T[] {
@@ -71,6 +73,7 @@ export function createLive(deps: LiveDeps): LiveStore {
 	let source: EventSourceLike | null = null;
 	let cancelReconnect: (() => void) | null = null;
 	let cancelTick: (() => void) | null = null;
+	let cancelPointsRefresh: (() => void) | null = null;
 	let backoffIndex = 0;
 	let dead = false;
 
@@ -159,6 +162,8 @@ export function createLive(deps: LiveDeps): LiveStore {
 		cancelReconnect = null;
 		cancelTick?.();
 		cancelTick = null;
+		cancelPointsRefresh?.();
+		cancelPointsRefresh = null;
 	}
 
 	function connect(): void {
@@ -169,6 +174,11 @@ export function createLive(deps: LiveDeps): LiveStore {
 			if (dead || source !== src) return;
 			backoffIndex = 0;
 			clearTimers();
+			cancelPointsRefresh = tick(() => {
+				if (s.forceWatch?.some((channel) => channel.platform === 'twitch')) {
+					void quiet(loadForceWatch());
+				}
+			}, POINTS_REFRESH_MS);
 			s.unreachable = false;
 			s.retryIn = 0;
 			void refetchAll();

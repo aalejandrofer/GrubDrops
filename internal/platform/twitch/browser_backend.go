@@ -75,6 +75,10 @@ type twitchAccount struct {
 }
 
 var _ platform.Backend = (*BrowserBackend)(nil)
+var _ platform.PubSubAware = (*BrowserBackend)(nil)
+var _ platform.ChannelSubscriber = (*BrowserBackend)(nil)
+var _ platform.ChannelPointsBalanceReader = (*BrowserBackend)(nil)
+var _ platform.RaidJoiner = (*BrowserBackend)(nil)
 
 // NewBrowserBackend builds a Backend whose gql traffic is proxied
 // through the sidecar. `client` must satisfy both TwitchGQLSender and
@@ -336,6 +340,7 @@ func (b *BrowserBackend) SubscribeChannel(accountID, channelID string) {
 		return
 	}
 	c.AddTopic(TopicVideoPlaybackByID(channelID))
+	c.AddTopic(TopicRaid(channelID))
 }
 
 // UnsubscribeChannel drops a video-playback-by-id topic.
@@ -347,6 +352,7 @@ func (b *BrowserBackend) UnsubscribeChannel(accountID, channelID string) {
 		return
 	}
 	c.RemoveTopic(TopicVideoPlaybackByID(channelID))
+	c.RemoveTopic(TopicRaid(channelID))
 }
 
 // ensurePubSub lazily starts the PubSub WebSocket for an account.
@@ -368,6 +374,7 @@ func (b *BrowserBackend) ensurePubSub(s platform.Session, a *twitchAccount) {
 			OnStreamDown:   hooks.OnStreamDown,
 			OnStreamUp:     hooks.OnStreamUp,
 			OnRewardCode:   hooks.OnRewardCode,
+			OnRaid:         hooks.OnRaid,
 		}
 	}
 	b.pubsubMu.Unlock()
@@ -442,6 +449,7 @@ func (b *BrowserBackend) StartWatch(ctx context.Context, s platform.Session, str
 	}
 	a := b.accountFor(s.AccountID)
 	a.c.bind(s)
+	b.ensurePubSub(s, a)
 	h, err := a.watch.start(ctx, s, stream)
 	if err != nil {
 		return h, err

@@ -57,6 +57,7 @@
 	let flowEl = $state<AccountFlow | null>(null);
 
 	const runnerOf = (id: string) => live.runners.find((r) => r.account_id === id);
+	const twitchLimitReached = $derived(live.accounts.filter((a) => a.platform === 'twitch').length >= 3);
 	const shown = (a: Account) => !(adding && addId === a.id);
 
 	let ordering = $state(false);
@@ -428,6 +429,7 @@
 			</button>
 		</div>
 		<AddAccount
+			twitchDisabled={twitchLimitReached}
 			platform={adding}
 			bind:id={addId}
 			onadded={added}

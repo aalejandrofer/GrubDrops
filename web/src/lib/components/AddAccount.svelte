@@ -10,6 +10,7 @@
 	let {
 		platform = 'twitch',
 		id = $bindable(''),
+		twitchDisabled = false,
 		onadded,
 		onfail,
 		onpick
@@ -18,29 +19,44 @@
 		platform?: Platform;
 		/** The half-made account's id once one exists. */
 		id?: string;
+		twitchDisabled?: boolean;
 		onadded?: () => void;
 		onfail?: (msg: string) => void;
 		/** A platform or method was picked. */
 		onpick?: () => void;
 	} = $props();
 
-	let kind = $state<Platform>(untrack(() => platform));
+	let kind = $state<Platform>(untrack(() => platform === 'twitch' && twitchDisabled ? 'kick' : platform));
 	let method = $state<TwitchMethod>('android');
 
 	function pick(p: Platform): void {
 		kind = p;
 		onpick?.();
 	}
+	$effect(() => {
+		if (twitchDisabled && kind === 'twitch' && !id) kind = 'kick';
+	});
+
 </script>
 
 <div class="tiles" role="radiogroup" aria-label={t('welcome.platform')}>
 	{#each ['twitch', 'kick'] as const as p (p)}
-		<button type="button" class="tile" class:on={kind === p} role="radio" aria-checked={kind === p} onclick={() => pick(p)}>
+		<button
+			type="button"
+			class="tile"
+			class:on={kind === p}
+			role="radio"
+			aria-checked={kind === p}
+			disabled={p === 'twitch' && twitchDisabled}
+			onclick={() => pick(p)}
+		>
 			<PlatformMark platform={p} /><b>{t(p === 'twitch' ? 'accounts.twitch' : 'accounts.kick')}</b>
 			<span>{t(p === 'twitch' ? 'welcome.twitch_hint' : 'welcome.kick_hint')}</span>
+			{#if p === 'twitch' && twitchDisabled}<span class="limit">{t('accounts.twitch_limit')}</span>{/if}
 		</button>
 	{/each}
 </div>
+
 
 {#if kind === 'twitch'}
 	<div class="tabs2" role="tablist" aria-label={t('welcome.method')}>
@@ -142,6 +158,15 @@
 		border: 1px solid var(--border-soft);
 		border-radius: 12px;
 		background: var(--surface);
+	}
+	.tile:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+	}
+	.limit {
+		grid-column: 1 / -1;
+		color: var(--muted);
+		font-size: 12px;
 	}
 	@media (max-width: 560px) {
 		.tiles {

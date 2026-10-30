@@ -117,6 +117,7 @@ func (s *server) pollTwitch(ctx context.Context, id string, backend platform.Bac
 			fl.set("error")
 			return
 		}
+		s.forgetPointBalances(id)
 		if ctx.Err() != nil {
 			return
 		}

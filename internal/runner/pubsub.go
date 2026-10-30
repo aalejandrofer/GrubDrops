@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"log/slog"
+	"math/rand/v2"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -11,6 +12,8 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/plan"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
+
+var raidJoinDelay = func() time.Duration { return time.Duration(2+rand.IntN(7)) * time.Second }
 
 // Real backends copy the hooks into their PubSub client once, at the
 // account's first bootstrap, and ignore later SetAccountPubSubHooks calls.
@@ -48,6 +51,11 @@ func (t *trampoline) hooks() platform.PubSubHooks {
 			}
 		},
 		OnStreamUp: func(string) {},
+		OnRaid: func(channelID, raidID string) {
+			if r := t.cur.Load(); r != nil {
+				r.onRaid(channelID, raidID)
+			}
+		},
 		OnRewardCode: func(notificationID, code, title string) {
 			if r := t.cur.Load(); r != nil {
 				r.onRewardCode(notificationID, code, title)
@@ -90,6 +98,7 @@ func (r *Runner) directHooks() platform.PubSubHooks {
 		OnDropClaim:    r.onDropClaim,
 		OnStreamDown:   r.onStreamDown,
 		OnStreamUp:     func(string) {},
+		OnRaid:         r.onRaid,
 		OnRewardCode:   r.onRewardCode,
 	}
 }
@@ -144,17 +153,85 @@ func (r *Runner) onDropClaim(dropID, instanceID string) {
 // watch has no target to restart, so it re-picks.
 func (r *Runner) onStreamDown(channelID string) {
 	r.mu.Lock()
-	if r.stream == nil || r.stream.ChannelID != channelID || r.handle == nil {
+	if r.stream != nil && r.handle != nil && r.stream.ChannelID == channelID {
+		next := StateStarting
+		if r.state == StateForceWatching {
+			next = StatePicking
+		}
 		r.mu.Unlock()
+		r.stopForceWatch(context.Background())
+		r.setState(context.Background(), next)
 		return
 	}
-	next := StateStarting
-	if r.state == StateForceWatching {
-		next = StatePicking
+	for i, extra := range r.extraWatches {
+		if extra.stream.ChannelID == channelID {
+			r.extraWatches = append(r.extraWatches[:i], r.extraWatches[i+1:]...)
+			r.extraChannels = append(r.extraChannels[:i], r.extraChannels[i+1:]...)
+			r.extraRetryAt = time.Now().Add(recheckInterval)
+			r.mu.Unlock()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := r.cfg.Backend.StopWatch(ctx, extra.handle); err != nil {
+				slog.Warn("runner extra force stop failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
+			}
+			if cs, ok := r.cfg.Backend.(platform.ChannelSubscriber); ok {
+				cs.UnsubscribeChannel(r.cfg.AccountID, extra.stream.ChannelID)
+			}
+			r.changed()
+			return
+		}
 	}
 	r.mu.Unlock()
-	r.stopWatch(context.Background())
-	r.setState(context.Background(), next)
+}
+
+func (r *Runner) onRaid(sourceID string, raidID string) {
+	if raidID == "" || r.cfg.FollowRaids == nil || !r.cfg.FollowRaids() {
+		return
+	}
+	r.mu.Lock()
+	ctx := r.runCtx
+	active := r.activeForceSourceLocked(sourceID)
+	r.mu.Unlock()
+	joiner, ok := r.cfg.Backend.(platform.RaidJoiner)
+	if !ok || ctx == nil || !active {
+		return
+	}
+	go func() {
+		timer := time.NewTimer(raidJoinDelay())
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+		}
+		if !r.cfg.FollowRaids() {
+			return
+		}
+		r.mu.Lock()
+		active := r.activeForceSourceLocked(sourceID)
+		r.mu.Unlock()
+		if !active {
+			return
+		}
+		if err := joiner.JoinRaid(ctx, r.cfg.Session, raidID); err != nil && ctx.Err() == nil {
+			slog.Warn("runner raid join failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
+		}
+	}()
+}
+
+func (r *Runner) activeForceSourceLocked(sourceID string) bool {
+	if sourceID == "" || r.state != StateForceWatching || r.handle == nil {
+		return false
+	}
+	if r.stream != nil && r.stream.ChannelID == sourceID {
+		return true
+	}
+	for _, extra := range r.extraWatches {
+		if extra.stream.ChannelID == sourceID {
+			return true
+		}
+	}
+	return false
 }
 
 // onRewardCode logs a redemption code and stores it against the target the

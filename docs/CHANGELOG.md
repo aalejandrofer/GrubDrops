@@ -4,6 +4,10 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Added
+- **Twitch channel points.** The Points page shows cached balances beside Twitch channels and lets you reorder Twitch channels without changing the shared Force watch order; Home shows balances for active Twitch force channels. Balances refresh about every 65 minutes.
+- **Points watch controls.** Add up to three Twitch accounts, set each account’s concurrent Twitch stream count, choose points-only watching, and configure sleep hours and raid following for force/points watches.
+
 ## [2.2.2] — 2026-10-29
 
 ### Added

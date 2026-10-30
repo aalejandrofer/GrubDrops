@@ -85,6 +85,14 @@ type Config struct {
 	// ScanEvery is the plan rebuild pace, while watching and while sleeping
 	// with an empty queue. Read live; nil or <=0 = the package defaults.
 	ScanEvery func() time.Duration
+	// PointsOnly skips all drop campaign scans and watches.
+	PointsOnly bool
+	// PointsStreams is the live slot count for force/points watches; Kick uses one.
+	PointsStreams func() int
+	// SleepUntil returns the next end of a scheduled sleep, when asleep.
+	SleepUntil func(now time.Time) (time.Time, bool)
+	// FollowRaids is read when a raid is received and again before joining.
+	FollowRaids func() bool
 	// Preempt reports whether a rescan while watching may switch to a
 	// campaign that now outranks the current one. Read live; nil = never.
 	Preempt func() bool
@@ -100,7 +108,7 @@ type Config struct {
 	// or changing them.
 	OnScan     func(ctx context.Context, s Scan)
 	OnProgress func(ctx context.Context, accountID string, progress []platform.Progress)
-	OnBeat     func(ctx context.Context, accountID string) // after each successful Heartbeat
+	OnBeat     func(ctx context.Context, accountID string) // after each primary-watch heartbeat
 	// OnChange is nil-safe; called after every state change and progress update.
 	// It may be called concurrently from the backend PubSub goroutine and the
 	// Run goroutine, so implementations must be thread-safe.
@@ -115,6 +123,7 @@ type Snapshot struct {
 	State                             State
 	Current                           *plan.Target
 	Channel                           string
+	ExtraChannels                     []string
 	ViewerCount                       int
 	MinutesWatched                    int
 	StartedAt, LastPollAt, LastScanAt time.Time

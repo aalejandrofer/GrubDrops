@@ -67,6 +67,8 @@ type Deps struct {
 	ForceWatch   *store.ForceWatch
 	ForceLive    func(platform, login string) *bool
 	ForceChanged func() // nil-safe; must return at once, the reload runs in the background
+	// PointsSafetyChanged applies saved shared safety settings to active runners.
+	PointsSafetyChanged func()
 
 	// Accounts and logins.
 	Sessions       *store.SessionStore
@@ -108,7 +110,11 @@ type server struct {
 	// canaryRunning is set while a run-now canary is in flight.
 	canaryRunning atomic.Bool
 	// canaryRerun asks for one more canary run once the one in flight ends.
-	canaryRerun atomic.Bool
+	canaryRerun     atomic.Bool
+	accountCreateMu sync.Mutex
+	pointsMu        sync.Mutex
+	pointsCache     map[string]pointBalanceEntry
+	pointsInFlight  map[string]*pointBalanceFlight
 	// twitch holds the in-flight Twitch device logins, account ID -> *twitchFlow.
 	twitch sync.Map
 }
@@ -168,6 +174,7 @@ func (s *server) routesProtected(r chi.Router) {
 	s.routesDiscover(r)
 	s.routesClaims(r)
 	s.routesAccounts(r)
+	s.routesPoints(r)
 	s.routesSettings(r)
 	s.routesHealth(r)
 	s.routesAdmin(r)

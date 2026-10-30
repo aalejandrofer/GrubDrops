@@ -13,11 +13,12 @@ import (
 )
 
 type forceChannelJSON struct {
-	Platform string   `json:"platform"`
-	Channel  string   `json:"channel"`
-	Live     *bool    `json:"live"`
-	Accounts []string `json:"accounts"`
-	Watching []string `json:"watching"`
+	Platform string             `json:"platform"`
+	Channel  string             `json:"channel"`
+	Live     *bool              `json:"live"`
+	Accounts []string           `json:"accounts"`
+	Watching []string           `json:"watching"`
+	Points   []pointBalanceJSON `json:"points,omitempty"`
 }
 
 type forceWatchJSON struct {
@@ -50,11 +51,19 @@ func (s *server) forceLive(platform, login string) *bool {
 func forceWatchers(snaps []runner.Snapshot) map[string][]string {
 	out := map[string][]string{}
 	for _, sn := range snaps {
-		if sn.State != runner.StateForceWatching || sn.Channel == "" {
+		if sn.State != runner.StateForceWatching {
 			continue
 		}
-		k := sn.Platform + "/" + sn.Channel
-		out[k] = append(out[k], sn.AccountID)
+		if sn.Channel != "" {
+			k := sn.Platform + "/" + sn.Channel
+			out[k] = append(out[k], sn.AccountID)
+		}
+		for _, channel := range sn.ExtraChannels {
+			if channel != "" {
+				k := sn.Platform + "/" + channel
+				out[k] = append(out[k], sn.AccountID)
+			}
+		}
 	}
 	return out
 }
@@ -82,6 +91,7 @@ func (s *server) forceView(list []store.ForceChannel) forceWatchJSON {
 		out.Channels = append(out.Channels, forceChannelJSON{
 			Platform: c.Platform, Channel: c.Channel,
 			Live: s.forceLive(c.Platform, c.Channel), Accounts: accts, Watching: w,
+			Points: s.pointsFor(c.Platform, c.Channel, append(append([]string(nil), accts...), w...)),
 		})
 	}
 	return out
@@ -149,9 +159,10 @@ func (s *server) putForceWatch(w http.ResponseWriter, r *http.Request) {
 }
 
 type forceLiveLineJSON struct {
-	Platform string   `json:"platform"`
-	Channel  string   `json:"channel"`
-	Watchers []string `json:"watchers"`
+	Platform string             `json:"platform"`
+	Channel  string             `json:"channel"`
+	Watchers []string           `json:"watchers"`
+	Points   []pointBalanceJSON `json:"points,omitempty"`
 }
 
 type forceOverviewJSON struct {
@@ -195,6 +206,9 @@ func (s *server) forceOverview(r *http.Request, snaps []runner.Snapshot, names m
 			continue
 		}
 		line := forceLiveLineJSON{Platform: c.Platform, Channel: c.Channel, Watchers: []string{}}
+		if len(ids) > 0 {
+			line.Points = s.pointsFor(c.Platform, c.Channel, ids)
+		}
 		for _, id := range ids {
 			if n, ok := names[id]; ok {
 				line.Watchers = append(line.Watchers, n)

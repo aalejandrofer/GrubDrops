@@ -40,6 +40,13 @@ export interface Overview {
 	force_watch?: OverviewForceWatch;
 }
 
+/** Cached Twitch channel-points balance; null values mean no successful read yet. */
+export interface ChannelPointsBalance {
+	account_id: string;
+	balance: number | null;
+	updated_at: string | null;
+}
+
 /** One force watch channel. live null = not checked yet. accounts and watching hold account IDs. */
 export interface ForceChannel {
 	platform: Platform;
@@ -47,7 +54,9 @@ export interface ForceChannel {
 	live: boolean | null;
 	accounts: string[];
 	watching: string[];
+	points?: ChannelPointsBalance[];
 }
+
 
 /** PUT /api/force-watch body item. The server rejects any other field. */
 export interface ForceChannelPut {
@@ -58,10 +67,11 @@ export interface ForceChannelPut {
 
 /** Home tile: live channels, watched first, at most two. watchers holds account names. */
 export type OverviewForceWatch = {
-	live: { platform: Platform; channel: string; watchers: string[] }[];
+	live: { platform: Platform; channel: string; watchers: string[]; points?: ChannelPointsBalance[] }[];
 	more: number;
 	total: number;
 } | null;
+
 
 export type RunnerState =
 	| 'idle'
@@ -289,6 +299,10 @@ export interface Account {
 	own_games: boolean;
 	/** Games on the own list, 0 while own_games is off. */
 	own_game_count: number;
+	points_enabled: boolean;
+	points_only: boolean;
+	points_streams: number;
+
 	auth: AccountAuth | null;
 }
 
@@ -303,6 +317,13 @@ export interface AccountGames {
 	own: boolean;
 	games: AccountGame[];
 }
+export interface PointsSafety {
+	sleep_enabled: boolean;
+	sleep_start: string;
+	sleep_end: string;
+	follow_raids: boolean;
+}
+
 
 export interface Settings {
 	language: 'en' | 'es' | 'zh-CN' | 'tr';

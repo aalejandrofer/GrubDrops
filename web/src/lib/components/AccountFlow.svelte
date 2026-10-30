@@ -86,7 +86,8 @@
 
 	function fail(e: unknown): void {
 		closed = true;
-		onfail?.(errMsg(e, t('accounts.add_failed')));
+		const msg = e instanceof ApiError && e.code === 'account_limit' ? t('accounts.twitch_limit') : errMsg(e, t('accounts.add_failed'));
+		onfail?.(msg);
 	}
 
 	/** Creates the new Kick account. Returns false when the flow closed or failed. */

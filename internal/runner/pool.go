@@ -365,6 +365,19 @@ func (p *Pool) ForceListChanged(accountID string) bool {
 	return true
 }
 
+// SafetyChanged wakes only runners whose points safety can affect their
+// current force/sleep state.
+func (p *Pool) SafetyChanged() {
+	p.mu.Lock()
+	units := slices.Clone(p.units)
+	p.mu.Unlock()
+	for _, u := range units {
+		if r, ok := u.current().Unit.(interface{ SafetyChanged() }); ok {
+			r.SafetyChanged()
+		}
+	}
+}
+
 // RecheckLinks runs the account runner's link recheck. ErrNotRunning when the
 // account has no running runner.
 func (p *Pool) RecheckLinks(ctx context.Context, accountID string) (LinkRecheck, error) {

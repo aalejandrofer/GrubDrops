@@ -88,24 +88,38 @@ func (s *server) twitchAndroidLogin(w http.ResponseWriter, r *http.Request) {
 
 	created := false
 	if id == "" {
+		s.accountCreateMu.Lock()
 		id = s.twitchAccountForUser(ctx, sess.UserID)
-	}
-	if id == "" {
-		name := login
-		if name == "" {
-			name = "Twitch account"
+		if id == "" {
+			available, err := s.twitchAccountCapacity(ctx)
+			if err != nil {
+				s.accountCreateMu.Unlock()
+				writeErr(w, http.StatusInternalServerError, "internal")
+				return
+			}
+			if !available {
+				s.accountCreateMu.Unlock()
+				writeErr(w, http.StatusBadRequest, "account_limit")
+				return
+			}
+			name := login
+			if name == "" {
+				name = "Twitch account"
+			}
+			id = genAccountID()
+			now := time.Now().Unix()
+			if _, err := s.d.Q.CreateAccount(ctx, gen.CreateAccountParams{
+				ID: id, Platform: "twitch", DisplayName: name,
+				Status: "idle", FingerprintJson: "{}", Enabled: 1,
+				CreatedAt: now, UpdatedAt: now,
+			}); err != nil {
+				s.accountCreateMu.Unlock()
+				writeErr(w, http.StatusInternalServerError, "internal")
+				return
+			}
+			created = true
 		}
-		id = genAccountID()
-		now := time.Now().Unix()
-		if _, err := s.d.Q.CreateAccount(ctx, gen.CreateAccountParams{
-			ID: id, Platform: "twitch", DisplayName: name,
-			Status: "idle", FingerprintJson: "{}", Enabled: 1,
-			CreatedAt: now, UpdatedAt: now,
-		}); err != nil {
-			writeErr(w, http.StatusInternalServerError, "internal")
-			return
-		}
-		created = true
+		s.accountCreateMu.Unlock()
 	}
 	// A device flow still polling for this account would overwrite the session.
 	s.cancelTwitchFlow(id)
@@ -114,6 +128,7 @@ func (s *server) twitchAndroidLogin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
 	}
+	s.forgetPointBalances(id)
 	slog.Info("twitch android login stored", "kind", "auth", "account", id, "platform", "twitch", "created", created)
 	sess.AccountID = id
 	fetchAndStoreAvatar(ctx, s.d.Q, backend, id, sess)

@@ -3,6 +3,7 @@ package twitch
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -137,4 +138,37 @@ func TestBackend_FetchAvatar_NullUser(t *testing.T) {
 	b := newForTest(srv.URL)
 	_, err := b.FetchAvatar(context.Background(), platform.Session{AccessToken: "tok"})
 	require.Error(t, err)
+}
+
+func TestStartWatchBootstrapsPubSubWithoutCampaignScan(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req gqlRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		switch req.OperationName {
+		case "CurrentUser":
+			_, _ = w.Write([]byte(`{"data":{"currentUser":{"id":"123","login":"user"}}}`))
+		case OpChannelPointsContext.Name:
+			_, _ = w.Write([]byte(`{"data":{"community":{"channel":{"id":"42","self":{"communityPoints":{"balance":123,"availableClaim":null}}}}}}`))
+		default:
+			t.Fatalf("unexpected operation %q", req.OperationName)
+		}
+	}))
+	defer srv.Close()
+
+	b := newForTest(srv.URL)
+	b.pubsubDisabled = false
+	b.pubsubDial = func(context.Context, string, string) (net.Conn, error) {
+		return nil, context.Canceled
+	}
+	defer b.Close()
+
+	handle, err := b.StartWatch(context.Background(), platform.Session{AccessToken: "token"}, platform.Stream{
+		Channel: "channel", ChannelID: "42",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "channel", handle.Channel)
+	b.pubsubMu.Lock()
+	pubsub := b.pubsub
+	b.pubsubMu.Unlock()
+	require.NotNil(t, pubsub, "watch lifecycle must initialize PubSub without a campaign scan")
 }

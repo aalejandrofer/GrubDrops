@@ -47,6 +47,7 @@
 	const nextScan = $derived(live.games?.next_scan_at ?? o?.status.next_scan_at ?? null);
 	const pausedIds = $derived(new Set(live.accounts.filter((a) => !a.enabled).map((a) => a.id)));
 	const cards = $derived(gameCards(live.games?.games ?? [], live.runners, pausedIds));
+	const accountNames = $derived(new Map(live.accounts.map((a) => [a.id, a.name])));
 	const idle = $derived(notMining(live.accounts, live.runners));
 	const IDLE_KEYS = {
 		idle: 'accounts.status.idle',
@@ -199,6 +200,11 @@
 										<span class="on">{r.watchers.join(', ')}</span>
 									{:else}
 										<span class="off">{t('home.kpi_force_nobody')}</span>
+									{/if}
+									{#if r.watchers.length > 0 && r.platform === 'twitch' && r.points?.length}
+										<span class="points">{r.points.map((p) => p.balance === null
+											? t('points.balance_waiting', { name: accountNames.get(p.account_id) ?? p.account_id })
+											: t('points.balance', { name: accountNames.get(p.account_id) ?? p.account_id, balance: formatInt(p.balance) })).join(' · ')}</span>
 									{/if}
 								</li>
 							{/each}

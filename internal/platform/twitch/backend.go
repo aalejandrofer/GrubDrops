@@ -147,12 +147,11 @@ func (b *Backend) Close() {
 	b.pubsubMu.Unlock()
 }
 
-// Backend must satisfy ChannelSubscriber so the watcher subscribes
-// video-playback PubSub topics for event-driven stream-up/down, and
-// PubSubAware so the watcher's real-time hooks actually receive events
-// (both signatures drifted once and broke this silently).
+// The backend must expose its PubSub and Twitch-only point/raid capabilities.
 var _ platform.ChannelSubscriber = (*Backend)(nil)
 var _ platform.PubSubAware = (*Backend)(nil)
+var _ platform.ChannelPointsBalanceReader = (*Backend)(nil)
+var _ platform.RaidJoiner = (*Backend)(nil)
 
 func New() *Backend {
 	c := newClient()
@@ -328,6 +327,7 @@ func (b *Backend) SetAccountPubSubHooks(accountID string, h platform.PubSubHooks
 		OnStreamDown:   h.OnStreamDown,
 		OnStreamUp:     h.OnStreamUp,
 		OnRewardCode:   h.OnRewardCode,
+		OnRaid:         h.OnRaid,
 	}
 	b.pubsubMu.Unlock()
 }
@@ -386,6 +386,7 @@ func (b *Backend) SubscribeChannel(_ string, channelID string) {
 		return
 	}
 	client.AddTopic(TopicVideoPlaybackByID(channelID))
+	client.AddTopic(TopicRaid(channelID))
 }
 
 // UnsubscribeChannel drops a video-playback-by-id.<id> topic.
@@ -397,6 +398,7 @@ func (b *Backend) UnsubscribeChannel(_ string, channelID string) {
 		return
 	}
 	client.RemoveTopic(TopicVideoPlaybackByID(channelID))
+	client.RemoveTopic(TopicRaid(channelID))
 }
 
 func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, c platform.Campaign) ([]platform.Stream, error) {
@@ -523,6 +525,7 @@ func (b *Backend) ReadyDrops(ctx context.Context, s platform.Session) ([]platfor
 
 func (b *Backend) StartWatch(ctx context.Context, s platform.Session, stream platform.Stream) (platform.WatchHandle, error) {
 	b.c.bind(s)
+	b.ensurePubSub(s)
 	return b.watch.start(ctx, s, stream)
 }
 
@@ -549,6 +552,18 @@ func (b *Backend) Claim(ctx context.Context, s platform.Session, drop platform.D
 func (b *Backend) AvailableDropIDs(ctx context.Context, s platform.Session, channelID string) (map[string]struct{}, error) {
 	b.c.bind(s)
 	return b.adv.availableDropIDs(ctx, s, channelID)
+}
+
+// ChannelPointsBalance performs a read-only lookup; bonus claims are kept in
+// the watch lifecycle and are never triggered by this method.
+func (b *Backend) ChannelPointsBalance(ctx context.Context, s platform.Session, channel string) (int, error) {
+	b.c.bind(s)
+	return channelPointsBalance(ctx, b.c, s, channel)
+}
+
+func (b *Backend) JoinRaid(ctx context.Context, s platform.Session, raidID string) error {
+	b.c.bind(s)
+	return joinRaid(ctx, b.c, s, raidID)
 }
 
 // CurrentSession satisfies platform.CurrentSessionChecker. Returns the

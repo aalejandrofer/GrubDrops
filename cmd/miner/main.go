@@ -439,6 +439,7 @@ func run(ctx context.Context) error {
 		backendFor:  backendFor,
 		notifier:    notifier,
 		settings:    settingsStore,
+		zone:        displayZone.Location,
 		force:       store.NewForceWatch(db, q),
 	}, kickBackend)
 
@@ -589,10 +590,11 @@ func run(ctx context.Context) error {
 		GamesSettle:  ro.settle,
 		Discover:     discoverSvc,
 
-		ForceWatch:     ro.force,
-		ForceLive:      func(plat, login string) *bool { return forceChecker.Peek(plat, login).Live },
-		ForceChanged:   ro.forceChanged,
-		LookupCategory: ro.lookupCategory,
+		ForceWatch:          ro.force,
+		ForceLive:           func(plat, login string) *bool { return forceChecker.Peek(plat, login).Live },
+		ForceChanged:        ro.forceChanged,
+		PointsSafetyChanged: ro.pointsSafetyChanged,
+		LookupCategory:      ro.lookupCategory,
 
 		Sessions:  sessions,
 		Registry:  registry,
@@ -621,6 +623,7 @@ func run(ctx context.Context) error {
 		},
 		SetZone: func(name string) {
 			displayZone.Set(timeutil.Resolve(name, os.Getenv("TZ")))
+			ro.pointsSafetyChanged()
 		},
 
 		Ring:         ring,

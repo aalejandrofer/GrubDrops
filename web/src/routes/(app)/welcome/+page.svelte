@@ -209,7 +209,11 @@
 				{/if}
 				{#if addError}<p class="bad" role="alert">{addError}</p>{/if}
 				{#if showFlow}
-					<AddAccount onadded={onAdded} onfail={(msg) => (addError = msg)} onpick={() => (addError = '')} />
+					<AddAccount
+						twitchDisabled={live.accounts.filter((a) => a.platform === 'twitch').length >= 3}
+						onadded={onAdded}
+						onfail={(msg) => ((addError = msg), (showFlow = false))}
+					/>
 					{#if ready.length > 0}
 						<button type="button" class="btn quiet more" onclick={() => ((showFlow = false), (addError = ''))}>{t('welcome.cancel_add')}</button>
 					{/if}

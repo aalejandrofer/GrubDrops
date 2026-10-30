@@ -61,8 +61,8 @@ func TestForceWatch_StartsWhenQueueEmpty(t *testing.T) {
 	if s.ViewerCount != 7 {
 		t.Fatalf("viewers=%d", s.ViewerCount)
 	}
-	if left := time.Until(s.NextScanAt); left > recheckInterval || left < recheckInterval-time.Minute {
-		t.Fatalf("next scan in %v, want about %v", left, recheckInterval)
+	if left := time.Until(s.NextScanAt); left > r.forceCheckInterval() || left < r.forceCheckInterval()-time.Second {
+		t.Fatalf("next scan in %v, want about %v", left, r.forceCheckInterval())
 	}
 	if callIndex(f, "Lookup:a", 1) > callIndex(f, "Lookup:b", 1) {
 		t.Fatalf("lookups out of order: %v", f.Calls)

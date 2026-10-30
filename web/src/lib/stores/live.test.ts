@@ -35,6 +35,7 @@ function setup(session: () => Promise<{ authed: boolean }> = async () => ({ auth
 	const sources: FakeSource[] = [];
 	const delays: number[] = [];
 	const pending: (() => void)[] = [];
+	const ticks: { fn: () => void; ms: number; cancelled: boolean }[] = [];
 	const onUnauthorized = vi.fn();
 	const live = createLive({
 		api: api as unknown as Api,
@@ -48,12 +49,16 @@ function setup(session: () => Promise<{ authed: boolean }> = async () => ({ auth
 			pending.push(fn);
 			return () => {};
 		},
-		tick: () => () => {},
+		tick: (fn, ms) => {
+			const timer = { fn, ms, cancelled: false };
+			ticks.push(timer);
+			return () => (timer.cancelled = true);
+		},
 		now: () => 1234,
 		onUnauthorized
 	});
 	live.start();
-	return { api, live, sources, delays, pending, onUnauthorized, cur: () => sources[sources.length - 1] };
+	return { api, live, sources, delays, pending, ticks, onUnauthorized, cur: () => sources[sources.length - 1] };
 }
 
 const settle = () => new Promise((r) => setTimeout(r, 0));
@@ -122,6 +127,21 @@ describe('live events', () => {
 		expect(api.overview).toHaveBeenCalledTimes(1);
 		expect(api.games).not.toHaveBeenCalled();
 		expect(live.forceWatch).toEqual([c]);
+	});
+	it('refreshes Twitch balances periodically while the event stream is connected', async () => {
+		const { api, live, cur, ticks } = setup();
+		api.forceWatch.mockResolvedValue({
+			channels: [{ platform: 'twitch', channel: 'keshaeuw', live: true, accounts: ['a'], watching: [] }]
+		});
+		cur().onopen!();
+		await settle();
+		const poll = ticks.find((timer) => timer.ms === 65 * 60 * 1000);
+		expect(poll).toBeDefined();
+		poll!.fn();
+		await settle();
+		expect(api.forceWatch).toHaveBeenCalledTimes(2);
+		live.stop();
+		expect(poll!.cancelled).toBe(true);
 	});
 
 	it('a runner entering or leaving force watching refetches overview and the force list', async () => {

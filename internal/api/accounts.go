@@ -35,6 +35,7 @@ func (s *server) routesAccounts(r chi.Router) {
 	r.Post("/accounts/{id}/restart", s.postAccountRestart)
 	r.Get("/accounts/{id}/games", s.getAccountGames)
 	r.Put("/accounts/{id}/games", s.putAccountGames)
+	r.Put("/accounts/{id}/points", s.putAccountPoints)
 	r.Get("/login/twitch/android", s.twitchAndroidURL)
 	r.Post("/login/twitch/android", s.twitchAndroidLogin)
 }
@@ -46,17 +47,20 @@ type accountAuthJSON struct {
 }
 
 type accountJSON struct {
-	ID           string           `json:"id"`
-	Platform     string           `json:"platform"`
-	Name         string           `json:"name"`          // custom name, else the platform name
-	PlatformName string           `json:"platform_name"` // the platform login
-	AvatarURL    string           `json:"avatar_url"`
-	State        string           `json:"state"`
-	NeedsLogin   bool             `json:"needs_login"`
-	Enabled      bool             `json:"enabled"`        // false: paused, the runner idles
-	OwnGames     bool             `json:"own_games"`      // true: mines its own game list
-	OwnGameCount int              `json:"own_game_count"` // games on the own list, 0 while own_games is off
-	Auth         *accountAuthJSON `json:"auth"`           // null until a check has run
+	ID            string           `json:"id"`
+	Platform      string           `json:"platform"`
+	Name          string           `json:"name"`          // custom name, else the platform name
+	PlatformName  string           `json:"platform_name"` // the platform login
+	AvatarURL     string           `json:"avatar_url"`
+	State         string           `json:"state"`
+	NeedsLogin    bool             `json:"needs_login"`
+	Enabled       bool             `json:"enabled"`        // false: paused, the runner idles
+	OwnGames      bool             `json:"own_games"`      // true: mines its own game list
+	OwnGameCount  int              `json:"own_game_count"` // games on the own list, 0 while own_games is off
+	PointsEnabled bool             `json:"points_enabled"`
+	PointsOnly    bool             `json:"points_only"`
+	PointsStreams int              `json:"points_streams"`
+	Auth          *accountAuthJSON `json:"auth"` // null until a check has run
 }
 
 // checkedAt is nil when no check has run.
@@ -96,13 +100,21 @@ func (s *server) listAccounts(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			slog.Warn("accounts: session lookup failed", "kind", "error", "account", a.ID, "err", err)
 		}
+		points, err := store.LoadPointsAccountSettings(ctx, s.d.Q, a.ID)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "internal")
+			return
+		}
+		streams := points.Streams
+		if a.Platform == "kick" {
+			streams = 1
+		}
 		item := accountJSON{
 			ID: a.ID, Platform: a.Platform, Name: store.AccountName(a), PlatformName: a.DisplayName,
-			AvatarURL:  avatarSrc(a.Platform, a.AvatarUrl),
-			State:      state,
+			AvatarURL: avatarSrc(a.Platform, a.AvatarUrl), State: state,
 			NeedsLogin: state == string(runner.StateNeedsLogin) || !hasSession,
-			Enabled:    a.Enabled != 0,
-			OwnGames:   a.OwnGames != 0,
+			Enabled:    a.Enabled != 0, OwnGames: a.OwnGames != 0,
+			PointsEnabled: points.Enabled, PointsOnly: points.Only, PointsStreams: streams,
 		}
 		if a.OwnGames != 0 && s.d.AccountGames != nil {
 			if list, err := s.d.AccountGames.List(ctx, a.ID); err == nil {
@@ -117,6 +129,43 @@ func (s *server) listAccounts(w http.ResponseWriter, r *http.Request) {
 		out = append(out, item)
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *server) putAccountPoints(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	acc, ok := s.account(w, r, id)
+	if !ok {
+		return
+	}
+	var body struct {
+		Enabled *bool `json:"points_enabled"`
+		Only    *bool `json:"points_only"`
+		Streams *int  `json:"points_streams"`
+	}
+	if !readJSON(w, r, &body) {
+		return
+	}
+	if body.Enabled == nil || body.Only == nil || (acc.Platform == "twitch" && (body.Streams == nil || *body.Streams <= 0)) {
+		writeErr(w, http.StatusBadRequest, "bad_request")
+		return
+	}
+	current, err := store.LoadPointsAccountSettings(r.Context(), s.d.Q, id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	current.Enabled, current.Only = *body.Enabled, *body.Only
+	if acc.Platform == "twitch" {
+		current.Streams = *body.Streams
+	} else {
+		current.Streams = 1
+	}
+	if err := store.SavePointsAccountSettings(r.Context(), s.d.Q, id, current); err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	s.accountChanged(id)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *server) createAccount(w http.ResponseWriter, r *http.Request) {
@@ -141,6 +190,19 @@ func (s *server) createAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad_request")
 		return
 	}
+	s.accountCreateMu.Lock()
+	defer s.accountCreateMu.Unlock()
+	if body.Platform == "twitch" {
+		ok, err := s.twitchAccountCapacity(r.Context())
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "internal")
+			return
+		}
+		if !ok {
+			writeErr(w, http.StatusBadRequest, "account_limit")
+			return
+		}
+	}
 	id := genAccountID()
 	now := time.Now().Unix()
 	if _, err := s.d.Q.CreateAccount(r.Context(), gen.CreateAccountParams{
@@ -153,6 +215,20 @@ func (s *server) createAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	s.accountChanged(id)
 	writeJSON(w, http.StatusCreated, map[string]string{"id": id})
+}
+
+func (s *server) twitchAccountCapacity(ctx context.Context) (bool, error) {
+	accs, err := s.d.Q.ListAllAccounts(ctx)
+	if err != nil {
+		return false, err
+	}
+	count := 0
+	for _, a := range accs {
+		if a.Platform == "twitch" {
+			count++
+		}
+	}
+	return count < 3, nil
 }
 
 func (s *server) renameAccount(w http.ResponseWriter, r *http.Request) {
@@ -290,6 +366,7 @@ func (s *server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
 	}
+	s.forgetPointBalances(id)
 	if s.d.AccountRemoved != nil {
 		s.d.AccountRemoved(id)
 	}
@@ -513,6 +590,9 @@ func (s *server) purgeAccount(ctx context.Context, id string) error {
 		return err
 	}
 	if err := qtx.DeleteAccountClaims(ctx, id); err != nil {
+		return err
+	}
+	if err := store.DeletePointsAccountSettings(ctx, qtx, id); err != nil {
 		return err
 	}
 	if err := qtx.DeleteAccount(ctx, id); err != nil {

@@ -45,28 +45,36 @@ const (
 	maxBackoff = 5 * time.Minute
 	// rewardCodeWindow is how long after a claim a reward code push is
 	// still attributed to the claimed target.
-	rewardCodeWindow = 10 * time.Minute
+	rewardCodeWindow        = 10 * time.Minute
+	forceDropScanInterval   = time.Minute
+	forcePointsScanInterval = 30 * time.Minute
 )
 
 type Runner struct {
-	cfg Config
-
-	mu          sync.Mutex
-	state       State
-	current     *plan.Target
-	handle      *platform.WatchHandle
-	stream      *platform.Stream
-	channel     string
-	viewers     int
-	minutes     int
-	startedAt   time.Time
-	lastPollAt  time.Time
-	lastScanAt  time.Time
-	lastScanTry time.Time // last scan attempt, failed or not; paces rescans
-	nextRecheck time.Time // deadline of the armed idle wait timer; zero = none
+	cfg                   Config
+	state                 State
+	mu                    sync.Mutex
+	forceGeneration       uint64
+	current               *plan.Target
+	handle                *platform.WatchHandle
+	stream                *platform.Stream
+	extraWatches          []extraWatch
+	extraChannels         []string
+	extraRetryAt          time.Time
+	forceChannelsSnapshot []string
+	channel               string
+	runCtx                context.Context
+	viewers               int
+	minutes               int
+	startedAt             time.Time
+	lastPollAt            time.Time
+	lastScanAt            time.Time
+	lastScanTry           time.Time // last scan attempt, failed or not; paces rescans
+	nextRecheck           time.Time // deadline of the armed idle wait timer; zero = none
 	// sleepNoStream marks a sleep with campaigns queued but no eligible live
 	// stream; it waits recheckInterval, not idleRecheck. pick clears it.
 	sleepNoStream bool
+	sleepUntil    time.Time
 	lastBeatAt    time.Time     // when the current watch last beaconed; zero = not yet
 	wake          chan struct{} // signalled on every state change, cap 1
 	rescan        chan struct{} // signalled by Rescan, cap 1
@@ -133,6 +141,10 @@ type Runner struct {
 	lastMilestone    int // last progress milestone notified; -1 = none
 	milestoneBenefit string
 }
+type extraWatch struct {
+	handle platform.WatchHandle
+	stream platform.Stream
+}
 
 // New builds a Runner and plumbs the game whitelist into the session.
 func New(cfg Config) *Runner {
@@ -197,6 +209,15 @@ func (r *Runner) Rescan() {
 	}
 }
 
+// SafetyChanged re-evaluates an idle or force-watching runner against live
+// points safety settings; an active drop watch is never stopped.
+func (r *Runner) SafetyChanged() {
+	st := r.State()
+	if st == StateForceWatching || st == StateSleeping {
+		r.Rescan()
+	}
+}
+
 // MineNow asks the Run goroutine to drop the current watch and pick again,
 // so the caller's order, with benefitID first, takes effect at once. The
 // benefit must be queued. A claim in flight finishes first.
@@ -241,6 +262,7 @@ func (r *Runner) Snapshot() Snapshot {
 		Platform:       r.cfg.Platform,
 		State:          r.state,
 		Channel:        r.channel,
+		ExtraChannels:  append([]string(nil), r.extraChannels...),
 		ViewerCount:    r.viewers,
 		MinutesWatched: r.minutes,
 		StartedAt:      r.startedAt,
@@ -252,7 +274,7 @@ func (r *Runner) Snapshot() Snapshot {
 	case StateNeedsLogin, StateNoGames:
 		// Stopped: nothing is scheduled.
 	case StateForceWatching:
-		s.NextScanAt = r.forceCheckAt.Add(recheckInterval)
+		s.NextScanAt = r.forceCheckAt.Add(r.forceCheckInterval())
 	case StateSleeping, StateAwaitingConnect:
 		if !r.nextRecheck.IsZero() {
 			s.NextScanAt = r.nextRecheck
@@ -363,6 +385,13 @@ func idleWait(s State, noStream bool, pace time.Duration) time.Duration {
 	return recheckInterval
 }
 
+func (r *Runner) forceCheckInterval() time.Duration {
+	if r.cfg.PointsOnly {
+		return forcePointsScanInterval
+	}
+	return forceDropScanInterval
+}
+
 func (r *Runner) clearSkip(id string) {
 	r.mu.Lock()
 	delete(r.skipped, id)
@@ -375,6 +404,12 @@ func (r *Runner) clearSkip(id string) {
 }
 
 func (r *Runner) pick(ctx context.Context) error {
+	now := time.Now()
+	r.mu.Lock()
+	if !r.sleepUntil.IsZero() && !now.Before(r.sleepUntil) {
+		r.sleepUntil = time.Time{}
+	}
+	r.mu.Unlock()
 	force := r.forceChannels()
 	if len(r.cfg.Games) == 0 && len(force) == 0 {
 		r.setState(ctx, StateNoGames)
@@ -382,7 +417,7 @@ func (r *Runner) pick(ctx context.Context) error {
 	}
 	// No games: nothing to plan, only force channels to watch.
 	var res plan.Result
-	if len(r.cfg.Games) > 0 {
+	if len(r.cfg.Games) > 0 && !r.cfg.PointsOnly {
 		var err error
 		res, err = r.scan(ctx, nil, false)
 		if err != nil {
@@ -439,6 +474,19 @@ func (r *Runner) pick(ctx context.Context) error {
 			}
 		}
 	}
+	r.mu.Unlock()
+	if len(force) > 0 && r.cfg.SleepUntil != nil {
+		if until, asleep := r.cfg.SleepUntil(time.Now()); asleep {
+			r.mu.Lock()
+			r.sleepUntil = until
+			r.sleepNoStream = false
+			r.mu.Unlock()
+			r.setState(ctx, StateSleeping)
+			return nil
+		}
+	}
+	r.mu.Lock()
+	r.sleepUntil = time.Time{}
 	r.mu.Unlock()
 	if len(force) > 0 {
 		// The queue is empty: watch a force channel until a drop shows up.
@@ -654,6 +702,14 @@ func nextBackoff(cur time.Duration) time.Duration {
 // StartWatch, later ones every TickInterval. A step that left a non-watching
 // state unchanged waits TickInterval so it cannot spin.
 func (r *Runner) Run(ctx context.Context) error {
+	r.mu.Lock()
+	r.runCtx = ctx
+	r.mu.Unlock()
+	defer func() {
+		r.mu.Lock()
+		r.runCtx = nil
+		r.mu.Unlock()
+	}()
 	defer func() {
 		if p := recover(); p != nil {
 			r.cleanupAfterPanic()
@@ -691,6 +747,9 @@ func (r *Runner) Run(ctx context.Context) error {
 			pace := r.scanEvery()
 			r.mu.Lock()
 			wait := idleWait(before, r.sleepNoStream, pace)
+			if before == StateSleeping && !r.sleepUntil.IsZero() {
+				wait = max(time.Millisecond, time.Until(r.sleepUntil))
+			}
 			timer := time.NewTimer(wait)
 			r.nextRecheck = time.Now().Add(wait)
 			r.mu.Unlock()

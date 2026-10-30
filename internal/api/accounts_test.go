@@ -66,6 +66,7 @@ func accountsEnv(t *testing.T, backends ...platform.Backend) (*env, *calls) {
 	e.s.d.AccountChanged = c.onChanged
 	e.s.d.AccountRemoved = c.onRemoved
 	e.s.routesAccounts(e.s.protected)
+	e.s.routesPoints(e.s.protected)
 	e.setup("password123")
 	return e, c
 }

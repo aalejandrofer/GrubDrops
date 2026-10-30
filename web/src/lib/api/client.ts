@@ -25,6 +25,7 @@ import type {
 	Session,
 	Settings,
 	SettingsPatch,
+	PointsSafety,
 	UpdateInfo
 } from './types';
 
@@ -110,6 +111,9 @@ export interface Api {
 	restartAccount(id: string): Promise<void>;
 	accountGames(id: string): Promise<AccountGames>;
 	/** games null keeps the stored list. */
+	pointsSafety(): Promise<PointsSafety>;
+	savePointsSafety(p: PointsSafety): Promise<PointsSafety>;
+	setAccountPoints(id: string, points: { points_enabled: boolean; points_only: boolean; points_streams?: number }): Promise<void>;
 	setAccountGames(id: string, own: boolean, games: AccountGame[] | null): Promise<AccountGames>;
 	/** A consistent copy of the database, as a file to save. */
 	snapshot(): Promise<{ blob: Blob; name: string }>;
@@ -268,6 +272,10 @@ export function createClient(opts: ClientOpts): Api {
 		accountGames: (id) => get(`/api/accounts/${enc(id)}/games`),
 		setAccountGames: (id, own, games) =>
 			send('PUT', `/api/accounts/${enc(id)}/games`, games === null ? { own } : { own, games }) as Promise<AccountGames>,
+		pointsSafety: () => get('/api/points'),
+		savePointsSafety: (p) => send('PUT', '/api/points/safety', p) as Promise<PointsSafety>,
+		setAccountPoints: (id, points) => send('PUT', `/api/accounts/${enc(id)}/points`, points) as Promise<void>,
+
 		settings: () => get('/api/settings'),
 		saveSettings: (p) => send('PUT', '/api/settings', p) as Promise<Settings>,
 		notifyTest: (target) => post(`/api/settings/notify-test${target ? `?target=${target}` : ''}`),

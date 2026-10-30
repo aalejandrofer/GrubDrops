@@ -11,6 +11,7 @@
 		{ href: '/', key: 'nav.home' },
 		{ href: '/discover', key: 'nav.discover' },
 		{ href: '/games', key: 'nav.games' },
+		{ href: '/points', key: 'nav.points' },
 		{ href: '/inventory', key: 'nav.inventory' },
 		{ href: '/settings', key: 'nav.settings' }
 	];

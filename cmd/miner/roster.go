@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"slices"
 	"sort"
@@ -52,6 +53,7 @@ type roster struct {
 	notifier   runner.Notifier
 	settings   *store.Settings              // nil = default priority
 	runCfg     *atomic.Pointer[runSettings] // set by newRoster; holds nil until read
+	zone       func() *time.Location
 
 	// gamesDirty queues one games reload; see requestGamesReload.
 	gamesDirty chan struct{} // set by newRoster
@@ -338,11 +340,40 @@ const progressNotifyStepPct = 50
 // runnerConfig is the runner.Config for one account build.
 func (ro *roster) runnerConfig(ctx context.Context, a gen.Account, b platform.Backend, sess platform.Session, games []plan.Game) runner.Config {
 	order := ro.pool.OrderFunc(a.ID)
+	points, err := store.LoadPointsAccountSettings(ctx, ro.q, a.ID)
+	if err != nil {
+		ro.log().Error("load points settings failed", "account", a.ID, "err", err)
+		points = store.PointsAccountSettings{Enabled: true, Streams: 2}
+	}
+	safety := func(ctx context.Context) store.PointsSafety {
+		settings, err := store.LoadPointsSafety(ctx, ro.q)
+		if err != nil {
+			ro.log().Error("load points safety failed", "err", err)
+			return store.PointsSafety{SleepEnabled: true, SleepStart: 120, SleepEnd: 480, FollowRaids: true}
+		}
+		return settings
+	}
+	var forceMu sync.Mutex
+	var forceMembership []string
 	return runner.Config{
 		AccountID: a.ID, AccountLabel: store.AccountName(a), Platform: a.Platform,
 		Backend: b, Session: sess,
-		Games:       games,
-		Notifier:    ro.notifier,
+		Notifier:      ro.notifier,
+		Games:         games,
+		PointsOnly:    points.Only,
+		PointsStreams: func() int { return points.Streams },
+		SleepUntil: func(now time.Time) (time.Time, bool) {
+			settings := safety(ctx)
+			if !settings.SleepEnabled {
+				return time.Time{}, false
+			}
+			var loc *time.Location
+			if ro.zone != nil {
+				loc = ro.zone()
+			}
+			return scheduledSleep(now, a.ID, settings, loc)
+		},
+		FollowRaids: func() bool { return safety(ctx).FollowRaids },
 		Claims:      &claimLog{ro: ro},
 		Skips:       ro.skips,
 		LinkNotices: ro.linkNotices,
@@ -368,12 +399,71 @@ func (ro *roster) runnerConfig(ctx context.Context, a gen.Account, b platform.Ba
 				Name: api.EventRunner, Key: a.ID,
 				Data: api.RunnerJSON(s, row, len(order()) > 0),
 			})
+
+			var membership []string
+			if s.State == runner.StateForceWatching {
+				if s.Channel != "" {
+					membership = append(membership, s.Channel)
+				}
+				for _, channel := range s.ExtraChannels {
+					if channel != "" {
+						membership = append(membership, channel)
+					}
+				}
+			}
+			slices.Sort(membership)
+			membership = slices.Compact(membership)
+			forceMu.Lock()
+			changed := !slices.Equal(forceMembership, membership)
+			if changed {
+				forceMembership = membership
+			}
+			forceMu.Unlock()
+			if changed {
+				ro.hub.Publish(api.Event{Name: api.EventForceWatch, Data: struct{}{}})
+			}
 		},
 		ProgressNotifyStepPct: progressNotifyStepPct,
 		TickInterval:          0,
-		ForceChannels:         func() []string { return ro.forceFor(a.ID, a.Platform) },
-		ForceLookup:           ro.forceLookupFor(a.Platform),
+		ForceChannels: func() []string {
+			if !points.Enabled {
+				return nil
+			}
+			return ro.forceFor(a.ID, a.Platform)
+		},
+		ForceLookup: ro.forceLookupFor(a.Platform),
 	}
+}
+func scheduledSleep(now time.Time, accountID string, settings store.PointsSafety, location *time.Location) (time.Time, bool) {
+	if location == nil {
+		location = now.Location()
+	}
+	local := now.In(location)
+	year, month, day := local.Date()
+	start := settings.SleepStart
+	end := settings.SleepEnd
+	today := time.Date(year, month, day, 0, 0, 0, 0, location)
+	for _, offset := range []int{0, -1} {
+		startDate := today.AddDate(0, 0, offset)
+		endDate := startDate
+		if end <= start {
+			endDate = endDate.AddDate(0, 0, 1)
+		}
+		sy, sm, sd := startDate.Date()
+		ey, em, ed := endDate.Date()
+		startAt := time.Date(sy, sm, sd, start/60, start%60, 0, 0, location).Add(sleepJitter(accountID, startDate, "start"))
+		endAt := time.Date(ey, em, ed, end/60, end%60, 0, 0, location).Add(sleepJitter(accountID, endDate, "end"))
+		if !local.Before(startAt) && local.Before(endAt) {
+			return endAt, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func sleepJitter(accountID string, date time.Time, edge string) time.Duration {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(accountID + "/" + date.Format("2006-01-02") + "/" + edge))
+	return time.Duration(int(h.Sum32()%41)-20) * time.Minute
 }
 
 // forceLookupFor binds the shared force-watch lookup to one platform; nil
@@ -712,6 +802,10 @@ func (ro *roster) forceChanged() {
 	}
 	ro.forceQueue.add(rebuild)
 	ro.warmForce(added)
+}
+
+func (ro *roster) pointsSafetyChanged() {
+	ro.pool.SafetyChanged()
 }
 
 // addedChannels is the platform/channel pairs in list that old lacks, in

@@ -44,18 +44,20 @@ func TestGetForceWatch(t *testing.T) {
 		{Platform: "twitch", Channel: "keshaeuw", Accounts: []string{"a1"}},
 		{Platform: "kick", Channel: "xqc", Accounts: []string{"b2"}},
 		{Platform: "twitch", Channel: "unseen"},
+		{Platform: "twitch", Channel: "bonus", Accounts: []string{"a1"}},
 	})
 	e.pool.snaps = []runner.Snapshot{
-		{AccountID: "a1", Platform: "twitch", State: runner.StateForceWatching, Channel: "keshaeuw"},
+		{AccountID: "a1", Platform: "twitch", State: runner.StateForceWatching, Channel: "keshaeuw", ExtraChannels: []string{"bonus"}},
 		// Same channel name, other platform: not a watcher.
 		{AccountID: "b2", Platform: "kick", State: runner.StateForceWatching, Channel: "unseen"},
 	}
 	resp, b := e.do("GET", "/api/force-watch", "", nil)
 	require.Equal(t, 200, resp.StatusCode, string(b))
 	assert.JSONEq(t, `{"channels":[
-		{"platform":"twitch","channel":"keshaeuw","live":true,"accounts":["a1"],"watching":["a1"]},
+		{"platform":"twitch","channel":"keshaeuw","live":true,"accounts":["a1"],"watching":["a1"],"points":[{"account_id":"a1","balance":null,"updated_at":null}]},
 		{"platform":"kick","channel":"xqc","live":false,"accounts":["b2"],"watching":[]},
-		{"platform":"twitch","channel":"unseen","live":null,"accounts":[],"watching":[]}
+		{"platform":"twitch","channel":"unseen","live":null,"accounts":[],"watching":[]},
+		{"platform":"twitch","channel":"bonus","live":null,"accounts":["a1"],"watching":["a1"],"points":[{"account_id":"a1","balance":null,"updated_at":null}]}
 	]}`, string(b))
 }
 
@@ -90,7 +92,7 @@ func TestPutForceWatch_ReplacesAndNotifies(t *testing.T) {
 	require.Equal(t, 200, resp.StatusCode, string(b))
 	assert.JSONEq(t, `{"channels":[
 		{"platform":"kick","channel":"xqc","live":true,"accounts":["b2"],"watching":[]},
-		{"platform":"twitch","channel":"keshaeuw","live":null,"accounts":["a1"],"watching":[]}
+		{"platform":"twitch","channel":"keshaeuw","live":null,"accounts":["a1"],"watching":[],"points":[{"account_id":"a1","balance":null,"updated_at":null}]}
 	]}`, string(b))
 	assert.Equal(t, []store.ForceChannel{
 		{Platform: "kick", Channel: "xqc", Accounts: []string{"b2"}},
@@ -188,10 +190,7 @@ func TestOverview_ForceWatch(t *testing.T) {
 	}
 	m = e.overview()
 	b, _ = json.Marshal(m["force_watch"])
-	assert.JSONEq(t, `{"live":[
-		{"platform":"twitch","channel":"three","watchers":["Alice"]},
-		{"platform":"twitch","channel":"one","watchers":[]}
-	],"more":2,"total":5}`, string(b))
+	assert.JSONEq(t, `{"live":[{"platform":"twitch","channel":"three","watchers":["Alice"],"points":[{"account_id":"a1","balance":null,"updated_at":null}]},{"platform":"twitch","channel":"one","watchers":[]}],"more":2,"total":5}`, string(b))
 }
 
 func TestOverview_ForceWatchWatchedUnknownIsLive(t *testing.T) {
@@ -204,7 +203,7 @@ func TestOverview_ForceWatchWatchedUnknownIsLive(t *testing.T) {
 		{AccountID: "a1", Platform: "twitch", State: runner.StateForceWatching, Channel: "one"},
 	}
 	b, _ := json.Marshal(e.overview()["force_watch"])
-	assert.JSONEq(t, `{"live":[{"platform":"twitch","channel":"one","watchers":["Alice"]}],"more":0,"total":2}`, string(b))
+	assert.JSONEq(t, `{"live":[{"platform":"twitch","channel":"one","watchers":["Alice"],"points":[{"account_id":"a1","balance":null,"updated_at":null}]}],"more":0,"total":2}`, string(b))
 }
 
 func TestOverview_NoGamesButForceWatch(t *testing.T) {

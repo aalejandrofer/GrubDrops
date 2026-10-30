@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -51,13 +52,12 @@ type PubSubHandlers struct {
 	// channel can be re-picked without waiting for the discovery
 	// poll.
 	OnStreamUp func(channelID string)
-	// OnRewardCode fires when an onsite-notification payload carries
-	// a Twitch/Mojang-style redemption code (5 blocks of 5
-	// alphanumerics separated by hyphens — e.g. Minecraft cape codes).
-	// notificationID is the per-event identifier so the receiver can
-	// dedupe; body is the raw notification text so the receiver can
-	// capture surrounding context (game / drop name) when persisting.
+	// OnRewardCode fires when an onsite-notification carries a Twitch /
+	// Mojang-style redemption code (five groups of five alphanumerics).
+	// notificationID dedupes events; body includes surrounding context.
 	OnRewardCode func(notificationID, code, body string)
+	// OnRaid fires for raids announced on raid.<source_channel_id>.
+	OnRaid func(channelID, raidID string)
 }
 
 // PubSubClient holds one WebSocket connection and the topics LISTENed
@@ -309,12 +309,12 @@ func (p *PubSubClient) dispatch(topic string, payload []byte) {
 		p.dispatchDropEvent(payload)
 	case startsWith(topic, "video-playback-by-id."):
 		p.dispatchPlaybackEvent(topic, payload)
+	case startsWith(topic, "raid."):
+		p.dispatchRaidEvent(topic, payload)
+		return
 	case startsWith(topic, "onsite-notifications."):
-		// Onsite notifications surface user_drop_reward_reminder + a
-		// pile of unrelated stuff. Drop-claim is already covered by
-		// user-drop-events.drop-claim, so we only mine this stream
-		// for redemption codes (Minecraft etc) that aren't carried
-		// by the regular claim event.
+		// Onsite notifications surface user_drop_reward_reminder + unrelated
+		// events; redemption codes are not carried by drop-claim messages.
 		p.dispatchNotification(payload)
 		return
 	default:
@@ -453,6 +453,29 @@ func (p *PubSubClient) dispatchPlaybackEvent(topic string, payload []byte) {
 	}
 }
 
+func (p *PubSubClient) dispatchRaidEvent(topic string, payload []byte) {
+	channelID := strings.TrimPrefix(topic, "raid.")
+	if channelID == "" || channelID == topic {
+		return
+	}
+	var event struct {
+		Type string `json:"type"`
+		Raid struct {
+			ID       string `json:"id"`
+			SourceID string `json:"source_id"`
+		} `json:"raid"`
+	}
+	if err := json.Unmarshal(payload, &event); err != nil {
+		slog.Warn("pubsub raid event decode failed", "err", err)
+		return
+	}
+	if event.Type != "raid_update_v2" || event.Raid.ID == "" || event.Raid.SourceID != channelID {
+		return
+	}
+	if p.handlers.OnRaid != nil {
+		p.handlers.OnRaid(channelID, event.Raid.ID)
+	}
+}
 func writeListen(conn *websocket.Conn, token string, topics []string) error {
 	return conn.WriteJSON(map[string]any{
 		"type":  "LISTEN",
@@ -496,4 +519,9 @@ func TopicVideoPlaybackByID(channelID string) string {
 // stream — includes user_drop_reward_reminder among many others.
 func TopicOnsiteNotifications(userID int64) string {
 	return "onsite-notifications." + strconv.FormatInt(userID, 10)
+}
+
+// TopicRaid subscribes to raids announced by the source broadcaster.
+func TopicRaid(channelID string) string {
+	return "raid." + channelID
 }
