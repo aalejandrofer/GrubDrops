@@ -4,7 +4,19 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [2.2.2] — 2026-10-29
+
+### Added
+- **Help on game names.** Under the Games add box, "Kick or Twitch campaign not showing up?" explains that each platform names its own categories (Twitch's World of Warcraft is World of Warcraft: Forever on Kick) and that you add the name each platform uses, or paste its category link.
+
+### Fixed
+- **Box art for Kick-only games.** A game with no Twitch match, such as Kick's World of Warcraft: Forever, showed the placeholder on Games and Home because its art came from a name-keyed Twitch URL. It now uses the Kick category image while a Kick campaign for it is live.
+- **"Link your game account" banner clears on Check now.** When Check now reported Linked, the banner stayed until the account's next scan, up to a minute later for an account that was watching. It now clears straight away.
+- **Kick open campaigns find live channels again.** A Kick campaign open to any channel in its category, such as World of Warcraft: Forever, could log "no eligible streams live" while thousands watched it. The category directory GrubDrops asked ignored the category and returned five random streams. It now asks Kick's livestream list by category id, biggest streams first.
+- **No sideways scroll on phones.** At phone width the top nav was wider than the screen, so every page scrolled sideways. The nav links now scroll inside the bar, and the current page's link stays in view.
+
 ### Changed
+- **Game order changes apply after a 10 second pause.** Every arrow click on Games saves the order, and each save used to restart every account's watch, so moving a game five places restarted the miner five times. The miner now waits until saves stop for 10 seconds and restarts once. A toast counts down: "Saved. Restarting the miner in 10 s". Adding or removing a game waits the same way.
 - **`.playwright-cli/` is git-ignored.** Console logs and page snapshots from `playwright-cli` runs no longer show as untracked files.
 
 ## [2.2.1] — 2026-10-28
