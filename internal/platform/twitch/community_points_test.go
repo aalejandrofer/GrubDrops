@@ -102,3 +102,36 @@ func TestClaimAvailableCommunityPointsRejectsMissingMutationResult(t *testing.T)
 	assert.Equal(t, "12345", channelID)
 	assert.False(t, claimed)
 }
+
+func TestChannelPointsBalanceReadsWithoutClaimingBonus(t *testing.T) {
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		var request struct {
+			OperationName string         `json:"operationName"`
+			Variables     map[string]any `json:"variables"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+		assert.Equal(t, "ChannelPointsContext", request.OperationName)
+		assert.Equal(t, "goldenstreamer", request.Variables["channelLogin"])
+		_, _ = fmt.Fprint(w, `{"data":{"community":{"channel":{"self":{"communityPoints":{"balance":1250,"availableClaim":{"id":"bonus-1"}}}}}}}`)
+	}))
+	defer srv.Close()
+
+	b := &Backend{c: newTestClient(srv.URL)}
+	balance, err := b.ChannelPointsBalance(context.Background(), platform.Session{AccessToken: "token"}, "goldenstreamer")
+	require.NoError(t, err)
+	assert.Equal(t, 1250, balance)
+	assert.Equal(t, 1, requests, "reading the balance must not claim the available bonus")
+}
+
+func TestChannelPointsBalanceRejectsMissingBalance(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `{"data":{"community":{"channel":{"self":{"communityPoints":{"availableClaim":null}}}}}}`)
+	}))
+	defer srv.Close()
+
+	b := &Backend{c: newTestClient(srv.URL)}
+	_, err := b.ChannelPointsBalance(context.Background(), platform.Session{AccessToken: "token"}, "goldenstreamer")
+	require.ErrorContains(t, err, "no channel points balance")
+}

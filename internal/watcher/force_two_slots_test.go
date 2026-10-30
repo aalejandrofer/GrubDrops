@@ -74,7 +74,7 @@ func TestForceWatch_TwoChannelsAtOnce(t *testing.T) {
 	require.NoError(t, w.forceWatch(ctx)) // heartbeats it, starts the second
 	snap := w.Snapshot()
 	require.Equal(t, "b", snap.Channel, "offline top is skipped")
-	require.Equal(t, "c", snap.Channel2)
+	require.Equal(t, []string{"c"}, snap.ExtraChannels)
 
 	require.NoError(t, w.forceWatch(ctx))
 	require.Equal(t, 2, b.beats["b"])
@@ -82,7 +82,30 @@ func TestForceWatch_TwoChannelsAtOnce(t *testing.T) {
 
 	w.stopCurrentWatch(ctx)
 	require.ElementsMatch(t, []string{"b", "c"}, b.stopped)
-	require.Empty(t, w.Snapshot().Channel2)
+	require.Empty(t, w.Snapshot().ExtraChannels)
+}
+
+// Secondary account settings can request more than two slots. Losing the
+// primary promotes an active slot and the watcher fills the freed slot.
+func TestForceWatch_ArbitrarySlotsAndPrimaryPromotion(t *testing.T) {
+	ctx := context.Background()
+	b := newSlotBackend()
+	w := twoSlotWatcher(b, ForceTask{Channel: "a", Alternates: []string{"b", "c", "d"}, Slots: 3})
+	for range 3 {
+		require.NoError(t, w.forceWatch(ctx))
+	}
+	require.Equal(t, "a", w.Snapshot().Channel)
+	require.Equal(t, []string{"b", "c"}, w.Snapshot().ExtraChannels)
+
+	b.offline["a"] = true
+	w.handlePubSubStreamDown("id-a")
+	require.Equal(t, "b", w.Snapshot().Channel, "an active secondary replaces the failed primary")
+	require.Equal(t, []string{"c"}, w.Snapshot().ExtraChannels)
+	require.NoError(t, w.forceWatch(ctx))
+	require.Equal(t, []string{"c", "d"}, w.Snapshot().ExtraChannels, "the freed slot is replenished without duplicating channels")
+
+	w.stopCurrentWatch(ctx)
+	require.ElementsMatch(t, []string{"a", "b", "c", "d"}, b.stopped)
 }
 
 func TestForceWatch_SingleSlotWhenNotTwitchOrOneChannel(t *testing.T) {
@@ -97,7 +120,7 @@ func TestForceWatch_SingleSlotWhenNotTwitchOrOneChannel(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			require.NoError(t, w.forceWatch(ctx), name)
 		}
-		require.Empty(t, w.Snapshot().Channel2, name)
+		require.Empty(t, w.Snapshot().ExtraChannels, name)
 	}
 }
 
@@ -112,7 +135,7 @@ func TestForceWatch_SecondChannelRaidAndStreamDown(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		require.NoError(t, w.forceWatch(ctx))
 	}
-	require.Equal(t, "b", w.Snapshot().Channel2)
+	require.Equal(t, []string{"b"}, w.Snapshot().ExtraChannels)
 
 	w.handlePubSubRaid("id-b", "raid-b")
 	select {
@@ -123,28 +146,29 @@ func TestForceWatch_SecondChannelRaidAndStreamDown(t *testing.T) {
 	}
 
 	w.handlePubSubStreamDown("id-b")
-	require.Empty(t, w.Snapshot().Channel2)
+	require.Empty(t, w.Snapshot().ExtraChannels)
 	require.Equal(t, "a", w.Snapshot().Channel, "primary unaffected")
 	require.Equal(t, StateForceWatch, w.State())
 	require.Equal(t, []string{"b"}, b.stopped)
 
 	require.NoError(t, w.forceWatch(ctx)) // next tick starts a replacement (b is live again)
-	require.Equal(t, "b", w.Snapshot().Channel2)
+	require.Equal(t, []string{"b"}, w.Snapshot().ExtraChannels)
 }
 
-// When the primary drops, its replacement never doubles up on the channel the
-// second slot already holds.
-func TestForceWatch_PrimaryRestartSkipsSecondChannel(t *testing.T) {
+// When the primary drops, the second slot is promoted and a replacement fills
+// the remaining slot without duplicating a channel.
+func TestForceWatch_PrimaryDownPromotesSecondAndRefills(t *testing.T) {
 	ctx := context.Background()
 	b := newSlotBackend()
 	w := twoSlotWatcher(b, ForceTask{Channel: "a", Alternates: []string{"b", "c"}, Slots: 2})
 	for i := 0; i < 2; i++ {
 		require.NoError(t, w.forceWatch(ctx))
 	}
-	require.Equal(t, "b", w.Snapshot().Channel2)
+	require.Equal(t, []string{"b"}, w.Snapshot().ExtraChannels)
 
 	w.handlePubSubStreamDown("id-a")
 	b.offline["a"] = true                 // a really went offline
 	require.NoError(t, w.forceWatch(ctx)) // restarts the primary
-	require.Equal(t, "c", w.Snapshot().Channel, "b is held by the second slot, so c")
+	require.Equal(t, "b", w.Snapshot().Channel, "the existing second slot is promoted")
+	require.Equal(t, []string{"c"}, w.Snapshot().ExtraChannels, "the replacement does not duplicate b")
 }

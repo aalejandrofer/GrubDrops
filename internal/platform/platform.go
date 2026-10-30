@@ -138,6 +138,12 @@ type AvatarFetcher interface {
 	FetchAvatar(ctx context.Context, s Session) (string, error)
 }
 
+// ChannelPointsBalanceReader is an optional read-only capability for
+// backends that expose the viewer's balance for a specific channel.
+type ChannelPointsBalanceReader interface {
+	ChannelPointsBalance(ctx context.Context, s Session, channel string) (int, error)
+}
+
 // CurrentSessionChecker is an optional backend capability for the
 // DropCurrentSessionContext gql query (P6). Watcher uses it post-claim
 // as a soft consistency check.

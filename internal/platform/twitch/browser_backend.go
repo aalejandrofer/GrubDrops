@@ -184,6 +184,41 @@ func (b *BrowserBackend) ensureAuthenticated(ctx context.Context, s platform.Ses
 	return nil
 }
 
+// ChannelPointsBalance reads one channel's viewer balance via the
+// authenticated browser tab without claiming any available bonus.
+func (b *BrowserBackend) ChannelPointsBalance(ctx context.Context, s platform.Session, channel string) (int, error) {
+	if channel == "" {
+		return 0, fmt.Errorf("channel is required")
+	}
+	if err := b.ensureAuthenticated(ctx, s); err != nil {
+		return 0, err
+	}
+	a := b.accountFor(s.AccountID)
+	a.c.bind(s)
+	var state channelPointsContext
+	err := a.c.gql(ctx, s.AccessToken, OpChannelPointsContext, map[string]any{"channelLogin": channel}, &state)
+	if isTabMissingErr(err) {
+		slog.Info("twitch sidecar tab missing on ChannelPointsBalance; re-authenticating", "account", s.AccountID)
+		b.invalidateAuth(s.AccountID)
+		if err := b.ensureAuthenticated(ctx, s); err != nil {
+			return 0, err
+		}
+		a = b.accountFor(s.AccountID)
+		a.c.bind(s)
+		err = a.c.gql(ctx, s.AccessToken, OpChannelPointsContext, map[string]any{"channelLogin": channel}, &state)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("get channel points balance: %w", err)
+	}
+	balance := state.Community.Channel.Self.CommunityPoints.Balance
+	if balance == nil {
+		return 0, fmt.Errorf("Twitch returned no channel points balance")
+	}
+	return *balance, nil
+}
+
+var _ platform.ChannelPointsBalanceReader = (*BrowserBackend)(nil)
+
 func (b *BrowserBackend) Name() string { return "twitch" }
 
 func (b *BrowserBackend) StartDeviceLogin(ctx context.Context) (platform.DeviceChallenge, error) {

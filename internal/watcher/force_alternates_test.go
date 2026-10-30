@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/platform/platformtest"
@@ -49,4 +50,29 @@ func TestForceWatchSkipsOfflineChannels(t *testing.T) {
 	w2.setState(ctx, StateForceWatch)
 	require.NoError(t, w2.forceWatch(ctx))
 	require.Equal(t, StatePickCampaign, w2.State())
+}
+
+func TestForceWatchYieldsToWhitelistedDrop(t *testing.T) {
+	ctx := context.Background()
+	backend := &campaignCountingBackend{MockBackend: platformtest.New()}
+	w := New(Config{
+		AccountID: "acct", Backend: backend, Session: platform.Session{AccessToken: "tok"},
+		AllowGame: func(string) bool { return true }, ForceWatcher: fakeForce{channel: "points"},
+	})
+	w.mu.Lock()
+	w.forceTask = &ForceTask{Channel: "points"}
+	w.currentStream = &platform.Stream{Channel: "points"}
+	w.handle = &platform.WatchHandle{Channel: "points"}
+	w.watchStartedAt = time.Now().Add(-forceWatchYieldInterval)
+	w.mu.Unlock()
+	w.setState(ctx, StateForceWatch)
+
+	require.NoError(t, w.step(ctx))
+	require.Equal(t, StatePickCampaign, w.State(), "force-watch yields to campaign discovery")
+	require.NoError(t, w.step(ctx))
+	require.Equal(t, StatePickStream, w.State(), "a whitelisted drop is selected before points resume")
+	require.Equal(t, "b", w.Snapshot().BenefitID)
+	require.NoError(t, w.step(ctx))
+	require.Equal(t, StateWatching, w.State())
+	require.Equal(t, "mockstreamer", w.Snapshot().Channel)
 }

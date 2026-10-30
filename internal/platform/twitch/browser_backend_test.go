@@ -17,18 +17,20 @@ import (
 
 // fakeSidecar implements TwitchGQLSender + TwitchSidecarAuthenticator.
 // ViewerDropsDashboard returns an integrity-failure body for the first
-// `integrityFailsLeft` calls, then a clean (empty) campaign list. Every
-// other op returns an error so the PubSub bootstrap defers (no websocket
-// in unit tests).
+// `integrityFailsLeft` calls, then a clean (empty) campaign list.
+// ChannelPointsContext returns a fixed balance; other ops fail so PubSub
+// bootstrap defers (no websocket in unit tests).
 type fakeSidecar struct {
 	mu                 sync.Mutex
 	integrityFailsLeft int
 	dashboardCalls     int
 	authCalls          int
+	pointsCalls        int
+	pointsMissingLeft  int
 	alwaysIntegrity    bool
 }
 
-func (f *fakeSidecar) TwitchGQL(_ context.Context, _, opName string, _ []byte) ([]byte, int, error) {
+func (f *fakeSidecar) TwitchGQL(_ context.Context, accountID, opName string, _ []byte) ([]byte, int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	switch opName {
@@ -43,12 +45,32 @@ func (f *fakeSidecar) TwitchGQL(_ context.Context, _, opName string, _ []byte) (
 			return []byte(`{"errors":[{"message":"failed integrity check","path":["currentUser"]}],"data":{"currentUser":null}}`), 200, nil
 		}
 		return []byte(`{"data":{"currentUser":{"dropCampaigns":[]}}}`), 200, nil
+	case OpChannelPointsContext.Name:
+		f.pointsCalls++
+		if f.pointsMissingLeft > 0 {
+			f.pointsMissingLeft--
+			return nil, 0, fmt.Errorf("no authenticated tab for account %s", accountID)
+		}
+		return []byte(`{"data":{"community":{"channel":{"self":{"communityPoints":{"balance":725,"availableClaim":{"id":"bonus-1"}}}}}}}`), 200, nil
 	default:
 		// CurrentUser / resolveUserID / etc. — fail so PubSub defers and
 		// resolveCurrentLogin stays empty (no detail fetches needed for
 		// an empty dashboard).
 		return nil, 0, fmt.Errorf("fakeSidecar: unhandled op %q", opName)
 	}
+}
+
+func TestBrowserBackendReadsChannelPointsBalanceAndRecoversMissingTab(t *testing.T) {
+	f := &fakeSidecar{pointsMissingLeft: 1}
+	b := NewBrowserBackend(f)
+	balance, err := b.ChannelPointsBalance(context.Background(), browserTestSession(), "streamer")
+	require.NoError(t, err)
+	assert.Equal(t, 725, balance)
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	assert.Equal(t, 2, f.pointsCalls, "the balance query retries once after the sidecar loses its tab")
+	assert.Equal(t, 2, f.authCalls, "the sidecar tab is re-authenticated before retry")
 }
 
 func (f *fakeSidecar) TwitchAuthenticate(_ context.Context, _ string, _ *pb.TwitchSession) (*pb.TwitchAuthenticateResponse, error) {

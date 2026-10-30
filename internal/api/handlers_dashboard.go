@@ -69,6 +69,10 @@ type dashboardDeps struct {
 	// kickPath reports an account's live Kick watch path ("ws"|"chrome").
 	// Nil when no Kick backend is wired.
 	kickPath func(accountID string) string
+	rootCtx  context.Context
+	sessions *store.SessionStore
+	registry *platform.Registry
+	points   *channelPointsCache
 }
 
 type dashTelemetry struct {
@@ -80,6 +84,14 @@ type dashTelemetry struct {
 	TotalDrops     int    // total discovered drops across active campaigns (Y in "X / Y")
 	NextClaimETA   string // "00:13 h:m" or "—"
 	NextClaimName  string // "Wolf Helmet" or ""
+}
+
+type dashChannel struct {
+	Name            string
+	URL             string
+	Points          string
+	PointsUpdated   string
+	PointsAvailable bool
 }
 
 type dashMineCard struct {
@@ -97,14 +109,13 @@ type dashMineCard struct {
 	Enabled        bool
 
 	// Now-playing strip
-	Channel        string
-	ChannelInitial string
-	ChannelGame    string
-	ChannelViews   string // formatted, e.g. "62.4k" or "—"
-	ChannelURL     string // direct watch link (platform-aware) or ""
-	// Second force-watch channel (Twitch watches two at once), or "".
-	Channel2    string
-	Channel2URL string
+	Channel         string
+	ChannelInitial  string
+	ChannelGame     string
+	ChannelViews    string // formatted, e.g. "62.4k" or "—"
+	ChannelURL      string // direct watch link (platform-aware) or ""
+	ExtraChannels   []dashChannel
+	ChannelBalances []dashChannel
 
 	// Current drop
 	DropName     string
@@ -302,6 +313,7 @@ func (d dashboardDeps) collectPage(r *http.Request) dashPage {
 			snap = watcher.Snapshot{AccountID: a.ID, State: "stopped"}
 		}
 		c := mineCardFromSnap(a, snap, lang)
+		c.ChannelBalances = d.channelBalances(a, snap, lang)
 		c.CSRFToken = csrf
 		if c.Platform == "kick" && d.kickPath != nil {
 			c.WatchPath = d.kickPath(a.ID)
@@ -761,9 +773,10 @@ func mineCardFromSnap(a gen.Account, s watcher.Snapshot, lang string) dashMineCa
 		c.Channel = s.Channel
 		c.ChannelInitial = initial(s.Channel)
 		c.ChannelURL = channelURL(a.Platform, s.Channel)
-		if s.Channel2 != "" {
-			c.Channel2 = s.Channel2
-			c.Channel2URL = channelURL(a.Platform, s.Channel2)
+		for _, name := range s.ExtraChannels {
+			c.ExtraChannels = append(c.ExtraChannels, dashChannel{
+				Name: name, URL: channelURL(a.Platform, name),
+			})
 		}
 	case "pick_stream":
 		c.StateSub = "mining.scanning_channels"

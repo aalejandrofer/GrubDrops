@@ -137,20 +137,59 @@ func tierForState(enabled bool, state string) string {
 	return "orange"
 }
 
+const maxTwitchAccounts = 3
+
+type newAccountPage struct {
+	TwitchLimitReached bool
+}
+
+func countTwitchAccounts(ctx context.Context, q *gen.Queries) (int, error) {
+	accs, err := q.ListAllAccounts(ctx)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, a := range accs {
+		if a.Platform == "twitch" {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func (d accountsDeps) newGet(w http.ResponseWriter, r *http.Request) {
+	count, err := countTwitchAccounts(r.Context(), d.q)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	render(w, r, d.t, "accounts_new.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: "accounts",
+		Page: newAccountPage{TwitchLimitReached: count >= maxTwitchAccounts},
 	})
 }
 
 func (d accountsDeps) newPost(w http.ResponseWriter, r *http.Request) {
-	platform := r.FormValue("platform")
-	display := strings.TrimSpace(r.FormValue("display_name"))
-	if platform == "" || display == "" {
+	count, err := countTwitchAccounts(r.Context(), d.q)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	page := newAccountPage{TwitchLimitReached: count >= maxTwitchAccounts}
+	renderForm := func(flash string) {
 		render(w, r, d.t, "accounts_new.html", templateData{
 			AuthedAdmin: true, CSRFToken: csrfToken(r),
-			Flash: "flash.platform_name_required", Active: "accounts",
+			Flash: flash, Active: "accounts", Page: page,
 		})
+	}
+	platform := r.FormValue("platform")
+	display := strings.TrimSpace(r.FormValue("display_name"))
+	if platform == "twitch" && page.TwitchLimitReached {
+		renderForm("flash.twitch_account_limit")
+		return
+	}
+	if platform == "" || display == "" {
+		renderForm("flash.platform_name_required")
 		return
 	}
 	id := genID()
@@ -160,10 +199,7 @@ func (d accountsDeps) newPost(w http.ResponseWriter, r *http.Request) {
 		Status: "idle", FingerprintJson: "{}", Enabled: 1,
 		CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
-		render(w, r, d.t, "accounts_new.html", templateData{
-			AuthedAdmin: true, CSRFToken: csrfToken(r),
-			Flash: err.Error(), Active: "accounts",
-		})
+		renderForm(err.Error())
 		return
 	}
 	if platform == "twitch" || platform == "kick" {

@@ -90,8 +90,7 @@
           <span class="k">{{t "points.streams"}}</span>
           <span class="d">{{t "points.streams_desc"}}</span>
           <span class="v">
-            <label class="cb"><input type="radio" name="streams" value="1" {{if eq .Streams 1}}checked{{end}}> {{t "points.streams_one"}}</label>
-            <label class="cb"><input type="radio" name="streams" value="2" {{if eq .Streams 2}}checked{{end}}> {{t "points.streams_two"}}</label>
+            <label>{{t "points.streams_number"}} <input type="number" name="streams" min="1" step="1" value="{{.Streams}}" required></label>
           </span>
         </div>
         {{end}}
@@ -106,8 +105,9 @@
       <div class="kicker" style="margin-top:14px;">{{t "account.force_reorder"}}</div>
       <ul class="rank-list force-list">
         {{range .Channels}}
-        <li draggable="true" data-channel="{{.}}">
-          <span>{{.}}</span>
+        <li draggable="true" data-channel="{{.Name}}">
+          <span>{{.Name}}</span>
+          {{if eq $.Page.Tab "twitch"}}<span class="meta">{{if .PointsAvailable}}{{.Points}} pts{{else}}—{{end}}</span>{{end}}
           <button type="button" class="rank-rm" onclick="fcRemove(this)">{{t "account.remove"}} ×</button>
         </li>
         {{end}}

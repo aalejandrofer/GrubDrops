@@ -4,12 +4,15 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/scheduler"
+	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 	"github.com/aalejandrofer/grubdrops/internal/timeutil"
 )
@@ -45,17 +48,16 @@ func pointsRedirect(w http.ResponseWriter, r *http.Request, platform string) {
 	http.Redirect(w, r, "/points?tab="+platform, http.StatusSeeOther)
 }
 
-// PointsStreamsKey is the per-account KV key for how many channels a Twitch
-// account force-watches at once, "1" or "2".
+// PointsStreamsKey is the per-account KV key for concurrent Twitch channels.
 func PointsStreamsKey(accountID string) string { return "points_streams:" + accountID }
 
-// PointsStreams returns how many channels the account watches at once. Twitch
-// allows two, so that is the default; Kick credits one watch per account, so
-// callers only use it for Twitch.
+// PointsStreams returns the configured number of simultaneous channels.
+// Twitch accounts default to two channels and have no app-imposed maximum.
 func PointsStreams(ctx context.Context, q *gen.Queries, accountID string) int {
-	v, err := q.GetSettingString(ctx, PointsStreamsKey(accountID))
-	if err == nil && string(v) == "1" {
-		return 1
+	if v, err := q.GetSettingString(ctx, PointsStreamsKey(accountID)); err == nil {
+		if n, err := strconv.Atoi(string(v)); err == nil && n > 0 {
+			return n
+		}
 	}
 	return 2
 }
@@ -63,23 +65,33 @@ func PointsStreams(ctx context.Context, q *gen.Queries, accountID string) int {
 // pointsDeps owns /points. Channel and on/off edits reuse the per-account
 // force-watch endpoints on accountsDeps.
 type pointsDeps struct {
-	q   *gen.Queries
-	sch *scheduler.Scheduler
-	t   Renderer
-	sm  *scs.SessionManager
-	loc *timeutil.Zone
+	q        *gen.Queries
+	sch      *scheduler.Scheduler
+	t        Renderer
+	sm       *scs.SessionManager
+	loc      *timeutil.Zone
+	points   *channelPointsCache
+	sessions *store.SessionStore
+	registry *platform.Registry
+	rootCtx  context.Context
+}
+
+type pointChannel struct {
+	Name            string
+	Points          string
+	PointsAvailable bool
 }
 
 type pointsAccount struct {
 	ID          string
 	Name        string
 	Platform    string
-	Enabled     bool     // channel-points mining toggle
-	PointsOnly  bool     // true: never mines drops, only the selected channels
-	Channels    []string // priority order; the first live one is watched
-	Watching    string   // channel currently force-watched, "" when not
-	AsleepUntil string   // local HH:MM the current sleep window ends, "" when awake
-	Streams     int      // channels watched at once (Twitch: 1 or 2)
+	Enabled     bool // channel-points mining toggle
+	PointsOnly  bool // true: never mines drops, only the selected channels
+	Channels    []pointChannel
+	Watching    string // channel currently force-watched, "" when not
+	AsleepUntil string // local HH:MM the current sleep window ends, "" when awake
+	Streams     int    // channels watched simultaneously
 }
 
 type pointsPage struct {
@@ -107,8 +119,8 @@ func (d *pointsDeps) get(w http.ResponseWriter, r *http.Request) {
 			for _, s := range d.sch.WatcherSnapshots() {
 				if s.State == "force_watch" {
 					watching[s.AccountID] = s.Channel
-					if s.Channel2 != "" {
-						watching[s.AccountID] += ", " + s.Channel2
+					if len(s.ExtraChannels) > 0 {
+						watching[s.AccountID] += ", " + strings.Join(s.ExtraChannels, ", ")
 					}
 				}
 			}
@@ -116,6 +128,12 @@ func (d *pointsDeps) get(w http.ResponseWriter, r *http.Request) {
 		loc := time.Local
 		if d.loc != nil {
 			loc = d.loc.Location()
+		}
+		var reader platform.ChannelPointsBalanceReader
+		if tab == "twitch" && d.registry != nil {
+			if b, ok := d.registry.Get("twitch"); ok {
+				reader, _ = b.(platform.ChannelPointsBalanceReader)
+			}
 		}
 		accs, _ := d.q.ListEnabledAccounts(ctx)
 		for _, a := range accs {
@@ -135,7 +153,14 @@ func (d *pointsDeps) get(w http.ResponseWriter, r *http.Request) {
 			}
 			if chs, err := d.q.ListForceChannels(ctx, a.ID); err == nil {
 				for _, c := range chs {
-					row.Channels = append(row.Channels, c.Channel)
+					ch := pointChannel{Name: c.Channel}
+					if reader != nil {
+						if entry, ok := cachedChannelPoints(d.rootCtx, d.points, d.sessions, reader, a.ID, c.Channel); ok {
+							ch.Points = strconv.Itoa(entry.Balance)
+							ch.PointsAvailable = true
+						}
+					}
+					row.Channels = append(row.Channels, ch)
 				}
 			}
 			page.Accounts = append(page.Accounts, row)
@@ -183,8 +208,7 @@ func (d *pointsDeps) saveSafety(w http.ResponseWriter, r *http.Request) {
 }
 
 // pointsMode handles POST /accounts/:id/points-mode — switches the account
-// between Drops + points and Points only and, on Twitch, between watching one
-// or two channels, restarting just its watcher when either changes.
+// between Drops + points and Points only and updates Twitch stream count.
 func (d accountsDeps) pointsMode(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	acc, err := d.q.GetAccount(r.Context(), id)
@@ -194,9 +218,19 @@ func (d accountsDeps) pointsMode(w http.ResponseWriter, r *http.Request) {
 	}
 	wasOnly := PointsOnly(r.Context(), d.q, id)
 	only := r.FormValue("mode") == "points"
-	mode := "0"
-	if only {
-		mode = "1"
+	wasStreams, streams := 0, 0
+	if acc.Platform == "twitch" {
+		wasStreams = PointsStreams(r.Context(), d.q, id)
+		streams = wasStreams
+		if raw := r.FormValue("streams"); raw != "" {
+			requested, err := strconv.Atoi(raw)
+			if err != nil || requested < 1 {
+				d.sm.Put(r.Context(), "flash", "flash.points_streams_invalid")
+				pointsRedirect(w, r, acc.Platform)
+				return
+			}
+			streams = requested
+		}
 	}
 	save := func(key, val string) bool {
 		if err := d.q.UpsertSettingString(r.Context(), gen.UpsertSettingStringParams{Key: key, Value: []byte(val)}); err != nil {
@@ -205,21 +239,19 @@ func (d accountsDeps) pointsMode(w http.ResponseWriter, r *http.Request) {
 		}
 		return true
 	}
+	mode := "0"
+	if only {
+		mode = "1"
+	}
 	if !save(PointsOnlyKey(id), mode) {
 		return
 	}
 	changed := only != wasOnly
-	// Streams is a Twitch-only choice; Kick credits one watch per account.
 	if acc.Platform == "twitch" {
-		was := PointsStreams(r.Context(), d.q, id)
-		streams := 1
-		if r.FormValue("streams") == "2" {
-			streams = 2
-		}
 		if !save(PointsStreamsKey(id), strconv.Itoa(streams)) {
 			return
 		}
-		changed = changed || streams != was
+		changed = changed || streams != wasStreams
 	}
 	if changed {
 		d.reloadForce(id)

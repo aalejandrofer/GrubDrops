@@ -31,7 +31,7 @@ func TestForceWatchHonoursSleepWindow(t *testing.T) {
 	w.forceTask = &ForceTask{Channel: "streamer"}
 	w.currentStream = &platform.Stream{Channel: "streamer", ChannelID: "1"}
 	w.handle = &platform.WatchHandle{Channel: "streamer"}
-	w.watchStartedAt = time.Now().Add(-time.Minute)
+	w.watchStartedAt = time.Now()
 	w.mu.Unlock()
 	w.setState(ctx, StateForceWatch)
 

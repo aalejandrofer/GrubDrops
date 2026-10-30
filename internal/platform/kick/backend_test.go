@@ -3,6 +3,7 @@ package kick
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -177,6 +178,33 @@ func TestKickBackend_ListEligibleChannels_LiveCampaignChannel(t *testing.T) {
 	// ChannelID is the CHANNEL id (for the viewer-WS handshake), not livestream id.
 	assert.Equal(t, "27589", out[0].ChannelID)
 	assert.Equal(t, 50, out[0].ViewerCount)
+}
+
+func TestKickBackend_ListEligibleChannelsFindsLiveChannelAfterFirstTwelve(t *testing.T) {
+	f := &fakeDoer{resp: map[string]fakeResp{}}
+	channels := make([]kickChannel, 13)
+	for i := range channels {
+		slug := fmt.Sprintf("channel-%02d", i+1)
+		channels[i] = kickChannel{Slug: slug, ID: fmt.Sprint(i + 1)}
+		f.resp["https://kick.com/api/v2/channels/"+slug+"/livestream"] = fakeResp{
+			status: 200,
+			body:   `{"data":null}`,
+		}
+	}
+	f.resp["https://kick.com/api/v2/channels/channel-13/livestream"] = fakeResp{
+		status: 200,
+		body:   `{"data":{"id":999,"viewer_count":50,"categories":[{"name":"Counter-Strike 2"}]}}`,
+	}
+	b := withFake(f)
+	b.campaignChannels["cs2"] = channels
+
+	out, err := b.ListEligibleChannels(context.Background(), sess("acc1"),
+		platform.Campaign{ID: "cs2", Game: "Counter-Strike 2"})
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	assert.Equal(t, "channel-13", out[0].Channel)
+	assert.Equal(t, "13", out[0].ChannelID)
+	assert.Len(t, f.calls, len(channels))
 }
 
 // An OPEN campaign (no channels of its own) must borrow the category-wide pool

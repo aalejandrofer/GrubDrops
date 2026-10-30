@@ -495,18 +495,12 @@ func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, 
 	return out, nil
 }
 
-// probeLive checks each candidate channel's livestream and returns the ones
-// that are LIVE and streaming the campaign's category. Caps the number of
-// network probes. ChannelLivestream returns the channel id when known (campaign
-// channels carry it; bare slugs fall back to the livestream id, which the watch
-// handshake also accepts).
+// probeLive checks every campaign channel's livestream and returns the ones
+// that are LIVE and streaming the campaign's category. A fixed prefix misses
+// active participants in large campaigns.
 func (b *Backend) probeLive(ctx context.Context, s platform.Session, c platform.Campaign, pool []kickChannel) []platform.Stream {
-	const maxProbe = 12
 	var live []platform.Stream
-	for i, ch := range pool {
-		if i >= maxProbe {
-			break
-		}
+	for _, ch := range pool {
 		ok, lsID, viewers, category, err := b.api.ChannelLivestream(ctx, s, ch.Slug)
 		if err != nil {
 			slog.Debug("kick channel liveness check failed", "channel", ch.Slug, "err", err)
@@ -521,7 +515,7 @@ func (b *Backend) probeLive(ctx context.Context, s platform.Session, c platform.
 		}
 		id := ch.ID
 		if id == "" {
-			id = lsID // bare slug: best-effort, watch handshake accepts the livestream id
+			id = lsID
 		}
 		live = append(live, platform.Stream{Channel: ch.Slug, ChannelID: id, ViewerCount: viewers, DropsEnabled: true})
 	}

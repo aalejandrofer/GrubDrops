@@ -18,13 +18,15 @@ All notable changes to GrubDrops.
   shifted up to 20 minutes a day) during which channel-points watching
   pauses, and the **follow raids** switch (Twitch, joins delayed by a random
   3-15 seconds). Turn the sleep window off to watch non-stop.
-- **Twitch accounts can watch two channels at once for points** (the first two
-  live channels in the list; Twitch's own limit). Switch between **1 stream**
-  and **2 streams** per account on the Twitch tab (default 2). Each channel
-  gets its own bonus claims and raid follows, and the console card shows both
-  channels. Kick stays at one channel.
+- **Up to three Twitch accounts**, each configurable to watch any positive
+  number of channels from its own list. Twitch may not credit more than two
+  simultaneous streams per account. Kick stays at one.
 - **Twitch and Kick tabs on the Points page**, each listing that platform's
   accounts.
+- Dashboard shows cached Twitch points per active channel, refreshing hourly.
+  Kick balances are marked unavailable because the public API does not expose them.
+- Points page shows each Twitch channel's cached balance beside it in the
+  drag-to-reorder list, using the same hourly cache as the dashboard.
 - Twitch channel-point bonuses are checked on watch start and credited
   heartbeats.
 - Raid-update events from currently watched Twitch channels are joined
@@ -36,6 +38,8 @@ All notable changes to GrubDrops.
   live one, instead of only ever trying the top channel.
 - Changing an account's channel points settings restarts only that account,
   not every account.
+- In Drops + points mode, forced channel-points watching checks for whitelisted
+  drops every minute and yields to them before resuming points.
 
 ### Fixed
 
@@ -53,6 +57,10 @@ All notable changes to GrubDrops.
   discards. They are now looked up first, and an offline channel is skipped.
 - New channels are added to the end of the list. They used to land at the top
   alongside the existing first channel.
+
+- **Kick campaign stream discovery checks the full participating-channel list.** It
+  finds live participants beyond the previous 12-channel prefix instead of
+  falling back to points watching.
 
 ### Docs
 

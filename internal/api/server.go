@@ -166,6 +166,7 @@ func NewRouter(d Deps) http.Handler {
 	if startedAt.IsZero() {
 		startedAt = time.Now()
 	}
+	pointsCache := &channelPointsCache{}
 	dash := dashboardDeps{
 		q:               d.Q,
 		t:               d.Templates,
@@ -177,6 +178,10 @@ func NewRouter(d Deps) http.Handler {
 		loc:             d.Zone,
 		channelCounters: channelCountersFromRegistry(d.Registry),
 		kickPath:        d.KickActivePath,
+		sessions:        d.Sessions,
+		registry:        d.Registry,
+		points:          pointsCache,
+		rootCtx:         d.RootCtx,
 	}
 	accs := accountsDeps{q: d.Q, db: d.DB, t: d.Templates, sm: d.Session, sch: d.Scheduler, reload: d.Reload, authCheck: d.AuthCheck, reloadAccount: d.ReloadAccount, rootCtx: d.RootCtx, loc: d.Zone}
 	loginTwitch := newLoginTwitchDeps(d, d.RootCtx)
@@ -344,7 +349,8 @@ func NewRouter(d Deps) http.Handler {
 	}
 	dropsH := &dropsDeps{q: d.Q, t: d.Templates, reload: d.Reload, sessions: d.Sessions, registry: d.Registry, loc: d.Zone, sm: d.Session}
 	historyH := &historyDeps{q: d.Q, ring: d.LogRing, t: d.Templates, loc: d.Zone}
-	pointsH := &pointsDeps{q: d.Q, sch: d.Scheduler, t: d.Templates, sm: d.Session, loc: d.Zone}
+	pointsH := &pointsDeps{q: d.Q, sch: d.Scheduler, t: d.Templates, sm: d.Session, loc: d.Zone,
+		points: pointsCache, sessions: d.Sessions, registry: d.Registry, rootCtx: d.RootCtx}
 
 	authed.Get("/settings", settingsH.get)
 	authed.Get("/priority", settingsH.getPriority)          // top-level nav item, moved out of Settings

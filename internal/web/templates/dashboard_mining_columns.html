@@ -45,7 +45,7 @@
         <span class="drop">{{if .DropName}}{{.DropName}}{{else}}{{t "mining.drop"}}{{end}}</span>
         <span class="meta">{{t "mining.claim_in_flight"}}</span>
       {{else if eq .State "force_watch"}}
-        <span class="drop" style="color:var(--green)">{{t "mining.force_watching"}}{{if .Channel}} {{.Channel}}{{end}}{{if .Channel2}} + {{.Channel2}}{{end}}</span>
+        <span class="drop" style="color:var(--green)">{{t "mining.force_watching"}}{{if .Channel}} {{.Channel}}{{end}}{{range .ExtraChannels}} + {{.Name}}{{end}}</span>
       {{else if eq .State "pick_stream"}}
         {{if .DropCampaign}}<span class="drop">{{.DropCampaign}}</span>{{end}}
         <span class="meta">{{t "mining.scanning_channels"}}</span>
@@ -113,7 +113,7 @@
     {{else if eq .State "force_watch"}}
     <div class="acc-exp-row">
       <span class="acc-exp-k">{{t "mining.channel"}}</span>
-      <span class="acc-exp-v">{{if .Channel}}<a href="{{.ChannelURL}}" target="_blank" rel="noopener">{{.Channel}} ↗</a>{{end}}{{if .Channel2}} · <a href="{{.Channel2URL}}" target="_blank" rel="noopener">{{.Channel2}} ↗</a>{{end}}</span>
+      <span class="acc-exp-v">{{if .Channel}}<a href="{{.ChannelURL}}" target="_blank" rel="noopener">{{.Channel}} ↗</a>{{end}}{{range .ExtraChannels}} · <a href="{{.URL}}" target="_blank" rel="noopener">{{.Name}} ↗</a>{{end}}</span>
     </div>
     <div class="acc-exp-row">
       <span class="acc-exp-k">{{t "mining.state"}}</span>
@@ -123,6 +123,16 @@
     <div class="acc-exp-row">
       <span class="acc-exp-k">{{t "mining.state"}}</span>
       <span class="acc-exp-v">{{.State}}{{if .StateSub}} · {{t .StateSub}}{{end}}</span>
+    </div>
+    {{end}}
+    {{if .ChannelBalances}}
+    <div class="acc-exp-row">
+      <span class="acc-exp-k">{{t "mining.channel_points"}}</span>
+      <span class="acc-exp-v">
+        {{range .ChannelBalances}}
+        <span class="acc-exp-queue-item"><a href="{{.URL}}" target="_blank" rel="noopener">{{.Name}}</a> · {{if .PointsAvailable}}{{.Points}}{{else}}{{t "mining.points_unavailable"}}{{end}}{{if .PointsUpdated}} <small>· {{t "mining.points_updated"}} {{.PointsUpdated}}</small>{{end}}</span>
+        {{end}}
+      </span>
     </div>
     {{end}}
     {{if .Queue}}

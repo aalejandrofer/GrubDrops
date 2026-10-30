@@ -16,10 +16,8 @@ const (
 	// external account (e.g. Krafton/PUBG). Distinct from Sleeping so the
 	// dashboard can prompt the user to connect instead of implying idle.
 	StateAwaitingConnect
-	// StateForceWatch: the watcher is running a manual "force-watch" task
-	// (watch a specific channel for N minutes), bypassing campaign
-	// selection. Takes priority over normal mining when a pending task
-	// exists for the account.
+	// StateForceWatch is the channel-points fallback while no whitelisted
+	// drop is available. It yields periodically to campaign discovery.
 	StateForceWatch
 )
 

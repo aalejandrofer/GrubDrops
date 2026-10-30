@@ -15,10 +15,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 	"github.com/aalejandrofer/grubdrops/internal/web"
 )
+
+type balanceTestBackend struct{ platform.Backend }
+
+func (balanceTestBackend) Name() string { return "twitch" }
+
+func (balanceTestBackend) ChannelPointsBalance(context.Context, platform.Session, string) (int, error) {
+	return 0, nil
+}
 
 type pointsEnv struct {
 	t   *testing.T
@@ -88,6 +97,14 @@ func TestPointsTabs_SplitByPlatformAndRedirectBack(t *testing.T) {
 	assert.Equal(t, "/points?tab=twitch", rec.Header().Get("Location"))
 	assert.Equal(t, []string{"acc-tw", "acc-tw", "acc-kk", "acc-tw"}, e.rld, "only the edited account restarts")
 
+	e.pts.points = &channelPointsCache{entries: map[string]channelPointsEntry{
+		"acc-tw\x00xqc":           {Balance: 1234, FetchedAt: time.Now()},
+		"acc-tw\x00shroud":        {Balance: 0, FetchedAt: time.Now()},
+		"acc-kk\x00trainwreckstv": {Balance: 777, FetchedAt: time.Now()},
+	}}
+	e.pts.registry = platform.NewRegistry()
+	e.pts.registry.Register(balanceTestBackend{})
+
 	tw := e.page("twitch")
 	assert.Contains(t, tw, "name-twitch")
 	assert.NotContains(t, tw, "name-kick")
@@ -95,6 +112,19 @@ func TestPointsTabs_SplitByPlatformAndRedirectBack(t *testing.T) {
 	assert.Contains(t, tw, `data-channel="shroud"`)
 	assert.Less(t, strings.Index(tw, `data-channel="xqc"`), strings.Index(tw, `data-channel="shroud"`),
 		"channels render in saved priority order")
+	xqcStart := strings.Index(tw, `data-channel="xqc"`)
+	require.NotEqual(t, -1, xqcStart)
+	xqcTail := tw[xqcStart:]
+	xqcEnd := strings.Index(xqcTail, "</li>")
+	require.NotEqual(t, -1, xqcEnd)
+	assert.Contains(t, xqcTail[:xqcEnd], "1234 pts")
+
+	shroudStart := strings.Index(tw, `data-channel="shroud"`)
+	require.NotEqual(t, -1, shroudStart)
+	shroudTail := tw[shroudStart:]
+	shroudEnd := strings.Index(shroudTail, "</li>")
+	require.NotEqual(t, -1, shroudEnd)
+	assert.Contains(t, shroudTail[:shroudEnd], "0 pts", "zero balance is still displayed")
 	assert.Contains(t, tw, `action="/accounts/acc-tw/force-watch"`)
 
 	kk := e.page("kick")
@@ -102,6 +132,7 @@ func TestPointsTabs_SplitByPlatformAndRedirectBack(t *testing.T) {
 	assert.NotContains(t, kk, "name-twitch")
 	assert.Contains(t, kk, `data-channel="trainwreckstv"`)
 
+	assert.NotContains(t, kk, "777 pts", "Kick balances are not shown in the Twitch-only counter")
 	assert.Contains(t, e.page("nonsense"), "name-twitch", "unknown tab falls back to Twitch")
 	assert.NotContains(t, tw, `name="sleep_start"`, "safety settings live only on their own tab")
 }
@@ -160,28 +191,44 @@ func TestPointsMode_RestartsOnlyOnChange(t *testing.T) {
 	assert.Equal(t, []string{"acc-kk", "acc-kk"}, e.rld)
 }
 
-// Twitch accounts choose 1 or 2 streams (default 2); changing it restarts the
-// account, saving the same value does not, and Kick never stores one.
-func TestPointsStreams_TwitchOnlyAndRestartsOnChange(t *testing.T) {
+// Twitch accounts choose any positive stream count. Changes reload only that
+// account, and Kick never stores a stream setting.
+func TestPointsStreams_AnyPositiveCount(t *testing.T) {
 	e := newPointsEnv(t)
-	assert.Equal(t, 2, PointsStreams(e.ctx, e.q, "acc-tw"), "Twitch default keeps both slots")
+	assert.Equal(t, 2, PointsStreams(e.ctx, e.q, "acc-tw"), "accounts default to two slots")
 
-	post := func(id string, form url.Values) {
+	post := func(id string, form url.Values) *httptest.ResponseRecorder {
 		rec := e.post(id, "/accounts/"+id+"/points-mode", form, e.acc.pointsMode)
 		require.Equal(t, http.StatusSeeOther, rec.Code)
+		return rec
 	}
-	post("acc-tw", url.Values{"mode": {"drops"}, "streams": {"1"}})
-	assert.Equal(t, 1, PointsStreams(e.ctx, e.q, "acc-tw"))
-	post("acc-tw", url.Values{"mode": {"drops"}, "streams": {"1"}}) // unchanged
-	post("acc-tw", url.Values{"mode": {"drops"}, "streams": {"2"}})
-	assert.Equal(t, 2, PointsStreams(e.ctx, e.q, "acc-tw"))
-	assert.Equal(t, []string{"acc-tw", "acc-tw"}, e.rld, "only real changes restart the watcher")
+	post("acc-tw", url.Values{"mode": {"drops"}, "streams": {"5"}})
+	assert.Equal(t, 5, PointsStreams(e.ctx, e.q, "acc-tw"), "Twitch accounts may exceed two")
+	post("acc-tw", url.Values{"mode": {"drops"}, "streams": {"5"}}) // unchanged
+	post("acc-tw", url.Values{"mode": {"drops"}, "streams": {"7"}})
+	assert.Equal(t, 7, PointsStreams(e.ctx, e.q, "acc-tw"))
+
+	_, err := e.q.CreateAccount(e.ctx, gen.CreateAccountParams{
+		ID: "acc-tw2", Platform: "twitch", DisplayName: "secondary",
+		Status: "idle", FingerprintJson: "{}", Enabled: 1, CreatedAt: 2, UpdatedAt: 2,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 2, PointsStreams(e.ctx, e.q, "acc-tw2"), "new accounts default to two")
+	post("acc-tw2", url.Values{"mode": {"drops"}, "streams": {"5"}})
+	assert.Equal(t, 5, PointsStreams(e.ctx, e.q, "acc-tw2"))
+
+	post("acc-tw", url.Values{"mode": {"points"}, "streams": {"0"}})
+	assert.False(t, PointsOnly(e.ctx, e.q, "acc-tw"), "invalid stream counts do not partially save mode")
+	assert.Equal(t, 7, PointsStreams(e.ctx, e.q, "acc-tw"))
 
 	post("acc-kk", url.Values{"mode": {"drops"}, "streams": {"2"}})
-	_, err := e.q.GetSettingString(e.ctx, PointsStreamsKey("acc-kk"))
+	_, err = e.q.GetSettingString(e.ctx, PointsStreamsKey("acc-kk"))
 	assert.Error(t, err, "Kick has no streams setting")
 
+	assert.Equal(t, []string{"acc-tw", "acc-tw", "acc-tw2"}, e.rld, "only changed accounts restart")
 	tw := e.page("twitch")
-	assert.Contains(t, tw, `name="streams" value="2" checked`)
+	assert.Contains(t, tw, `type="number" name="streams" min="1" step="1" value="7" required`)
+	assert.Contains(t, tw, `type="number" name="streams" min="1" step="1" value="5" required`)
+	assert.NotContains(t, tw, `type="radio" name="streams"`)
 	assert.NotContains(t, e.page("kick"), `name="streams"`)
 }

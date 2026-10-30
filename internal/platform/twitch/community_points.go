@@ -3,6 +3,8 @@ package twitch
 import (
 	"context"
 	"fmt"
+
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 )
 
 type claimCommunityPointsResult struct {
@@ -15,6 +17,7 @@ type channelPointsContext struct {
 			ID   string `json:"id"`
 			Self struct {
 				CommunityPoints struct {
+					Balance        *int `json:"balance"`
 					AvailableClaim *struct {
 						ID string `json:"id"`
 					} `json:"availableClaim"`
@@ -23,6 +26,26 @@ type channelPointsContext struct {
 		} `json:"channel"`
 	} `json:"community"`
 }
+
+// ChannelPointsBalance reads the viewer's channel-specific balance without
+// claiming any available bonus.
+func (b *Backend) ChannelPointsBalance(ctx context.Context, s platform.Session, channel string) (int, error) {
+	if channel == "" || s.AccessToken == "" {
+		return 0, fmt.Errorf("channel and access token are required")
+	}
+	b.c.bind(s)
+	var state channelPointsContext
+	if err := b.c.gql(ctx, s.AccessToken, OpChannelPointsContext, map[string]any{"channelLogin": channel}, &state); err != nil {
+		return 0, fmt.Errorf("get channel points balance: %w", err)
+	}
+	balance := state.Community.Channel.Self.CommunityPoints.Balance
+	if balance == nil {
+		return 0, fmt.Errorf("Twitch returned no channel points balance")
+	}
+	return *balance, nil
+}
+
+var _ platform.ChannelPointsBalanceReader = (*Backend)(nil)
 
 // claimAvailableCommunityPoints claims the Twitch channel bonus currently
 // available to the authenticated viewer for channel. It returns the channel
