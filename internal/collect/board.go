@@ -33,6 +33,7 @@ type GameStatus struct {
 	Campaigns  []CampaignSummary // active, non-reward, at least one drop; deduped by platform+ID; EndsAt ascending
 	NeedsLink  []LinkNeed        // one per account, AccountID ascending
 	Queued     bool              // some account has a drop of this game left to mine
+	QueuedBy   []string          // the accounts Queued counts, ID ascending
 	LastScanAt time.Time         // latest successful scan of any account; zero = none yet
 }
 
@@ -62,6 +63,15 @@ func addLinkNeed(out []GameStatus, idx []map[string]int, i int, s runner.Scan, c
 	}
 	idx[i][s.AccountID] = len(out[i].NeedsLink)
 	out[i].NeedsLink = append(out[i].NeedsLink, LinkNeed{AccountID: s.AccountID, Platform: s.Platform, URL: u})
+}
+
+// markQueued records that account id has a drop of game i left to mine.
+// Accounts arrive in ID order, so a repeat is always the last one added.
+func markQueued(out []GameStatus, i int, id string) {
+	out[i].Queued = true
+	if q := out[i].QueuedBy; len(q) == 0 || q[len(q)-1] != id {
+		out[i].QueuedBy = append(q, id)
+	}
 }
 
 // Board keeps the latest successful scan per account and merges them per game.
@@ -139,12 +149,12 @@ func (b *Board) Games(games []plan.Game) []GameStatus {
 				if !linked {
 					addLinkNeed(out, links, i, s, t.Campaign)
 				}
-				out[i].Queued = true
+				markQueued(out, i, id)
 			}
 		}
 		for _, t := range s.Result.Queue {
 			if i, ok := plan.Match(games, t.Campaign.Game); ok {
-				out[i].Queued = true
+				markQueued(out, i, id)
 			}
 		}
 		for _, bl := range s.Result.Blocked {

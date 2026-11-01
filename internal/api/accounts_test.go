@@ -20,23 +20,61 @@ import (
 
 const testAgeKey = "AGE-SECRET-KEY-1DZCAXYWJM6M42NSX5GR4QWZZ2JXEYKJ9ZKWYFYSNU997775JJ6XSY85FK9"
 
-type snapPool struct{ snaps []runner.Snapshot }
+// snapPool serves fixed snapshots. marks, when set, records the
+// MarkCollected and MarkUncollected calls.
+type snapPool struct {
+	snaps []runner.Snapshot
+	marks *calls
+}
+
+func (p snapPool) MarkCollected(acct, benefit string) {
+	if p.marks != nil {
+		p.marks.onMark("collected:" + acct + ":" + benefit)
+	}
+}
+func (p snapPool) MarkUncollected(acct, benefit string) {
+	if p.marks != nil {
+		p.marks.onMark("uncollected:" + acct + ":" + benefit)
+	}
+}
+func (snapPool) SettingsChangedAll() {}
 
 func (p snapPool) Snapshots() []runner.Snapshot   { return p.snaps }
 func (snapPool) SetOrder(string, []string)        {}
 func (snapPool) ResetOrder(string)                {}
 func (snapPool) RescanAll()                       {}
+func (snapPool) RescanPlatform(string, string)    {}
 func (snapPool) MineNow(string) (string, error)   { return "", nil }
 func (snapPool) OrderFunc(string) func() []string { return nil }
 func (snapPool) RecheckLinks(context.Context, string) (runner.LinkRecheck, error) {
 	return runner.LinkRecheck{}, nil
 }
 
-// calls records AccountChanged / AccountRemoved invocations.
+// calls records AccountChanged, AccountSettingsChanged and AccountRemoved
+// invocations, and the pool's claim marks.
 type calls struct {
-	mu      sync.Mutex
-	changed []string
-	removed []string
+	mu       sync.Mutex
+	changed  []string
+	settings []string
+	removed  []string
+	marks    []string
+}
+
+func (c *calls) onSettings(id string) {
+	c.mu.Lock()
+	c.settings = append(c.settings, id)
+	c.mu.Unlock()
+}
+func (c *calls) onMark(m string) { c.mu.Lock(); c.marks = append(c.marks, m); c.mu.Unlock() }
+func (c *calls) settingsList() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.settings...)
+}
+func (c *calls) markList() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.marks...)
 }
 
 func (c *calls) onChanged(id string) { c.mu.Lock(); c.changed = append(c.changed, id); c.mu.Unlock() }
@@ -64,6 +102,7 @@ func accountsEnv(t *testing.T, backends ...platform.Backend) (*env, *calls) {
 	e.s.d.Registry = reg
 	e.s.d.RootCtx = ctx
 	e.s.d.AccountChanged = c.onChanged
+	e.s.d.AccountSettingsChanged = c.onSettings
 	e.s.d.AccountRemoved = c.onRemoved
 	e.s.routesAccounts(e.s.protected)
 	e.setup("password123")

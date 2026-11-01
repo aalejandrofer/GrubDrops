@@ -86,6 +86,10 @@ type PubSubHooks struct {
 	// notificationID dedupes; body is the raw notification text so
 	// the receiver can extract game/drop context.
 	OnRewardCode func(notificationID, code, body string)
+	// OnRaid fires when raid.<channelID> announces a raid from the
+	// channel. Only channels added through RaidJoiner.SubscribeRaids
+	// emit it. Twitch may repeat it for the same raidID.
+	OnRaid func(channelID, raidID string)
 }
 
 // PubSubAware is an optional backend capability. Backends that expose
@@ -102,6 +106,16 @@ type PubSubAware interface {
 type ChannelSubscriber interface {
 	SubscribeChannel(accountID, channelID string)
 	UnsubscribeChannel(accountID, channelID string)
+}
+
+// RaidJoiner is an optional backend capability (Twitch): follow raids from
+// a watched channel. SubscribeRaids makes the account's real-time socket
+// report raids from channelID through PubSubHooks.OnRaid until
+// UnsubscribeRaids. JoinRaid joins one announced raid.
+type RaidJoiner interface {
+	SubscribeRaids(accountID, channelID string)
+	UnsubscribeRaids(accountID, channelID string)
+	JoinRaid(ctx context.Context, s Session, raidID string) error
 }
 
 // CurrentSession is the post-claim verification result. Empty
@@ -172,6 +186,15 @@ type CompletedSweeper interface {
 	SweepCompletedClaims(ctx context.Context, s Session) ([]ClaimedReward, error)
 }
 
+// SampledDiscoverer is optional: SampledDiscovery reports whether
+// ListActiveCampaigns for s lists campaigns from a sample of live channels
+// rather than the full drops dashboard (Twitch TV-client sessions). Such a
+// list can miss a campaign one scan and find it the next, so a runner with an
+// empty queue rechecks sooner.
+type SampledDiscoverer interface {
+	SampledDiscovery(s Session) bool
+}
+
 // ChannelLooker is optional: one channel's live stream by login (Twitch) or slug (Kick).
 type ChannelLooker interface {
 	LookupChannel(ctx context.Context, s Session, login string) (stream Stream, live bool, err error)
@@ -190,6 +213,82 @@ type CategoryLooker interface {
 // ok is false when the platform knows no such game.
 type GameIDLooker interface {
 	LookupGameID(ctx context.Context, s Session, name string) (id, platformName string, ok bool, err error)
+}
+
+// PointsMode is how an account treats channel points. It is stored per
+// account. Unknown values count as off.
+type PointsMode string
+
+const (
+	// PointsOff: no Force watch and no channel-points requests.
+	PointsOff PointsMode = "off"
+	// PointsDropsPoints: drops first, Force watch channels when no drop is
+	// live, and the channel-points bonus claimed on whatever is watched.
+	PointsDropsPoints PointsMode = "drops_points"
+	// PointsOnly: points without drops. The runner never scans or picks a
+	// drop campaign; it watches the Force watch channels in order and
+	// claims the channel-points bonus on them.
+	PointsOnly PointsMode = "points_only"
+)
+
+// Valid reports whether m is one of the known modes.
+func (m PointsMode) Valid() bool {
+	switch m {
+	case PointsOff, PointsDropsPoints, PointsOnly:
+		return true
+	}
+	return false
+}
+
+// On reports whether m turns channel points on. Unknown values are off.
+func (m PointsMode) On() bool {
+	return m == PointsDropsPoints || m == PointsOnly
+}
+
+// PointsSupported reports whether accounts on platform plat have channel
+// points. Twitch only.
+func PointsSupported(plat string) bool {
+	return plat == "twitch"
+}
+
+// EffectivePointsMode is the mode an account on platform plat runs with,
+// given its stored mode m. A platform without channel points runs
+// drops_points whatever is stored: Force watch whenever the account has
+// force channels and no drop, never points only. Its backend has no
+// PointsClaimer, so no points request goes out.
+func EffectivePointsMode(plat string, m PointsMode) PointsMode {
+	if !PointsSupported(plat) {
+		return PointsDropsPoints
+	}
+	return m
+}
+
+// PointsClaim is the result of one ClaimChannelPoints call.
+type PointsClaim struct {
+	// Claimed is true when a bonus was available and claimed.
+	Claimed bool
+	// Gained is the points the claim added; 0 when unknown.
+	Gained int
+	// Balance is the balance after the call; -1 when unknown.
+	Balance int
+}
+
+// PointsClaimer is optional: claim the channel-points bonus on a channel the
+// account is watching, if one is available. A call with no bonus available
+// returns Claimed false and a nil error. Twitch only.
+type PointsClaimer interface {
+	ClaimChannelPoints(ctx context.Context, s Session, channel string) (PointsClaim, error)
+}
+
+// ErrNoPointsBalance means the channel has no channel-points balance for
+// the account, e.g. the channel has channel points turned off.
+var ErrNoPointsBalance = errors.New("channel points: no balance on this channel")
+
+// PointsBalancer is optional: read the account's channel-points balance on
+// a channel without claiming anything. A channel with no balance returns
+// ErrNoPointsBalance. Twitch only.
+type PointsBalancer interface {
+	ChannelPointsBalance(ctx context.Context, s Session, channel string) (int, error)
 }
 
 // ReadyDropLister is optional: drops in the inventory that are fully watched and unclaimed,

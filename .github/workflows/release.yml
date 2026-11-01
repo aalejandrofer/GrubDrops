@@ -3,19 +3,43 @@ name: Release images
 on:
   push:
     tags: ["v*"]
+  # Manual browser-only publish: rebuild (or re-check) grubdrops-browser for an
+  # existing tag without a code change, e.g. to pick up a newer Chrome/Chromium
+  # or Debian security fixes. Only the browser jobs run; the miner image is
+  # untouched. `tag` must be the newest v* tag because this moves :latest.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing v* tag to publish the browser image for (must be the newest v* tag)"
+        required: true
+        type: string
+      force_browser:
+        description: "Rebuild the browser image even if no sidecar path changed"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
   packages: write
 
+env:
+  # The release tag: the pushed tag, or the dispatch input.
+  TAG: ${{ inputs.tag || github.ref_name }}
+
 # Build each image on a NATIVE runner per arch (amd64 on ubuntu-latest, arm64 on
 # ubuntu-24.04-arm) instead of emulating arm64 via QEMU. The browser sidecar's
 # apt/chromium install was the slow part under emulation; native runners cut it
-# dramatically. The four (image x arch) builds run in parallel and push by digest;
+# dramatically. The (image x arch) builds run in parallel and push by digest;
 # a merge job then stitches each image's manifest list with the version + latest
 # tags. (Native arm64 runners are free for public repos.)
+#
+# The miner builds on every tag (build + merge). The browser sidecar rarely
+# changes, so browser-plan decides between rebuilding it (browser-build +
+# browser-merge) and pointing the new tag + latest at the previous tag's
+# browser manifest (browser-retag).
 jobs:
   build:
+    if: github.event_name == 'push'
     strategy:
       fail-fast: false
       matrix:
@@ -26,8 +50,6 @@ jobs:
         include:
           - { image: grubdrops,         key: miner,   dockerfile: deploy/Dockerfile.miner,   platform: linux/amd64, runner: ubuntu-latest,   arch: amd64 }
           - { image: grubdrops,         key: miner,   dockerfile: deploy/Dockerfile.miner,   platform: linux/arm64, runner: ubuntu-24.04-arm, arch: arm64 }
-          - { image: grubdrops-browser, key: browser, dockerfile: deploy/Dockerfile.browser, platform: linux/amd64, runner: ubuntu-latest,   arch: amd64 }
-          - { image: grubdrops-browser, key: browser, dockerfile: deploy/Dockerfile.browser, platform: linux/arm64, runner: ubuntu-24.04-arm, arch: arm64 }
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
@@ -47,8 +69,7 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platform }}
-          # Harmless for the browser image (no ARG VERSION); the miner reads it
-          # via -ldflags so Settings shows the running tag.
+          # The miner reads it via -ldflags so Settings shows the running tag.
           build-args: |
             VERSION=${{ github.ref_name }}
           outputs: type=image,name=ghcr.io/aalejandrofer/${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
@@ -78,7 +99,6 @@ jobs:
       matrix:
         include:
           - { image: grubdrops,         key: miner }
-          - { image: grubdrops-browser, key: browser }
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -104,3 +124,183 @@ jobs:
 
       - name: Inspect
         run: docker buildx imagetools inspect ghcr.io/aalejandrofer/${{ matrix.image }}:${{ github.ref_name }}
+
+  # Decides whether grubdrops-browser needs a rebuild for $TAG.
+  #   build  when forced (workflow_dispatch force_browser), when there is no
+  #          previous v* tag, when the previous tag's browser image is missing
+  #          from ghcr, or when any sidecar input changed since the previous tag.
+  #   retag  otherwise: browser-retag points :$TAG and :latest at the previous
+  #          tag's browser manifest (same digest, no new image for hosts to pull).
+  # Sidecar inputs: every in-module package `go list -deps ./cmd/browser-sidecar`
+  # reports (cmd/browser-sidecar, internal/auth/browser/sidecar,
+  # internal/auth/browser/gen/browser/v1 today), proto/ (incl. buf config),
+  # deploy/Dockerfile.browser, go.mod, go.sum and .dockerignore (the Dockerfile
+  # does COPY . .).
+  # Force a rebuild without code changes: Actions > Release images > Run
+  # workflow, tag = the newest v* tag, force_browser = true.
+  browser-plan:
+    runs-on: ubuntu-latest
+    outputs:
+      action: ${{ steps.plan.outputs.action }}
+      prev: ${{ steps.plan.outputs.prev }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Plan browser image
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          FORCE: ${{ inputs.force_browser }}
+        run: |
+          set -euo pipefail
+          img=ghcr.io/aalejandrofer/grubdrops-browser
+          decide() {
+            echo "action=$1" >> "$GITHUB_OUTPUT"
+            echo "prev=$2" >> "$GITHUB_OUTPUT"
+            echo "::notice title=grubdrops-browser::$1 ($3)"
+          }
+
+          if [ "$EVENT" = workflow_dispatch ]; then
+            newest=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+            if [ "$TAG" != "$newest" ]; then
+              echo "::error::tag $TAG is not the newest v* tag ($newest); refusing to move :latest"
+              exit 1
+            fi
+          fi
+          if [ "$FORCE" = true ]; then
+            decide build "" "forced by workflow_dispatch"
+            exit 0
+          fi
+
+          if ! prev=$(git describe --tags --abbrev=0 --match 'v*' "${TAG}^" 2>/dev/null); then
+            decide build "" "no previous v* tag"
+            exit 0
+          fi
+
+          mapfile -t pkgs < <(go list -deps -f '{{if .Module}}{{if .Module.Main}}{{.Dir}}{{end}}{{end}}' ./cmd/browser-sidecar | sed "s|^$PWD/||")
+          paths=("${pkgs[@]}" proto deploy/Dockerfile.browser go.mod go.sum .dockerignore)
+          echo "previous tag: $prev"
+          echo "sidecar paths: ${paths[*]}"
+
+          if ! git diff --quiet "$prev" "$TAG" -- "${paths[@]}"; then
+            git diff --stat "$prev" "$TAG" -- "${paths[@]}"
+            decide build "$prev" "sidecar paths changed since $prev"
+            exit 0
+          fi
+          if ! docker buildx imagetools inspect "$img:$prev" >/dev/null 2>&1; then
+            decide build "$prev" "$img:$prev not found"
+            exit 0
+          fi
+          decide retag "$prev" "no sidecar changes since $prev"
+
+  browser-build:
+    needs: browser-plan
+    if: needs.browser-plan.outputs.action == 'build'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux/amd64, runner: ubuntu-latest,   arch: amd64 }
+          - { platform: linux/arm64, runner: ubuntu-24.04-arm, arch: arm64 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.TAG }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build + push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/Dockerfile.browser
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=ghcr.io/aalejandrofer/grubdrops-browser,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=grubdrops-browser-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=grubdrops-browser-${{ matrix.arch }}
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest='${{ steps.build.outputs.digest }}'
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: digest-browser-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  browser-merge:
+    needs: browser-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests
+          pattern: digest-browser-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create + push manifest list
+        working-directory: /tmp/digests
+        run: |
+          img=ghcr.io/aalejandrofer/grubdrops-browser
+          refs=()
+          for d in *; do refs+=("$img@sha256:$d"); done
+          docker buildx imagetools create -t "$img:$TAG" -t "$img:latest" "${refs[@]}"
+
+      - name: Inspect
+        run: docker buildx imagetools inspect "ghcr.io/aalejandrofer/grubdrops-browser:$TAG"
+
+  browser-retag:
+    needs: browser-plan
+    if: needs.browser-plan.outputs.action == 'retag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Point the new tag + latest at the previous browser manifest
+        env:
+          PREV: ${{ needs.browser-plan.outputs.prev }}
+        run: |
+          img=ghcr.io/aalejandrofer/grubdrops-browser
+          docker buildx imagetools create -t "$img:$TAG" -t "$img:latest" "$img:$PREV"
+          docker buildx imagetools inspect "$img:$TAG"

@@ -54,6 +54,7 @@ type settingsNotify struct {
 	DailySummary bool `json:"daily_summary"`
 	Progress     bool `json:"progress"`
 	Canary       bool `json:"canary"`
+	RewardCodes  bool `json:"reward_codes"`
 }
 
 // settingsProxy is the outbound proxy. URL hides any password.
@@ -66,6 +67,25 @@ type settingsCanary struct {
 	TwitchChannel string `json:"twitch_channel"`
 	KickChannel   string `json:"kick_channel"`
 	IntervalSec   int    `json:"interval_sec"` // 0 = off
+}
+
+// settingsSleep is the daily sleep window. Start and End are "HH:MM" in the
+// display timezone; an End at or before Start crosses midnight.
+type settingsSleep struct {
+	Enabled bool   `json:"enabled"`
+	Start   string `json:"start"`
+	End     string `json:"end"`
+}
+
+// settingsSSO reports the OIDC SSO config, which comes from the env. It
+// carries no secrets: the client ID, secret and allowlist entries stay on the
+// server, only their counts and the issuer's host name go out.
+type settingsSSO struct {
+	Enabled       bool   `json:"enabled"`
+	Name          string `json:"name"`
+	IssuerHost    string `json:"issuer_host"`
+	AllowedEmails int    `json:"allowed_emails"`
+	AllowedGroups int    `json:"allowed_groups"`
 }
 
 type settingsBody struct {
@@ -83,11 +103,27 @@ type settingsBody struct {
 	// ScanIntervalMin is how often accounts check for new campaigns.
 	ScanIntervalMin int  `json:"scan_interval_min"`
 	Preempt         bool `json:"preempt"`
+	// FollowRaids joins raids from the watched Twitch channel. Read live.
+	FollowRaids bool `json:"follow_raids"`
+	// ExpShareCatalog lets TV-login Twitch accounts mine the campaigns an
+	// Android login sees. Experimental; read at each scan.
+	ExpShareCatalog bool `json:"exp_share_catalog"`
+	// ShareCatalogAvailable reports an enabled Android Twitch login to share
+	// from and an enabled TV one to share with. Read-only.
+	ShareCatalogAvailable bool `json:"share_catalog_available"`
 	// Proxy, KickWatchMode and the canary interval apply after a restart.
-	Proxy           settingsProxy  `json:"proxy"`
-	KickWatchMode   string         `json:"kick_watch_mode"`
-	NotifyAvatarURL string         `json:"notify_avatar_url"`
-	Canary          settingsCanary `json:"canary"`
+	Proxy           settingsProxy `json:"proxy"`
+	KickWatchMode   string        `json:"kick_watch_mode"`
+	NotifyAvatarURL string        `json:"notify_avatar_url"`
+	// The mention IDs are numeric user IDs pinged on error notifications.
+	DiscordMentionID  string         `json:"discord_mention_id"`
+	TelegramMentionID string         `json:"telegram_mention_id"`
+	Canary            settingsCanary `json:"canary"`
+	Sleep             settingsSleep  `json:"sleep"`
+	SSO               settingsSSO    `json:"sso"`
+	// PasswordLoginDisabled is the stored setting. It takes effect only
+	// while SSO is enabled.
+	PasswordLoginDisabled bool `json:"password_login_disabled"`
 }
 
 var (
@@ -176,6 +212,13 @@ func (s *server) loadSettings(ctx context.Context) (settingsBody, error) {
 	if b.Preempt, err = st.Preempt(ctx); err != nil {
 		return b, err
 	}
+	if b.FollowRaids, err = st.FollowRaids(ctx); err != nil {
+		return b, err
+	}
+	if b.ExpShareCatalog, err = st.ExpShareCatalog(ctx); err != nil {
+		return b, err
+	}
+	b.ShareCatalogAvailable = s.d.ShareCatalogReady != nil && s.d.ShareCatalogReady(ctx)
 	if b.Proxy.Enabled, err = st.ProxyEnabled(ctx); err != nil {
 		return b, err
 	}
@@ -190,6 +233,12 @@ func (s *server) loadSettings(ctx context.Context) (settingsBody, error) {
 	if b.NotifyAvatarURL, err = st.NotifyAvatarURL(ctx); err != nil {
 		return b, err
 	}
+	if b.DiscordMentionID, err = st.DiscordMentionID(ctx); err != nil {
+		return b, err
+	}
+	if b.TelegramMentionID, err = st.TelegramMentionID(ctx); err != nil {
+		return b, err
+	}
 	if b.Canary.TwitchChannel, err = st.CanaryTwitchChannel(ctx); err != nil {
 		return b, err
 	}
@@ -197,6 +246,23 @@ func (s *server) loadSettings(ctx context.Context) (settingsBody, error) {
 		return b, err
 	}
 	if b.Canary.IntervalSec, err = st.CanaryIntervalSec(ctx); err != nil {
+		return b, err
+	}
+	sleep, err := st.SleepWindow(ctx)
+	if err != nil {
+		return b, err
+	}
+	b.Sleep = settingsSleep{Enabled: sleep.Enabled, Start: sleep.Start, End: sleep.End}
+	b.SSO.Enabled = s.ssoOn()
+	if s.d.OIDC != nil {
+		b.SSO.Name = s.d.OIDC.Name()
+		if u, err := url.Parse(s.d.OIDC.Issuer()); err == nil {
+			b.SSO.IssuerHost = u.Hostname()
+		}
+		b.SSO.AllowedEmails = len(s.d.OIDC.AllowedEmails())
+		b.SSO.AllowedGroups = len(s.d.OIDC.AllowedGroups())
+	}
+	if b.PasswordLoginDisabled, err = st.PasswordLoginDisabled(ctx); err != nil {
 		return b, err
 	}
 	b.ZoneEffective = s.overviewZone().String()
@@ -222,6 +288,9 @@ func (s *server) loadSettings(ctx context.Context) (settingsBody, error) {
 	b.Telegram.ChatID = chat
 	b.Notify.Claim, b.Notify.Progress, b.Notify.Auth, b.Notify.Errors, b.Notify.Canary = st.NotifyKinds(ctx)
 	if b.Notify.DailySummary, err = st.NotifyDailySummary(ctx); err != nil {
+		return b, err
+	}
+	if b.Notify.RewardCodes, err = st.NotifyRewardCodes(ctx); err != nil {
 		return b, err
 	}
 	b.UpdateAuto, err = st.UpdateAuto(ctx)
@@ -260,21 +329,54 @@ type settingsPut struct {
 		DailySummary *bool `json:"daily_summary"`
 		Progress     *bool `json:"progress"`
 		Canary       *bool `json:"canary"`
+		RewardCodes  *bool `json:"reward_codes"`
 	} `json:"notify"`
 	UpdateAuto      *bool `json:"update_auto"`
 	ScanIntervalMin *int  `json:"scan_interval_min"`
 	Preempt         *bool `json:"preempt"`
+	FollowRaids     *bool `json:"follow_raids"`
+	ExpShareCatalog *bool `json:"exp_share_catalog"`
+	// ShareCatalogAvailable is accepted so a client can send the GET body
+	// back. Ignored.
+	ShareCatalogAvailable json.RawMessage `json:"share_catalog_available"`
 	// Proxy is accepted so a client can send the GET body back. Ignored.
-	Proxy           json.RawMessage `json:"proxy"`
-	ProxyEnabled    *bool           `json:"proxy_enabled"`
-	ProxyURL        *string         `json:"proxy_url"` // the GET hint itself = unchanged
-	KickWatchMode   *string         `json:"kick_watch_mode"`
-	NotifyAvatarURL *string         `json:"notify_avatar_url"`
-	Canary          *struct {
+	Proxy             json.RawMessage `json:"proxy"`
+	ProxyEnabled      *bool           `json:"proxy_enabled"`
+	ProxyURL          *string         `json:"proxy_url"` // the GET hint itself = unchanged
+	KickWatchMode     *string         `json:"kick_watch_mode"`
+	NotifyAvatarURL   *string         `json:"notify_avatar_url"`
+	DiscordMentionID  *string         `json:"discord_mention_id"`
+	TelegramMentionID *string         `json:"telegram_mention_id"`
+	Canary            *struct {
 		TwitchChannel *string `json:"twitch_channel"`
 		KickChannel   *string `json:"kick_channel"`
 		IntervalSec   *int    `json:"interval_sec"`
 	} `json:"canary"`
+	Sleep *struct {
+		Enabled *bool   `json:"enabled"`
+		Start   *string `json:"start"`
+		End     *string `json:"end"`
+	} `json:"sleep"`
+	// SSO is accepted so a client can send the GET body back. Ignored.
+	SSO json.RawMessage `json:"sso"`
+	// PasswordLoginDisabled can be turned on only while SSO is enabled.
+	PasswordLoginDisabled *bool `json:"password_login_disabled"`
+}
+
+// mergeSleep applies the request's sleep fields over cur.
+func mergeSleep(cur store.SleepWindow, req settingsPut) store.SleepWindow {
+	if p := req.Sleep; p != nil {
+		if p.Enabled != nil {
+			cur.Enabled = *p.Enabled
+		}
+		if p.Start != nil {
+			cur.Start = *p.Start
+		}
+		if p.End != nil {
+			cur.End = *p.End
+		}
+	}
+	return cur
 }
 
 // validCanary accepts channel names and an interval of 0 (off) or 5 minutes
@@ -313,6 +415,12 @@ func validWebhook(v string) bool {
 	return false
 }
 
+// validMentionID accepts digits only, or empty to turn the mention off.
+func validMentionID(v string) bool {
+	v = strings.TrimSpace(v)
+	return v == "" || notify.ValidUserID(v)
+}
+
 // validOptional accepts an empty value, which clears the setting.
 func validOptional(re *regexp.Regexp, v string) bool {
 	v = strings.TrimSpace(v)
@@ -336,14 +444,35 @@ func (s *server) putSettings(w http.ResponseWriter, r *http.Request) {
 		(req.ProxyURL == nil || validProxy(*req.ProxyURL)) &&
 		(req.KickWatchMode == nil || oneOf(*req.KickWatchMode, store.KickWatchModeBrowser, store.KickWatchModeWS, store.KickWatchModeAuto)) &&
 		(req.NotifyAvatarURL == nil || validAvatar(*req.NotifyAvatarURL)) &&
+		(req.DiscordMentionID == nil || validMentionID(*req.DiscordMentionID)) &&
+		(req.TelegramMentionID == nil || validMentionID(*req.TelegramMentionID)) &&
 		validCanary(req.Canary)
 	if !valid {
 		writeErr(w, http.StatusBadRequest, "bad_request")
 		return
 	}
 
+	// Turning password sign-in off needs SSO, or nobody could sign in.
+	// Turning it back on is always accepted.
+	if req.PasswordLoginDisabled != nil && *req.PasswordLoginDisabled && !s.ssoOn() {
+		writeErr(w, http.StatusConflict, "sso_not_configured")
+		return
+	}
+
 	ctx := r.Context()
 	st := s.d.Settings
+	oldSleep, err := st.SleepWindow(ctx)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	// Checked merged with the saved window, so start == end is caught
+	// however the two arrive.
+	newSleep := mergeSleep(oldSleep, req)
+	if req.Sleep != nil && !store.ValidSleepWindow(newSleep.Start, newSleep.End) {
+		writeErr(w, http.StatusBadRequest, "bad_request")
+		return
+	}
 	oldZone, err := st.Timezone(ctx)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "internal")
@@ -359,7 +488,17 @@ func (s *server) putSettings(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
 	}
-	if err := s.applySettings(ctx, req); err != nil {
+	oldRaids, err := st.FollowRaids(ctx)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	oldShare, err := st.ExpShareCatalog(ctx)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	if err := s.applySettings(ctx, req, newSleep); err != nil {
 		slog.Warn("settings save", "kind", "error", "err", err)
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
@@ -371,11 +510,25 @@ func (s *server) putSettings(w http.ResponseWriter, r *http.Request) {
 		s.d.SetZone(*req.Timezone)
 	}
 	// Runners read the mode at each plan: rescan so the queue reorders now. A
-	// new scan pace re-arms the idle waits the same way.
+	// new scan pace re-arms the idle waits the same way. A drop watch keeps
+	// its channel unless preempt switches; a Force watch ends only for a
+	// watchable drop.
+	// Sharing the Android catalog changes what a TV account's scan lists.
 	replan := (req.PriorityMode != nil && *req.PriorityMode != oldPriority) ||
-		(req.ScanIntervalMin != nil && *req.ScanIntervalMin != oldScan)
+		(req.ScanIntervalMin != nil && *req.ScanIntervalMin != oldScan) ||
+		(req.ExpShareCatalog != nil && *req.ExpShareCatalog != oldShare)
 	if replan && s.d.Pool != nil {
 		s.d.Pool.RescanAll()
+	}
+	// The sleep window and the zone it is read in are read live: each runner
+	// checks its sleep gate now, and a watch outside the window stays.
+	sleepMoved := (req.Sleep != nil && newSleep != oldSleep) ||
+		(req.Timezone != nil && *req.Timezone != oldZone)
+	// Follow raids is read live too: each watch subscribes to or drops its
+	// channel's raids now and keeps its channel.
+	raidsMoved := req.FollowRaids != nil && *req.FollowRaids != oldRaids
+	if (sleepMoved || raidsMoved) && s.d.Pool != nil {
+		s.d.Pool.SettingsChangedAll()
 	}
 	s.getSettings(w, r)
 }
@@ -385,7 +538,7 @@ func validZone(name string) bool {
 	return err == nil && timeutil.Valid(name)
 }
 
-func (s *server) applySettings(ctx context.Context, req settingsPut) error {
+func (s *server) applySettings(ctx context.Context, req settingsPut, sleep store.SleepWindow) error {
 	st := s.d.Settings
 	if req.Language != nil {
 		if err := st.SetUILanguage(ctx, *req.Language); err != nil {
@@ -453,8 +606,23 @@ func (s *server) applySettings(ctx context.Context, req settingsPut) error {
 			return err
 		}
 	}
+	if n := req.Notify; n != nil && n.RewardCodes != nil {
+		if err := st.SetNotifyRewardCodes(ctx, *n.RewardCodes); err != nil {
+			return err
+		}
+	}
 	if req.UpdateAuto != nil {
 		if err := st.SetUpdateAuto(ctx, *req.UpdateAuto); err != nil {
+			return err
+		}
+	}
+	if req.Sleep != nil {
+		if err := st.SetSleepWindow(ctx, sleep); err != nil {
+			return err
+		}
+	}
+	if req.PasswordLoginDisabled != nil {
+		if err := st.SetPasswordLoginDisabled(ctx, *req.PasswordLoginDisabled); err != nil {
 			return err
 		}
 	}
@@ -471,6 +639,16 @@ func (s *server) applyEngineSettings(ctx context.Context, req settingsPut) error
 	}
 	if req.Preempt != nil {
 		if err := st.SetPreempt(ctx, *req.Preempt); err != nil {
+			return err
+		}
+	}
+	if req.FollowRaids != nil {
+		if err := st.SetFollowRaids(ctx, *req.FollowRaids); err != nil {
+			return err
+		}
+	}
+	if req.ExpShareCatalog != nil {
+		if err := st.SetExpShareCatalog(ctx, *req.ExpShareCatalog); err != nil {
 			return err
 		}
 	}
@@ -498,6 +676,16 @@ func (s *server) applyEngineSettings(ctx context.Context, req settingsPut) error
 	}
 	if req.NotifyAvatarURL != nil {
 		if err := st.SetNotifyAvatarURL(ctx, strings.TrimSpace(*req.NotifyAvatarURL)); err != nil {
+			return err
+		}
+	}
+	if req.DiscordMentionID != nil {
+		if err := st.SetDiscordMentionID(ctx, *req.DiscordMentionID); err != nil {
+			return err
+		}
+	}
+	if req.TelegramMentionID != nil {
+		if err := st.SetTelegramMentionID(ctx, *req.TelegramMentionID); err != nil {
 			return err
 		}
 	}

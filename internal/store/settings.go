@@ -18,6 +18,8 @@ const (
 	keyTelegramBotToken    = "settings:telegram_bot_token"
 	keyTelegramChatID      = "settings:telegram_chat_id"
 	keyNotifyAvatarURL     = "settings:notify_avatar_url"
+	keyDiscordMentionID    = "settings:discord_mention_id"
+	keyTelegramMentionID   = "settings:telegram_mention_id"
 	keyNotifyClaim         = "settings:notify_claim"
 	keyNotifyProgress      = "settings:notify_progress"
 	keyNotifyAuth          = "settings:notify_auth"
@@ -107,6 +109,26 @@ func (s *Settings) NotifyAvatarURL(ctx context.Context) (string, error) {
 
 func (s *Settings) SetNotifyAvatarURL(ctx context.Context, url string) error {
 	return s.setString(ctx, keyNotifyAvatarURL, url)
+}
+
+// DiscordMentionID is the Discord user ID pinged on error notifications.
+// Empty means no mention.
+func (s *Settings) DiscordMentionID(ctx context.Context) (string, error) {
+	return s.getString(ctx, keyDiscordMentionID)
+}
+
+func (s *Settings) SetDiscordMentionID(ctx context.Context, id string) error {
+	return s.setString(ctx, keyDiscordMentionID, strings.TrimSpace(id))
+}
+
+// TelegramMentionID is the Telegram user ID mentioned on error
+// notifications. Empty means no mention.
+func (s *Settings) TelegramMentionID(ctx context.Context) (string, error) {
+	return s.getString(ctx, keyTelegramMentionID)
+}
+
+func (s *Settings) SetTelegramMentionID(ctx context.Context, id string) error {
+	return s.setString(ctx, keyTelegramMentionID, strings.TrimSpace(id))
 }
 
 // HeartbeatInterval is intentionally NOT a setting. It is locked to 60s in the
@@ -302,6 +324,8 @@ const (
 	keyPriorityMode       = "settings:priority_mode"
 	keyScanIntervalMin    = "settings:scan_interval_min"
 	keyPreempt            = "settings:preempt"
+	keyFollowRaids        = "settings:follow_raids"
+	keyExpShareCatalog    = "settings:exp_share_catalog"
 )
 
 // ScanIntervals are the allowed scan paces, in minutes: 15 minutes to 24 hours.
@@ -337,6 +361,110 @@ func (s *Settings) Preempt(ctx context.Context) (bool, error) {
 
 func (s *Settings) SetPreempt(ctx context.Context, on bool) error {
 	return s.setBool(ctx, keyPreempt, on)
+}
+
+// FollowRaids reports whether a Twitch account joins a raid started by the
+// channel it is watching. Default off.
+func (s *Settings) FollowRaids(ctx context.Context) (bool, error) {
+	return s.boolKey(ctx, keyFollowRaids, false)
+}
+
+func (s *Settings) SetFollowRaids(ctx context.Context, on bool) error {
+	return s.setBool(ctx, keyFollowRaids, on)
+}
+
+// ExpShareCatalog reports whether TV-login Twitch accounts also mine the
+// campaigns an Android login's drops dashboard lists. Experimental. Default
+// off.
+func (s *Settings) ExpShareCatalog(ctx context.Context) (bool, error) {
+	return s.boolKey(ctx, keyExpShareCatalog, false)
+}
+
+func (s *Settings) SetExpShareCatalog(ctx context.Context, on bool) error {
+	return s.setBool(ctx, keyExpShareCatalog, on)
+}
+
+// KeyPasswordLoginDisabled turns off the admin password sign-in while SSO
+// is configured. Deleting the row turns password sign-in back on.
+const KeyPasswordLoginDisabled = "settings:password_login_disabled"
+
+// PasswordLoginDisabled reports whether the admin password sign-in is turned
+// off. It only takes effect while SSO is configured. Default off.
+func (s *Settings) PasswordLoginDisabled(ctx context.Context) (bool, error) {
+	return s.boolKey(ctx, KeyPasswordLoginDisabled, false)
+}
+
+func (s *Settings) SetPasswordLoginDisabled(ctx context.Context, on bool) error {
+	return s.setBool(ctx, KeyPasswordLoginDisabled, on)
+}
+
+const (
+	keySleepEnabled = "settings:sleep_enabled"
+	keySleepStart   = "settings:sleep_start" // "HH:MM" in the display timezone
+	keySleepEnd     = "settings:sleep_end"   // "HH:MM"; at or before start = next day
+
+	DefaultSleepStart = "02:00"
+	DefaultSleepEnd   = "08:00"
+)
+
+// SleepWindow is the daily window in which every account without skip_sleep
+// stops watching. Start and End are "HH:MM" in the display timezone; an End
+// at or before Start crosses midnight.
+type SleepWindow struct {
+	Enabled    bool
+	Start, End string
+}
+
+// ValidSleepWindow reports whether start and end are "HH:MM" and differ.
+func ValidSleepWindow(start, end string) bool {
+	s, ok1 := timeutil.ParseClock(start)
+	e, ok2 := timeutil.ParseClock(end)
+	return ok1 && ok2 && s != e
+}
+
+// SleepWindow reads the sleep window. Default off, 02:00 to 08:00. A stored
+// pair that does not parse, or has start equal to end, reads as the default
+// times.
+func (s *Settings) SleepWindow(ctx context.Context) (SleepWindow, error) {
+	w := SleepWindow{Start: DefaultSleepStart, End: DefaultSleepEnd}
+	on, err := s.boolKey(ctx, keySleepEnabled, false)
+	if err != nil {
+		return w, err
+	}
+	w.Enabled = on
+	start, err := s.getString(ctx, keySleepStart)
+	if err != nil {
+		return w, err
+	}
+	end, err := s.getString(ctx, keySleepEnd)
+	if err != nil {
+		return w, err
+	}
+	if start == "" {
+		start = DefaultSleepStart
+	}
+	if end == "" {
+		end = DefaultSleepEnd
+	}
+	if ValidSleepWindow(start, end) {
+		w.Start, w.End = start, end
+	}
+	return w, nil
+}
+
+// SetSleepWindow validates and saves the whole window. An invalid one is
+// rejected and nothing is saved.
+func (s *Settings) SetSleepWindow(ctx context.Context, w SleepWindow) error {
+	if !ValidSleepWindow(w.Start, w.End) {
+		return fmt.Errorf("invalid sleep window %q-%q", w.Start, w.End)
+	}
+	if err := s.setString(ctx, keySleepStart, w.Start); err != nil {
+		return err
+	}
+	if err := s.setString(ctx, keySleepEnd, w.End); err != nil {
+		return err
+	}
+	return s.setBool(ctx, keySleepEnabled, w.Enabled)
 }
 
 // PriorityMode orders the mining queue: ordered (game list order) or

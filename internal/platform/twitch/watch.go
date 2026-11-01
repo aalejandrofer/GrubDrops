@@ -279,7 +279,9 @@ func (w *watch) evictSpadeURL(channel string) {
 // the given watch handle and returns its JSON encoding. The properties
 // schema matches the post-2026-07-11 Twitch edge: game/game_id/
 // is_live/minutes_logged are required (Twitch silently discards
-// heartbeats missing them); the legacy location/player fields are gone.
+// heartbeats missing them); the legacy location field is gone. player
+// stays: without player=site the beacon is accepted (204) but Twitch
+// credits no channel points.
 func minuteWatchedEvents(internal watchInternal) ([]byte, error) {
 	event := map[string]any{
 		"event": "minute-watched",
@@ -296,6 +298,7 @@ func minuteWatchedEvents(internal watchInternal) ([]byte, error) {
 			"logged_in":      true,
 			"minutes_logged": 1,
 			"muted":          false,
+			"player":         "site",
 			"user_id":        internal.UserID,
 		},
 	}

@@ -153,7 +153,7 @@ func markEnv(t *testing.T) (*env, *calls, string) {
 		return plan.Target{Campaign: camp, Benefit: platform.DropBenefit{ID: b, Name: "name-" + b, ImageURL: "http://img/" + b}}
 	}
 	cur := tgt("b-cur")
-	e.s.d.Pool = snapPool{snaps: []runner.Snapshot{{
+	e.s.d.Pool = snapPool{marks: c, snaps: []runner.Snapshot{{
 		AccountID: id, Platform: "twitch", Current: &cur,
 		UpNext:  []plan.Target{tgt("b-next")},
 		Blocked: []plan.Blocked{{Target: tgt("b-blk"), Reason: plan.ReasonNotLinked}},
@@ -178,7 +178,9 @@ func TestClaims_MarkCollected(t *testing.T) {
 	ids, err := e.s.d.Claims.ClaimedBenefitIDs(context.Background(), id)
 	require.NoError(t, err)
 	require.Equal(t, map[string]bool{"b-cur": true, "b-next": true, "b-blk": true}, ids)
-	require.Len(t, c.changedList(), before+3, "each mark reloads the runner")
+	require.Len(t, c.changedList(), before, "a mark rebuilds no runner")
+	require.Equal(t, []string{"collected:" + id + ":b-cur", "collected:" + id + ":b-next", "collected:" + id + ":b-blk"},
+		c.markList(), "each mark reaches the runner")
 }
 
 func TestClaims_MarkRejectsUnplanned(t *testing.T) {
@@ -194,6 +196,7 @@ func TestClaims_MarkRejectsUnplanned(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, ids)
 	require.Len(t, c.changedList(), before)
+	require.Empty(t, c.markList())
 }
 
 func TestClaims_Remove(t *testing.T) {
@@ -209,10 +212,12 @@ func TestClaims_Remove(t *testing.T) {
 	ids, err := e.s.d.Claims.ClaimedBenefitIDs(context.Background(), id)
 	require.NoError(t, err)
 	require.Empty(t, ids)
-	require.Equal(t, []string{id}, c.changedList()[before:])
+	require.Len(t, c.changedList(), before, "no rebuild")
+	require.Equal(t, []string{"uncollected:" + id + ":a/b c"}, c.markList())
 
 	resp, _ = e.do("DELETE", path, tok, nil)
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
+	require.Len(t, c.markList(), 1)
 }
 
 func TestClaims_MarkNeedsCSRF(t *testing.T) {
@@ -252,7 +257,8 @@ func TestClaims_RemoveClearsSkip(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, resp.StatusCode, string(body))
 	_, err := e.s.d.Q.GetSettingString(context.Background(), store.SkipOverridePrefix+"b-skip:"+id)
 	require.ErrorIs(t, err, sql.ErrNoRows, "kv skip row gone")
-	require.Equal(t, []string{id}, c.changedList()[n:], "reload rebuilds the runner from the store")
+	require.Len(t, c.changedList(), n, "no rebuild")
+	require.Equal(t, []string{"uncollected:" + id + ":b-skip"}, c.markList(), "the runner forgets the skip")
 
 	after := skipPlan(t, e, id)
 	require.Len(t, after.Queue, 1, "planner queues the drop again")
@@ -284,6 +290,7 @@ func TestClaims_RemoveNeither404(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 	require.Contains(t, string(body), "not_found")
 	require.Len(t, c.changedList(), n)
+	require.Empty(t, c.markList())
 	m, err := store.NewSkips(e.s.d.Q).Skips("acc_other")
 	require.NoError(t, err)
 	require.True(t, m["b-x"], "another account's skip stays")

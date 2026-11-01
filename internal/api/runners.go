@@ -54,6 +54,8 @@ type runnerDTO struct {
 	UpNext      []targetDTO  `json:"up_next"`
 	Blocked     []blockedDTO `json:"blocked"`
 	OrderCustom bool         `json:"order_custom"`
+	// SleepUntil is when the sleep window ends, only in state sleep_window.
+	SleepUntil *string `json:"sleep_until"`
 }
 
 // rfc3339 formats t in UTC, or nil for the zero time.
@@ -89,7 +91,7 @@ func RunnerJSON(s runner.Snapshot, a gen.Account, custom bool) runnerDTO {
 		ViewerCount: s.ViewerCount, Minutes: s.MinutesWatched,
 		StartedAt: rfc3339(s.StartedAt), LastScanAt: rfc3339(s.LastScanAt),
 		UpNext: make([]targetDTO, 0, len(up)), Blocked: make([]blockedDTO, 0, len(s.Blocked)),
-		OrderCustom: custom,
+		OrderCustom: custom, SleepUntil: rfc3339(s.SleepUntil),
 	}
 	if s.Current != nil {
 		c := TargetJSON(*s.Current)
@@ -167,6 +169,8 @@ func (s *server) postRunnerMineNow(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not_queued")
 	case errors.Is(err, runner.ErrNotRunning):
 		writeErr(w, http.StatusConflict, "not_running")
+	case errors.Is(err, runner.ErrSleepWindow):
+		writeErr(w, http.StatusConflict, "sleep_window")
 	default:
 		writeErr(w, http.StatusInternalServerError, "internal")
 	}

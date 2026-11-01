@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ApiError } from '$lib/api/client';
 import type { Platform, Runner, Target } from '$lib/api/types';
 import mining from '$lib/fixtures/runners.mining.json';
 import {
@@ -12,6 +13,7 @@ import {
 	commitMove,
 	foldQueue,
 	inGameOrder,
+	mineErrorKey,
 	mineTarget,
 	moveItem,
 	queues,
@@ -56,7 +58,16 @@ describe('queues', () => {
 describe('canMineNow', () => {
 	it('allows running states only', () => {
 		for (const s of ['watching', 'sleeping', 'starting', 'awaiting_connect'] as const) expect(canMineNow({ state: s })).toBe(true);
-		for (const s of ['needs_login', 'no_games', 'idle'] as const) expect(canMineNow({ state: s })).toBe(false);
+		for (const s of ['needs_login', 'no_games', 'no_channels', 'idle', 'sleep_window'] as const) expect(canMineNow({ state: s })).toBe(false);
+	});
+});
+
+describe('mineErrorKey', () => {
+	it('names the sleep window, else the generic failure', () => {
+		expect(mineErrorKey(new ApiError(409, { error: 'sleep_window' }))).toBe('upnext.mine_sleep_window');
+		expect(mineErrorKey(new ApiError(409, { error: 'not_running' }))).toBe('upnext.mine_next_failed');
+		expect(mineErrorKey(new ApiError(404, { error: 'not_queued' }))).toBe('upnext.mine_next_failed');
+		expect(mineErrorKey(new Error('x'))).toBe('upnext.mine_next_failed');
 	});
 });
 

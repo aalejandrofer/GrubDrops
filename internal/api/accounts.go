@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/aalejandrofer/grubdrops/internal/authcheck"
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/runner"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
@@ -27,6 +28,8 @@ func (s *server) routesAccounts(r chi.Router) {
 	r.Patch("/accounts/{id}", s.renameAccount)
 	r.Delete("/accounts/{id}", s.deleteAccount)
 	r.Put("/accounts/{id}/enabled", s.setAccountEnabled)
+	r.Put("/accounts/{id}/skip-sleep", s.setAccountSkipSleep)
+	r.Put("/accounts/{id}/points-mode", s.setAccountPointsMode)
 	r.Post("/accounts/{id}/twitch/device", s.twitchDeviceStart)
 	r.Get("/accounts/{id}/twitch/device", s.twitchDeviceStatus)
 	r.Post("/accounts/{id}/kick/session", s.kickSession)
@@ -56,6 +59,8 @@ type accountJSON struct {
 	Enabled      bool             `json:"enabled"`        // false: paused, the runner idles
 	OwnGames     bool             `json:"own_games"`      // true: mines its own game list
 	OwnGameCount int              `json:"own_game_count"` // games on the own list, 0 while own_games is off
+	SkipSleep    bool             `json:"skip_sleep"`     // true: ignores the sleep window
+	PointsMode   string           `json:"points_mode"`    // off, drops_points or points_only
 	Auth         *accountAuthJSON `json:"auth"`           // null until a check has run
 }
 
@@ -103,6 +108,8 @@ func (s *server) listAccounts(w http.ResponseWriter, r *http.Request) {
 			NeedsLogin: state == string(runner.StateNeedsLogin) || !hasSession,
 			Enabled:    a.Enabled != 0,
 			OwnGames:   a.OwnGames != 0,
+			SkipSleep:  a.SkipSleep != 0,
+			PointsMode: a.PointsMode,
 		}
 		if a.OwnGames != 0 && s.d.AccountGames != nil {
 			if list, err := s.d.AccountGames.List(ctx, a.ID); err == nil {
@@ -276,6 +283,77 @@ func (s *server) setAccountEnabled(w http.ResponseWriter, r *http.Request) {
 	if acc.Enabled == 0 && v == 1 {
 		s.rerunSkippedCanary(r.Context(), acc.Platform)
 	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setAccountSkipSleep turns the account's sleep window bypass on or off. The
+// runner reads it live, so the change applies at once without stopping a
+// watch the window does not stop.
+func (s *server) setAccountSkipSleep(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var body struct {
+		SkipSleep *bool `json:"skip_sleep"`
+	}
+	if !readJSON(w, r, &body) {
+		return
+	}
+	if body.SkipSleep == nil {
+		writeErr(w, http.StatusBadRequest, "bad_request")
+		return
+	}
+	if _, ok := s.account(w, r, id); !ok {
+		return
+	}
+	var v int64
+	if *body.SkipSleep {
+		v = 1
+	}
+	if err := s.d.Q.SetAccountSkipSleep(r.Context(), gen.SetAccountSkipSleepParams{
+		SkipSleep: v, UpdatedAt: time.Now().Unix(), ID: id,
+	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	s.accountSettingsChanged(id)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setAccountPointsMode sets how the account treats channel points: off (no
+// Force watch, no points requests), drops_points or points_only (no drops,
+// only the Force watch channels). The runner reads it live: points claims
+// start or stop on the current watch, a force watch ends when points turn
+// off, points only ends a drop watch, leaving it lets a drop win at once,
+// and an idle account may pick a force channel once points turn on. Twitch
+// only: an account on another platform gets 400 points_unsupported_platform
+// and always Force watches (see platform.EffectivePointsMode).
+func (s *server) setAccountPointsMode(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var body struct {
+		PointsMode *string `json:"points_mode"`
+	}
+	if !readJSON(w, r, &body) {
+		return
+	}
+	if body.PointsMode == nil || !platform.PointsMode(*body.PointsMode).Valid() {
+		writeErr(w, http.StatusBadRequest, "bad_request")
+		return
+	}
+	mode := platform.PointsMode(*body.PointsMode)
+	acc, ok := s.account(w, r, id)
+	if !ok {
+		return
+	}
+	if !platform.PointsSupported(acc.Platform) {
+		writeErr(w, http.StatusBadRequest, "points_unsupported_platform")
+		return
+	}
+	if err := s.d.Q.SetAccountPointsMode(r.Context(), gen.SetAccountPointsModeParams{
+		PointsMode: string(mode), UpdatedAt: time.Now().Unix(), ID: id,
+	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	s.accountSettingsChanged(id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -471,9 +549,47 @@ func (s *server) postAccountRestart(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// How a change reaches an account's runner. A rebuild stops the watch and
+// starts a new runner, so it is kept for changes the runner cannot take live.
+//
+//	change                         applies   why
+//	create account                 rebuild   no runner yet
+//	pause / resume                 rebuild   a paused account has no runner
+//	login (Twitch, Kick, paste)    rebuild   the session is baked into the runner
+//	own games list                 rebuild   the game list is baked into the
+//	                                         runner and its backend session
+//	Restart                        rebuild   asked for
+//	remove account                 remove    the runner goes
+//	rename, account order          none      display only
+//	skip sleep                     live      SleepUntil reads it; the sleep gate
+//	                                         stops a watch only inside the window
+//	channel points                 live      points claims start or stop on the
+//	                                         watch; Force watch ends when off;
+//	                                         points only ends a drop watch,
+//	                                         leaving it rechecks for a drop; a
+//	                                         no_games runner is rebuilt (roster)
+//	mark collected                 live      the watched drop: re-pick at once;
+//	                                         any other: rescan, the watch stays
+//	mark uncollected               live      skip forgotten, rescan
+//	sleep window, timezone         live      Pool.SettingsChangedAll: sleep gate
+//	follow raids                   live      Pool.SettingsChangedAll: each watch
+//	                                         subscribes to or drops its raids
+//	priority mode, scan pace       rescan    Pool.RescanAll: a drop watch stays
+//	                                         unless preempt switches; a Force
+//	                                         watch ends only for a watchable drop
+//	global games list              rebuild   after a 10 s settle (roster)
+//	force watch list               live      Pool.ForceListChanged (roster)
 func (s *server) accountChanged(id string) {
 	if s.d.AccountChanged != nil {
 		s.d.AccountChanged(id)
+	}
+}
+
+// accountSettingsChanged applies a saved live account setting (skip sleep,
+// points mode) to the running runner.
+func (s *server) accountSettingsChanged(id string) {
+	if s.d.AccountSettingsChanged != nil {
+		s.d.AccountSettingsChanged(id)
 	}
 }
 

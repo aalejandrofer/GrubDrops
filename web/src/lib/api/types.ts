@@ -6,11 +6,13 @@ export interface Session {
 	authed: boolean;
 	setup_needed: boolean;
 	oidc: { enabled: boolean; name: string };
+	/** False only while SSO is configured and password sign-in is turned off. */
+	password_login: boolean;
 	csrf_token: string;
 	version: string;
 }
 
-export type OverviewState = 'no_accounts' | 'no_games' | 'mining' | 'nothing_live' | 'idle';
+export type OverviewState = 'no_accounts' | 'no_games' | 'mining' | 'sleep_window' | 'nothing_live' | 'idle';
 
 export interface Problem {
 	kind: 'needs_login';
@@ -26,6 +28,8 @@ export interface Overview {
 		accounts_paused: number;
 		last_scan_at: string | null;
 		next_scan_at: string | null;
+		/** Earliest wake in state sleep_window, else null. Older fixtures leave it out. */
+		sleep_until?: string | null;
 	};
 	problems: Problem[];
 	kpis: {
@@ -56,11 +60,24 @@ export interface ForceChannelPut {
 	accounts: string[];
 }
 
-/** Home tile: live channels, watched first, at most two. watchers holds account names. */
+/**
+ * Read state of summed channel points on the Home tile. failed: the newest read
+ * failed for every balance read; pending: none read yet; none: no balance applies.
+ */
+export type PointsRead = 'ok' | 'pending' | 'failed' | 'none';
+
+/**
+ * Home tile: live channels, watched first, at most two. watchers holds account names.
+ * balance sums the cached points on that channel; points sums every channel.
+ */
 export type OverviewForceWatch = {
-	live: { platform: Platform; channel: string; watchers: string[] }[];
+	live: { platform: Platform; channel: string; watchers: string[]; balance: number | null; read: PointsRead }[];
 	more: number;
 	total: number;
+	points: number | null;
+	points_read: PointsRead;
+	/** Newest successful read, null when no balance is known. */
+	points_at: string | null;
 } | null;
 
 export type RunnerState =
@@ -73,7 +90,10 @@ export type RunnerState =
 	| 'awaiting_connect'
 	| 'needs_login'
 	| 'no_games'
-	| 'force_watching';
+	| 'force_watching'
+	| 'sleep_window'
+	/** Points only with no Force watch channel: nothing to watch. */
+	| 'no_channels';
 
 export interface Target {
 	game: string;
@@ -111,9 +131,12 @@ export interface Runner {
 	up_next: Target[];
 	blocked: Blocked[];
 	order_custom: boolean;
+	/** When the sleep window ends, only in state sleep_window. Older fixtures leave it out. */
+	sleep_until?: string | null;
 }
 
-export type GameState = 'mining' | 'waiting' | 'done' | 'no_campaign';
+/** paused: only paused accounts have drops of the game left; nothing mines it until one resumes. */
+export type GameState = 'mining' | 'waiting' | 'paused' | 'done' | 'no_campaign';
 
 export interface Campaign {
 	id: string;
@@ -132,6 +155,13 @@ export interface NeedsLink {
 	url: string;
 }
 
+/** A paused account with a drop of the game left to mine. */
+export interface PausedHolder {
+	account_id: string;
+	account_name: string;
+	platform: Platform;
+}
+
 export interface Game {
 	id: string;
 	name: string;
@@ -143,6 +173,8 @@ export interface Game {
 	state: GameState;
 	campaigns: Campaign[];
 	needs_link: NeedsLink[];
+	/** Paused accounts with a drop of the game left, in account order. */
+	paused_holders: PausedHolder[];
 }
 
 /** POST /api/accounts/{id}/recheck-links result. */
@@ -289,8 +321,72 @@ export interface Account {
 	own_games: boolean;
 	/** Games on the own list, 0 while own_games is off. */
 	own_game_count: number;
+	/** true: keeps mining through the sleep window. */
+	skip_sleep: boolean;
+	/** off: no Force watch, no points. drops_points: Force watch when no drop is live, bonus claimed while watching. points_only: no drops, Force watch channels only. */
+	points_mode: PointsMode;
 	auth: AccountAuth | null;
 }
+
+/** How an account treats channel points. */
+export type PointsMode = 'off' | 'drops_points' | 'points_only';
+
+/** ok: last read worked. pending: not read yet. error: last read failed, balance is the last good one. unavailable: no channel points there (Kick, or a Twitch channel without them). off: not read while the account is paused or its points mode is off, balance is the last one read. */
+export type PointsStatus = 'ok' | 'pending' | 'error' | 'unavailable' | 'off';
+
+/** One account's cached balance on one channel. */
+export interface PointsBalance {
+	account_id: string;
+	status: PointsStatus;
+	balance: number | null;
+	fetched_at: string | null;
+	checked_at: string | null;
+	/** The balance is older than two refresh intervals. */
+	stale: boolean;
+}
+
+/** A Force watch channel with a balance for each assigned account. live null = not checked yet. */
+export interface PointsChannel {
+	platform: Platform;
+	channel: string;
+	live: boolean | null;
+	balances: PointsBalance[];
+}
+
+export interface PointsAccount {
+	id: string;
+	name: string;
+	platform: Platform;
+	enabled: boolean;
+	points_mode: PointsMode;
+	/** false on platforms without balances: Kick. */
+	balances_available: boolean;
+	/** Sum of the account's known balances on its channels; null = none known. */
+	total: number | null;
+}
+
+/** GET /api/points: Force watch channels in rank order with cached balances. */
+export interface PointsResp {
+	refresh_every_sec: number;
+	accounts: PointsAccount[];
+	channels: PointsChannel[];
+}
+
+/** One Twitch reward code still to redeem. Times are RFC 3339 UTC. */
+export interface RewardCode {
+	id: number;
+	account_id: string;
+	account_name: string;
+	name: string;
+	game: string;
+	code: string;
+	redeem_url: string;
+	expires_at: string | null;
+	received_at: string | null;
+	first_seen: string | null;
+}
+
+export type RewardCodeState = 'redeemed' | 'dismissed';
 
 /** One game in an account's own list. A game without an id is added by name. */
 export interface AccountGame {
@@ -315,7 +411,7 @@ export interface Settings {
 	discord: { configured: boolean; webhook_hint: string };
 	/** token_hint is empty when the token comes from the env default. */
 	telegram: { configured: boolean; token_hint: string; chat_id: string };
-	notify: { claim: boolean; auth: boolean; errors: boolean; daily_summary: boolean; progress: boolean; canary: boolean };
+	notify: { claim: boolean; auth: boolean; errors: boolean; daily_summary: boolean; progress: boolean; canary: boolean; reward_codes: boolean };
 	update_auto: boolean;
 	/** ordered mines games in list order; ending_soonest mines the campaign that ends first. */
 	priority_mode: 'ordered' | 'ending_soonest';
@@ -323,13 +419,43 @@ export interface Settings {
 	scan_interval_min: number;
 	/** Leave a drop when a higher-ranked campaign goes live. */
 	preempt: boolean;
+	/** Twitch: join a raid from the watched channel. Off by default. */
+	follow_raids: boolean;
+	/** Experimental: TV-login Twitch accounts also mine the Android catalog. Off by default. */
+	exp_share_catalog: boolean;
+	/** Read-only: an enabled Android-login Twitch account exists, the source exp_share_catalog needs. */
+	share_catalog_available: boolean;
 	/** url hides the password as ***. Applies after a restart. */
 	proxy: { enabled: boolean; url: string };
 	/** Applies after a restart. */
 	kick_watch_mode: 'auto' | 'browser' | 'ws';
 	notify_avatar_url: string;
+	/** Numeric user IDs pinged on error notifications; empty means no mention. */
+	discord_mention_id: string;
+	telegram_mention_id: string;
 	/** interval_sec 0 means off; the interval applies after a restart. */
 	canary: { twitch_channel: string; kick_channel: string; interval_sec: number };
+	/** Daily pause, HH:MM in the display zone; end at or before start crosses midnight. */
+	sleep: SleepWindow;
+	/** SSO comes from the env and is read-only here. */
+	sso: SettingsSSO;
+	/** Takes effect only while sso.enabled. */
+	password_login_disabled: boolean;
+}
+
+/** Non-secret summary of the env OIDC config: host and allowlist counts only. */
+export interface SettingsSSO {
+	enabled: boolean;
+	name: string;
+	issuer_host: string;
+	allowed_emails: number;
+	allowed_groups: number;
+}
+
+export interface SleepWindow {
+	enabled: boolean;
+	start: string;
+	end: string;
 }
 
 export interface SettingsPatch {
@@ -342,12 +468,19 @@ export interface SettingsPatch {
 	priority_mode?: Settings['priority_mode'];
 	scan_interval_min?: number;
 	preempt?: boolean;
+	follow_raids?: boolean;
+	exp_share_catalog?: boolean;
 	proxy_enabled?: boolean;
 	/** The GET hint means unchanged. */
 	proxy_url?: string;
 	kick_watch_mode?: Settings['kick_watch_mode'];
 	notify_avatar_url?: string;
+	discord_mention_id?: string;
+	telegram_mention_id?: string;
 	canary?: Settings['canary'];
+	sleep?: Partial<SleepWindow>;
+	/** The server refuses true while SSO is off. */
+	password_login_disabled?: boolean;
 	discord_webhook?: string;
 	telegram_bot_token?: string;
 	telegram_chat_id?: string;
@@ -413,4 +546,6 @@ export interface ApiErrorBody {
 	error: string;
 	message?: string;
 	priority?: number;
+	/** 429: seconds until the call is allowed again. */
+	retry_after_sec?: number;
 }

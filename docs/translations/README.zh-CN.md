@@ -98,7 +98,7 @@ docker compose up -d
 
 ### 单点登录（OIDC）
 
-设置前四个变量后即启用 SSO。密码登录仍然可用。
+设置前四个变量后即启用 SSO。除非你将其关闭（见[仅限 SSO](#仅限-sso)），密码登录仍然可用。
 
 | 变量 | 必需 | 用途 |
 |-----|----------|---------|
@@ -112,6 +112,32 @@ docker compose up -d
 
 > [!WARNING]
 > 未设置允许列表时，身份提供方认证的任何人都会成为管理员。
+
+#### 仅限 SSO
+
+配置 SSO 后，管理员密码仍可登录。要让 SSO 成为唯一的登录方式，请在“设置 → 身份验证”中关闭**密码登录**。该开关仅在配置了 SSO 时显示。“设置 → 身份验证 → 设置”会引导你完成配置。只要 SSO 未配置（包括启动时无法连接身份提供方），密码登录会自动恢复。
+
+如果已配置 SSO 但无法通过它登录，可在 Docker 主机上重新开启密码登录，以下两种方式任选其一。
+
+删除 `miner.db` 中该设置的行（键 `settings:password_login_disabled`）：
+
+```bash
+docker compose stop miner
+sudo sqlite3 data/miner.db "DELETE FROM kv WHERE key = 'settings:password_login_disabled';"
+docker compose start miner
+```
+
+或者以 `GRUB_AUTH_BYPASS_LOCAL=1` 启动 miner，并在主机上调用设置 API。请直接访问发布的端口，不要经过反向代理：带有 `X-Forwarded-For` 的请求不会放行。API 需要 CSRF cookie 和对应的 `X-CSRF-Token` 请求头：
+
+```bash
+TOKEN=$(curl -s -c grub.cookies http://localhost:8080/api/session \
+  | sed -n 's/.*"csrf_token":"\([^"]*\)".*/\1/p')
+curl -s -b grub.cookies -X PUT http://localhost:8080/api/settings \
+  -H "X-CSRF-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"password_login_disabled":false}'
+```
+
+完成后请移除 `GRUB_AUTH_BYPASS_LOCAL`。
 
 ## 工作原理
 

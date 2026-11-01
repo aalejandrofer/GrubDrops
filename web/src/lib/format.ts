@@ -13,6 +13,9 @@ export function relTime(iso: string | null, now: number): string {
 	return t('time.d_ago', { n: Math.floor(s / 86400) });
 }
 
+/** Milliseconds from now to the next whole minute, so a ticking clock turns over on time. */
+export const msToNextMinute = (now: number): number => 60_000 - (now % 60_000);
+
 export function formatInt(n: number): string {
 	return new Intl.NumberFormat(i18n.lang).format(n);
 }

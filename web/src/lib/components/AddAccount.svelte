@@ -35,7 +35,7 @@
 
 <div class="tiles" role="radiogroup" aria-label={t('welcome.platform')}>
 	{#each ['twitch', 'kick'] as const as p (p)}
-		<button type="button" class="tile" class:on={kind === p} role="radio" aria-checked={kind === p} onclick={() => pick(p)}>
+		<button type="button" class="ptile" class:on={kind === p} role="radio" aria-checked={kind === p} onclick={() => pick(p)}>
 			<PlatformMark platform={p} /><b>{t(p === 'twitch' ? 'accounts.twitch' : 'accounts.kick')}</b>
 			<span>{t(p === 'twitch' ? 'welcome.twitch_hint' : 'welcome.kick_hint')}</span>
 		</button>
@@ -68,7 +68,7 @@
 		grid-template-columns: 1fr 1fr;
 		gap: 10px;
 	}
-	.tile {
+	.ptile {
 		display: grid;
 		grid-template-columns: auto 1fr;
 		align-items: center;
@@ -82,18 +82,18 @@
 		padding: 12px 14px;
 		cursor: pointer;
 	}
-	.tile b {
+	.ptile b {
 		font-weight: 500;
 	}
-	.tile span {
+	.ptile span {
 		grid-column: 2;
 		font-size: 12px;
 		color: var(--t3);
 	}
-	.tile:hover:not(.on) {
+	.ptile:hover:not(.on) {
 		border-color: var(--t3);
 	}
-	.tile.on {
+	.ptile.on {
 		border-color: var(--accent);
 		background: var(--accent-soft);
 	}
@@ -124,7 +124,7 @@
 		font-weight: 500;
 		box-shadow: inset 0 -2px 0 var(--accent);
 	}
-	.tile:focus-visible,
+	.ptile:focus-visible,
 	.tabs2 button:focus-visible {
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;

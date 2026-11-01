@@ -15,11 +15,9 @@
 		queues,
 		readGameOrder,
 		settleGameOrder,
-		withoutDrop,
 		writeGameOrder,
 		type GameOrder
 	} from '$lib/upnext';
-	import ArmButton from './ArmButton.svelte';
 	import BoxArt from './BoxArt.svelte';
 	import type { CampaignTarget } from './CampaignDrawer.svelte';
 	import PlatformMark from './PlatformMark.svelte';
@@ -28,10 +26,7 @@
 	let { onopen }: { onopen: (t: CampaignTarget) => void } = $props();
 
 	const live = getLive();
-	// Games whose rows are open; not persisted.
-	let open = $state<Record<string, boolean>>({});
 	let failed = $state(false);
-	let markFailed = $state(false);
 	let drag = $state<{ from: number; to: number } | null>(null);
 	// The dropped game order, kept for this tab so rows stay where they were dropped.
 	let order = $state<GameOrder | null>(readGameOrder());
@@ -90,20 +85,7 @@
 		}
 	}
 
-	/** Marks a queued drop collected by hand. The row leaves at once; the
-	 * runner reloads and its event brings the new queue. */
-	async function collect(accountId: string, benefitId: string): Promise<void> {
-		markFailed = false;
-		try {
-			await api.markCollected(accountId, benefitId);
-		} catch {
-			markFailed = true;
-			return;
-		}
-		live.runners = withoutDrop(live.runners, accountId, benefitId);
-	}
-
-	// Only the row header drags, so text in an open row stays selectable.
+	// Only the row header drags, so campaign names stay clickable.
 	const dragOpts = {
 		items: (list: HTMLElement) => Array.from(list.querySelectorAll<HTMLElement>(':scope > li > .head')),
 		onStart: (from: number) => (drag = { from, to: from }),
@@ -128,8 +110,7 @@
 	</div>
 	<ol class="rows" use:reorder={dragOpts}>
 		{#each shown as g, i (g.game)}
-			{@const on = open[g.game] === true}
-			<li class:on class:dragging={drag?.to === i}>
+			<li class:dragging={drag?.to === i}>
 				<div class="head">
 					<span class="grip" title={t('upnext.drag')} role="presentation">
 						<svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"
@@ -140,7 +121,7 @@
 							/><circle cx="4" cy="9" r="1" /><circle cx="8" cy="9" r="1" /></svg
 						>
 					</span>
-					<button type="button" class="row" aria-expanded={on} onclick={() => (open[g.game] = !on)}>
+					<div class="row">
 						<span class="qn">{i + 1}</span>
 						<span class="art"><BoxArt src={art.get(g.game) ?? null} name={g.game} size="sm" /></span>
 						<span class="what">
@@ -151,62 +132,34 @@
 							</span>
 						</span>
 						<span class="left"><b>{etaShort(g.minutesLeft)}</b><small>{t('inventory.upnext_to_watch')}</small></span>
-						<svg class="chev" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
-							><path d="m4.5 3 3 3-3 3" /></svg
-						>
-					</button>
-				</div>
-				{#if on}
-					<div class="inline">
-						{#each g.campaigns as c (`${c.platform}:${c.id}`)}
-							<div class="camp">
-								<div class="ch">
-									<PlatformMark platform={c.platform} size="sm" />
-									{#if c.id}
-										<button
-											type="button"
-											class="cn clink"
-											aria-haspopup="dialog"
-											title={t('campaign.open')}
-											onclick={() => onopen({ platform: c.platform, id: c.id, highlight: c.drops[0].target.benefit_id })}
-											>{c.name}</button
-										>
-									{:else}
-										<span class="cn">{c.name}</span>
-									{/if}
-									<span class="ce">{campaignLine({ id: c.id, platform: c.platform, name: c.name, drops: c.drops.length, ends_at: c.endsAt }, prefs.zone)}</span>
-								</div>
-								<ol>
-									{#each c.drops as d (`${d.accountId}:${d.target.benefit_id}`)}
-										{@const req = d.target.required_minutes}
-										{@const pct = req > 0 ? Math.min(100, Math.round((d.target.minutes / req) * 100)) : 0}
-										<li>
-											<span class="dn">{d.target.benefit_name}</span>
-											<span class="da pf-name {d.platform}">{d.accountName}</span>
-											<span class="dm">
-												<span class="bar"><i style="width:{pct}%"></i></span>
-												{d.target.minutes > 0
-													? t('inventory.min_of', { m: d.target.minutes, req })
-													: t('upnext.meta', { min: req })}
-											</span>
-											<ArmButton
-												kind="collect"
-												drop={d.target.benefit_name}
-												account={d.accountName}
-												onconfirm={() => collect(d.accountId, d.target.benefit_id)}
-											/>
-										</li>
-									{/each}
-								</ol>
-							</div>
-						{/each}
 					</div>
-				{/if}
+				</div>
+				<div class="inline">
+					{#each g.campaigns as c (`${c.platform}:${c.id}`)}
+						<div class="camp">
+							<div class="ch">
+								<PlatformMark platform={c.platform} size="sm" />
+								{#if c.id}
+									<button
+										type="button"
+										class="cn clink"
+										aria-haspopup="dialog"
+										title={t('campaign.open')}
+										onclick={() => onopen({ platform: c.platform, id: c.id, highlight: c.drops[0].target.benefit_id })}
+										>{c.name}</button
+									>
+								{:else}
+									<span class="cn">{c.name}</span>
+								{/if}
+								<span class="ce">{campaignLine({ id: c.id, platform: c.platform, name: c.name, drops: c.drops.length, ends_at: c.endsAt }, prefs.zone)}</span>
+							</div>
+						</div>
+					{/each}
+				</div>
 			</li>
 		{/each}
 	</ol>
 	{#if failed}<p class="err" role="alert">{t('upnext.save_failed')}</p>{/if}
-	{#if markFailed}<p class="err" role="alert">{t('mark.collect_failed')}</p>{/if}
 	<div class="panel-f">
 		<span>{perm[0]}<a href="/games" class="link">{t('nav.games')}</a>{perm[1] ?? ''}</span>
 		{#if custom}<button class="reset" type="button" onclick={reset}>{t('upnext.reset')}</button>{/if}
@@ -266,14 +219,9 @@
 	.rows > li {
 		border-top: 1px solid var(--border-soft);
 	}
-	.rows > li.on {
-		background: var(--surface-2);
-	}
 	.rows > li.dragging {
 		background: var(--surface-2);
-		box-shadow:
-			inset 2px 0 0 var(--accent),
-			0 6px 18px rgb(0 0 0 / 0.35);
+		box-shadow: 0 6px 18px rgb(0 0 0 / 0.35);
 		position: relative;
 		z-index: 1;
 	}
@@ -282,13 +230,6 @@
 		grid-template-columns: 14px minmax(0, 1fr);
 		align-items: center;
 		padding-left: 8px;
-	}
-	.head:hover {
-		background: var(--surface-2);
-	}
-	/* The header's hover fill would hide the dragged row's accent edge. */
-	.dragging .head {
-		background: none;
 	}
 	.grip {
 		color: var(--t3);
@@ -304,21 +245,11 @@
 	}
 	.row {
 		display: grid;
-		grid-template-columns: 18px 36px minmax(0, 1fr) auto 14px;
+		grid-template-columns: 18px 36px minmax(0, 1fr) auto;
 		align-items: center;
 		gap: 12px;
 		width: 100%;
 		padding: 10px 14px 10px 6px;
-		font: inherit;
-		color: inherit;
-		text-align: left;
-		background: none;
-		border: 0;
-		cursor: pointer;
-	}
-	.row:focus-visible {
-		outline: 2px solid var(--accent);
-		outline-offset: -2px;
 	}
 	.qn {
 		font: 12px var(--mono);
@@ -366,20 +297,11 @@
 		font-size: 11px;
 		color: var(--t3);
 	}
-	.chev {
-		width: 12px;
-		height: 12px;
-		color: var(--t3);
-		transition: transform 0.15s;
-	}
-	.on .chev {
-		transform: rotate(90deg);
-	}
 	.inline {
 		padding: 2px 14px 12px 80px;
 	}
 	.camp + .camp {
-		margin-top: 12px;
+		margin-top: 6px;
 	}
 	.ch {
 		display: flex;
@@ -416,50 +338,6 @@
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
 		border-radius: 3px;
-	}
-	.camp ol {
-		list-style: none;
-		margin: 6px 0 0;
-		padding: 0;
-	}
-	.camp li {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto 128px 22px;
-		align-items: center;
-		gap: 10px;
-		padding: 6px 0;
-		font-size: 12.5px;
-		border-top: 1px solid var(--border-soft);
-	}
-	.dn {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.da {
-		font-size: 12px;
-	}
-	.dm {
-		display: grid;
-		grid-template-columns: 36px 1fr;
-		align-items: center;
-		gap: 8px;
-		text-align: right;
-		color: var(--t2);
-		font: 500 11.5px/1 var(--mono);
-		white-space: nowrap;
-	}
-	.bar {
-		width: 36px;
-		height: 4px;
-		border-radius: 2px;
-		background: var(--surface-3);
-		overflow: hidden;
-	}
-	.bar i {
-		display: block;
-		height: 100%;
-		background: var(--accent);
 	}
 	.err {
 		margin: 0;
@@ -506,27 +384,11 @@
 			padding-left: 6px;
 		}
 		.row {
-			grid-template-columns: 36px minmax(0, 1fr) auto 12px;
+			grid-template-columns: 36px minmax(0, 1fr) auto;
 			padding: 10px 12px 10px 6px;
 		}
 		.inline {
 			padding: 2px 12px 12px;
-		}
-		.camp li {
-			grid-template-columns: minmax(0, 1fr) auto;
-			row-gap: 4px;
-		}
-		.camp li > :global(.arm) {
-			justify-self: end;
-		}
-		.dm {
-			grid-column: 1;
-			grid-template-columns: 64px auto;
-			justify-content: start;
-			text-align: left;
-		}
-		.bar {
-			width: 64px;
 		}
 	}
 </style>

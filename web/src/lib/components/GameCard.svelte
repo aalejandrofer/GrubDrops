@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { etaShort, formatInt } from '$lib/format';
-	import { cardCampaign, foldRows, type AccountRow, type GameCard } from '$lib/home';
+	import { cardCampaign, foldRows, waitBadge, waitLine, type AccountRow, type GameCard } from '$lib/home';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { foldQueue } from '$lib/upnext';
 	import { scanStamp } from '$lib/scan';
@@ -38,36 +38,22 @@
 	const game = $derived(card.game);
 	const unlinked = $derived(linkNames(game));
 	const camp = $derived(cardCampaign(card));
-	const wait = $derived(card.waitFor);
+	// The server's state wins: a game it calls waiting never shows paused holders.
+	const wait = $derived(game.state === 'waiting' && card.waitFor?.kind === 'paused' ? null : card.waitFor);
 	const stateText = $derived(
 		game.state === 'mining'
 			? t('home.state_mining')
 			: game.state === 'waiting'
-				? waitBadge()
-				: game.state === 'done'
-					? t('home.state_done')
-					: t('home.state_none')
+				? waitBadge(wait)
+				: game.state === 'paused'
+					? wait?.kind === 'paused'
+						? waitBadge(wait)
+						: t('home.state_paused')
+					: game.state === 'done'
+						? t('home.state_done')
+						: t('home.state_none')
 	);
-	const waitLine = $derived(lineFor());
-
-	function waitBadge(): string {
-		if (wait?.kind === 'account') return t('home.wait_account', { account: wait.account });
-		if (wait?.kind !== 'live') return t('home.state_waiting');
-		if (wait.channels.length === 0) return t('home.wait_live_any');
-		const n = wait.channels.length - 1 + wait.more;
-		return n > 0
-			? t('home.wait_live_more', { channel: wait.channels[0], n })
-			: t('home.wait_live', { channel: wait.channels[0] });
-	}
-
-	function lineFor(): string {
-		if (wait?.kind === 'account') return t('home.waiting_line', { account: wait.account });
-		if (wait?.kind !== 'live') return t('home.waiting_line_any');
-		if (wait.channels.length === 0) return t('home.live_line_any');
-		if (wait.channels.length === 1 && wait.more === 0) return t('home.live_line', { channel: wait.channels[0] });
-		const names = wait.channels.join(', ') + (wait.more > 0 ? ` +${wait.more}` : '');
-		return t('home.live_line_some', { channels: names });
-	}
+	const line = $derived(waitLine(wait));
 	const foot = $derived(
 		[
 			folded ? t('home.most_advanced') : '',
@@ -156,7 +142,7 @@
 			{/if}
 		{:else if game.state === 'waiting' && card.queued.length > 0}
 			<ul class="queued">
-				<li class="q-h">{t('home.queued_head', { line: waitLine })}</li>
+				<li class="q-h">{t('home.queued_head', { line })}</li>
 				{#each queuedFold.rows as q (q.benefit_id)}
 					<li><span>{q.benefit_name}</span><span>{t('home.queued_min', { n: formatInt(q.required_minutes) })}</span></li>
 				{/each}
@@ -164,8 +150,8 @@
 					<li class="q-more">{tn('home.more_in_upnext', queuedFold.more, { game: game.name })}</li>
 				{/if}
 			</ul>
-		{:else if game.state === 'waiting'}
-			<p class="idle-l">{waitLine}</p>
+		{:else if game.state === 'waiting' || (game.state === 'paused' && wait?.kind === 'paused')}
+			<p class="idle-l">{line}</p>
 		{:else if game.state === 'done'}
 			<p class="idle-l">{t('home.done_line')}</p>
 		{/if}
@@ -254,8 +240,12 @@
 		background: var(--green-soft);
 	}
 	.state.waiting {
-		color: #b48cf8;
+		color: var(--chip-wait);
 		background: var(--accent-soft);
+	}
+	.state.paused {
+		color: var(--amber);
+		background: var(--amber-soft);
 	}
 	.state.no_campaign {
 		color: var(--t2);

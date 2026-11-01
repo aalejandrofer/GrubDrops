@@ -21,6 +21,9 @@ const (
 	EventLog      = "log"
 
 	EventForceWatch = "force_watch"
+	// EventPoints: a cached channel-points balance changed; refetch
+	// GET /api/points.
+	EventPoints = "points"
 )
 
 const subBuffer = 64

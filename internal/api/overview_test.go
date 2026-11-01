@@ -75,15 +75,23 @@ func (f *fakePool) ResetOrder(id string) {
 	f.resets = append(f.resets, id)
 }
 
-func (*fakePool) RescanAll() {}
+func (*fakePool) RescanAll()                     {}
+func (*fakePool) RescanPlatform(string, string)  {}
+func (*fakePool) SettingsChangedAll()            {}
+func (*fakePool) MarkCollected(string, string)   {}
+func (*fakePool) MarkUncollected(string, string) {}
 
-// MineNow mirrors the real pool's checks: Up next must hold a target.
+// MineNow mirrors the real pool's checks: not in the sleep window, and Up
+// next must hold a target.
 func (f *fakePool) MineNow(id string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, s := range f.snaps {
 		if s.AccountID != id {
 			continue
+		}
+		if s.State == runner.StateSleepWindow {
+			return "", runner.ErrSleepWindow
 		}
 		if len(s.UpNext) == 0 {
 			return "", runner.ErrNotQueued
@@ -324,4 +332,62 @@ func TestOverview_NextScanAt(t *testing.T) {
 	assert.Equal(t, "2026-10-25T10:05:00Z", e.overview()["status"].(map[string]any)["next_scan_at"])
 	e.pool.snaps = nil
 	assert.Nil(t, e.overview()["status"].(map[string]any)["next_scan_at"])
+}
+
+// The Home Points watch tile carries the cached Twitch points: a sum per
+// live row and a total over every channel, each with a read state.
+func TestOverview_ForceWatchPoints(t *testing.T) {
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	e, pb := newPointsEnv(t, now, func(d *Deps) {
+		d.ForceLive = stubLive(map[string]*bool{"twitch/one": boolPtr(true), "kick/kchan": boolPtr(true)})
+	})
+	ctx := context.Background()
+	e.setForce([]store.ForceChannel{
+		{Platform: "twitch", Channel: "one", Accounts: []string{"a1", "c3"}},
+		{Platform: "kick", Channel: "kchan", Accounts: []string{"b2"}},
+		{Platform: "twitch", Channel: "two", Accounts: []string{"c3"}},
+	})
+	force := func() string {
+		b, err := json.Marshal(e.overview()["force_watch"])
+		require.NoError(t, err)
+		return string(b)
+	}
+
+	// Nothing read yet: c3 waits for its first read, a1 (points off) has
+	// nothing cached and does not count. The Kick row has no balance.
+	assert.JSONEq(t, `{"live":[
+		{"platform":"twitch","channel":"one","watchers":[],"balance":null,"read":"pending"},
+		{"platform":"kick","channel":"kchan","watchers":[],"balance":null,"read":"none"}
+	],"more":0,"total":3,"points":null,"points_read":"pending","points_at":null}`, force())
+
+	// Read: a row sums its accounts, a1's last balance included; the total
+	// sums every channel, live or not.
+	require.NoError(t, pb.RecordOK(ctx, "a1", "one", 300, now.Add(-3*time.Hour)))
+	require.NoError(t, pb.RecordOK(ctx, "c3", "one", 1200, now.Add(-20*time.Minute)))
+	require.NoError(t, pb.RecordOK(ctx, "c3", "two", 40, now.Add(-10*time.Minute)))
+	assert.JSONEq(t, `{"live":[
+		{"platform":"twitch","channel":"one","watchers":[],"balance":1500,"read":"ok"},
+		{"platform":"kick","channel":"kchan","watchers":[],"balance":null,"read":"none"}
+	],"more":0,"total":3,"points":1540,"points_read":"ok","points_at":"2026-11-01T11:50:00Z"}`, force())
+
+	// The newest read failed on every channel: failed, last good values stay.
+	require.NoError(t, pb.RecordErr(ctx, "c3", "one", store.PointsErrFailed, 1, now.Add(-time.Minute)))
+	require.NoError(t, pb.RecordErr(ctx, "c3", "two", store.PointsErrFailed, 1, now.Add(-time.Minute)))
+	assert.JSONEq(t, `{"live":[
+		{"platform":"twitch","channel":"one","watchers":[],"balance":1500,"read":"failed"},
+		{"platform":"kick","channel":"kchan","watchers":[],"balance":null,"read":"none"}
+	],"more":0,"total":3,"points":1540,"points_read":"failed","points_at":"2026-11-01T11:50:00Z"}`, force())
+
+	// One channel reads again: the total is ok, row one still failed.
+	require.NoError(t, pb.RecordOK(ctx, "c3", "two", 55, now))
+	assert.JSONEq(t, `{"live":[
+		{"platform":"twitch","channel":"one","watchers":[],"balance":1500,"read":"failed"},
+		{"platform":"kick","channel":"kchan","watchers":[],"balance":null,"read":"none"}
+	],"more":0,"total":3,"points":1555,"points_read":"ok","points_at":"2026-11-01T12:00:00Z"}`, force())
+
+	// Kick channels only: no points at all.
+	e.setForce([]store.ForceChannel{{Platform: "kick", Channel: "kchan", Accounts: []string{"b2"}}})
+	assert.JSONEq(t, `{"live":[
+		{"platform":"kick","channel":"kchan","watchers":[],"balance":null,"read":"none"}
+	],"more":0,"total":1,"points":null,"points_read":"none","points_at":null}`, force())
 }

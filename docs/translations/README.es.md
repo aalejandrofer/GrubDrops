@@ -102,7 +102,7 @@ Ninguna variable es obligatoria. Todas las variables están en
 ### Inicio de sesión único (OIDC)
 
 SSO se activa cuando defines las cuatro primeras variables. El inicio de sesión
-con contraseña sigue funcionando.
+con contraseña sigue funcionando salvo que lo desactives (ver [Solo SSO](#solo-sso)).
 
 | Variable | Obligatoria | Uso |
 |-----|----------|---------|
@@ -116,6 +116,41 @@ con contraseña sigue funcionando.
 
 > [!WARNING]
 > Sin lista de permitidos, cualquiera que tu proveedor de identidad autentique se convierte en administrador.
+
+#### Solo SSO
+
+La contraseña de administrador sigue funcionando junto a SSO. Para que SSO sea
+la única forma de entrar, desactiva **Inicio de sesión con contraseña** en
+Ajustes, Autenticación. El interruptor solo aparece con SSO configurado.
+Ajustes, Autenticación, Configurar te guía en la configuración. El inicio de sesión con contraseña vuelve solo siempre que SSO no
+esté configurado, también cuando el proveedor de identidad no responde al
+arrancar.
+
+Si SSO está configurado pero no puedes entrar con él, vuelve a activar la
+contraseña desde el host de Docker. Sirve cualquiera de estas dos formas.
+
+Borra la fila del ajuste en `miner.db` (clave `settings:password_login_disabled`):
+
+```bash
+docker compose stop miner
+sudo sqlite3 data/miner.db "DELETE FROM kv WHERE key = 'settings:password_login_disabled';"
+docker compose start miner
+```
+
+O arranca el miner con `GRUB_AUTH_BYPASS_LOCAL=1` y llama a la API de ajustes
+desde el host. Usa el puerto publicado, no un proxy inverso: las peticiones con
+`X-Forwarded-For` no pasan. La API pide la cookie CSRF y la cabecera
+`X-CSRF-Token` correspondiente:
+
+```bash
+TOKEN=$(curl -s -c grub.cookies http://localhost:8080/api/session \
+  | sed -n 's/.*"csrf_token":"\([^"]*\)".*/\1/p')
+curl -s -b grub.cookies -X PUT http://localhost:8080/api/settings \
+  -H "X-CSRF-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"password_login_disabled":false}'
+```
+
+Después quita `GRUB_AUTH_BYPASS_LOCAL`.
 
 ## Cómo funciona
 

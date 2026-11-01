@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -312,6 +313,22 @@ func (c *client) gqlQuery(ctx context.Context, token, operationName, query strin
 // the account into needs_auth (C1).
 var ErrIntegrityBlocked = fmt.Errorf("twitch %w", platform.ErrIntegrityBlocked)
 
+// ErrPersistedQueryNotFound means Twitch no longer knows an op's persisted
+// query hash: Twitch rotated it and the constant in ops.go needs refreshing.
+// Match it with errors.Is.
+var ErrPersistedQueryNotFound = errors.New("PersistedQueryNotFound")
+
+// persistedQueryNotFound reports whether a gql error list says the op's hash
+// is unknown.
+func persistedQueryNotFound(errs []gqlError) bool {
+	for _, e := range errs {
+		if strings.EqualFold(strings.TrimSpace(e.Message), "PersistedQueryNotFound") {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *client) do(ctx context.Context, token, opName string, body []byte, out any) error {
 	rawBody, status, err := c.transport.gqlPost(ctx, token, opName, body)
 	if err != nil {
@@ -349,6 +366,13 @@ func (c *client) do(ctx context.Context, token, opName string, body []byte, out 
 	if err := json.Unmarshal(rawBody, &envelope); err != nil {
 		slog.Error("twitch gql decode failed", "op", opName, "status", status)
 		return fmt.Errorf("decode gql response: %w", err)
+	}
+	if persistedQueryNotFound(envelope.Errors) {
+		// Logged for every op, distinct from other gql errors, so a rotated
+		// hash is visible in the log feed.
+		slog.Error("twitch gql persisted query not found; the op hash needs refreshing",
+			"kind", "error", "op", opName, "status", status)
+		return fmt.Errorf("twitch gql %s: %w", opName, ErrPersistedQueryNotFound)
 	}
 	if len(envelope.Errors) > 0 {
 		msgs := make([]string, 0, len(envelope.Errors))

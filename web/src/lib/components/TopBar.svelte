@@ -4,13 +4,15 @@
 	import type { UpdateInfo } from '$lib/api/types';
 	import { t } from '$lib/i18n/index.svelte';
 	import VersionPopover from './VersionPopover.svelte';
+	import NewPill from './NewPill.svelte';
 
 	let { version, update }: { version: string; update: UpdateInfo | null } = $props();
 
-	const items = [
+	const items: { href: string; key: string; since?: string }[] = [
 		{ href: '/', key: 'nav.home' },
 		{ href: '/discover', key: 'nav.discover' },
 		{ href: '/games', key: 'nav.games' },
+		{ href: '/points', key: 'nav.points', since: '2.3' },
 		{ href: '/inventory', key: 'nav.inventory' },
 		{ href: '/settings', key: 'nav.settings' }
 	];
@@ -44,7 +46,9 @@
 		<a href="/" class="brand"><img src={logo} alt="" /><span>{t('app.name')}</span></a>
 		<nav class="tabs" bind:this={tabs}>
 			{#each items as it (it.href)}
-				<a href={it.href} class:on={on(it.href)} aria-current={on(it.href) ? 'page' : undefined}>{t(it.key)}</a>
+				<a href={it.href} class:on={on(it.href)} aria-current={on(it.href) ? 'page' : undefined}
+					>{t(it.key)}{#if it.since}<NewPill since={it.since} sup />{/if}</a
+				>
 			{/each}
 		</nav>
 		<VersionPopover current={version} {update} />
@@ -98,11 +102,12 @@
 	}
 	.tabs a:hover {
 		color: var(--text);
-		background: var(--surface);
 	}
+	/* Active link: purple underline under the word only; the inline-block New pill stays clear of it. */
 	.tabs a.on {
 		color: var(--text);
-		background: var(--surface-2);
+		text-decoration: underline 2px var(--accent);
+		text-underline-offset: 7px;
 	}
 	.tabs a:focus-visible,
 	.brand:focus-visible {

@@ -1,18 +1,28 @@
 <script lang="ts">
+	import { tick } from 'svelte';
+	import Hint, { type HintExample } from '$lib/components/Hint.svelte';
+	import NewPill from '$lib/components/NewPill.svelte';
+	import { SECTION_LOOK } from '$lib/settings-look';
 	import { api } from '$lib/app';
 	import { ApiError } from '$lib/api/client';
 	import type { Settings, SettingsPatch } from '$lib/api/types';
+	import { typed, type Autosave } from '$lib/autosave';
+	import { withScheme } from '$lib/hint';
 	import { t } from '$lib/i18n/index.svelte';
-	import { SCAN_INTERVALS, isProxyURL, minutesLabel } from '$lib/settings';
+	import Icon from '$lib/components/Icon.svelte';
+	import { SCAN_INTERVALS, isProxyURL, minutesLabel, sleepProblem } from '$lib/settings';
+	import SectionHead from './SectionHead.svelte';
 
 	let {
 		s,
 		save,
-		errs
+		errs,
+		auto
 	}: {
 		s: Settings;
 		save: (key: string, p: SettingsPatch) => Promise<boolean>;
 		errs: Record<string, boolean>;
+		auto: Autosave;
 	} = $props();
 
 	const scanOptions = $derived(SCAN_INTERVALS.includes(s.scan_interval_min) ? SCAN_INTERVALS : [...SCAN_INTERVALS, s.scan_interval_min]);
@@ -31,21 +41,80 @@
 	let proxyBad = $state(false);
 	let proxyTesting = $state(false);
 	let proxyFeedback = $state<{ ok: boolean; text: string } | null>(null);
+	/** The switch needs a saved proxy URL. */
+	const proxyNoURL = $derived(!s.proxy.enabled && s.proxy.url === '');
 	$effect(() => {
 		if (!proxyDirty) proxyURL = s.proxy.url;
 	});
 
-	async function saveProxy(): Promise<void> {
+	async function saveProxy(): Promise<boolean> {
 		const v = proxyURL.trim();
 		if (!isProxyURL(v)) {
 			proxyBad = true;
-			return;
+			return false;
 		}
 		proxyFeedback = null;
 		const patch: SettingsPatch = { proxy_url: v };
 		if (v === '') patch.proxy_enabled = false;
-		if (await save('proxy_url', patch)) proxyDirty = false;
+		const ok = await save('proxy_url', patch);
+		if (ok) proxyDirty = false;
+		return ok;
 	}
+	const proxyValid = (): boolean => isProxyURL(proxyURL.trim());
+
+	let proxyInput = $state<HTMLInputElement>();
+	const proxyExamples: HintExample[] = [{ label: 'http://' }, { label: 'https://' }, { label: 'socks5://' }];
+	/** Puts the picked scheme on the URL. Not typing, so it waits for Save like autofill. */
+	async function pickScheme(scheme: string): Promise<void> {
+		proxyURL = withScheme(proxyURL, scheme);
+		proxyDirty = true;
+		proxyBad = false;
+		proxyFeedback = null;
+		await tick();
+		proxyInput?.focus();
+		proxyInput?.setSelectionRange(proxyURL.length, proxyURL.length);
+	}
+
+	// The URL can hold a password, so only typing starts a save, never autofill.
+	function editProxy(e: Event): void {
+		proxyDirty = true;
+		proxyBad = false;
+		proxyFeedback = null;
+		if (typed(e as InputEvent)) auto.edit('proxy_url', saveProxy, proxyValid);
+	}
+
+	// Times save 10s after the last edit, or on Save; the switch saves at once.
+	let sleepStart = $state('');
+	let sleepEnd = $state('');
+	let sleepDirty = $state(false);
+	let sleepBad = $state<string | null>(null);
+	$effect(() => {
+		if (!sleepDirty) {
+			sleepStart = s.sleep.start;
+			sleepEnd = s.sleep.end;
+		}
+	});
+
+	async function saveSleep(): Promise<boolean> {
+		const problem = sleepProblem(sleepStart, sleepEnd);
+		if (problem) {
+			sleepBad = problem;
+			return false;
+		}
+		const ok = await save('sleep_times', { sleep: { start: sleepStart, end: sleepEnd } });
+		if (ok) sleepDirty = false;
+		return ok;
+	}
+	const sleepValid = (): boolean => sleepProblem(sleepStart, sleepEnd) === null;
+
+	function editSleep(): void {
+		sleepDirty = true;
+		sleepBad = null;
+		auto.edit('sleep_times', saveSleep, sleepValid);
+	}
+
+	const saveSleepNow = (): Promise<boolean> => auto.now('sleep_times', saveSleep, sleepValid);
+	const saveProxyNow = (): Promise<boolean> => auto.now('proxy_url', saveProxy, proxyValid);
 
 	async function testProxy(): Promise<void> {
 		const v = proxyURL.trim();
@@ -69,8 +138,8 @@
 	}
 </script>
 
-<section class="set" id="engine" aria-labelledby="h-eng">
-	<div class="sec-head"><div><h2 id="h-eng">{t('settings.engine')}</h2></div></div>
+<section class="set hue-{SECTION_LOOK.engine.hue}" id="engine" aria-labelledby="h-eng">
+	<SectionHead sec="engine" id="h-eng" blurb={t('settings.engine_sub')} />
 	<div class="panel">
 		<div class="row">
 			<div class="lbl">
@@ -104,6 +173,21 @@
 		</div>
 		<div class="row">
 			<div class="lbl">
+				<b id="raid-l">{t('settings.follow_raids')}<NewPill since="2.3" /></b>
+				<small>{t('settings.follow_raids_sub')}</small>
+				{#if errs.follow_raids}<small class="bad">{t('settings.save_failed')}</small>{/if}
+			</div>
+			<button
+				type="button"
+				class="sw"
+				role="switch"
+				aria-checked={s.follow_raids}
+				aria-labelledby="raid-l"
+				onclick={() => save('follow_raids', { follow_raids: !s.follow_raids })}
+			></button>
+		</div>
+		<div class="row">
+			<div class="lbl">
 				<b><label for="scan">{t('settings.scan_interval')}</label></b>
 				<small>{t('settings.scan_interval_sub')}</small>
 				{#if errs.scan_interval_min}<small class="bad">{t('settings.save_failed')}</small>{/if}
@@ -120,6 +204,63 @@
 			>
 				{#each scanOptions as m (m)}<option value={m}>{minutesLabel(m)}</option>{/each}
 			</select>
+		</div>
+	</div>
+
+	<h3 class="sub-h"><span class="tile sm" aria-hidden="true"><Icon name="moon" size={13} /></span>{t('settings.sleep')}<NewPill since="2.3" /></h3>
+	<div class="panel">
+		<div class="row">
+			<div class="lbl">
+				<b id="sl-l">{t('settings.sleep_use')}</b>
+				<small>{t('settings.sleep_sub')}</small>
+				{#if errs.sleep_enabled}<small class="bad">{t('settings.save_failed')}</small>{/if}
+			</div>
+			<button
+				type="button"
+				class="sw"
+				role="switch"
+				aria-checked={s.sleep.enabled}
+				aria-labelledby="sl-l"
+				onclick={() => save('sleep_enabled', { sleep: { enabled: !s.sleep.enabled } })}
+			></button>
+		</div>
+		<div class="card-body">
+			<div class="inline wrap times">
+				<div class="field">
+					<label for="sl-start">{t('settings.sleep_start')}</label>
+					<input
+						class="inp"
+						id="sl-start"
+						type="time"
+						autocomplete="off"
+						aria-invalid={sleepBad ? true : undefined}
+						bind:value={sleepStart}
+						oninput={editSleep}
+						onkeydown={(e) => {
+							if (e.key === 'Enter' && e.isTrusted && sleepDirty) void saveSleepNow();
+						}}
+					/>
+				</div>
+				<div class="field">
+					<label for="sl-end">{t('settings.sleep_end')}</label>
+					<input
+						class="inp"
+						id="sl-end"
+						type="time"
+						autocomplete="off"
+						aria-invalid={sleepBad ? true : undefined}
+						bind:value={sleepEnd}
+						oninput={editSleep}
+						onkeydown={(e) => {
+							if (e.key === 'Enter' && e.isTrusted && sleepDirty) void saveSleepNow();
+						}}
+					/>
+				</div>
+				<button type="button" class="btn" disabled={!sleepDirty} onclick={saveSleepNow}>{t('accounts.save')}</button>
+			</div>
+			<small class="help">{t('settings.sleep_help', { zone: s.timezone || s.zone_effective || 'UTC' })}</small>
+			{#if sleepBad}<span class="feedback bad" role="alert">{t(sleepBad)}</span>{/if}
+			{#if errs.sleep_times}<span class="feedback bad">{t('settings.save_failed')}</span>{/if}
 		</div>
 	</div>
 
@@ -142,23 +283,26 @@
 			</div>
 		</div>
 
-		<h3 class="sub-h">{t('settings.proxy')}</h3>
+		<h3 class="sub-h"><span class="tile sm" aria-hidden="true"><Icon name="globe" size={13} /></span>{t('settings.proxy')}</h3>
 		<div class="panel">
 			<div class="row">
 				<div class="lbl">
 					<b id="px-l">{t('settings.proxy_use')}</b>
-					<small>{t('settings.proxy_sub')}</small>
+					<small>{proxyNoURL ? t('settings.proxy_needs_url') : t('settings.proxy_sub')}</small>
 					{#if errs.proxy_enabled}<small class="bad">{t('settings.save_failed')}</small>{/if}
 				</div>
-				<button
-					type="button"
-					class="sw"
-					role="switch"
-					aria-checked={s.proxy.enabled}
-					aria-labelledby="px-l"
-					disabled={!s.proxy.enabled && s.proxy.url === ''}
-					onclick={() => save('proxy_enabled', { proxy_enabled: !s.proxy.enabled })}
-				></button>
+				{#if proxyNoURL}
+					<span class="chip off">{t('settings.unavailable')}</span>
+				{:else}
+					<button
+						type="button"
+						class="sw"
+						role="switch"
+						aria-checked={s.proxy.enabled}
+						aria-labelledby="px-l"
+						onclick={() => save('proxy_enabled', { proxy_enabled: !s.proxy.enabled })}
+					></button>
+				{/if}
 			</div>
 			<div class="card-body">
 				<div class="field">
@@ -178,17 +322,18 @@
 							placeholder="socks5://user:pass@127.0.0.1:1080"
 							aria-invalid={proxyBad ? true : undefined}
 							bind:value={proxyURL}
-							oninput={() => ((proxyDirty = true), (proxyBad = false), (proxyFeedback = null))}
+							bind:this={proxyInput}
+							oninput={editProxy}
 							onkeydown={(e) => {
-								if (e.key === 'Enter' && e.isTrusted && proxyDirty) void saveProxy();
+								if (e.key === 'Enter' && e.isTrusted && proxyDirty) void saveProxyNow();
 							}}
 						/>
-						<button type="button" class="btn" disabled={!proxyDirty} onclick={saveProxy}>{t('accounts.save')}</button>
+						<button type="button" class="btn" disabled={!proxyDirty} onclick={saveProxyNow}>{t('accounts.save')}</button>
 						<button type="button" class="btn" disabled={proxyTesting || proxyURL.trim() === ''} onclick={testProxy}>
 							{proxyTesting ? t('settings.proxy_testing') : t('settings.proxy_test')}
 						</button>
 					</div>
-					<small class="help">{t('settings.proxy_help')}</small>
+					<Hint text={t('settings.proxy_help')} examples={proxyExamples} onpick={pickScheme} />
 					{#if proxyBad}<span class="feedback bad" role="alert">{t('settings.proxy_invalid')}</span>{/if}
 					{#if errs.proxy_url}<span class="feedback bad">{t('settings.save_failed')}</span>{/if}
 					{#if proxyFeedback}<span class="feedback" class:bad={!proxyFeedback.ok} role="status">{proxyFeedback.text}</span>{/if}
@@ -209,5 +354,13 @@
 	.inp {
 		flex: 1;
 		min-width: 0;
+	}
+	.times .btn {
+		align-self: flex-end;
+		height: 34px;
+	}
+	.times .field {
+		flex: 1;
+		min-width: 120px;
 	}
 </style>

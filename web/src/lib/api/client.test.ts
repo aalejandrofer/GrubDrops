@@ -45,6 +45,51 @@ describe('client', () => {
 		expect(hdr(calls[0], 'X-CSRF-Token')).toBe('tok');
 	});
 
+	it('setSkipSleep puts the flag with CSRF', async () => {
+		const { api, calls } = setup([{ status: 204 }]);
+		await api.setSkipSleep('acc 1', true);
+		expect(calls[0].url).toBe('/api/accounts/acc%201/skip-sleep');
+		expect(calls[0].init.method).toBe('PUT');
+		expect(hdr(calls[0], 'X-CSRF-Token')).toBe('tok');
+		expect(JSON.parse(calls[0].init.body as string)).toEqual({ skip_sleep: true });
+	});
+
+	it('setPointsMode puts the mode with CSRF', async () => {
+		const { api, calls } = setup([{ status: 204 }]);
+		await api.setPointsMode('acc 1', 'drops_points');
+		expect(calls[0].url).toBe('/api/accounts/acc%201/points-mode');
+		expect(calls[0].init.method).toBe('PUT');
+		expect(hdr(calls[0], 'X-CSRF-Token')).toBe('tok');
+		expect(JSON.parse(calls[0].init.body as string)).toEqual({ points_mode: 'drops_points' });
+	});
+
+	it('points gets the balances', async () => {
+		const { api, calls } = setup([{ status: 200, body: '{"refresh_every_sec":3600,"accounts":[],"channels":[]}' }]);
+		expect((await api.points()).refresh_every_sec).toBe(3600);
+		expect(calls.map((c) => [c.init.method ?? 'GET', c.url])).toEqual([['GET', '/api/points']]);
+	});
+
+	it('refreshPoints posts with CSRF; a 429 carries retry_after_sec', async () => {
+		const { api, calls } = setup([{ status: 202 }, { status: 429, body: '{"error":"cooldown","retry_after_sec":42}' }]);
+		await expect(api.refreshPoints()).resolves.toBeUndefined();
+		expect(calls[0].url).toBe('/api/points/refresh');
+		expect(calls[0].init.method).toBe('POST');
+		expect(hdr(calls[0], 'X-CSRF-Token')).toBe('tok');
+		await expect(api.refreshPoints()).rejects.toMatchObject({ status: 429, code: 'cooldown', body: { retry_after_sec: 42 } });
+	});
+
+	it('scan posts with CSRF, with the platform only when given; a 429 carries retry_after_sec', async () => {
+		const { api, calls } = setup([{ status: 202 }, { status: 202 }, { status: 429, body: '{"error":"cooldown","retry_after_sec":42}' }]);
+		await expect(api.scan()).resolves.toBeUndefined();
+		await expect(api.scan('kick')).resolves.toBeUndefined();
+		expect(calls.map((c) => [c.init.method, c.url, c.init.body])).toEqual([
+			['POST', '/api/scan', undefined],
+			['POST', '/api/scan', '{"platform":"kick"}']
+		]);
+		for (const c of calls) expect(hdr(c, 'X-CSRF-Token')).toBe('tok');
+		await expect(api.scan('twitch')).rejects.toMatchObject({ status: 429, code: 'cooldown', body: { retry_after_sec: 42 } });
+	});
+
 	it('json body and content-type on writes', async () => {
 		const { api, calls } = setup([{ status: 204 }]);
 		await api.setOrder('a1', ['b1', 'b2']);

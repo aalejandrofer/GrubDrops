@@ -59,7 +59,10 @@ type Querier interface {
 	GetAdmin(ctx context.Context) (Admin, error)
 	GetCampaign(ctx context.Context, id string) (Campaign, error)
 	GetClaimLog(ctx context.Context, arg GetClaimLogParams) (ClaimLog, error)
+	GetPointsBalance(ctx context.Context, arg GetPointsBalanceParams) (PointsBalance, error)
 	GetProgress(ctx context.Context, arg GetProgressParams) (Progress, error)
+	GetRewardCode(ctx context.Context, id int64) (RewardCode, error)
+	GetRewardCodeByKey(ctx context.Context, arg GetRewardCodeByKeyParams) (RewardCode, error)
 	GetSession(ctx context.Context, accountID string) (Session, error)
 	GetSettingString(ctx context.Context, key string) ([]byte, error)
 	InsertClaim(ctx context.Context, arg InsertClaimParams) error
@@ -105,10 +108,14 @@ type Querier interface {
 	ListKVByPrefix(ctx context.Context, dollar_1 sql.NullString) ([]Kv, error)
 	// Claims the user marked collected by hand.
 	ListManualClaimLogBenefitIDs(ctx context.Context, accountID string) ([]string, error)
+	// Rewards neither redeemed nor dismissed.
+	ListOpenRewardCodes(ctx context.Context) ([]RewardCode, error)
 	// Campaigns that have ended. Whitelist filtering is applied in Go.
 	ListPastCampaigns(ctx context.Context, arg ListPastCampaignsParams) ([]Campaign, error)
+	ListPointsBalances(ctx context.Context) ([]PointsBalance, error)
 	ListRecentClaimLog(ctx context.Context, limit int64) ([]ClaimLog, error)
 	ListRecentClaims(ctx context.Context, limit int64) ([]ListRecentClaimsRow, error)
+	ListRewardCodes(ctx context.Context) ([]RewardCode, error)
 	ListUnclaimedProgressForAccount(ctx context.Context, arg ListUnclaimedProgressForAccountParams) ([]Progress, error)
 	// Account and campaign pairs whose claim the platform rejected until an
 	// external account is linked.
@@ -116,6 +123,11 @@ type Querier interface {
 	// Campaigns announced but not yet started. Whitelist filtering is
 	// applied in Go.
 	ListUpcomingCampaigns(ctx context.Context, arg ListUpcomingCampaignsParams) ([]Campaign, error)
+	MarkRewardCodeNotified(ctx context.Context, arg MarkRewardCodeNotifiedParams) error
+	MarkRewardCodeNotifySkipped(ctx context.Context, arg MarkRewardCodeNotifySkippedParams) error
+	MarkRewardCodeReminded(ctx context.Context, arg MarkRewardCodeRemindedParams) error
+	// Drops rows whose account is no longer assigned to that Twitch Force watch channel.
+	PrunePointsBalances(ctx context.Context) (int64, error)
 	// A zero timestamp keeps the stored value. The error is always written.
 	PutAccountScan(ctx context.Context, arg PutAccountScanParams) error
 	RemoveAccountChannel(ctx context.Context, arg RemoveAccountChannelParams) error
@@ -123,9 +135,13 @@ type Querier interface {
 	RemoveForceChannel(ctx context.Context, arg RemoveForceChannelParams) error
 	SetAccountEnabled(ctx context.Context, arg SetAccountEnabledParams) error
 	SetAccountOwnGames(ctx context.Context, arg SetAccountOwnGamesParams) error
+	SetAccountPointsMode(ctx context.Context, arg SetAccountPointsModeParams) error
+	SetAccountSkipSleep(ctx context.Context, arg SetAccountSkipSleepParams) error
 	SetAccountSortOrder(ctx context.Context, arg SetAccountSortOrderParams) error
 	SetGameTwitchID(ctx context.Context, arg SetGameTwitchIDParams) error
 	SetGameTwitchName(ctx context.Context, arg SetGameTwitchNameParams) (int64, error)
+	SetRewardCodeDismissed(ctx context.Context, arg SetRewardCodeDismissedParams) (int64, error)
+	SetRewardCodeRedeemed(ctx context.Context, arg SetRewardCodeRedeemedParams) (int64, error)
 	SumAllWatchMinutes(ctx context.Context) (int64, error)
 	// Lifetime watch minutes: sum of per-benefit progress. Persistent, so it
 	// survives restarts (unlike the heartbeat log ring used for today's count).
@@ -145,7 +161,14 @@ type Querier interface {
 	UpsertClaimLog(ctx context.Context, arg UpsertClaimLogParams) error
 	UpsertDropState(ctx context.Context, arg UpsertDropStateParams) error
 	UpsertGame(ctx context.Context, arg UpsertGameParams) error
+	// A successful read: new balance, error and failures cleared.
+	UpsertPointsBalance(ctx context.Context, arg UpsertPointsBalanceParams) error
+	// A read without a balance: the last good balance and fetched_at stay.
+	UpsertPointsBalanceError(ctx context.Context, arg UpsertPointsBalanceErrorParams) error
 	UpsertProgress(ctx context.Context, arg UpsertProgressParams) error
+	// A read of one reward. Empty text and NULL values keep what is stored,
+	// so a later read without the code or expiry never erases them.
+	UpsertRewardCode(ctx context.Context, arg UpsertRewardCodeParams) error
 	UpsertSession(ctx context.Context, arg UpsertSessionParams) error
 	UpsertSettingString(ctx context.Context, arg UpsertSettingStringParams) error
 }

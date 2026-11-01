@@ -5,6 +5,9 @@
 	import CopyCommand from '$lib/components/CopyCommand.svelte';
 	import { httpsOnly, relTime } from '$lib/format';
 	import { t } from '$lib/i18n/index.svelte';
+	import Icon from '$lib/components/Icon.svelte';
+	import { SECTION_LOOK, updateChip } from '$lib/settings-look';
+	import SectionHead from './SectionHead.svelte';
 
 	let {
 		s,
@@ -50,19 +53,21 @@
 	);
 	const hasNew = $derived(u?.update_available === true);
 	const notesUrl = $derived(httpsOnly(u?.notes_url));
+	const chip = $derived(updateChip(u));
 </script>
 
-<section class="set" id="updates" aria-labelledby="h-upd">
-	<div class="sec-head">
-		<div>
-			<h2 id="h-upd">{t('settings.updates')}</h2>
-			<p>{t('settings.updates_sub')}</p>
-		</div>
-		<button type="button" class="btn" disabled={checking} onclick={check}>
-			<svg class="i" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5" /></svg>
-			<span>{checking ? t('settings.checking') : t('settings.check')}</span>
-		</button>
-	</div>
+<section class="set hue-{SECTION_LOOK.updates.hue}" id="updates" aria-labelledby="h-upd">
+	<SectionHead sec="updates" id="h-upd" blurb={t('settings.updates_sub')}>
+		{#snippet chips()}
+			{#if chip}<span class="chip {chip.tone}">{chip.text}</span>{/if}
+		{/snippet}
+		{#snippet right()}
+			<button type="button" class="btn tint" disabled={checking} onclick={check}>
+				<Icon name="refresh" />
+				<span>{checking ? t('settings.checking') : t('settings.check')}</span>
+			</button>
+		{/snippet}
+	</SectionHead>
 	{#if failed}<p class="bad" role="status">{t('settings.check_failed')}</p>{/if}
 	<div class="panel">
 		<div class="vers">
@@ -150,14 +155,5 @@
 		color: var(--red);
 		font-size: 12px;
 		margin: 0 0 8px;
-	}
-	.i {
-		width: 14px;
-		height: 14px;
-		fill: none;
-		stroke: currentColor;
-		stroke-width: 1.8;
-		stroke-linecap: round;
-		stroke-linejoin: round;
 	}
 </style>

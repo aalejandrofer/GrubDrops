@@ -71,7 +71,7 @@ func (q *Queries) DeleteAccountSession(ctx context.Context, accountID string) er
 }
 
 const listAllAccounts = `-- name: ListAllAccounts :many
-SELECT id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url, custom_name, sort_order, own_games FROM accounts ORDER BY sort_order ASC, created_at ASC
+SELECT id, platform, display_name, status, webhook_url, fingerprint_json, enabled, created_at, updated_at, avatar_url, custom_name, sort_order, own_games, skip_sleep, points_mode FROM accounts ORDER BY sort_order ASC, created_at ASC
 `
 
 func (q *Queries) ListAllAccounts(ctx context.Context) ([]Account, error) {
@@ -97,6 +97,8 @@ func (q *Queries) ListAllAccounts(ctx context.Context) ([]Account, error) {
 			&i.CustomName,
 			&i.SortOrder,
 			&i.OwnGames,
+			&i.SkipSleep,
+			&i.PointsMode,
 		); err != nil {
 			return nil, err
 		}
@@ -123,6 +125,36 @@ type SetAccountOwnGamesParams struct {
 
 func (q *Queries) SetAccountOwnGames(ctx context.Context, arg SetAccountOwnGamesParams) error {
 	_, err := q.db.ExecContext(ctx, setAccountOwnGames, arg.OwnGames, arg.UpdatedAt, arg.ID)
+	return err
+}
+
+const setAccountPointsMode = `-- name: SetAccountPointsMode :exec
+UPDATE accounts SET points_mode = ?, updated_at = ? WHERE id = ?
+`
+
+type SetAccountPointsModeParams struct {
+	PointsMode string `json:"points_mode"`
+	UpdatedAt  int64  `json:"updated_at"`
+	ID         string `json:"id"`
+}
+
+func (q *Queries) SetAccountPointsMode(ctx context.Context, arg SetAccountPointsModeParams) error {
+	_, err := q.db.ExecContext(ctx, setAccountPointsMode, arg.PointsMode, arg.UpdatedAt, arg.ID)
+	return err
+}
+
+const setAccountSkipSleep = `-- name: SetAccountSkipSleep :exec
+UPDATE accounts SET skip_sleep = ?, updated_at = ? WHERE id = ?
+`
+
+type SetAccountSkipSleepParams struct {
+	SkipSleep int64  `json:"skip_sleep"`
+	UpdatedAt int64  `json:"updated_at"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) SetAccountSkipSleep(ctx context.Context, arg SetAccountSkipSleepParams) error {
+	_, err := q.db.ExecContext(ctx, setAccountSkipSleep, arg.SkipSleep, arg.UpdatedAt, arg.ID)
 	return err
 }
 

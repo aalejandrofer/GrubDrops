@@ -6,7 +6,7 @@
 </script>
 
 <script lang="ts">
-	import { tick, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import { api } from '$lib/app';
 	import { ApiError } from '$lib/api/client';
 	import type { CampaignDetail, DropCell } from '$lib/api/types';
@@ -22,14 +22,18 @@
 		withPending,
 		type PendingMark
 	} from '$lib/campaign';
+	import { refreshLabel } from '$lib/cooldown';
 	import { clock, shortDate } from '$lib/format';
 	import { linkHref } from '$lib/games';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
+	import { createRefresh } from '$lib/refresh.svelte';
 	import ArmButton from './ArmButton.svelte';
 	import BoxArt from './BoxArt.svelte';
+	import Icon from './Icon.svelte';
 	import PlatformMark from './PlatformMark.svelte';
+	import SidePanel from './SidePanel.svelte';
 
 	let { target, onclose }: { target: CampaignTarget | null; onclose: () => void } = $props();
 
@@ -45,9 +49,7 @@
 	let markErr = $state('');
 	const data = $derived(fetched ? withPending(fetched, pending) : null);
 	let status = $state<'loading' | 'ok' | 'gone' | 'failed'>('loading');
-	let closeBtn = $state<HTMLButtonElement | null>(null);
 	let sheet = $state<HTMLElement | null>(null);
-	let opener: HTMLElement | null = null;
 	let lastLoad = 0;
 	let seq = 0;
 
@@ -96,21 +98,14 @@
 		});
 	});
 
-	// Focus the close button on open and give focus back on close.
-	let wasOpen = false;
-	$effect(() => {
-		const open = !!key;
-		untrack(() => {
-			if (open && !wasOpen) {
-				opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-				void tick().then(() => closeBtn?.focus());
-			} else if (!open && wasOpen) {
-				opener?.focus();
-				opener = null;
-			}
-			wasOpen = open;
-		});
+	// Refresh: the campaign's platform rescans; the first finished scan
+	// reloads live.games and this campaign.
+	const refresh = createRefresh({
+		post: () => (target ? api.scan(target.platform) : Promise.resolve()),
+		signal: () => live.games,
+		onland: () => void load(true)
 	});
+	const refreshText = $derived(t(refreshLabel(refresh.busy, refresh.done, 'scan.refresh')));
 
 	// Bring the highlighted reward into view once its row renders.
 	$effect(() => {
@@ -152,30 +147,27 @@
 		pending = [...pending.filter((x) => !(x.account_id === m.account_id && x.drop_id === m.drop_id)), m];
 		void load(true);
 	}
-
-	function onkey(e: KeyboardEvent): void {
-		if (key && e.key === 'Escape') onclose();
-	}
-
-	// Clicks outside close the drawer. Clicks on another campaign trigger
-	// (data-campaign) swap its content instead.
-	function onpointer(e: PointerEvent): void {
-		if (!key || !(e.target instanceof Element)) return;
-		if (sheet?.contains(e.target) || e.target.closest('[data-campaign]')) return;
-		onclose();
-	}
 </script>
 
-<svelte:window onkeydown={onkey} onpointerdown={onpointer} />
-
-{#if target}
-	<div class="scrim" aria-hidden="true"></div>
-	<div class="sheet" role="dialog" aria-modal="true" aria-label={data?.name ?? t('campaign.loading')} bind:this={sheet}>
-		<button type="button" class="x" aria-label={t('campaign.close')} title={t('campaign.close')} bind:this={closeBtn} onclick={onclose}>
+<!-- Clicks on another campaign trigger (data-campaign) swap the content instead of closing. -->
+<SidePanel open={!!target} label={data?.name ?? t('campaign.loading')} {onclose} keep="[data-campaign]" width={520}>
+	<div class="sheet" bind:this={sheet}>
+		<button type="button" class="x" aria-label={t('campaign.close')} title={t('campaign.close')} onclick={onclose}>
 			<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"
 				><path d="m3 3 6 6m0-6-6 6" /></svg
 			>
 		</button>
+		<!-- After the close button so opening the panel focuses close, not Refresh. -->
+		<button
+			type="button"
+			class="rf"
+			class:spin={refresh.busy}
+			class:done={refresh.done}
+			aria-label={refreshText}
+			title={refreshText}
+			disabled={refresh.busy}
+			onclick={() => refresh.run()}><Icon name="refresh" size={13} /></button
+		>
 		{#if status === 'loading'}
 			<p class="msg" role="status">{t('campaign.loading')}</p>
 		{:else if status === 'gone'}
@@ -198,6 +190,7 @@
 			</header>
 			<p class="sum">{tn('campaign.summary', data.drops.length, { claimed: claimedCount(data) })}</p>
 			{#if !data.live}<p class="sum">{t('campaign.from_claims')}</p>{/if}
+			{#if refresh.failed}<p class="msg err mark-err" role="alert">{t('points.refresh_failed')}</p>{/if}
 			{#if markErr}<p class="msg err mark-err" role="alert">{markErr}</p>{/if}
 			{#if href}
 				<p class="link">
@@ -247,32 +240,15 @@
 			</ol>
 		{/if}
 	</div>
-{/if}
+</SidePanel>
 
 <style>
-	.scrim {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.3);
-		pointer-events: none;
-		z-index: 30;
-	}
 	.sheet {
-		position: fixed;
-		top: 0;
-		right: 0;
-		bottom: 0;
-		width: min(520px, 100%);
-		overflow: auto;
+		position: relative;
 		padding: 20px;
 		display: grid;
 		align-content: start;
 		gap: 10px;
-		background: var(--surface-2);
-		border-left: 1px solid var(--border);
-		color: var(--text);
-		z-index: 31;
-		box-shadow: -12px 0 32px rgba(0, 0, 0, 0.25);
 	}
 	.x {
 		position: absolute;
@@ -292,11 +268,57 @@
 		width: 12px;
 		height: 12px;
 	}
-	.x:hover {
+	.rf {
+		position: absolute;
+		right: 40px;
+		top: 10px;
+		display: grid;
+		place-items: center;
+		width: 28px;
+		height: 28px;
+		border: 0;
+		border-radius: 6px;
+		background: none;
+		color: var(--muted);
+		cursor: pointer;
+		transition: color 0.2s ease;
+	}
+	.rf:disabled {
+		cursor: default;
+		opacity: 0.6;
+	}
+	/* Amber while it spins, green for a moment once fresh data lands. */
+	.rf.spin,
+	.rf.done {
+		opacity: 1;
+	}
+	.rf.spin {
+		color: var(--amber);
+	}
+	.rf.done,
+	.rf.done:hover:not(:disabled) {
+		color: var(--green);
+	}
+	.rf.spin :global(svg) {
+		animation: rf-spin 0.9s linear infinite;
+	}
+	@keyframes rf-spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.rf.spin :global(svg) {
+			animation: none;
+		}
+	}
+	.x:hover,
+	.rf:hover:not(:disabled) {
 		background: var(--surface-3);
 		color: var(--text);
 	}
 	.x:focus-visible,
+	.rf:focus-visible,
 	.btn:focus-visible,
 	.link a:focus-visible {
 		outline: 2px solid var(--accent);
@@ -328,7 +350,7 @@
 		display: flex;
 		gap: 10px;
 		align-items: flex-start;
-		padding-right: 32px;
+		padding-right: 64px;
 	}
 	header :global(.pm) {
 		margin-top: 4px;
@@ -493,8 +515,6 @@
 	}
 	@media (max-width: 640px) {
 		.sheet {
-			width: 100%;
-			border-left: 0;
 			padding: 16px;
 		}
 		li {

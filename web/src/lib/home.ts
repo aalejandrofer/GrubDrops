@@ -4,11 +4,13 @@ import type {
   Claim,
   Game,
   Overview,
+  PausedHolder,
   Platform,
   Runner,
   Target,
 } from "$lib/api/types";
 import { dayBucket } from "$lib/format";
+import { t, tn } from "$lib/i18n/index.svelte";
 
 export function normName(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
@@ -36,11 +38,13 @@ export type GameCard = {
  * live: an idle account has a drop queued, so it waits for an eligible
  * channel to go live; channels is empty when any channel qualifies, more
  * counts the channels not named. account: every account with a drop queued
- * is mining something else.
+ * is mining something else. paused: no unpaused account has a drop of the
+ * game left, only paused ones; account is the first, more counts the rest.
  */
 export type WaitFor =
   | { kind: "live"; channels: string[]; more: number }
-  | { kind: "account"; account: string };
+  | { kind: "account"; account: string; platform: Platform }
+  | { kind: "paused"; account: string; platform: Platform; more: number };
 
 function row(r: Runner): AccountRow {
   const c = r.current;
@@ -81,8 +85,7 @@ export function gameCards(
       .filter((x) => onCard(x, paused) && isThis(x.current!.game))
       .map(row)
       .sort((a, b) => b.progress - a.progress);
-    const targets: { t: Target; by: string; idle: boolean; out: boolean }[] =
-      [];
+    const targets: Holder[] = [];
     for (const x of r) {
       if (paused.has(x.account_id)) continue;
       for (const t of x.up_next)
@@ -90,6 +93,7 @@ export function gameCards(
           targets.push({
             t,
             by: x.account_name,
+            platform: x.platform,
             idle: !x.current,
             out: x.state === "needs_login",
           });
@@ -105,14 +109,27 @@ export function gameCards(
       size: rank <= 2 ? "lg" : "sm",
       rows,
       queued,
-      waitFor: waitFor(targets.filter((x) => !x.out)),
+      waitFor: waitFor(
+        targets.filter((x) => !x.out),
+        game.paused_holders,
+      ),
       moreInUpNext: queued.length,
     };
   });
 }
 
+type Holder = {
+  t: Target;
+  by: string;
+  platform: Platform;
+  idle: boolean;
+  out: boolean;
+};
+
+/** Unpaused accounts' queued drops win; paused holders count only without any. */
 function waitFor(
-  targets: { t: Target; by: string; idle: boolean }[],
+  targets: Holder[],
+  paused: PausedHolder[],
 ): WaitFor | null {
   const idle = targets.find((x) => x.idle);
   if (idle) {
@@ -120,14 +137,71 @@ function waitFor(
     const more = Math.max(0, (idle.t.channel_count ?? 0) - channels.length);
     return { kind: "live", channels, more };
   }
-  return targets.length > 0 ? { kind: "account", account: targets[0].by } : null;
+  if (targets.length > 0)
+    return {
+      kind: "account",
+      account: targets[0].by,
+      platform: targets[0].platform,
+    };
+  if (paused.length > 0)
+    return {
+      kind: "paused",
+      account: paused[0].account_name,
+      platform: paused[0].platform,
+      more: paused.length - 1,
+    };
+  return null;
+}
+
+/** An account name with its platform, e.g. "TTik3r (Kick)". */
+export function accountLabel(name: string, platform: Platform): string {
+  return t("home.account_platform", {
+    account: name,
+    platform: t(platform === "twitch" ? "accounts.twitch" : "accounts.kick"),
+  });
+}
+
+/** The status pill text of a card that waits or is held by paused accounts. */
+export function waitBadge(w: WaitFor | null): string {
+  if (w?.kind === "account")
+    return t("home.wait_account", { account: accountLabel(w.account, w.platform) });
+  if (w?.kind === "paused") {
+    const account = accountLabel(w.account, w.platform);
+    return w.more > 0
+      ? t("home.wait_paused_more", { account, n: w.more })
+      : t("home.wait_paused", { account });
+  }
+  if (w?.kind !== "live") return t("home.state_waiting");
+  if (w.channels.length === 0) return t("home.wait_live_any");
+  const n = w.channels.length - 1 + w.more;
+  return n > 0
+    ? t("home.wait_live_more", { channel: w.channels[0], n })
+    : t("home.wait_live", { channel: w.channels[0] });
+}
+
+/** The line under the pill: what the card's drops wait for. */
+export function waitLine(w: WaitFor | null): string {
+  if (w?.kind === "account")
+    return t("home.waiting_line", { account: accountLabel(w.account, w.platform) });
+  if (w?.kind === "paused") {
+    const account = accountLabel(w.account, w.platform);
+    return w.more > 0
+      ? tn("home.paused_line_more", w.more, { account })
+      : t("home.paused_line", { account });
+  }
+  if (w?.kind !== "live") return t("home.waiting_line_any");
+  if (w.channels.length === 0) return t("home.live_line_any");
+  if (w.channels.length === 1 && w.more === 0)
+    return t("home.live_line", { channel: w.channels[0] });
+  const names = w.channels.join(", ") + (w.more > 0 ? ` +${w.more}` : "");
+  return t("home.live_line_some", { channels: names });
 }
 
 /**
- * At most max cards for Home. Mining cards come first, then waiting or queued
- * ones, then the rest, each group in rank order, so a game that is mining is
- * never listed under one that only waits. Layout follows the display
- * position: the first two shown are large.
+ * At most max cards for Home. Mining cards come first, then waiting, queued
+ * or paused ones, then the rest, each group in rank order, so a game that is
+ * mining is never listed under one that only waits. Layout follows the
+ * display position: the first two shown are large.
  */
 export function visibleCards(
   cards: GameCard[],
@@ -136,7 +210,9 @@ export function visibleCards(
   const tier = (c: GameCard) =>
     c.game.state === "mining" || c.rows.length > 0
       ? 0
-      : c.game.state === "waiting" || c.queued.length > 0
+      : c.game.state === "waiting" ||
+          c.game.state === "paused" ||
+          c.queued.length > 0
         ? 1
         : 2;
   const ordered = [0, 1, 2].flatMap((n) => cards.filter((c) => tier(c) === n));
@@ -181,7 +257,7 @@ export function foldRows(
   };
 }
 
-export type IdleState = "idle" | "signed_out" | "paused";
+export type IdleState = "idle" | "sleep_window" | "signed_out" | "paused";
 
 export type IdleChip = {
   id: string;
@@ -190,12 +266,12 @@ export type IdleChip = {
   state: IdleState;
 };
 
-const IDLE_ORDER: IdleState[] = ["idle", "signed_out", "paused"];
+const IDLE_ORDER: IdleState[] = ["idle", "sleep_window", "signed_out", "paused"];
 
 /**
- * Accounts no card lists, for the chips under the last card: idle, then
- * signed out, then paused, each in account order. Force watching accounts are
- * left out; the force watch tile names them.
+ * Accounts no card lists, for the chips under the last card: idle, then in
+ * the sleep window, then signed out, then paused, each in account order.
+ * Force watching accounts are left out; the force watch tile names them.
  */
 export function notMining(accounts: Account[], runners: Runner[]): IdleChip[] {
   const paused = new Set(accounts.filter((a) => !a.enabled).map((a) => a.id));
@@ -238,6 +314,7 @@ export type HomeView =
   | "paused"
   | "signed_out"
   | "nothing_live"
+  | "sleep_window"
   | "healthy";
 
 export type HomeInput = {
@@ -272,6 +349,7 @@ export function homeView(i: HomeInput): HomeView {
   if ((o.status.accounts_paused ?? 0) >= o.status.accounts_total)
     return "paused";
   if (!i.games) return i.gamesFailed && !i.unreachable ? "error" : "loading";
+  if (o.status.state === "sleep_window") return "sleep_window";
   if (
     o.status.state === "nothing_live" ||
     i.games.every((g) => g.state === "no_campaign")

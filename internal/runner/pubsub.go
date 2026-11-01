@@ -53,6 +53,11 @@ func (t *trampoline) hooks() platform.PubSubHooks {
 				r.onRewardCode(notificationID, code, title)
 			}
 		},
+		OnRaid: func(channelID, raidID string) {
+			if r := t.cur.Load(); r != nil {
+				r.onRaid(channelID, raidID)
+			}
+		},
 	}
 }
 
@@ -91,6 +96,7 @@ func (r *Runner) directHooks() platform.PubSubHooks {
 		OnStreamDown:   r.onStreamDown,
 		OnStreamUp:     func(string) {},
 		OnRewardCode:   r.onRewardCode,
+		OnRaid:         r.onRaid,
 	}
 }
 
@@ -172,12 +178,12 @@ func (r *Runner) onRewardCode(notificationID, code, body string) {
 	r.mu.Unlock()
 	if claimed == nil {
 		slog.Info("runner reward code with no recent claim; not recorded", "kind", "claim",
-			"account", r.cfg.AccountID, "notification_id", notificationID, "code", code, "body", body)
+			"account", r.cfg.AccountID, "notification_id", notificationID)
 		return
 	}
 	benefit := claimed.Benefit
 	slog.Info("runner reward code captured", "kind", "claim", "account", r.cfg.AccountID,
-		"notification_id", notificationID, "code", code,
+		"notification_id", notificationID,
 		"benefit_id", benefit.ID, "benefit_name", benefit.Name)
 	if r.cfg.Claims == nil || benefit.ID == "" {
 		return

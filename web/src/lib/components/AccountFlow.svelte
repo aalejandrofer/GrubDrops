@@ -7,6 +7,7 @@
 	import { t } from '$lib/i18n/index.svelte';
 	import { loginFlow } from '$lib/login-flow.svelte';
 	import CopyCommand from './CopyCommand.svelte';
+	import Hint from './Hint.svelte';
 	import PlatformMark from './PlatformMark.svelte';
 
 	/**
@@ -61,6 +62,7 @@
 	let method = $state<TwitchMethod | null>(null);
 	// Shape of the redirect URL, token hidden.
 	const ANDROID_EXAMPLE = 'https://www.twitch.tv/#access_token=XXX&scope=&token_type=bearer';
+	const COOKIES_EXT = 'https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc?hl=en';
 	let androidUrl = $state('');
 	let paste = $state('');
 	let androidMsg = $state('');
@@ -266,6 +268,16 @@
 	});
 </script>
 
+{#snippet cookie()}
+	<svg class="cookie" viewBox="0 0 24 24" aria-hidden="true">
+		<path d="M21.95 12.9A10 10 0 1 1 11.1 2.05a3 3 0 0 0 3.4 3.95 3 3 0 0 0 3.5 3.5 3 3 0 0 0 3.95 3.4z" />
+		<circle cx="8" cy="9" r="1.5" />
+		<circle cx="15.5" cy="15" r="1.5" />
+		<circle cx="9" cy="16" r="1.2" />
+		<circle cx="13" cy="11.5" r="1" />
+	</svg>
+{/snippet}
+
 <div class="card-body flow" aria-live="polite">
 	{#if framed}
 		<div class="card-title">
@@ -309,7 +321,7 @@
 						if (e.key === 'Enter') void submitAndroid();
 					}}
 				/>
-				<small class="eg">{t('accounts.android_example')} <code>{ANDROID_EXAMPLE}</code></small>
+				<Hint examples={[{ platform: 'twitch', label: ANDROID_EXAMPLE }]} />
 			</div>
 			<div class="inline wrap">
 				<button type="button" class="btn primary" disabled={saving || paste.trim() === ''} onclick={submitAndroid}>
@@ -367,7 +379,7 @@
 		<div class="field">
 			<label for="{uid}-cookies">{t('accounts.cookies_label')}</label>
 			<textarea class="inp ta" id="{uid}-cookies" rows="5" spellcheck="false" autocomplete="off" bind:value={cookies}></textarea>
-			<small class="help">{t('accounts.cookies_help')}</small>
+			<Hint text={t('accounts.cookies_help')} examples={[{ label: 'Get cookies.txt', href: COOKIES_EXT, icon: cookie }]} />
 		</div>
 		<div class="inline wrap">
 			<label class="btn file">
@@ -386,16 +398,11 @@
 </div>
 
 <style>
-	.eg {
-		display: block;
-		margin-top: 6px;
-		font-size: 12px;
-		color: var(--t2);
-		overflow-wrap: anywhere;
+	.cookie path {
+		fill: var(--h-amber);
 	}
-	.eg code {
-		font-family: var(--mono, ui-monospace, monospace);
-		font-size: 12px;
+	.cookie circle {
+		fill: color-mix(in srgb, var(--h-amber) 35%, #000);
 	}
 	/* Same values as the Settings primitives, so the flow looks alike in Settings and onboarding. */
 	.card-body {

@@ -13,8 +13,14 @@ import (
 
 // Force watch: with the plan queue empty, the runner watches the first live
 // channel of the account's ordered force list. A drop always wins: every
-// recheckInterval the force tick rescans the plan and a non-empty queue ends
-// the force watch.
+// recheckInterval, and at once on Rescan, the force tick rescans the plan
+// and a queued drop with a live stream ends the force watch.
+//
+// Points only: the account never scans or picks a drop campaign. pick goes
+// straight to the force list (pickPoints) and the recheck only moves between
+// force channels. The force tick still claims drops the inventory reports
+// ready (claimReady, sweepCompleted): that is no campaign scan, and a drop a
+// points channel happened to earn is not left unclaimed.
 
 // forceChannels reads the account's force list, or nil when the feature is
 // off.
@@ -130,8 +136,56 @@ func (r *Runner) beginForce(ctx context.Context, login string, s platform.Stream
 	if cs, ok := r.cfg.Backend.(platform.ChannelSubscriber); ok && s.ChannelID != "" {
 		cs.SubscribeChannel(r.cfg.AccountID, s.ChannelID)
 	}
+	r.startPoints(ctx, s.Channel)
+	r.startRaids(ctx, s.ChannelID)
 	r.setState(ctx, StateForceWatching)
 	return nil
+}
+
+// pickPoints is pick for a points-only account: no campaign scan, no plan.
+// It drops any plan left from drops mode and watches the first live force
+// channel, failing over in order. None live sleeps at the 5-minute recheck;
+// an empty force list idles as StateNoChannels.
+func (r *Runner) pickPoints(ctx context.Context) error {
+	r.mu.Lock()
+	// Paces the idle wait and NextScanAt as a scan would.
+	r.lastScanTry = time.Now()
+	r.noStream = map[string]bool{}
+	r.sleepNoStream = false
+	r.current = nil
+	r.clearWatchViewLocked()
+	r.mu.Unlock()
+	r.dropPlan()
+	force := r.forceChannels()
+	if len(force) == 0 {
+		r.setState(ctx, StateNoChannels)
+		return nil
+	}
+	started, err := r.startForce(ctx, force)
+	if started || err != nil {
+		return err
+	}
+	slog.Debug("runner points only: force channels offline; sleeping", "kind", "discovery",
+		"account", r.cfg.AccountID)
+	r.mu.Lock()
+	r.sleepNoStream = true // recheck at the 5-minute pace
+	r.mu.Unlock()
+	r.setState(ctx, StateSleeping)
+	return nil
+}
+
+// dropPlan clears the queue, blocked list and Mine now pin, so a points-only
+// account shows no Up next from its drops-mode scans. A pending Mine now goes
+// too: taken, it would restart the force watch.
+func (r *Runner) dropPlan() {
+	r.switchNow.Store(false)
+	r.mu.Lock()
+	had := len(r.queue) > 0 || len(r.blocked) > 0 || r.pinned != nil
+	r.queue, r.blocked, r.pinned = nil, nil, nil
+	r.mu.Unlock()
+	if had {
+		r.changed()
+	}
 }
 
 // ForceListChanged tells the runner its force list was edited. A force watch
@@ -153,18 +207,21 @@ func (r *Runner) ForceListChanged() {
 }
 
 // forceTick beacons the force channel, sweeps and claims finished drops, and
-// every recheckInterval rechecks the plan and the force list. A Rescan or
-// Mine now ends the force watch and re-picks.
+// every recheckInterval rechecks the plan and the force list. A Rescan runs
+// that recheck now, without a beacon: the watch ends only for a drop or a
+// better force channel, as at the 5-minute recheck. Mine now ends it.
 func (r *Runner) forceTick(ctx context.Context) error {
 	if r.forceScan.Swap(false) {
 		select {
 		case <-r.rescan:
 		default:
 		}
-		slog.Debug("runner force watch ended by rescan", "kind", "state", "account", r.cfg.AccountID)
-		r.stopWatch(ctx)
-		r.setState(ctx, StatePicking)
-		return nil
+		r.mu.Lock()
+		login := r.channel
+		r.mu.Unlock()
+		slog.Debug("runner force watch rechecking on rescan", "kind", "state",
+			"account", r.cfg.AccountID, "channel", login)
+		return r.forceRecheck(ctx, login)
 	}
 	// An early wake (a stale Rescan token) must not beacon before TickInterval.
 	if r.untilNextBeat() > 0 {
@@ -195,12 +252,15 @@ func (r *Runner) forceTick(ctx context.Context) error {
 
 // forceRecheck rescans the plan, then the force list. A queued drop with a
 // live eligible stream ends the force watch. Otherwise the runner moves to
-// the best live force channel, or sleeps when none is live.
+// the best live force channel, or sleeps when none is live. A points-only
+// account skips the plan: no drop ever ends its force watch.
 func (r *Runner) forceRecheck(ctx context.Context, login string) error {
 	r.mu.Lock()
 	r.forceCheckAt = time.Now()
 	r.mu.Unlock()
-	if len(r.cfg.Games) > 0 {
+	if r.pointsOnly() {
+		r.dropPlan()
+	} else if len(r.cfg.Games) > 0 {
 		res, err := r.scan(ctx, nil, false)
 		if err != nil {
 			slog.Warn("runner rescan failed", "kind", "error", "account", r.cfg.AccountID, "err", err)
@@ -217,6 +277,15 @@ func (r *Runner) forceRecheck(ctx context.Context, login string) error {
 		}
 	}
 	logins := r.forceChannels()
+	if r.pointsOnly() && len(logins) == 0 {
+		// The list was emptied: pick idles as no_channels now, not after the
+		// 5-minute offline sleep.
+		slog.Info("runner force list now empty; ending force watch", "kind", "state",
+			"account", r.cfg.AccountID, "channel", login)
+		r.stopWatch(ctx)
+		r.setState(ctx, StatePicking)
+		return nil
+	}
 	next, s, ok := r.liveForce(ctx, logins)
 	switch {
 	case !ok:

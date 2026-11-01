@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { setLang } from '$lib/i18n/index.svelte';
+import { setLang, t } from '$lib/i18n/index.svelte';
 import { readFileSync } from 'node:fs';
 import {
 	SECTIONS,
 	isAvatarURL,
 	isChannel,
+	isClock,
 	isDiscordWebhook,
+	isMentionID,
 	isProxyURL,
 	minutesLabel,
 	isTelegramChat,
@@ -13,6 +15,8 @@ import {
 	passwordErrorKey,
 	passwordProblem,
 	sectionFromHash,
+	shareCatalogToggle,
+	sleepProblem,
 	timeExample,
 	zoneOptions
 } from './settings';
@@ -28,7 +32,11 @@ describe('settings helpers', () => {
 	});
 
 	it('SECTIONS order is general first and password last, under updates', () => {
-		expect([...SECTIONS]).toEqual(['general', 'accounts', 'engine', 'notifications', 'health', 'updates', 'password']);
+		expect([...SECTIONS]).toEqual(['general', 'accounts', 'engine', 'experimental', 'notifications', 'health', 'updates', 'password']);
+	});
+
+	it('sectionFromHash knows the experimental section', () => {
+		expect(sectionFromHash('#experimental')).toBe('experimental');
 	});
 
 	it('zoneOptions starts with server default', () => {
@@ -55,6 +63,18 @@ describe('telegram', () => {
 		expect(isTelegramChat('@grub_alerts')).toBe(true);
 		expect(isTelegramChat('@x')).toBe(false);
 		expect(isTelegramChat('chat')).toBe(false);
+	});
+});
+
+describe('mention IDs', () => {
+	it('accepts digits only or empty', () => {
+		expect(isMentionID('')).toBe(true);
+		expect(isMentionID('123456789012345678')).toBe(true);
+		expect(isMentionID('987654321')).toBe(true);
+		expect(isMentionID('<@123>')).toBe(false);
+		expect(isMentionID('@grub_user')).toBe(false);
+		expect(isMentionID('-100123')).toBe(false);
+		expect(isMentionID('123456789012345678901')).toBe(false);
 	});
 });
 
@@ -85,6 +105,36 @@ describe('discord webhook', () => {
 	});
 });
 
+describe('experimental settings', () => {
+	it('the share toggle works with an Android Twitch login', () => {
+		const st = shareCatalogToggle({ share_catalog_available: true });
+		expect(st.disabled).toBe(false);
+		expect(t(st.hint)).toBe('TV logins also mine campaigns an Android login can see.');
+	});
+	it('without an Android and a TV Twitch login it is disabled and says why', () => {
+		const st = shareCatalogToggle({ share_catalog_available: false });
+		expect(st.disabled).toBe(true);
+		expect(t(st.hint)).toBe('Needs an Android and a TV Twitch login.');
+	});
+	it('the section shows a chip when the helper says unavailable and saves only its own field', () => {
+		const src = readFileSync('src/routes/(app)/settings/Experimental.svelte', 'utf8');
+		expect(src).toContain('id="experimental"');
+		expect(src).toContain('{#if share.disabled}');
+		expect(src).toContain("<span class=\"chip off\">{t('settings.unavailable')}</span>");
+		expect(src).toContain('class:na={share.disabled}');
+		expect(src).toContain("save('exp_share_catalog', { exp_share_catalog: !s.exp_share_catalog })");
+	});
+	it('the page renders Experimental right after Engine', () => {
+		const src = readFileSync('src/routes/(app)/settings/+page.svelte', 'utf8');
+		const eng = src.indexOf('<Engine {s}');
+		const exp = src.indexOf('<Experimental {s}');
+		const notif = src.indexOf('<Notifications {s}');
+		expect(eng).toBeGreaterThan(-1);
+		expect(exp).toBeGreaterThan(eng);
+		expect(notif).toBeGreaterThan(exp);
+	});
+});
+
 describe('engine settings helpers', () => {
 	it('minutesLabel shows minutes below an hour and hours above', () => {
 		expect(minutesLabel(15)).toBe('15 min');
@@ -100,6 +150,19 @@ describe('engine settings helpers', () => {
 		expect(isProxyURL('ftp://10.0.0.1')).toBe(false);
 		expect(isProxyURL('10.0.0.1:3128')).toBe(false);
 		expect(isProxyURL('socks5://')).toBe(false);
+	});
+
+	it('isClock takes a 24-hour HH:MM only', () => {
+		for (const v of ['00:00', '02:00', '09:59', '23:59']) expect(isClock(v)).toBe(true);
+		for (const v of ['', '2:00', '24:00', '12:60', '12:5', '12-30', '12:30:00', ' 12:30']) expect(isClock(v)).toBe(false);
+	});
+
+	it('sleepProblem rejects bad and equal times, and allows crossing midnight', () => {
+		expect(sleepProblem('02:00', '08:00')).toBeNull();
+		expect(sleepProblem('23:00', '07:00')).toBeNull();
+		expect(sleepProblem('', '08:00')).toBe('settings.sleep_invalid');
+		expect(sleepProblem('02:00', '25:00')).toBe('settings.sleep_invalid');
+		expect(sleepProblem('03:30', '03:30')).toBe('settings.sleep_same');
 	});
 
 	it('isChannel takes up to 25 word characters', () => {

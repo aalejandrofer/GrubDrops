@@ -148,6 +148,19 @@ func adminConfigured(ctx context.Context, q *gen.Queries) (bool, error) {
 	return q.AdminExists(ctx)
 }
 
+// ssoOn reports whether OIDC SSO is configured and reachable.
+func (s *server) ssoOn() bool { return s.d.OIDC != nil && s.d.OIDC.Enabled() }
+
+// passwordLoginOff reports whether the admin password sign-in is refused: the
+// setting is on AND SSO is configured. Without SSO the password always works,
+// so a dropped SSO config cannot lock the admin out.
+func (s *server) passwordLoginOff(ctx context.Context) (bool, error) {
+	if !s.ssoOn() || s.d.Settings == nil {
+		return false, nil
+	}
+	return s.d.Settings.PasswordLoginDisabled(ctx)
+}
+
 // routesAuth registers the public session, setup, login and logout routes.
 func (s *server) routesAuth(r chi.Router) {
 	b := s.bypass
@@ -157,7 +170,11 @@ func (s *server) routesAuth(r chi.Router) {
 			writeErr(w, http.StatusInternalServerError, "internal")
 			return
 		}
-		oidcOn := s.d.OIDC != nil && s.d.OIDC.Enabled()
+		pwOff, err := s.passwordLoginOff(r.Context())
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "internal")
+			return
+		}
 		name := ""
 		if s.d.OIDC != nil {
 			name = s.d.OIDC.Name()
@@ -165,9 +182,11 @@ func (s *server) routesAuth(r chi.Router) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"authed":       b.allows(r) || s.d.Session.GetBool(r.Context(), "admin_authed"),
 			"setup_needed": !configured,
-			"oidc":         map[string]any{"enabled": oidcOn, "name": name},
-			"csrf_token":   nosurf.Token(r),
-			"version":      s.d.Version,
+			"oidc":         map[string]any{"enabled": s.ssoOn(), "name": name},
+			// password_login is false only while SSO is the sole way in.
+			"password_login": !pwOff,
+			"csrf_token":     nosurf.Token(r),
+			"version":        s.d.Version,
 		})
 	})
 	r.Post("/setup", s.setup)
@@ -223,6 +242,15 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &in) {
 		return
 	}
+	off, err := s.passwordLoginOff(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	if off {
+		writeErr(w, http.StatusForbidden, "password_login_disabled")
+		return
+	}
 	admin, err := s.d.Q.GetAdmin(r.Context())
 	if err != nil || auth.VerifyPassword(admin.PasswordHash, in.Password) != nil {
 		writeErr(w, http.StatusUnauthorized, "unauthorized")
@@ -243,7 +271,7 @@ func (s *server) routesOIDC(r chi.Router) {
 	if s.d.DB != nil {
 		hs = oidc.NewHandshakeStore(s.d.DB)
 	}
-	enabled := func() bool { return s.d.OIDC != nil && s.d.OIDC.Enabled() && hs != nil }
+	enabled := func() bool { return s.ssoOn() && hs != nil }
 
 	r.Get("/login", func(w http.ResponseWriter, r *http.Request) {
 		if !enabled() {

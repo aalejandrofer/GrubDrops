@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/runner"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
@@ -69,6 +70,31 @@ func pausedAccounts(accts []gen.Account) map[string]bool {
 	return paused
 }
 
+// sleepWindowUntil reports whether the app is in its sleep window: at least
+// one account sleeps in it, and every other ready account (healthy, not
+// paused) skips the window. It returns the earliest wake among the sleepers.
+// ready lists the ready account IDs; skip the IDs with skip_sleep on.
+func sleepWindowUntil(snaps []runner.Snapshot, ready, skip map[string]bool) (time.Time, bool) {
+	var wake time.Time
+	asleep := false
+	for _, sn := range snaps {
+		if !ready[sn.AccountID] {
+			continue
+		}
+		if sn.State != runner.StateSleepWindow {
+			if !skip[sn.AccountID] {
+				return time.Time{}, false
+			}
+			continue
+		}
+		asleep = true
+		if !sn.SleepUntil.IsZero() && (wake.IsZero() || sn.SleepUntil.Before(wake)) {
+			wake = sn.SleepUntil
+		}
+	}
+	return wake, asleep
+}
+
 // signedOut reports whether the account has no stored session. A failed
 // lookup counts as signed in.
 func (s *server) signedOut(ctx context.Context, id string) bool {
@@ -99,6 +125,18 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	paused := pausedAccounts(accts)
+	skipSleep := map[string]bool{}
+	// canForce holds enabled accounts whose points mode is on: only they
+	// force watch. A Kick account has no points mode and always may.
+	canForce := map[string]bool{}
+	for _, a := range accts {
+		if a.SkipSleep != 0 {
+			skipSleep[a.ID] = true
+		}
+		if a.Enabled != 0 && platform.EffectivePointsMode(a.Platform, platform.PointsMode(a.PointsMode)).On() {
+			canForce[a.ID] = true
+		}
+	}
 
 	snaps := s.d.Pool.Snapshots()
 	// ready counts healthy accounts that are not paused.
@@ -107,6 +145,7 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 	var lastScan time.Time
 	problems := []overviewProblem{}
 	flagged := map[string]bool{}
+	readyIDs := map[string]bool{}
 	for _, sn := range snaps {
 		if _, ok := names[sn.AccountID]; !ok {
 			continue
@@ -124,6 +163,7 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 			healthy++
 			if !paused[sn.AccountID] {
 				ready++
+				readyIDs[sn.AccountID] = true
 			}
 		}
 		if sn.Current != nil || len(sn.UpNext) > 0 {
@@ -151,8 +191,10 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// With force channels set, no chosen games is not a stop: accounts still
-	// force watch. That needs a channel with at least one enabled account.
-	force, forceUsable := s.forceOverview(r, snaps, names, paused)
+	// force watch. That needs a channel with at least one enabled account
+	// whose points mode is on; a points-only account needs no games.
+	force, forceUsable := s.forceOverview(r, snaps, accts, names, canForce)
+	sleepUntil, asleep := sleepWindowUntil(snaps, readyIDs, skipSleep)
 	state := "idle"
 	switch {
 	case len(accts) == 0:
@@ -161,8 +203,13 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 		state = "no_games"
 	case mining > 0:
 		state = "mining"
+	case asleep:
+		state = "sleep_window"
 	case !anyWork && ready > 0:
 		state = "nothing_live"
+	}
+	if state != "sleep_window" {
+		sleepUntil = time.Time{}
 	}
 
 	now := s.overviewNow()
@@ -203,6 +250,7 @@ func (s *server) getOverview(w http.ResponseWriter, r *http.Request) {
 			"accounts_paused": len(paused),
 			"last_scan_at":    rfc3339(lastScan),
 			"next_scan_at":    rfc3339(earliestNextScan(snaps, paused)),
+			"sleep_until":     rfc3339(sleepUntil),
 		},
 		"problems": problems,
 		"kpis": map[string]any{

@@ -17,7 +17,21 @@
 		"claim": true,
 		"auth": true,
 		"errors": false,
-		"daily_summary": true
+		"daily_summary": true,
+		"reward_codes": true
 	},
-	"update_auto": true
+	"update_auto": true,
+	"sleep": {
+		"enabled": false,
+		"start": "02:00",
+		"end": "08:00"
+	},
+	"sso": {
+		"enabled": false,
+		"name": "",
+		"issuer_host": "",
+		"allowed_emails": 0,
+		"allowed_groups": 0
+	},
+	"password_login_disabled": false
 }

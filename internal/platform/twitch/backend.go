@@ -118,6 +118,10 @@ type Backend struct {
 	tvDetails   map[string][]platform.DropBenefit
 	tvDetailsAt time.Time
 
+	// shared is the experimental Android catalog a TV session's scan
+	// merges from; nil = off. Guarded by mu.
+	shared SharedCatalog
+
 	// PubSub WebSocket — one per backend (per platform-account). Lazy
 	// init on first ListActiveCampaigns once we have the user_id +
 	// auth token. Real-time progress / claim / stream-down events feed
@@ -132,6 +136,15 @@ type Backend struct {
 }
 
 var _ platform.Backend = (*Backend)(nil)
+
+// SampledDiscovery reports whether s is a TV-client session: its campaign
+// list comes from the top live drops-enabled channels per game, not the
+// drops dashboard. Satisfies platform.SampledDiscoverer.
+func (b *Backend) SampledDiscovery(s platform.Session) bool {
+	return s.ClientID == ClientTV
+}
+
+var _ platform.SampledDiscoverer = (*Backend)(nil)
 
 // Close stops the PubSub goroutine and releases resources.
 func (b *Backend) Close() {
@@ -254,6 +267,7 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 		if err != nil {
 			return nil, err
 		}
+		camps = b.withShared(ctx, s, camps, allowed)
 		details := make(map[string][]platform.DropBenefit, len(camps))
 		for _, c := range camps {
 			details[c.ID] = c.Benefits
@@ -328,6 +342,7 @@ func (b *Backend) SetAccountPubSubHooks(accountID string, h platform.PubSubHooks
 		OnStreamDown:   h.OnStreamDown,
 		OnStreamUp:     h.OnStreamUp,
 		OnRewardCode:   h.OnRewardCode,
+		OnRaid:         h.OnRaid,
 	}
 	b.pubsubMu.Unlock()
 }
@@ -398,6 +413,45 @@ func (b *Backend) UnsubscribeChannel(_ string, channelID string) {
 	}
 	client.RemoveTopic(TopicVideoPlaybackByID(channelID))
 }
+
+// SubscribeRaids adds the raid.<id> topic for a watched broadcaster so raid
+// announcements reach OnRaid. Idempotent. Satisfies platform.RaidJoiner.
+func (b *Backend) SubscribeRaids(_ string, channelID string) {
+	b.pubsubMu.Lock()
+	client := b.pubsub
+	b.pubsubMu.Unlock()
+	if client == nil || channelID == "" {
+		return
+	}
+	client.AddTopic(TopicRaid(channelID))
+}
+
+// UnsubscribeRaids drops the raid.<id> topic.
+func (b *Backend) UnsubscribeRaids(_ string, channelID string) {
+	b.pubsubMu.Lock()
+	client := b.pubsub
+	b.pubsubMu.Unlock()
+	if client == nil || channelID == "" {
+		return
+	}
+	client.RemoveTopic(TopicRaid(channelID))
+}
+
+// JoinRaid joins the raid raidID with one JoinRaid mutation.
+func (b *Backend) JoinRaid(ctx context.Context, s platform.Session, raidID string) error {
+	if raidID == "" || s.AccessToken == "" {
+		return errors.New("join raid: raid id and access token are required")
+	}
+	b.c.bind(s)
+	if err := b.c.gql(ctx, s.AccessToken, OpJoinRaid, map[string]any{
+		"input": map[string]string{"raidID": raidID},
+	}, nil); err != nil {
+		return fmt.Errorf("join raid: %w", err)
+	}
+	return nil
+}
+
+var _ platform.RaidJoiner = (*Backend)(nil)
 
 func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, c platform.Campaign) ([]platform.Stream, error) {
 	b.c.bind(s)

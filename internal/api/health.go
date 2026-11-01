@@ -16,7 +16,8 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/store"
 )
 
-// maxHealthEvents caps the events returned after the filter.
+// maxHealthEvents is the window of newest non-DEBUG lines the filters list
+// and count.
 const maxHealthEvents = 50
 
 // canaryRunTimeout bounds one run-now canary run: two Twitch beacons at 5 s
@@ -45,7 +46,8 @@ type healthEvent struct {
 
 // healthFieldAllow lists the ring line fields that reach the browser. Fields
 // are untrusted and may hold secrets, so nothing else is copied.
-var healthFieldAllow = []string{"game", "campaign", "benefit_name", "channel", "state", "prev", "err"}
+// ok is the pass or fail of an authcheck line.
+var healthFieldAllow = []string{"game", "campaign", "benefit_name", "channel", "state", "prev", "err", "ok"}
 
 // maxHealthFieldRunes cuts each allowlisted value.
 const maxHealthFieldRunes = 200
@@ -96,8 +98,18 @@ type canaryOut struct {
 	CheckedAt *string `json:"checked_at"`
 }
 
+// isProblem reports a line the Problems filter lists. An auth line counts
+// only when it failed: WARN or ERROR, or an ok field that is false. A
+// passing sign-in check is not a problem.
 func isProblem(l mlog.LogLine) bool {
-	return l.Level == "WARN" || l.Level == "ERROR" || l.Kind == mlog.KindError || l.Kind == mlog.KindAuth
+	if l.Level == "WARN" || l.Level == "ERROR" || l.Kind == mlog.KindError {
+		return true
+	}
+	if l.Kind == mlog.KindAuth {
+		ok, has := l.Fields["ok"].(bool)
+		return has && !ok
+	}
+	return false
 }
 
 func isClaim(l mlog.LogLine) bool { return l.Kind == mlog.KindClaim }
@@ -124,9 +136,11 @@ func (s *server) getHealth(w http.ResponseWriter, r *http.Request) {
 	if s.d.Ring != nil {
 		lines = s.d.Ring.Snapshot()
 	}
+	// The counts and the list share one window: the newest maxHealthEvents
+	// lines, the same lines the All filter lists.
 	counts := map[string]int{"all": 0, "problems": 0, "claims": 0}
 	events := []healthEvent{}
-	for i := len(lines) - 1; i >= 0; i-- { // newest first
+	for i := len(lines) - 1; i >= 0 && counts["all"] < maxHealthEvents; i-- { // newest first
 		l := lines[i]
 		// DEBUG lines stay in the full log download only.
 		if l.Level == "DEBUG" {
@@ -140,11 +154,9 @@ func (s *server) getHealth(w http.ResponseWriter, r *http.Request) {
 		if claim {
 			counts["claims"]++
 		}
-		keep := filter == "all" || (filter == "problems" && problem) || (filter == "claims" && claim)
-		if !keep || len(events) >= maxHealthEvents {
-			continue
+		if filter == "all" || (filter == "problems" && problem) || (filter == "claims" && claim) {
+			events = append(events, logEvent(l, names[LogAccountID(l)]))
 		}
-		events = append(events, logEvent(l, names[LogAccountID(l)]))
 	}
 
 	var lastScan time.Time

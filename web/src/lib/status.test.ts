@@ -25,7 +25,7 @@ describe('headerTone', () => {
 	it('mining without problems is green', () => expect(headerTone(clean(), false)).toBe('green'));
 	it('force watching is green, amber with a problem', () => {
 		const x = withState('idle');
-		x.force_watch = { live: [{ platform: 'kick', channel: 'xqc', watchers: ['a'] }], more: 0, total: 1 };
+		x.force_watch = { live: [{ platform: 'kick', channel: 'xqc', watchers: ['a'], balance: null, read: 'none' }], more: 0, total: 1, points: null, points_read: 'none', points_at: null };
 		x.problems = [];
 		expect(headerTone(x, false)).toBe('green');
 		x.problems = [{ kind: 'needs_login', account_id: 'b', account_name: 'b' }];
@@ -52,14 +52,22 @@ describe('statusText', () => {
 	});
 	it('nothing live', () => expect(statusText(o(nothingLive), false)).toBe('Idle · watching for campaigns'));
 	it('idle', () => expect(statusText(withState('idle'), false)).toBe('Idle'));
+	it('sleep window names the wake time', () => {
+		const x = withState('sleep_window');
+		x.status.sleep_until = '2026-10-30T07:45:00Z';
+		expect(statusText(x, false, () => '07:45')).toBe('Sleep window until 07:45');
+		x.status.sleep_until = null;
+		expect(statusText(x, false)).toBe('Sleep window');
+		expect(headerTone(x, false)).toBe('grey');
+	});
 	it('force watching when an account watches and none mines', () => {
 		const x = withState('idle');
-		x.force_watch = { live: [{ platform: 'twitch', channel: 'keshaeuw', watchers: ['Phluses'] }], more: 0, total: 1 };
-		expect(statusText(x, false)).toBe('Force watching');
+		x.force_watch = { live: [{ platform: 'twitch', channel: 'keshaeuw', watchers: ['Phluses'], balance: null, read: 'none' }], more: 0, total: 1, points: null, points_read: 'none', points_at: null };
+		expect(statusText(x, false)).toBe('Points watching');
 		x.force_watch.live[0].watchers = [];
 		expect(statusText(x, false)).toBe('Idle');
 		const m = o(mining);
-		m.force_watch = { live: [{ platform: 'twitch', channel: 'keshaeuw', watchers: ['Phluses'] }], more: 0, total: 1 };
+		m.force_watch = { live: [{ platform: 'twitch', channel: 'keshaeuw', watchers: ['Phluses'], balance: null, read: 'none' }], more: 0, total: 1, points: null, points_read: 'none', points_at: null };
 		expect(statusText(m, false)).toBe('Mining · 2 of 3 accounts');
 	});
 });

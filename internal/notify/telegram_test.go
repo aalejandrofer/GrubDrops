@@ -193,3 +193,47 @@ func TestTelegram_ErrorsRedactToken(t *testing.T) {
 	require.True(t, errors.As(err, &apiErr))
 	assert.Equal(t, http.StatusUnauthorized, apiErr.status)
 }
+
+func TestTelegram_MentionsUserOnAlertsOnly(t *testing.T) {
+	srv, calls := tgServer(t, okHandler)
+	bot := newTestBot(srv.URL, nil)
+	bot.MentionUserID = "987654321"
+	require.NoError(t, bot.Notify(context.Background(), EventAuth, map[string]any{"account": "a<b>", "msg": "1 < 2"}))
+	require.NoError(t, bot.Notify(context.Background(), EventError, map[string]any{"msg": "boom"}))
+	require.NoError(t, bot.Notify(context.Background(), EventCanary, map[string]any{"msg": "dead"}))
+	require.NoError(t, bot.Notify(context.Background(), EventClaim, map[string]any{"game": "Rust", "drop": "Helmet"}))
+	require.NoError(t, bot.Notify(context.Background(), EventProgress, map[string]any{"game": "Rust", "drop": "Helmet"}))
+	require.NoError(t, bot.Notify(context.Background(), EventSummary, map[string]any{"msg": "day"}))
+	require.NoError(t, bot.Notify(context.Background(), EventTest, map[string]any{"game": "Rust"}))
+
+	got := calls()
+	require.Len(t, got, 7)
+	mention := `🔔 <a href="tg://user?id=987654321">mention</a>`
+	assert.Equal(t, strings.Join([]string{
+		"<b>Auth event</b>",
+		"account: a&lt;b&gt;",
+		"msg: 1 &lt; 2",
+		mention,
+	}, "\n"), got[0].body["text"])
+	assert.Equal(t, "HTML", got[0].body["parse_mode"])
+	for i, c := range got[1:3] {
+		assert.True(t, strings.HasSuffix(c.body["text"].(string), "\n"+mention), "alert %d mentions", i)
+	}
+	for i, c := range got[3:] {
+		assert.NotContains(t, c.body["text"], "tg://user", "non-alert %d stays silent", i)
+	}
+}
+
+func TestTelegram_NoMentionWhenUnsetOrInvalid(t *testing.T) {
+	srv, calls := tgServer(t, okHandler)
+	for _, id := range []string{"", "@someone", `1"><b>x`} {
+		bot := newTestBot(srv.URL, nil)
+		bot.MentionUserID = id
+		require.NoError(t, bot.Notify(context.Background(), EventError, map[string]any{"msg": "boom"}))
+	}
+	got := calls()
+	require.Len(t, got, 3)
+	for i, c := range got {
+		assert.Equal(t, "<b>Error</b>\nmsg: boom", c.body["text"], "case %d", i)
+	}
+}

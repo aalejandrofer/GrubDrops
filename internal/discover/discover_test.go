@@ -166,3 +166,54 @@ func TestKickFetcher_FallsBackToNoSession(t *testing.T) {
 	assert.Len(t, camps, 1)
 	assert.Equal(t, []string{"k1", ""}, used)
 }
+
+func TestCanShareCatalog(t *testing.T) {
+	sess := sessionsBy(map[string]platform.Session{
+		"tv":     {AccessToken: "t", ClientID: twitch.ClientTV},
+		"tvoff":  {AccessToken: "t", ClientID: twitch.ClientTV},
+		"tvbare": {ClientID: twitch.ClientTV},
+		"off":    {AccessToken: "t", ClientID: twitch.ClientAndroid},
+		"k":      {AccessToken: "t"},
+		"bare":   {ClientID: twitch.ClientAndroid},
+		"a":      {AccessToken: "t", ClientID: twitch.ClientAndroid},
+	})
+	ctx := context.Background()
+	assert.False(t, CanShareCatalog(ctx, accounts(
+		gen.Account{ID: "tv", Platform: "twitch", Enabled: 1},
+		gen.Account{ID: "off", Platform: "twitch", Enabled: 0},
+		gen.Account{ID: "k", Platform: "kick", Enabled: 1},
+		gen.Account{ID: "bare", Platform: "twitch", Enabled: 1},
+		gen.Account{ID: "none", Platform: "twitch", Enabled: 1},
+	), sess), "TV, disabled, Kick, tokenless and sessionless accounts are no Android source")
+	assert.False(t, CanShareCatalog(ctx, accounts(
+		gen.Account{ID: "a", Platform: "twitch", Enabled: 1},
+		gen.Account{ID: "tvoff", Platform: "twitch", Enabled: 0},
+		gen.Account{ID: "tvbare", Platform: "twitch", Enabled: 1},
+	), sess), "an Android login with no enabled, signed-in TV login has nobody to share with")
+	assert.True(t, CanShareCatalog(ctx, accounts(
+		gen.Account{ID: "tv", Platform: "twitch", Enabled: 1},
+		gen.Account{ID: "a", Platform: "twitch", Enabled: 1},
+	), sess))
+	failing := func(context.Context) ([]gen.Account, error) { return nil, errors.New("db") }
+	assert.False(t, CanShareCatalog(ctx, failing, sess))
+}
+
+func TestCampaigns_ServesCachedPlatform(t *testing.T) {
+	var tw atomic.Int32
+	s := New(
+		Source{Platform: "twitch", Fetch: counting(&tw, []platform.Campaign{{ID: "c"}}, nil), Timeout: time.Second},
+	)
+	camps, err := s.Campaigns(context.Background(), "twitch")
+	require.NoError(t, err)
+	assert.Len(t, camps, 1)
+	_, _ = s.Campaigns(context.Background(), "twitch")
+	assert.EqualValues(t, 1, tw.Load(), "second read served from cache")
+
+	_, err = s.Campaigns(context.Background(), "kick")
+	assert.Error(t, err, "unknown platform")
+
+	f := New(Source{Platform: "twitch", Fetch: counting(&tw, nil, errors.New("boom")), Timeout: time.Second})
+	camps, err = f.Campaigns(context.Background(), "twitch")
+	assert.Error(t, err)
+	assert.Empty(t, camps)
+}

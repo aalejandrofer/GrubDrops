@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import type { PointsRead } from '$lib/api/types';
 	import CampaignDrawer, { type CampaignTarget } from '$lib/components/CampaignDrawer.svelte';
 	import GameCard from '$lib/components/GameCard.svelte';
 	import Icon from '$lib/components/Icon.svelte';
@@ -11,6 +12,7 @@
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive, getNet } from '$lib/live-context';
 	import { wantsWizard } from '$lib/onboarding';
+	import { freshLine } from '$lib/points';
 	import { prefs } from '$lib/prefs.svelte';
 
 	const live = getLive();
@@ -41,7 +43,7 @@
 		if (wantsWizard(mode)) void goto('/welcome', { replaceState: true });
 	});
 	const dashboard = $derived(
-		mode === 'healthy' || mode === 'nothing_live' || mode === 'signed_out' || mode === 'paused'
+		mode === 'healthy' || mode === 'nothing_live' || mode === 'sleep_window' || mode === 'signed_out' || mode === 'paused'
 	);
 	const lastScan = $derived(live.games?.last_scan_at ?? o?.status.last_scan_at ?? null);
 	const nextScan = $derived(live.games?.next_scan_at ?? o?.status.next_scan_at ?? null);
@@ -50,6 +52,7 @@
 	const idle = $derived(notMining(live.accounts, live.runners));
 	const IDLE_KEYS = {
 		idle: 'accounts.status.idle',
+		sleep_window: 'accounts.status.sleep_window',
 		signed_out: 'accounts.status.signed_out',
 		paused: 'accounts.status.paused'
 	} as const;
@@ -124,6 +127,9 @@
 	const kpi = $derived(o?.kpis);
 	const unhealthy = $derived(o && kpi ? kpi.accounts_healthy < o.status.accounts_total : false);
 	const force = $derived(o?.force_watch ?? null);
+	const pointsFailed = $derived(force?.points_read === 'failed');
+	/** A points sum as shown on the tile: … while it waits for its first read. */
+	const ptsText = (n: number | null, read: PointsRead) => (n !== null ? formatInt(n) : read === 'pending' ? '…' : '–');
 	const sections = $derived([
 		{ key: 'today', label: t('home.today'), items: groups.today },
 		{ key: 'yesterday', label: t('home.yesterday'), items: groups.yesterday },
@@ -175,6 +181,15 @@
 				<span>{tn('home.signed_out_all', o.status.accounts_total)}</span>
 				<a href="/settings#accounts" class="btn">{t('accounts.log_in_again')}</a>
 			</div>
+		{:else if mode === 'sleep_window'}
+			<div class="empty" role="status">
+				<span
+					>{o.status.sleep_until
+						? t('home.sleep_window', { time: clock(o.status.sleep_until, prefs.zone, prefs.fmt) })
+						: t('accounts.state.sleep_window')}</span
+				>
+				<a href="/settings#engine" class="btn">{t('settings.engine')}</a>
+			</div>
 		{/if}
 		<div class="kpis" class:four={!!force}>
 			<div class="kpi">
@@ -188,22 +203,42 @@
 				<div class="sub">{t('home.kpi_today', { n: formatInt(kpi.claimed_today) })}</div>
 			</a>
 			{#if force}
-				<a class="kpi" href="/games">
-					<div class="label">{t('home.kpi_force')}</div>
+				<a class="kpi" href="/points">
+					<div class="label">
+						<span>{t('home.kpi_force')}</span>
+						{#if force.points_read !== 'none'}
+							<span class="tot" class:stale={pointsFailed}>
+								{#if pointsFailed}<span class="warn"><Icon name="alert" size={12} /></span>{/if}
+								{ptsText(force.points, force.points_read)}
+								{t('points.pts')}
+							</span>
+						{/if}
+					</div>
 					{#if force.live.length > 0}
 						<ul class="tile">
 							{#each force.live as r (`${r.platform}/${r.channel}`)}
 								<li>
 									<span class="dot"></span><PlatformMark platform={r.platform} size="sm" /><b>{r.channel}</b>
-									{#if r.watchers.length > 0}
-										<span class="on">{r.watchers.join(', ')}</span>
-									{:else}
-										<span class="off">{t('home.kpi_force_nobody')}</span>
+									<span class="who">
+										{#if r.watchers.length > 0}
+											<span class="on">{r.watchers.join(', ')}</span>
+										{:else}
+											<span class="off">{t('home.kpi_force_nobody')}</span>
+										{/if}
+									</span>
+									{#if r.read !== 'none'}
+										<span class="bal" class:stale={r.read === 'failed'}>{ptsText(r.balance, r.read)}</span>
 									{/if}
 								</li>
 							{/each}
 						</ul>
-						{#if force.more > 0}<div class="sub more">{t('home.kpi_force_more', { n: formatInt(force.more) })}</div>{/if}
+						{#if pointsFailed}
+							<div class="sub bad more">{freshLine({ kind: 'error', at: force.points_at }, now)}</div>
+						{:else if force.points_read === 'pending'}
+							<div class="sub more">{freshLine({ kind: 'pending' }, now)}</div>
+						{:else if force.more > 0}
+							<div class="sub more">{t('home.kpi_force_more', { n: formatInt(force.more) })}</div>
+						{/if}
 					{:else}
 						<div class="val none-live">{t('home.kpi_force_none')}</div>
 						<div class="sub">{tn('home.kpi_force_waiting', force.total)}</div>
@@ -314,7 +349,7 @@
 <style>
 	.kpis {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		border: 1px solid var(--border-soft);
 		border-radius: var(--radius);
 		background: var(--surface);
@@ -366,7 +401,7 @@
 		outline-offset: -2px;
 	}
 	.kpis.four {
-		grid-template-columns: 1fr 1fr 1.3fr 1fr;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 	}
 	.kpi .val.none-live {
 		font-size: 20px;
@@ -416,6 +451,42 @@
 	}
 	.kpi .sub.more {
 		margin-top: 6px;
+	}
+	.kpi .sub.bad {
+		color: var(--amber);
+	}
+	/* Points watch: total beside the label, a balance at the end of each row. */
+	.tot {
+		margin-left: auto;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		color: var(--text);
+		font-weight: 500;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+	.tot .warn {
+		display: inline-flex;
+		color: var(--amber);
+	}
+	.tile .who {
+		margin-left: auto;
+		font-size: 12px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 0;
+	}
+	.tile li > .bal {
+		flex: none;
+		margin-left: 6px;
+		color: var(--t2);
+		font-variant-numeric: tabular-nums;
+		overflow: visible;
+	}
+	.stale {
+		opacity: 0.6;
 	}
 	.kpi.bad {
 		background: var(--amber-soft);
@@ -499,6 +570,9 @@
 		border-radius: 50%;
 		flex: none;
 		background: var(--t3);
+	}
+	.sd.sleep_window {
+		background: var(--accent);
 	}
 	.sd.signed_out {
 		background: var(--amber);
@@ -707,18 +781,15 @@
 			border-left: 0;
 			border-top: 1px solid var(--border-soft);
 		}
+		/* The Points watch tile and Accounts mining each take a full row. */
 		.kpis.four .kpi:nth-child(3),
 		.kpis.four .kpi:nth-child(4) {
-			border-top: 1px solid var(--border-soft);
-		}
-		.kpis.four .kpi:nth-child(3) {
+			grid-column: 1 / -1;
 			border-left: 0;
+			border-top: 1px solid var(--border-soft);
 		}
 		.kpi.bad {
 			border-radius: 0 0 var(--radius) var(--radius);
-		}
-		.kpis.four .kpi.bad {
-			border-radius: 0 0 var(--radius) 0;
 		}
 	}
 </style>

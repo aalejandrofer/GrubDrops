@@ -50,3 +50,34 @@ func TestMigration0024SkipsTakenSlug(t *testing.T) {
 	require.NoError(t, db.QueryRowContext(ctx, `SELECT name FROM games WHERE id = 'g_overwatch'`).Scan(&name))
 	require.Equal(t, "Overwatch 2", name)
 }
+
+// Migration 0026 adds points_mode, off for every account, including accounts
+// already on a Force watch channel, and keeps their assignments.
+func TestMigration0026PointsModeStartsOff(t *testing.T) {
+	ctx := context.Background()
+	db := migratedTo(t, 25)
+	for _, id := range []string{"a_force", "a_plain", "a_both"} {
+		_, err := db.ExecContext(ctx, `INSERT INTO accounts (id, platform, display_name, status, fingerprint_json, enabled, created_at, updated_at)
+			VALUES (?, 'twitch', ?, 'idle', '{}', 1, 1, 1)`, id, id)
+		require.NoError(t, err)
+	}
+	_, err := db.ExecContext(ctx, `INSERT INTO force_channels (id, platform, channel, rank, created_at) VALUES (1, 'twitch', 'one', 0, 1), (2, 'twitch', 'two', 1, 1)`)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `INSERT INTO force_channel_accounts (channel_id, account_id) VALUES (1, 'a_force'), (1, 'a_both'), (2, 'a_both')`)
+	require.NoError(t, err)
+
+	require.NoError(t, goose.UpToContext(ctx, db, "migrations", 26))
+	want := map[string]string{"a_force": "off", "a_both": "off", "a_plain": "off"}
+	for id, mode := range want {
+		var got string
+		require.NoError(t, db.QueryRowContext(ctx, `SELECT points_mode FROM accounts WHERE id = ?`, id).Scan(&got))
+		require.Equal(t, mode, got, id)
+	}
+	var n int
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT count(*) FROM force_channel_accounts`).Scan(&n))
+	require.Equal(t, 3, n, "assignments stay")
+
+	require.NoError(t, goose.DownToContext(ctx, db, "migrations", 25))
+	_, err = db.ExecContext(ctx, `SELECT points_mode FROM accounts`)
+	require.Error(t, err, "down drops the column")
+}

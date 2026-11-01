@@ -13,6 +13,8 @@ const acct = (id: string, needs_login: boolean): Account => ({
 	enabled: true,
 	own_games: false,
 	own_game_count: 0,
+	skip_sleep: false,
+	points_mode: 'off',
 	auth: null
 });
 

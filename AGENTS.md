@@ -101,12 +101,17 @@ proto/                  buf config + gRPC defs for the sidecar — core, not dea
 
 ## Internationalization
 
-- User-facing strings Go sends go through `internal/i18n` (`i18n.T(lang, key)`).
-  Add the key to **every** locale file under
-  `internal/i18n/locales/` — the locales must keep equal key sets
-  (`TestLocaleParity`).
-- The Svelte UI reads the same files through `t()`/`tn()`.
-  `npm --prefix web run check` fails on unused or unequal keys.
+- Go strings go through `internal/i18n` (`i18n.T(lang, key)`); the Svelte UI
+  reads the same files through `t()`/`tn()`. Add every key to **all** files in
+  `internal/i18n/locales/` (`TestLocaleParity`; `npm --prefix web run check`
+  fails on unused or unequal keys).
+- Tag every new user-facing feature (nav link, setting, panel) with
+  `<NewPill since="X.Y" />` (the minor that ships it). It shows on that minor
+  only, flags "new, may be rough", and drops on the next minor by itself.
+- GUI text is lean and minimal: run the humanizer skill on it, then cut to the
+  shortest wording that says what happens ("Mining: War Thunder").
+- Help text under inputs uses `$lib/components/Hint.svelte`: one short line plus
+  optional platform-tagged examples that fill the field. No toggles or paragraphs.
 
 ## Releasing
 
@@ -135,20 +140,5 @@ A commit is **not** a release. Day-to-day work lands on `master` freely.
 
 A broken miner must never ship under a version tag.
 
-### Release notes format
-
-Never a paragraph wall. Lead with a one-line **highlight**, then group entries
-under these emoji section headers, in this order (omit empty sections):
-
-- **🌱 Added** — new features
-- **⚙️ Changed** — behaviour / UX changes
-- **🐛 Fixed** — bug fixes
-- **🔥 Removed** — removed features, flags, or paths
-
-Bold the subject of each bullet; write what changed + why it matters in plain
-user-facing language, not commit-speak. The notes are a curated subset of
-`[Unreleased]`, not the raw changelog.
-
-Release **title** = bare version only (e.g. `v1.2.5`). Release **notes** are
-humanized (run the humanizer skill): plain voice, **no em/en dashes**, but keep
-the emoji-section + bold-subject format above.
+Release notes format (title, emoji sections, humanized voice): see
+[docs/release-notes.md](docs/release-notes.md).

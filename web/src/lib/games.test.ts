@@ -60,7 +60,8 @@ const game = (id: string): Game => ({
 	box_art_url: '',
 	state: 'no_campaign',
 	campaigns: [],
-	needs_link: []
+	needs_link: [],
+	paused_holders: []
 });
 
 describe('linkHref', () => {

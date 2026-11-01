@@ -40,6 +40,8 @@ func TestCatalog_ActiveOnlyWithRewards(t *testing.T) {
 	require.Len(t, camps[0].Benefits, 1)
 	assert.Equal(t, "Wolf Helmet", camps[0].Benefits[0].Name)
 	assert.Equal(t, 60, camps[0].Benefits[0].RequiredMinutes)
+	assert.Equal(t, []string{"fakestreamer", "another"}, camps[0].AllowedChannels, "allow-list rides on the campaign")
+	assert.Equal(t, 2, camps[0].AllowedChannelCount)
 	assert.Empty(t, b.disc.drainAllowed(), "catalog must not capture allow-lists")
 }
 

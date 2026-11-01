@@ -162,3 +162,41 @@ func TestSettings_ScanAndPreempt(t *testing.T) {
 	n, _ = s.ScanIntervalMin(ctx)
 	assert.Equal(t, 60, n)
 }
+
+// Follow raids is off until turned on.
+func TestSettings_FollowRaids(t *testing.T) {
+	db, err := Open(context.Background(), filepath.Join(t.TempDir(), "t.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	s := NewSettings(gen.New(db))
+	ctx := context.Background()
+
+	on, err := s.FollowRaids(ctx)
+	require.NoError(t, err)
+	assert.False(t, on, "off by default")
+	require.NoError(t, s.SetFollowRaids(ctx, true))
+	on, _ = s.FollowRaids(ctx)
+	assert.True(t, on)
+	require.NoError(t, s.SetFollowRaids(ctx, false))
+	on, _ = s.FollowRaids(ctx)
+	assert.False(t, on)
+}
+
+// Sharing the Android catalog with TV accounts is off until turned on.
+func TestSettings_ExpShareCatalog(t *testing.T) {
+	db, err := Open(context.Background(), filepath.Join(t.TempDir(), "t.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	s := NewSettings(gen.New(db))
+	ctx := context.Background()
+
+	on, err := s.ExpShareCatalog(ctx)
+	require.NoError(t, err)
+	assert.False(t, on, "off by default")
+	require.NoError(t, s.SetExpShareCatalog(ctx, true))
+	on, _ = s.ExpShareCatalog(ctx)
+	assert.True(t, on)
+	require.NoError(t, s.SetExpShareCatalog(ctx, false))
+	on, _ = s.ExpShareCatalog(ctx)
+	assert.False(t, on)
+}

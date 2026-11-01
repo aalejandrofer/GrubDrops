@@ -58,6 +58,10 @@ type PubSubHandlers struct {
 	// dedupe; body is the raw notification text so the receiver can
 	// capture surrounding context (game / drop name) when persisting.
 	OnRewardCode func(notificationID, code, body string)
+	// OnRaid fires for `raid_update_v2` on `raid.<channel_id>`: the
+	// channel announced a raid. Twitch repeats the event while the
+	// raid counts down, so the receiver dedupes on raidID.
+	OnRaid func(channelID, raidID string)
 }
 
 // PubSubClient holds one WebSocket connection and the topics LISTENed
@@ -317,6 +321,8 @@ func (p *PubSubClient) dispatch(topic string, payload []byte) {
 		// by the regular claim event.
 		p.dispatchNotification(payload)
 		return
+	case startsWith(topic, "raid."):
+		p.dispatchRaid(topic, payload)
 	default:
 		slog.Debug("pubsub unhandled topic", "topic", topic)
 	}
@@ -408,16 +414,15 @@ func (p *PubSubClient) dispatchNotification(payload []byte) {
 	}
 	code := codePattern.FindString(text)
 	if code == "" {
+		// The body may hold a code of another shape: never log it.
 		slog.Debug("pubsub notification: no code in body",
-			"notification_type", d.Notification.Type,
-			"body", truncateString(text, 200))
+			"notification_type", d.Notification.Type)
 		return
 	}
 	slog.Info("pubsub reward code extracted",
 		"kind", "claim",
 		"notification_id", d.Notification.ID,
-		"notification_type", d.Notification.Type,
-		"code", code)
+		"notification_type", d.Notification.Type)
 	if p.handlers.OnRewardCode != nil {
 		p.handlers.OnRewardCode(d.Notification.ID, code, text)
 	}
@@ -428,6 +433,34 @@ func truncateString(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// dispatchRaid decodes a raid.<channel_id> payload and reports a raid
+// announced by that channel. Only raid_update_v2 counts: raid_go_v2 and
+// raid_cancel_v2 come later or undo it, and a raid whose source is not the
+// topic's channel is not one the account's watch can join.
+func (p *PubSubClient) dispatchRaid(topic string, payload []byte) {
+	channelID := topic[len("raid."):]
+	var env struct {
+		Type string `json:"type"`
+		Raid struct {
+			ID       string `json:"id"`
+			SourceID string `json:"source_id"`
+		} `json:"raid"`
+	}
+	if err := json.Unmarshal(payload, &env); err != nil {
+		slog.Debug("pubsub raid decode failed", "err", err)
+		return
+	}
+	if env.Type != "raid_update_v2" || env.Raid.ID == "" || channelID == "" {
+		return
+	}
+	if env.Raid.SourceID != "" && env.Raid.SourceID != channelID {
+		return
+	}
+	if p.handlers.OnRaid != nil {
+		p.handlers.OnRaid(channelID, env.Raid.ID)
+	}
 }
 
 // dispatchPlaybackEvent decodes video-playback-by-id payloads. Topic
@@ -490,6 +523,12 @@ func TopicUserDropEvents(userID int64) string {
 // numeric Twitch ID.
 func TopicVideoPlaybackByID(channelID string) string {
 	return "video-playback-by-id." + channelID
+}
+
+// TopicRaid watches raids a broadcaster starts. channelID is the
+// broadcaster's numeric Twitch ID.
+func TopicRaid(channelID string) string {
+	return "raid." + channelID
 }
 
 // TopicOnsiteNotifications subscribes to the user's notification

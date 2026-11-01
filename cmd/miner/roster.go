@@ -17,9 +17,11 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/plan"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/platform/kick"
+	"github.com/aalejandrofer/grubdrops/internal/platform/twitch"
 	"github.com/aalejandrofer/grubdrops/internal/runner"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/aalejandrofer/grubdrops/internal/timeutil"
 )
 
 // kickRegistry is the part of the Kick backend a roster build registers an
@@ -47,11 +49,17 @@ type roster struct {
 	logger      *slog.Logger
 	names       *accountNames       // set by newRoster
 	fallbackLog *refreshFallbackLog // set by newRoster
+	flags       *accountFlags       // set by newRoster
 
 	backendFor func(gen.Account) (platform.Backend, error)
 	notifier   runner.Notifier
 	settings   *store.Settings              // nil = default priority
 	runCfg     *atomic.Pointer[runSettings] // set by newRoster; holds nil until read
+	// runGen counts settingsChanged calls; a cached runSettings read under
+	// an older count is stale. Set by newRoster.
+	runGen *atomic.Uint64
+	// zone is the display timezone the sleep window is read in; nil = UTC.
+	zone func() *time.Location
 
 	// gamesDirty queues one games reload; see requestGamesReload.
 	gamesDirty chan struct{} // set by newRoster
@@ -72,6 +80,21 @@ type roster struct {
 	forceQueue  *accountQueue                         // set by newRoster; see forceChanged
 	loaded      *loadedSessions                       // set by newRoster
 	noLooker    *sync.Map                             // set by newRoster; platforms already warned about
+	// staleGames holds points-only accounts a games reload skipped: their
+	// runner still has the games it was built with. Set by newRoster.
+	staleGames *sync.Map
+	// waker wakes an account's platform peers when its scan finds a new
+	// campaign (discussion #83). Set by newRoster; nil = no wakes.
+	waker *runner.CampaignWaker
+	// catalog is the cached Discover catalog of one platform, the source
+	// TV accounts merge while the experimental share is on. nil = none.
+	catalog func(ctx context.Context, platform string) ([]platform.Campaign, error)
+}
+
+// sharedCatalogSetter is a backend whose TV scans can merge a shared
+// catalog (the direct twitch.Backend).
+type sharedCatalogSetter interface {
+	SetSharedCatalog(twitch.SharedCatalog)
 }
 
 // loadedSession is the backend and session a runner build last loaded for
@@ -185,6 +208,82 @@ func (n *accountNames) replace(accts []gen.Account) {
 	n.m = m
 }
 
+// liveFlags are the account settings a runner reads live, so a change
+// applies without a rebuild.
+type liveFlags struct {
+	skipSleep bool
+	points    platform.PointsMode
+}
+
+func flagsOf(a gen.Account) liveFlags {
+	return liveFlags{skipSleep: a.SkipSleep != 0, points: pointsModeOf(a)}
+}
+
+// pointsModeOf is the points mode account a runs with: its stored mode on
+// Twitch, drops_points on a platform without channel points, so a Kick
+// account Force watches its channels whatever is stored.
+func pointsModeOf(a gen.Account) platform.PointsMode {
+	return platform.EffectivePointsMode(a.Platform, platform.PointsMode(a.PointsMode))
+}
+
+// accountFlags maps account ID to its live flags. Each build stores the
+// row's; accountSettingsChanged stores a saved change. ver counts saved
+// changes per account, so a build whose row read began before one cannot
+// overwrite the flags it stored.
+type accountFlags struct {
+	mu  sync.RWMutex
+	m   map[string]liveFlags
+	ver map[string]uint64
+}
+
+// version is id's saved change count; read it before reading the row.
+func (f *accountFlags) version(id string) uint64 {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.ver[id]
+}
+
+// bump counts a saved change for id and returns the new count.
+func (f *accountFlags) bump(id string) uint64 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.ver == nil {
+		f.ver = map[string]uint64{}
+	}
+	f.ver[id]++
+	return f.ver[id]
+}
+
+// set stores a's flags, read at version v, unless a later save changed them.
+func (f *accountFlags) set(a gen.Account, v uint64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.ver[a.ID] != v {
+		return
+	}
+	if f.m == nil {
+		f.m = map[string]liveFlags{}
+	}
+	f.m[a.ID] = flagsOf(a)
+}
+
+// get returns id's stored flags, or a's when none is stored.
+func (f *accountFlags) get(a gen.Account) liveFlags {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	if v, ok := f.m[a.ID]; ok {
+		return v
+	}
+	return flagsOf(a)
+}
+
+func (f *accountFlags) remove(id string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.m, id)
+	delete(f.ver, id)
+}
+
 // accountName returns the cached display name for id, or "".
 func (ro *roster) accountName(id string) string { return ro.names.get(id) }
 
@@ -196,6 +295,7 @@ func newRoster(r roster, k *kick.Backend) *roster {
 	ro := &r
 	ro.names = &accountNames{}
 	ro.fallbackLog = &refreshFallbackLog{}
+	ro.flags = &accountFlags{}
 	ro.gamesDirty = make(chan struct{}, 1)
 	ro.allGames = &atomic.Bool{}
 	ro.settleTimer = &settleTimer{}
@@ -203,11 +303,16 @@ func newRoster(r roster, k *kick.Backend) *roster {
 		ro.settle = gamesSettle
 	}
 	ro.runCfg = &atomic.Pointer[runSettings]{}
+	ro.runGen = &atomic.Uint64{}
 	ro.forceCache = &atomic.Pointer[[]store.ForceChannel]{}
 	ro.forceMu = &sync.Mutex{}
 	ro.forceQueue = newAccountQueue()
 	ro.loaded = &loadedSessions{m: map[string]loadedSession{}}
 	ro.noLooker = &sync.Map{}
+	ro.staleGames = &sync.Map{}
+	if ro.pool != nil {
+		ro.waker = runner.NewCampaignWaker(ro.pool.RescanPlatform, 0)
+	}
 	if k != nil {
 		ro.kick = k
 	}
@@ -252,9 +357,11 @@ func (ro *roster) builder(a gen.Account) runner.Builder {
 		// Reread the row so a panic restart picks up a rename or login
 		// change; the captured row is the fallback.
 		a := a
+		v := ro.flags.version(a.ID)
 		if fresh, err := ro.q.GetAccount(ctx, a.ID); err == nil {
 			a = fresh
 		}
+		ro.flags.set(a, v)
 		// Only a build that gets to a runner leaves a session to borrow.
 		ro.loaded.remove(a.ID)
 		if a.Enabled == 0 {
@@ -264,6 +371,9 @@ func (ro *roster) builder(a gen.Account) runner.Builder {
 		if err != nil {
 			ro.log().Error("no backend for account", "kind", "error", "account", a.ID, "platform", a.Platform, "err", err)
 			return ro.idle(a, runner.StateNeedsLogin)
+		}
+		if sc, ok := b.(sharedCatalogSetter); ok {
+			sc.SetSharedCatalog(ro.sharedTwitchCatalog)
 		}
 		var verify func(ctx context.Context, s platform.Session) error
 		if ac, ok := b.(platform.AuthChecker); ok {
@@ -302,7 +412,11 @@ func (ro *roster) builder(a gen.Account) runner.Builder {
 		ro.loaded.set(a.ID, loadedSession{backend: b, session: lsess})
 
 		// A runner even with no games: it force watches when it has
-		// force channels, and idles itself as no_games otherwise.
+		// force channels, and idles itself as no_games otherwise (as
+		// no_channels in points only, which never reads the games).
+		// Cleared before the read: a games change after it marks the
+		// account again.
+		ro.staleGames.Delete(a.ID)
 		r := runner.New(ro.runnerConfig(ctx, a, b, sess, ro.gamesFor(ctx, a)))
 		return runner.Entry{ID: a.ID, Unit: r}
 	}
@@ -351,8 +465,11 @@ func (ro *roster) runnerConfig(ctx context.Context, a gen.Account, b platform.Ba
 		Lang:        ro.uiLanguage,
 		ScanEvery:   ro.scanEvery,
 		Preempt:     ro.preempt,
+		FollowRaids: ro.followRaids,
+		SleepUntil:  ro.sleepUntilFor(a),
 		OnScan: func(ctx context.Context, s runner.Scan) {
 			ro.collector.OnScan(ctx, s)
+			ro.waker.OnScan(s)
 			ro.hub.Publish(api.Event{Name: api.EventGames, Data: struct{}{}})
 		},
 		OnProgress: ro.collector.OnProgress,
@@ -370,9 +487,26 @@ func (ro *roster) runnerConfig(ctx context.Context, a gen.Account, b platform.Ba
 			})
 		},
 		ProgressNotifyStepPct: progressNotifyStepPct,
+		InventorySweep:        true,
 		TickInterval:          0,
-		ForceChannels:         func() []string { return ro.forceFor(a.ID, a.Platform) },
+		ForceChannels:         ro.forceChannelsFor(a),
 		ForceLookup:           ro.forceLookupFor(a.Platform),
+		PointsMode:            func() platform.PointsMode { return ro.flags.get(a).points },
+		OnPointsBalance:       ro.pointsBalanceHook(a),
+	}
+}
+
+// forceChannelsFor is the runner's ForceChannels for account a: its force
+// channels read live, none while its points mode is off (also read live).
+// Only a Twitch account's mode can be off (see pointsModeOf). Its
+// assignments stay in the store either way, so turning points back on
+// restores them.
+func (ro *roster) forceChannelsFor(a gen.Account) func() []string {
+	return func() []string {
+		if !ro.flags.get(a).points.On() {
+			return nil
+		}
+		return ro.forceFor(a.ID, a.Platform)
 	}
 }
 
@@ -391,7 +525,10 @@ func (ro *roster) forceLookupFor(plat string) func(ctx context.Context, login st
 // claimLog adapts the Collector to runner.ClaimLog and announces each claim.
 type claimLog struct{ ro *roster }
 
-var _ runner.ClaimLog = (*claimLog)(nil)
+var (
+	_ runner.ClaimLog       = (*claimLog)(nil)
+	_ runner.ClaimCorrector = (*claimLog)(nil)
+)
 
 func (l *claimLog) RecordClaim(ctx context.Context, accountID string, t plan.Target, code string) error {
 	if err := l.ro.collector.RecordClaim(ctx, accountID, t, code); err != nil {
@@ -407,6 +544,14 @@ func (l *claimLog) ClaimedBenefitIDs(ctx context.Context, accountID string) (map
 
 func (l *claimLog) MarkedBenefitIDs(ctx context.Context, accountID string) (map[string]bool, error) {
 	return l.ro.collector.MarkedBenefitIDs(ctx, accountID)
+}
+
+func (l *claimLog) LoggedClaim(ctx context.Context, accountID, benefitID string) (time.Time, bool, bool, error) {
+	return l.ro.collector.LoggedClaim(ctx, accountID, benefitID)
+}
+
+func (l *claimLog) ForgetClaim(ctx context.Context, accountID, benefitID string) error {
+	return l.ro.collector.ForgetClaim(ctx, accountID, benefitID)
 }
 
 // builders returns one Builder per account row, in ListAllAccounts order.
@@ -429,7 +574,9 @@ func (ro *roster) reloadAccount(id string) {
 	a, err := ro.q.GetAccount(ro.ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		ro.names.remove(id)
+		ro.flags.remove(id)
 		ro.loaded.remove(id)
+		ro.staleGames.Delete(id)
 		ro.pool.ReloadAccount(id, nil)
 		return
 	}
@@ -441,10 +588,48 @@ func (ro *roster) reloadAccount(id string) {
 	ro.pool.ReloadAccount(id, ro.builder(a))
 }
 
+// accountSettingsChanged applies a saved skip sleep or points mode change
+// without a rebuild: the runner reads both live, so a watch that stays
+// keeps its channel (see runner.SettingsChanged). A runner that has exited
+// as no_games is rebuilt when it now has work: points on with force
+// channels, or points only, which needs no games (with no force channel it
+// idles as no_channels). It watches nothing, so nothing restarts. One that
+// leaves points only after a games reload skipped it is rebuilt for the
+// current games. A failed row read rebuilds, so the change still applies.
+func (ro *roster) accountSettingsChanged(id string) {
+	v := ro.flags.bump(id)
+	a, err := ro.q.GetAccount(ro.ctx, id)
+	if err != nil {
+		ro.log().Error("account settings changed: read row failed; rebuilding", "kind", "error", "account", id, "err", err)
+		ro.reloadAccount(id)
+		return
+	}
+	ro.flags.set(a, v)
+	if pointsModeOf(a) != platform.PointsOnly {
+		if _, stale := ro.staleGames.LoadAndDelete(id); stale {
+			ro.log().Info("account left points only; rebuilding for the current games", "kind", "state", "account", id)
+			ro.reloadAccount(id)
+			return
+		}
+	}
+	for _, sn := range ro.pool.Snapshots() {
+		if sn.AccountID == id && sn.State == runner.StateNoGames {
+			mode := pointsModeOf(a)
+			if mode == platform.PointsOnly || (mode.On() && len(ro.forceFor(a.ID, a.Platform)) > 0) {
+				ro.reloadAccount(id)
+			}
+			return
+		}
+	}
+	ro.pool.SettingsChanged(id)
+}
+
 // accountRemoved drops a deleted account's runner and collected state.
 func (ro *roster) accountRemoved(id string) {
 	ro.names.remove(id)
+	ro.flags.remove(id)
 	ro.loaded.remove(id)
+	ro.staleGames.Delete(id)
 	ro.pool.ReloadAccount(id, nil)
 	ro.collector.Forget(id)
 	ro.hub.Publish(api.Event{Name: api.EventAccounts, Data: struct{}{}})
@@ -516,7 +701,8 @@ func (ro *roster) safeGamesChanged() {
 
 // gamesChanged rebuilds every runner on the global list so each picks up the
 // new chosen games. Accounts on their own list keep running, unless the
-// queued reload asked for all accounts.
+// queued reload asked for all accounts. Points-only accounts read no games:
+// they keep running, marked stale so leaving points only rebuilds them.
 func (ro *roster) gamesChanged() {
 	all := ro.allGames.Swap(false)
 	accts, err := ro.q.ListAllAccounts(ro.ctx)
@@ -531,6 +717,15 @@ func (ro *roster) gamesChanged() {
 		if !all && a.OwnGames != 0 && ro.own != nil {
 			continue
 		}
+		if pointsModeOf(a) == platform.PointsOnly {
+			ro.staleGames.Store(a.ID, true)
+			// Marked before this check: a save that left points only in
+			// between either finds the mark or is seen here.
+			if ro.flags.get(a).points == platform.PointsOnly {
+				continue
+			}
+			ro.staleGames.Delete(a.ID)
+		}
 		ro.reloadAccount(a.ID)
 	}
 	ro.hub.Publish(api.Event{Name: api.EventGames, Data: struct{}{}})
@@ -542,16 +737,45 @@ type runSettings struct {
 	priority plan.Priority
 	scan     time.Duration
 	preempt  bool
+	// raids is the follow raids setting.
+	raids bool
+	// share is the experimental share of the Android catalog with TV
+	// accounts.
+	share bool
+	// sleep is on when sleepStart and sleepEnd, minutes after midnight,
+	// hold a valid window.
+	sleep                bool
+	sleepStart, sleepEnd int
+	// gen is runGen when the read began.
+	gen uint64
 }
 
 // runSettings returns the cached runner settings, reading them once after
 // start or after settingsChanged. A failed read gives the defaults for that
-// call: en, ordered, the runner's own scan pace, preempt on.
+// call: en, ordered, the runner's own scan pace, preempt on. A read that
+// began before a save is not served from the cache after it.
 func (ro *roster) runSettings() runSettings {
-	if c := ro.runCfg.Load(); c != nil {
+	g := ro.runGen.Load()
+	if c := ro.runCfg.Load(); c != nil && c.gen == g {
 		return *c
 	}
-	c := runSettings{lang: "en", priority: plan.PriorityOrdered, preempt: true}
+	c, ok := ro.readRunSettings()
+	if ok {
+		ro.cacheRunSettings(c, g)
+	}
+	return c
+}
+
+// cacheRunSettings caches c, read from generation g.
+func (ro *roster) cacheRunSettings(c runSettings, g uint64) {
+	c.gen = g
+	ro.runCfg.Store(&c)
+}
+
+// readRunSettings reads the runner settings from the store. ok is false
+// when the read failed and c holds the defaults.
+func (ro *roster) readRunSettings() (c runSettings, ok bool) {
+	c = runSettings{lang: "en", priority: plan.PriorityOrdered, preempt: true}
 	if ro.settings != nil {
 		ctx, cancel := context.WithTimeout(ro.ctx, 5*time.Second)
 		defer cancel()
@@ -559,20 +783,30 @@ func (ro *roster) runSettings() runSettings {
 		p, e2 := ro.settings.PriorityMode(ctx)
 		n, e3 := ro.settings.ScanIntervalMin(ctx)
 		on, e4 := ro.settings.Preempt(ctx)
-		if err := errors.Join(e1, e2, e3, e4); err != nil {
+		sw, e5 := ro.settings.SleepWindow(ctx)
+		raids, e6 := ro.settings.FollowRaids(ctx)
+		share, e7 := ro.settings.ExpShareCatalog(ctx)
+		if err := errors.Join(e1, e2, e3, e4, e5, e6, e7); err != nil {
 			// Not cached: the next read tries again.
 			ro.log().Warn("read runner settings failed", "kind", "error", "err", err)
-			return c
+			return c, false
 		}
-		c = runSettings{lang: lang, priority: plan.Priority(p), scan: time.Duration(n) * time.Minute, preempt: on}
+		c = runSettings{lang: lang, priority: plan.Priority(p), scan: time.Duration(n) * time.Minute, preempt: on, raids: raids, share: share}
+		start, ok1 := timeutil.ParseClock(sw.Start)
+		end, ok2 := timeutil.ParseClock(sw.End)
+		c.sleep = sw.Enabled && ok1 && ok2 && start != end
+		c.sleepStart, c.sleepEnd = start, end
 	}
-	ro.runCfg.Store(&c)
-	return c
+	return c, true
 }
 
 // settingsChanged drops the cached runner settings so the next read sees a
-// saved change.
-func (ro *roster) settingsChanged() { ro.runCfg.Store(nil) }
+// saved change. Bumping runGen also voids a read in flight, which began
+// before the save and would otherwise cache the old settings.
+func (ro *roster) settingsChanged() {
+	ro.runGen.Add(1)
+	ro.runCfg.Store(nil)
+}
 
 // uiLanguage is the UI language for notification text.
 func (ro *roster) uiLanguage() string { return ro.runSettings().lang }
@@ -586,6 +820,37 @@ func (ro *roster) scanEvery() time.Duration { return ro.runSettings().scan }
 
 // preempt is the switch-to-higher-rank setting.
 func (ro *roster) preempt() bool { return ro.runSettings().preempt }
+
+// followRaids is the follow raids setting. A failed read gives off.
+func (ro *roster) followRaids() bool { return ro.runSettings().raids }
+
+// sharedTwitchCatalog is the Android catalog a TV account's scan merges: the
+// cached Discover catalog while the experimental share is on, else nothing.
+// A failed settings read gives off. With no Android login the catalog is an
+// error, which the scan ignores.
+func (ro *roster) sharedTwitchCatalog(ctx context.Context) ([]platform.Campaign, error) {
+	if ro.catalog == nil || !ro.runSettings().share {
+		return nil, nil
+	}
+	return ro.catalog(ctx, "twitch")
+}
+
+// sleepUntilFor is the runner's SleepUntil for account a: the saved sleep
+// window with daily jitter, read live in the display zone. Never inside it
+// while the account skips the window, also read live.
+func (ro *roster) sleepUntilFor(a gen.Account) func(now time.Time) (time.Time, bool) {
+	return func(now time.Time) (time.Time, bool) {
+		c := ro.runSettings()
+		if !c.sleep || ro.flags.get(a).skipSleep {
+			return time.Time{}, false
+		}
+		loc := time.UTC
+		if ro.zone != nil {
+			loc = ro.zone()
+		}
+		return timeutil.SleepUntil(now, loc, c.sleepStart, c.sleepEnd, true)
+	}
+}
 
 // errNoForceLookupAccount means no signed-in account can run a force-watch
 // lookup on the platform; the channel's live state stays unknown.

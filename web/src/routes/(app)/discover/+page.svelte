@@ -6,12 +6,14 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import PageHead from '$lib/components/PageHead.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
-	import { filterGroups, groupByGame, minutesLeft } from '$lib/discover';
+	import { refreshLabel } from '$lib/cooldown';
+	import { filterGroups, groupByGame, minutesLeft, sortGroups, type DiscoverSort } from '$lib/discover';
 	import { formatInt, relTime, shortDate } from '$lib/format';
 	import { linkHref } from '$lib/games';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
+	import { createRefresh } from '$lib/refresh.svelte';
 
 	const live = getLive();
 
@@ -27,25 +29,23 @@
 	let q = $state('');
 	let platform = $state<'all' | Platform>('all');
 	let hideAdded = $state(true);
+	let sort = $state<DiscoverSort>('name');
 	let adding = $state<string | null>(null);
 	let addFailed = $state<string | null>(null);
 
 	const chosen = $derived(live.games?.games ?? []);
 	const groups = $derived(groupByGame(data?.campaigns ?? [], chosen));
-	const shown = $derived(filterGroups(groups, { q, platform, hideAdded }));
+	const shown = $derived(sortGroups(filterGroups(groups, { q, platform, hideAdded }), sort));
 	const head = $derived(data ? tn('discover.head', groups.length) : undefined);
 	const stamp = $derived(data?.fetched_at ? t('discover.fetched', { rel: relTime(data.fetched_at, now) }) : undefined);
-	const canRefresh = $derived(
-		!busy && (!data?.next_refresh_at || Date.parse(data.next_refresh_at) <= now)
-	);
 	const twitchState = $derived(data?.platforms.twitch);
 	const kickState = $derived(data?.platforms.kick);
 
-	async function load(refresh = false): Promise<void> {
+	async function load(): Promise<void> {
 		busy = true;
 		failed = false;
 		try {
-			data = await api.discover(refresh);
+			data = await api.discover();
 		} catch {
 			failed = true;
 		} finally {
@@ -56,6 +56,23 @@
 	$effect(() => {
 		untrack(() => void load());
 	});
+
+	// The server answers a refresh with the catalog: refetched, or the cached
+	// one while it is under a minute old. Either way it is fresh, so any
+	// answer lands the refresh.
+	const refresh = createRefresh({
+		post: async () => {
+			failed = false;
+			try {
+				data = await api.discover(true);
+			} catch (e) {
+				failed = true;
+				throw e;
+			}
+		},
+		signal: () => data
+	});
+	const refreshText = $derived(t(refreshLabel(refresh.busy, refresh.done, 'discover.refresh')));
 
 	async function add(name: string): Promise<void> {
 		adding = name;
@@ -87,12 +104,17 @@
 
 <PageHead title={t('nav.discover')} status={head} {stamp}>
 	{#snippet action()}
-		<button type="button" class="btn" disabled={!canRefresh} onclick={() => load(true)}>
-			<Icon name="refresh" />{busy && data ? t('discover.refreshing') : t('discover.refresh')}
-		</button>
+		<button
+			type="button"
+			class="btn rf"
+			class:spin={refresh.busy}
+			class:done={refresh.done}
+			disabled={refresh.busy}
+			onclick={() => refresh.run()}><Icon name="refresh" />{refreshText}</button
+		>
 	{/snippet}
 
-	{#if busy && data}{@render loader()}{/if}
+	{#if refresh.busy && data}{@render loader()}{/if}
 	{#if data}
 		{#if twitchState?.error === 'needs_android'}
 			<p class="note" role="status">
@@ -129,6 +151,12 @@
 					>
 				{/each}
 			</div>
+			<div class="fgroup" role="group" aria-label={t('discover.sort')}>
+				<span>{t('discover.sort')}</span>
+				{#each [['name', 'discover.sort_name'], ['newest', 'discover.sort_newest'], ['ending', 'discover.sort_ending']] as const as [s, key] (s)}
+					<button type="button" class="chip" class:on={sort === s} aria-pressed={sort === s} onclick={() => (sort = s)}>{t(key)}</button>
+				{/each}
+			</div>
 			<label class="toggle">
 				<input type="checkbox" bind:checked={hideAdded} />
 				<span>{t('discover.hide_added')}</span>
@@ -162,7 +190,9 @@
 										<PlatformMark platform={c.platform} />
 										<span class="cn">{c.name}</span>
 										<small title={c.ends_at ? t('discover.ends', { date: shortDate(c.ends_at, prefs.zone) }) : undefined}
-											>{left(c.ends_at)}{#if c.ends_at} · {t('discover.ends', { date: shortDate(c.ends_at, prefs.zone) })}{/if}</small
+											>{#if sort === 'newest' && c.starts_at}{t('discover.started', { date: shortDate(c.starts_at, prefs.zone) })} · {/if}{left(
+												c.ends_at
+											)}{#if c.ends_at} · {t('discover.ends', { date: shortDate(c.ends_at, prefs.zone) })}{/if}</small
 										>
 									</div>
 									{#if c.needs_link}

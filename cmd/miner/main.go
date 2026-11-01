@@ -36,6 +36,7 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/platform/kick"
 	"github.com/aalejandrofer/grubdrops/internal/platform/twitch"
+	"github.com/aalejandrofer/grubdrops/internal/points"
 	"github.com/aalejandrofer/grubdrops/internal/runner"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
@@ -287,14 +288,16 @@ func run(ctx context.Context) error {
 		// (too noisy).
 		claim, progress, auth, errs, canaryOn := settingsStore.NotifyKinds(ctx)
 		dailySummary, _ := settingsStore.NotifyDailySummary(ctx)
+		rewardCodesOn, _ := settingsStore.NotifyRewardCodes(ctx)
 		filter := &notify.VerbosityFilter{Allow: map[string]bool{
-			notify.EventClaim:    claim,
-			notify.EventProgress: progress,
-			notify.EventAuth:     auth,
-			notify.EventError:    errs,
-			notify.EventCanary:   canaryOn,
-			notify.EventSummary:  dailySummary,
-			notify.EventState:    false,
+			notify.EventClaim:      claim,
+			notify.EventProgress:   progress,
+			notify.EventAuth:       auth,
+			notify.EventError:      errs,
+			notify.EventCanary:     canaryOn,
+			notify.EventSummary:    dailySummary,
+			notify.EventState:      false,
+			notify.EventRewardCode: rewardCodesOn,
 			// Manual "send test" always delivers, regardless of toggles.
 			notify.EventTest: true,
 		}}
@@ -314,12 +317,14 @@ func run(ctx context.Context) error {
 			}
 			wh.Username = botUsername
 			wh.AvatarURL = avatarURL
+			wh.MentionUserID, _ = settingsStore.DiscordMentionID(ctx)
 			multi.Targets = append(multi.Targets, notify.Named{Name: notify.TargetDiscord, Notifier: wh})
 		}
 		tgToken, tgChat := telegramConfig(ctx, settingsStore, cfg)
 		if tgToken != "" && tgChat != "" {
 			// proxyTransport is nil when no proxy is configured (direct).
 			bot := notify.NewTelegramBotWithTransport(tgToken, tgChat, filter, proxyTransport)
+			bot.MentionUserID, _ = settingsStore.TelegramMentionID(ctx)
 			multi.Targets = append(multi.Targets, notify.Named{Name: notify.TargetTelegram, Notifier: bot})
 		}
 		if len(multi.Targets) == 0 {
@@ -419,6 +424,21 @@ func run(ctx context.Context) error {
 		twitchBackendsMu.Unlock()
 	}()
 
+	// discoverTwitch is a dedicated backend for the Discover catalog, so its
+	// session binding and details cache never touch a mining backend.
+	discoverTwitch := twitch.New()
+	if proxyTransport != nil {
+		discoverTwitch = twitch.NewWithTransport(proxyTransport)
+	}
+	defer discoverTwitch.Close()
+	// Its cache also feeds the experimental catalog share with TV accounts.
+	discoverSvc := discover.New(
+		discover.Source{Platform: "twitch", Timeout: 60 * time.Second,
+			Fetch: discover.TwitchFetcher(q.ListAllAccounts, sessions.Get, discoverTwitch.Catalog)},
+		discover.Source{Platform: "kick", Timeout: 30 * time.Second,
+			Fetch: discover.KickFetcher(q.ListAllAccounts, sessions.Get, kickBackend.Catalog)},
+	)
+
 	collector := collect.New(db, q)
 	collector.Loc = displayZone.Location
 	hub := api.NewHub()
@@ -439,7 +459,9 @@ func run(ctx context.Context) error {
 		backendFor:  backendFor,
 		notifier:    notifier,
 		settings:    settingsStore,
+		zone:        displayZone.Location,
 		force:       store.NewForceWatch(db, q),
+		catalog:     discoverSvc.Campaigns,
 	}, kickBackend)
 
 	// Force watch: one shared live-status cache. Lookups borrow a session a
@@ -466,6 +488,19 @@ func run(ctx context.Context) error {
 	}
 	// After the boot, so the first pass has sessions to borrow.
 	bg.Go(func() { forceChecker.Run(ctx, ro.forceList, forceCheckEvery) })
+
+	// Channel-points balances: hourly reads of each points-on Twitch account
+	// on its Force watch channels, one at a time, cached in SQLite. After the
+	// boot so the first pass has sessions to borrow.
+	pointsBalances := store.NewPointsBalances(q)
+	pointsRefresher := ro.newPointsRefresher(pointsBalances)
+	bg.Go(func() { pointsRefresher.Run(ctx) })
+
+	// Twitch reward codes: read at start and every 3h per account, one at a
+	// time, in the background so the watch beacon never waits on it.
+	rewardCodes := store.NewRewardCodes(q, cryptor)
+	rewardPoller := ro.newRewardPoller(rewardCodes, settingsStore, notifier, displayZone.Location)
+	bg.Go(func() { rewardPoller.Run(ctx) })
 
 	// Now that the initial Reload has registered every enabled Kick account's
 	// sidecar, sweep away any auto-created (grubdrops.managed=true) browser
@@ -553,20 +588,6 @@ func run(ctx context.Context) error {
 		})
 	})
 
-	// discoverTwitch is a dedicated backend for the Discover catalog, so its
-	// session binding and details cache never touch a mining backend.
-	discoverTwitch := twitch.New()
-	if proxyTransport != nil {
-		discoverTwitch = twitch.NewWithTransport(proxyTransport)
-	}
-	defer discoverTwitch.Close()
-	discoverSvc := discover.New(
-		discover.Source{Platform: "twitch", Timeout: 60 * time.Second,
-			Fetch: discover.TwitchFetcher(q.ListAllAccounts, sessions.Get, discoverTwitch.Catalog)},
-		discover.Source{Platform: "kick", Timeout: 30 * time.Second,
-			Fetch: discover.KickFetcher(q.ListAllAccounts, sessions.Get, kickBackend.Catalog)},
-	)
-
 	deps := api.Deps{
 		DB: db, Q: q, Session: sm,
 		OIDC:          oidcProvider,
@@ -588,10 +609,17 @@ func run(ctx context.Context) error {
 		GamesChanged: ro.requestGamesReloadSoon,
 		GamesSettle:  ro.settle,
 		Discover:     discoverSvc,
+		ShareCatalogReady: func(ctx context.Context) bool {
+			return discover.CanShareCatalog(ctx, q.ListAllAccounts, sessions.Get)
+		},
 
 		ForceWatch:     ro.force,
 		ForceLive:      func(plat, login string) *bool { return forceChecker.Peek(plat, login).Live },
 		ForceChanged:   ro.forceChanged,
+		Points:         pointsBalances,
+		PointsEvery:    points.DefaultEvery,
+		PointsRefresh:  pointsRefresher.RefreshNow,
+		RewardCodes:    rewardCodes,
 		LookupCategory: ro.lookupCategory,
 
 		Sessions:  sessions,
@@ -600,6 +628,10 @@ func run(ctx context.Context) error {
 		Registrar: kickBackend,
 		AccountChanged: func(id string) {
 			ro.reloadAccount(id)
+			hub.Publish(api.Event{Name: api.EventAccounts, Data: struct{}{}})
+		},
+		AccountSettingsChanged: func(id string) {
+			ro.accountSettingsChanged(id)
 			hub.Publish(api.Event{Name: api.EventAccounts, Data: struct{}{}})
 		},
 		AccountRemoved: func(id string) {
@@ -698,6 +730,14 @@ func (i *indirectNotifier) Notify(ctx context.Context, event string, fields map[
 	n := *i.ptr
 	i.mu.Unlock()
 	return n.Notify(ctx, event, fields)
+}
+
+// Enabled asks the current notifier whether event would reach anyone.
+func (i *indirectNotifier) Enabled(ctx context.Context, event string) bool {
+	i.mu.Lock()
+	n := *i.ptr
+	i.mu.Unlock()
+	return notify.Enabled(ctx, n, event)
 }
 
 // decodeKickChannels pulls the channel list out of a stored Kick

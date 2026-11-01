@@ -4,7 +4,7 @@ import type { Account, DeviceStatus, Runner } from '$lib/api/types';
 import accountsFx from '$lib/fixtures/accounts.json';
 import runnersMining from '$lib/fixtures/runners.mining.json';
 import { prefs } from '$lib/prefs.svelte';
-import { MAX_POLL_FAILS, POLL_MS, accountLine, activateURL, accountStatus, commitAccountOrder, createDeviceFlow, renameRequest, rowActions } from './accounts';
+import { MAX_POLL_FAILS, POINTS_CHOICES, POLL_MS, accountLine, activateURL, accountStatus, commitAccountOrder, createDeviceFlow, forceWatchOn, pointsOn, pointsSupported, renameRequest, rowActions, sleepLine } from './accounts';
 import { moveTarget } from './games';
 import { moveItem } from './upnext';
 
@@ -193,12 +193,10 @@ describe('accountLine', () => {
 	prefs.zone = 'UTC';
 	prefs.fmt = '24h';
 	it('mining', () => {
-		expect(accountLine(ACC('acc-hjune'), RUN('acc-hjune'))).toBe(
-			'Rust · Rust Reward 1 on seed_streamer · 42 / 60 min'
-		);
+		expect(accountLine(ACC('acc-hjune'), RUN('acc-hjune'))).toBe('Mining: Rust');
 	});
 	it('needs login with the check time', () => {
-		expect(accountLine(ACC('acc-kick'), undefined)).toBe('Session expired at 11:55. Mining stopped.');
+		expect(accountLine(ACC('acc-kick'), undefined)).toBe('Session expired 11:55');
 	});
 	it('needs login without a check', () => {
 		const a = ACC('acc-kick');
@@ -208,7 +206,7 @@ describe('accountLine', () => {
 	it('paused', () => {
 		const a = ACC('acc-hjune');
 		a.enabled = false;
-		expect(accountLine(a, RUN('acc-hjune'))).toBe('Paused. Not mining.');
+		expect(accountLine(a, RUN('acc-hjune'))).toBe('Paused');
 	});
 	it('other states use the runner label', () => {
 		const r = RUN('acc-hjune');
@@ -216,12 +214,34 @@ describe('accountLine', () => {
 		r.current = null;
 		expect(accountLine(ACC('acc-hjune'), r)).toBe('Sleeping');
 	});
+	it('points only with no channel says so', () => {
+		const r = RUN('acc-hjune');
+		r.state = 'no_channels';
+		r.current = null;
+		expect(accountLine(ACC('acc-hjune'), r)).toBe('No Points watch channels');
+	});
 	it('force watching names the channel', () => {
 		const r = RUN('acc-hjune');
 		r.state = 'force_watching';
 		r.current = null;
 		r.channel = 'keshaeuw';
-		expect(accountLine(ACC('acc-hjune'), r)).toBe('Force watching keshaeuw');
+		expect(accountLine(ACC('acc-hjune'), r)).toBe('Points watching keshaeuw');
+	});
+	it('sleep window names the wake time in the display zone', () => {
+		const r = RUN('acc-hjune');
+		r.state = 'sleep_window';
+		r.current = null;
+		r.sleep_until = '2026-10-30T07:45:00Z';
+		expect(accountLine(ACC('acc-hjune'), r)).toBe('Sleep window until 07:45');
+		prefs.zone = 'Europe/Madrid';
+		expect(accountLine(ACC('acc-hjune'), r)).toBe('Sleep window until 08:45');
+		prefs.zone = 'UTC';
+		r.sleep_until = null;
+		expect(accountLine(ACC('acc-hjune'), r)).toBe('Sleep window');
+	});
+	it('sleepLine takes a formatter', () => {
+		expect(sleepLine('2026-10-30T07:45:00Z', () => '7:45 AM')).toBe('Sleep window until 7:45 AM');
+		expect(sleepLine(undefined)).toBe('Sleep window');
 	});
 });
 
@@ -243,6 +263,17 @@ describe('accountStatus', () => {
 		const a = ACC('acc-hjune');
 		a.enabled = false;
 		expect(accountStatus(a, r)).toBe('paused');
+	});
+	it('sleep window has its own status; paused and signed out win', () => {
+		const r = RUN('acc-hjune');
+		r.state = 'sleep_window';
+		r.current = null;
+		expect(accountStatus(ACC('acc-hjune'), r)).toBe('sleep_window');
+		const a = ACC('acc-hjune');
+		a.enabled = false;
+		expect(accountStatus(a, r)).toBe('paused');
+		a.needs_login = true;
+		expect(accountStatus(a, r)).toBe('signed_out');
 	});
 	it('paused wins over idle and mining, signed out wins over paused', () => {
 		const a = ACC('acc-hjune');
@@ -347,5 +378,33 @@ describe('activateURL', () => {
 		for (const bad of ['javascript:alert(1)', 'https://evil.example/activate', 'http://www.twitch.tv/activate', 'https://twitch.tv.evil.example/', '']) {
 			expect(activateURL(bad, 'X1')).toBe('https://www.twitch.tv/activate?device-code=X1');
 		}
+	});
+});
+
+describe('channel points', () => {
+	it('pointsOn is true only for a known on mode', () => {
+		expect(pointsOn({ points_mode: 'drops_points' })).toBe(true);
+		expect(pointsOn({ points_mode: 'points_only' })).toBe(true);
+		expect(pointsOn({ points_mode: 'off' })).toBe(false);
+		expect(pointsOn({ points_mode: 'bogus' as Account['points_mode'] })).toBe(false);
+	});
+
+	it('the menu offers Off, Drops + points and Points only, in order', () => {
+		expect(POINTS_CHOICES.map((c) => c.mode)).toEqual(['off', 'drops_points', 'points_only']);
+		expect(POINTS_CHOICES.map((c) => c.label)).toEqual(['accounts.points_off', 'accounts.points_drops', 'accounts.points_only']);
+	});
+
+	it('the points picker is Twitch only', () => {
+		expect(pointsSupported({ platform: 'twitch' })).toBe(true);
+		expect(pointsSupported({ platform: 'kick' })).toBe(false);
+	});
+
+	it('a Kick account Force watches whatever points mode is stored', () => {
+		for (const mode of ['off', 'drops_points', 'points_only'] as const) {
+			expect(forceWatchOn({ platform: 'kick', points_mode: mode })).toBe(true);
+		}
+		expect(forceWatchOn({ platform: 'twitch', points_mode: 'off' })).toBe(false);
+		expect(forceWatchOn({ platform: 'twitch', points_mode: 'drops_points' })).toBe(true);
+		expect(forceWatchOn({ platform: 'twitch', points_mode: 'points_only' })).toBe(true);
 	});
 });

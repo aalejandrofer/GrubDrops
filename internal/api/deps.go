@@ -13,6 +13,15 @@ type RunnerPool interface {
 	ResetOrder(accountID string)
 	OrderFunc(accountID string) func() []string
 	RescanAll()
+	// RescanPlatform rescans every unit on plat except account except.
+	RescanPlatform(plat, except string)
+	// SettingsChangedAll tells every runner a live-read engine setting
+	// changed (sleep window, timezone, follow raids).
+	SettingsChangedAll()
+	// MarkCollected and MarkUncollected tell the account's runner about a
+	// manual claim edit without a rebuild.
+	MarkCollected(accountID, benefitID string)
+	MarkUncollected(accountID, benefitID string)
 	MineNow(accountID string) (string, error)
 	RecheckLinks(ctx context.Context, accountID string) (runner.LinkRecheck, error)
 }

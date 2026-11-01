@@ -298,3 +298,26 @@ func TestBoard_QueuedOnlyWithWorkLeft(t *testing.T) {
 		t.Fatalf("overwatch %+v", got[1])
 	}
 }
+
+// QueuedBy names each account with a drop of the game left to mine, once
+// and in ID order, whether queued or waiting on a link.
+func TestBoard_QueuedBy(t *testing.T) {
+	b := NewBoard()
+	t1 := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	ow := camp("o1", "twitch", "Overwatch", oct31, 2)
+	tgt := plan.Target{Campaign: ow, Benefit: ow.Benefits[0]}
+	s2 := scan("a2", "twitch", t1, ow)
+	s2.Result = plan.Result{Queue: []plan.Target{tgt, {Campaign: ow, Benefit: ow.Benefits[1]}}}
+	b.Observe(s2)
+	s1 := scan("a1", "twitch", t1, ow)
+	s1.Result = plan.Result{NeedsLink: []plan.Target{tgt}}
+	b.Observe(s1)
+	b.Observe(scan("a3", "twitch", t1, ow))
+	got := b.Games([]plan.Game{rust, overwatch})
+	if len(got[0].QueuedBy) != 0 {
+		t.Fatalf("rust %+v", got[0].QueuedBy)
+	}
+	if fmt.Sprint(got[1].QueuedBy) != "[a1 a2]" {
+		t.Fatalf("overwatch %+v", got[1].QueuedBy)
+	}
+}

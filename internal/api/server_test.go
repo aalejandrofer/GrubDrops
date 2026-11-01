@@ -187,14 +187,16 @@ func TestSPA_CacheHeaders(t *testing.T) {
 	assert.True(t, strings.HasPrefix(resp.Header.Get("Content-Type"), "text/javascript"), resp.Header.Get("Content-Type"))
 }
 
-func TestRewardsRedirectsToInventory(t *testing.T) {
+func TestOldPagesRedirectToInventory(t *testing.T) {
 	e := newEnvSPA(t, fstest.MapFS{"index.html": {Data: []byte("<html>spa</html>")}})
 	cl := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	resp, err := cl.Get(e.srv.URL + "/rewards")
-	require.NoError(t, err)
-	resp.Body.Close()
-	assert.Equal(t, http.StatusMovedPermanently, resp.StatusCode)
-	assert.Equal(t, "/inventory", resp.Header.Get("Location"))
+	for _, p := range []string{"/rewards", "/drops"} {
+		resp, err := cl.Get(e.srv.URL + p)
+		require.NoError(t, err)
+		resp.Body.Close()
+		assert.Equal(t, http.StatusMovedPermanently, resp.StatusCode, p)
+		assert.Equal(t, "/inventory", resp.Header.Get("Location"), p)
+	}
 }
 
 func TestSPA_MissingAssetIs404(t *testing.T) {

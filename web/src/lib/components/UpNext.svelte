@@ -1,11 +1,12 @@
 <script lang="ts">
+	import { sleepLine } from '$lib/accounts';
 	import { api } from '$lib/app';
 	import { etaShort, nextScanMin } from '$lib/format';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
 	import { reorder } from '$lib/drag';
-	import { afterLabel, anyCustom, commitMineNow, commitMove, foldQueue, moveItem, queues } from '$lib/upnext';
+	import { afterLabel, anyCustom, commitMineNow, commitMove, foldQueue, mineErrorKey, moveItem, queues } from '$lib/upnext';
 	import type { Runner } from '$lib/api/types';
 	import type { CampaignTarget } from './CampaignDrawer.svelte';
 	import PlatformMark from './PlatformMark.svelte';
@@ -17,7 +18,8 @@
 	let failed = $state(false);
 	// Per-account Mine next state.
 	let mineBusy = $state<Record<string, boolean>>({});
-	let mineFailed = $state<Record<string, boolean>>({});
+	// i18n key of the last Mine next failure, per account.
+	let mineFailed = $state<Record<string, string>>({});
 	let drag = $state<{ id: string; from: number; to: number } | null>(null);
 	// Accounts whose queue shows every row; not persisted.
 	let open = $state<Record<string, boolean>>({});
@@ -90,18 +92,23 @@
 	async function mineNext(id: string): Promise<void> {
 		if (mineBusy[id]) return;
 		mineBusy[id] = true;
-		mineFailed[id] = false;
+		delete mineFailed[id];
+		let why = 'upnext.mine_next_failed';
 		const ok = await commitMineNow(
 			{
 				get: () => live.runners,
 				set: (r) => (live.runners = r),
-				mineNow: (aid) => api.mineNow(aid),
+				mineNow: (aid) =>
+					api.mineNow(aid).catch((e: unknown) => {
+						why = mineErrorKey(e);
+						throw e;
+					}),
 				fetchRunners: () => api.runners()
 			},
 			id
 		);
 		mineBusy[id] = false;
-		mineFailed[id] = !ok;
+		if (!ok) mineFailed[id] = why;
 	}
 
 	// Why Mine next is unavailable for this account, or null when it can run.
@@ -109,6 +116,8 @@
 		if (!q.canMine) {
 			if (r?.state === 'needs_login') return t('home.signed_out_row');
 			if (r?.state === 'no_games') return t('home.no_games');
+			if (r?.state === 'no_channels') return t('accounts.state.no_channels');
+			if (r?.state === 'sleep_window') return sleepLine(r.sleep_until);
 			return t('home.idle_row');
 		}
 		return null;
@@ -150,18 +159,22 @@
 		{@const why = mineWhy(q, r)}
 		<div class="acct">
 			<PlatformMark platform={q.platform} size="sm" /><span class="pf-name {q.platform}">{q.accountName}</span>
-			<button
-				class="mine"
-				type="button"
-				disabled={mineBusy[q.accountId] || why !== null}
-				aria-busy={mineBusy[q.accountId] === true}
-				title={why ?? t('upnext.mine_next_title', { drop: q.items[0].benefit_name })}
-				onclick={() => mineNext(q.accountId)}
-			>
-				{t('upnext.mine_next')}
-			</button>
+			{#if why !== null}
+				<span class="chip off" title={why}>{t('settings.unavailable')}<span class="vh">: {why}</span></span>
+			{:else}
+				<button
+					class="mine"
+					type="button"
+					disabled={mineBusy[q.accountId]}
+					aria-busy={mineBusy[q.accountId] === true}
+					title={t('upnext.mine_next_title', { drop: q.items[0].benefit_name })}
+					onclick={() => mineNext(q.accountId)}
+				>
+					{t('upnext.mine_next')}
+				</button>
+			{/if}
 		</div>
-		{#if mineFailed[q.accountId]}<p class="err" role="alert">{t('upnext.mine_next_failed')}</p>{/if}
+		{#if mineFailed[q.accountId]}<p class="err" role="alert">{t(mineFailed[q.accountId])}</p>{/if}
 		<ol class="queue" use:reorder={dragOpts(q.accountId)}>
 			{#each fold.rows as item, i (item.benefit_id)}
 				{@const after = r ? afterLabel({ ...r, up_next: full }, i) : null}
@@ -322,9 +335,7 @@
 	}
 	.queue li.dragging {
 		background: var(--surface-2);
-		box-shadow:
-			inset 2px 0 0 var(--accent),
-			0 6px 18px rgb(0 0 0 / 0.35);
+		box-shadow: 0 6px 18px rgb(0 0 0 / 0.35);
 		position: relative;
 		z-index: 1;
 	}
@@ -476,6 +487,37 @@
 		padding: 2px 8px;
 		white-space: nowrap;
 		cursor: pointer;
+	}
+	/* Mine next can't run: a neutral chip says so, the reason is in its title. */
+	.chip {
+		margin-left: auto;
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		font-size: 12px;
+		font-weight: 500;
+		line-height: 18px;
+		padding: 1px 8px;
+		border-radius: 999px;
+		color: var(--t3);
+		background: var(--surface-3);
+		white-space: nowrap;
+		cursor: default;
+	}
+	.chip::before {
+		content: '';
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		box-shadow: inset 0 0 0 1.5px currentColor;
+	}
+	.vh {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
 	}
 	.mine:disabled {
 		opacity: 0.5;

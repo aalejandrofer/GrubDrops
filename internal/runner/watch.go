@@ -36,6 +36,12 @@ const (
 
 // start picks a live channel for the current target and begins watching.
 func (r *Runner) start(ctx context.Context) error {
+	if r.pointsOnly() {
+		// Points only turned on after the pick: no drop channel lookup.
+		r.stopWatch(ctx)
+		r.setState(ctx, StatePicking)
+		return nil
+	}
 	r.mu.Lock()
 	if r.current == nil {
 		r.mu.Unlock()
@@ -174,6 +180,8 @@ func (r *Runner) start(ctx context.Context) error {
 	if cs, ok := r.cfg.Backend.(platform.ChannelSubscriber); ok && s.ChannelID != "" {
 		cs.SubscribeChannel(r.cfg.AccountID, s.ChannelID)
 	}
+	r.startPoints(ctx, s.Channel)
+	r.startRaids(ctx, s.ChannelID)
 	r.setState(ctx, StateWatching)
 	return nil
 }
@@ -484,17 +492,26 @@ func (r *Runner) clearWatchViewLocked() {
 	r.minutes = 0
 }
 
-// stopWatch ends the live watch, if any, and drops the channel subscription.
-// The current target stays so a restart can resume the same drop; the
-// snapshot's channel, viewers and minutes clear until the next watch polls.
+// stopWatch ends the live watch, if any, its channel points and raid side
+// tasks and its channel subscription. The current target stays so a restart can resume the
+// same drop; the snapshot's channel, viewers and minutes clear until the next
+// watch polls. The points task is taken in the same locked section that
+// clears the handle: startPoints checks the handle under that lock, so no
+// task can start after this and outlive the watch.
 func (r *Runner) stopWatch(ctx context.Context) {
 	r.mu.Lock()
+	t := r.points
+	r.points = nil
+	rw := r.raids
+	r.raids = nil
 	h := r.handle
 	s := r.stream
 	r.handle = nil
 	r.stream = nil
 	r.clearWatchViewLocked()
 	r.mu.Unlock()
+	t.stop()
+	rw.stop(r)
 	if h == nil {
 		return
 	}

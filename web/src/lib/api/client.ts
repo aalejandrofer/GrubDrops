@@ -20,6 +20,10 @@ import type {
 	LinkRecheck,
 	Overview,
 	Platform,
+	PointsMode,
+	PointsResp,
+	RewardCode,
+	RewardCodeState,
 	Runner,
 	SearchHit,
 	Session,
@@ -69,6 +73,8 @@ export interface Api {
 	games(): Promise<GamesResp>;
 	addGame(name: string): Promise<Game>;
 	scanGames(): Promise<void>;
+	/** Rescans every running account, or only those on platform; new state arrives over SSE. 429 with retry_after_sec inside the cooldown. */
+	scan(platform?: Platform): Promise<void>;
 	/** applies_in_s: seconds until the miner applies the order. */
 	setGames(ids: string[]): Promise<{ applies_in_s: number }>;
 	searchGames(q: string): Promise<SearchHit[]>;
@@ -89,6 +95,18 @@ export interface Api {
 	setAccountOrder(ids: string[]): Promise<void>;
 	removeAccount(id: string): Promise<void>;
 	setAccountEnabled(id: string, enabled: boolean): Promise<void>;
+	/** on: the account keeps mining through the sleep window. */
+	setSkipSleep(id: string, on: boolean): Promise<void>;
+	/** off also stops the account's Force watch; its channel assignments stay. */
+	setPointsMode(id: string, mode: PointsMode): Promise<void>;
+	/** Force watch channels with each account's cached channel-points balance. */
+	points(): Promise<PointsResp>;
+	/** Reads every balance now; new ones arrive as a points event. 429 with retry_after_sec inside the cooldown. */
+	refreshPoints(): Promise<void>;
+	/** Twitch reward codes still to redeem, newest first. */
+	rewardCodes(): Promise<{ codes: RewardCode[] }>;
+	/** Hides a code and stops its reminder. */
+	setRewardCode(id: number, state: RewardCodeState): Promise<void>;
 	twitchStart(id: string): Promise<DeviceStart>;
 	twitchStatus(id: string): Promise<DeviceStatus>;
 	twitchAndroidUrl(): Promise<{ login_url: string }>;
@@ -99,7 +117,8 @@ export interface Api {
 	kickSession(id: string, cookiesTxt: string): Promise<{ verified: boolean }>;
 	recheckLinks(id: string): Promise<LinkRecheck>;
 	settings(): Promise<Settings>;
-	saveSettings(p: SettingsPatch): Promise<Settings>;
+	/** keepalive: the request outlives a page that is closing. */
+	saveSettings(p: SettingsPatch, keepalive?: boolean): Promise<Settings>;
 	notifyTest(target?: 'discord' | 'telegram'): Promise<void>;
 	/** Fetches Twitch through the proxy; an empty url or the hint tests the saved one. */
 	proxyTest(url: string): Promise<{ status: number; ms: number }>;
@@ -147,7 +166,7 @@ export function createClient(opts: ClientOpts): Api {
 		opts.onUnauthorized();
 	}
 
-	async function send(method: string, path: string, body?: unknown, redirect = true, file = false): Promise<unknown> {
+	async function send(method: string, path: string, body?: unknown, redirect = true, file = false, keepalive = false): Promise<unknown> {
 		const unsafe = method !== 'GET' && method !== 'HEAD';
 		for (let attempt = 0; ; attempt++) {
 			const headers: Record<string, string> = {};
@@ -159,7 +178,7 @@ export function createClient(opts: ClientOpts): Api {
 			}
 			let res: Response;
 			try {
-				res = await doFetch(path, { method, headers, body: payload });
+				res = await doFetch(path, keepalive ? { method, headers, body: payload, keepalive } : { method, headers, body: payload });
 			} catch {
 				opts.onUnreachable(true);
 				throw new Unreachable();
@@ -226,6 +245,7 @@ export function createClient(opts: ClientOpts): Api {
 		games: () => get('/api/games'),
 		addGame: (name) => post('/api/games', { name }),
 		scanGames: () => post('/api/games/scan'),
+		scan: (platform) => post('/api/scan', platform ? { platform } : undefined),
 		setGames: (ids) => send('PUT', '/api/games', { ids }) as Promise<{ applies_in_s: number }>,
 		searchGames: (q) => get(`/api/games/search?q=${enc(q)}`),
 		discover: (refresh) => (refresh ? post('/api/discover/refresh') : get('/api/discover')),
@@ -253,6 +273,14 @@ export function createClient(opts: ClientOpts): Api {
 		removeAccount: (id) => send('DELETE', `/api/accounts/${enc(id)}`) as Promise<void>,
 		setAccountEnabled: (id, enabled) =>
 			send('PUT', `/api/accounts/${enc(id)}/enabled`, { enabled }) as Promise<void>,
+		setSkipSleep: (id, on) =>
+			send('PUT', `/api/accounts/${enc(id)}/skip-sleep`, { skip_sleep: on }) as Promise<void>,
+		setPointsMode: (id, mode) =>
+			send('PUT', `/api/accounts/${enc(id)}/points-mode`, { points_mode: mode }) as Promise<void>,
+		points: () => get('/api/points'),
+		refreshPoints: () => post('/api/points/refresh'),
+		rewardCodes: () => get('/api/reward-codes'),
+		setRewardCode: (id, state) => send('PUT', `/api/reward-codes/${id}`, { state }) as Promise<void>,
 		twitchStart: (id) => post(`/api/accounts/${enc(id)}/twitch/device`),
 		twitchStatus: (id) => get(`/api/accounts/${enc(id)}/twitch/device`),
 		twitchAndroidUrl: () => get('/api/login/twitch/android'),
@@ -269,7 +297,7 @@ export function createClient(opts: ClientOpts): Api {
 		setAccountGames: (id, own, games) =>
 			send('PUT', `/api/accounts/${enc(id)}/games`, games === null ? { own } : { own, games }) as Promise<AccountGames>,
 		settings: () => get('/api/settings'),
-		saveSettings: (p) => send('PUT', '/api/settings', p) as Promise<Settings>,
+		saveSettings: (p, keepalive = false) => send('PUT', '/api/settings', p, true, false, keepalive) as Promise<Settings>,
 		notifyTest: (target) => post(`/api/settings/notify-test${target ? `?target=${target}` : ''}`),
 		proxyTest: (url) => post('/api/settings/proxy-test', { url }),
 		changePassword: (current, next) => post('/api/settings/password', { current, new: next }),

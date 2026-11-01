@@ -1,10 +1,16 @@
 <script lang="ts">
+	import { SECTION_LOOK } from '$lib/settings-look';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/app';
 	import type { Settings, SettingsPatch } from '$lib/api/types';
 	import { LANGS, t, type Lang } from '$lib/i18n/index.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import { prefs } from '$lib/prefs.svelte';
+	import { advanced, setExpandAdv } from '$lib/advanced.svelte';
+	import NewPill from '$lib/components/NewPill.svelte';
+	import { msToNextMinute } from '$lib/format';
 	import { timeExample, zoneOptions } from '$lib/settings';
+	import SectionHead from './SectionHead.svelte';
 
 	let {
 		s,
@@ -16,7 +22,17 @@
 		errs: Record<string, boolean>;
 	} = $props();
 
-	const now = Date.now();
+	// The example clock turns over with each minute.
+	let now = $state(Date.now());
+	$effect(() => {
+		let timer: ReturnType<typeof setTimeout>;
+		const tick = (): void => {
+			now = Date.now();
+			timer = setTimeout(tick, msToNextMinute(now));
+		};
+		timer = setTimeout(tick, msToNextMinute(Date.now()));
+		return () => clearTimeout(timer);
+	});
 	const example = $derived(timeExample(s.time_format, prefs.zone, now));
 	const zones = $derived.by(() => {
 		const o = zoneOptions(s.zone_effective ?? 'UTC');
@@ -59,8 +75,8 @@
 	}
 </script>
 
-<section class="set" id="general" aria-labelledby="h-gen">
-	<div class="sec-head"><div><h2 id="h-gen">{t('settings.general')}</h2></div></div>
+<section class="set hue-{SECTION_LOOK.general.hue}" id="general" aria-labelledby="h-gen">
+	<SectionHead sec="general" id="h-gen" />
 	<div class="panel">
 		<div class="row">
 			<div class="lbl">
@@ -121,13 +137,25 @@
 		</div>
 		<div class="row">
 			<div class="lbl">
-				{#if signoutFailed}<small class="bad">{t('settings.signout_failed')}</small>{/if}
+				<b id="adv-l">{t('settings.expand_advanced')}<NewPill since="2.3" /></b>
+				<small>{t('settings.expand_advanced_sub')}</small>
 			</div>
-			<button type="button" class="btn" onclick={signOut}>{t('settings.sign_out')}</button>
+			<button
+				type="button"
+				class="sw"
+				role="switch"
+				aria-checked={advanced.expand}
+				aria-labelledby="adv-l"
+				onclick={() => setExpandAdv(!advanced.expand)}
+			></button>
 		</div>
 	</div>
+	<div class="signout">
+		{#if signoutFailed}<small class="bad">{t('settings.signout_failed')}</small>{/if}
+		<button type="button" class="btn" onclick={signOut}>{t('settings.sign_out')}</button>
+	</div>
 
-	<h3 class="sub-h">{t('settings.backup')}</h3>
+	<h3 class="sub-h"><span class="tile sm" aria-hidden="true"><Icon name="download" size={13} /></span>{t('settings.backup')}</h3>
 	<div class="panel">
 		<div class="row">
 			<div class="lbl">
@@ -136,7 +164,7 @@
 				{#if snapFailed}<small class="bad" role="alert">{t('settings.snapshot_failed')}</small>{/if}
 			</div>
 			<button type="button" class="btn" disabled={snapBusy} onclick={downloadSnapshot}>
-				{snapBusy ? t('settings.snapshot_busy') : t('settings.snapshot_download')}
+				<Icon name="download" />{snapBusy ? t('settings.snapshot_busy') : t('settings.snapshot_download')}
 			</button>
 		</div>
 	</div>
@@ -148,5 +176,20 @@
 	}
 	.bad {
 		color: var(--red);
+		font-size: 12.5px;
+	}
+	/* Sits under the panel, lined up with the controls inside it. */
+	.signout {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 12px;
+		margin-top: 10px;
+		padding-right: 16px;
+	}
+	@media (max-width: 720px) {
+		.signout {
+			padding-right: 14px;
+		}
 	}
 </style>

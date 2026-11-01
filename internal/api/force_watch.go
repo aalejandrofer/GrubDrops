@@ -10,6 +10,7 @@ import (
 
 	"github.com/aalejandrofer/grubdrops/internal/runner"
 	"github.com/aalejandrofer/grubdrops/internal/store"
+	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
 type forceChannelJSON struct {
@@ -152,12 +153,22 @@ type forceLiveLineJSON struct {
 	Platform string   `json:"platform"`
 	Channel  string   `json:"channel"`
 	Watchers []string `json:"watchers"`
+	// Balance sums the cached points of the accounts on the channel; nil
+	// when none is known. Read is its read state, see pointsSum.
+	Balance *int64 `json:"balance"`
+	Read    string `json:"read"`
 }
 
 type forceOverviewJSON struct {
 	Live  []forceLiveLineJSON `json:"live"`
 	More  int                 `json:"more"`
 	Total int                 `json:"total"`
+	// Points sums every cached Twitch balance on every channel; nil when
+	// none is known. PointsRead is its read state, see pointsSum, and
+	// PointsAt the newest successful read.
+	Points     *int64  `json:"points"`
+	PointsRead string  `json:"points_read"`
+	PointsAt   *string `json:"points_at"`
 }
 
 // forceOverviewMax is how many live channels the Home tile lists.
@@ -166,9 +177,10 @@ const forceOverviewMax = 2
 // forceOverview is the Home tile block: live channels, watched ones first and
 // then panel order, at most forceOverviewMax. nil when the list is empty or
 // cannot be read. A channel an account is watching counts as live. usable
-// reports whether any channel has an enabled account, so the list gives an
-// account something to watch.
-func (s *server) forceOverview(r *http.Request, snaps []runner.Snapshot, names map[string]string, paused map[string]bool) (*forceOverviewJSON, bool) {
+// reports whether any channel has an account in can, the accounts able to
+// force watch, so the list gives an account something to watch. Each line
+// and the block carry the cached channel points of accts.
+func (s *server) forceOverview(r *http.Request, snaps []runner.Snapshot, accts []gen.Account, names map[string]string, can map[string]bool) (*forceOverviewJSON, bool) {
 	if s.d.ForceWatch == nil {
 		return nil, false
 	}
@@ -181,11 +193,12 @@ func (s *server) forceOverview(r *http.Request, snaps []runner.Snapshot, names m
 		return nil, false
 	}
 	watch := forceWatchers(snaps)
+	sums, all := s.forcePoints(r.Context(), list, accts)
 	var watched, idle []forceLiveLineJSON
 	usable := false
 	for _, c := range list {
 		for _, id := range c.Accounts {
-			if _, ok := names[id]; ok && !paused[id] {
+			if can[id] {
 				usable = true
 			}
 		}
@@ -194,7 +207,9 @@ func (s *server) forceOverview(r *http.Request, snaps []runner.Snapshot, names m
 		if len(ids) == 0 && (live == nil || !*live) {
 			continue
 		}
-		line := forceLiveLineJSON{Platform: c.Platform, Channel: c.Channel, Watchers: []string{}}
+		sum := sums[c.Platform+"/"+c.Channel]
+		line := forceLiveLineJSON{Platform: c.Platform, Channel: c.Channel, Watchers: []string{},
+			Balance: sum.balance(), Read: sum.state()}
 		for _, id := range ids {
 			if n, ok := names[id]; ok {
 				line.Watchers = append(line.Watchers, n)
@@ -206,7 +221,12 @@ func (s *server) forceOverview(r *http.Request, snaps []runner.Snapshot, names m
 			idle = append(idle, line)
 		}
 	}
-	all := append(watched, idle...)
-	shown := all[:min(len(all), forceOverviewMax)]
-	return &forceOverviewJSON{Live: append([]forceLiveLineJSON{}, shown...), More: len(all) - len(shown), Total: len(list)}, usable
+	lines := append(watched, idle...)
+	shown := lines[:min(len(lines), forceOverviewMax)]
+	out := &forceOverviewJSON{Live: append([]forceLiveLineJSON{}, shown...), More: len(lines) - len(shown), Total: len(list),
+		Points: all.balance(), PointsRead: all.state()}
+	if all.known {
+		out.PointsAt = rfc3339(all.at)
+	}
+	return out, usable
 }

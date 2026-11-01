@@ -1,3 +1,4 @@
+import { sleepLine } from '$lib/accounts';
 import type { Overview } from '$lib/api/types';
 import { t, tn } from '$lib/i18n/index.svelte';
 
@@ -14,7 +15,8 @@ export function headerTone(o: Overview | null, unreachable: boolean): Tone {
 	return o && o.problems.length > 0 ? 'amber' : 'grey';
 }
 
-export function statusText(o: Overview | null, unreachable: boolean): string {
+/** time formats the wake time; it defaults to the display zone and clock. */
+export function statusText(o: Overview | null, unreachable: boolean, time?: (iso: string) => string): string {
 	if (unreachable) return t('status.offline');
 	if (!o) return '';
 	switch (o.status.state) {
@@ -23,6 +25,8 @@ export function statusText(o: Overview | null, unreachable: boolean): string {
 			return t('status.not_set_up');
 		case 'mining':
 			return tn('status.mining', o.status.accounts_total, { m: o.status.accounts_mining });
+		case 'sleep_window':
+			return sleepLine(o.status.sleep_until, time);
 		case 'nothing_live':
 			return forceWatching(o) ? t('status.force_watching') : t('status.nothing_live');
 		default:

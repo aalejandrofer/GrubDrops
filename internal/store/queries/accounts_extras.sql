@@ -42,3 +42,9 @@ UPDATE accounts SET sort_order = ? WHERE id = ?;
 
 -- name: SetAccountOwnGames :exec
 UPDATE accounts SET own_games = ?, updated_at = ? WHERE id = ?;
+
+-- name: SetAccountSkipSleep :exec
+UPDATE accounts SET skip_sleep = ?, updated_at = ? WHERE id = ?;
+
+-- name: SetAccountPointsMode :exec
+UPDATE accounts SET points_mode = ?, updated_at = ? WHERE id = ?;

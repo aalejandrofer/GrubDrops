@@ -6,8 +6,10 @@
 	import ArmButton from '$lib/components/ArmButton.svelte';
 	import BoxArt from '$lib/components/BoxArt.svelte';
 	import CopyCommand from '$lib/components/CopyCommand.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import CampaignDrawer, { type CampaignTarget } from '$lib/components/CampaignDrawer.svelte';
 	import PageHead from '$lib/components/PageHead.svelte';
+	import RewardCodes from '$lib/components/RewardCodes.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { claimStamp, etaShort, formatInt, relTime } from '$lib/format';
 	import { t, tn } from '$lib/i18n/index.svelte';
@@ -15,6 +17,8 @@
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
 	import { inProgress, pageCount, pageQuery, pageRange, PAGE_SIZES, readPageSize, validPageSize, writePageSize } from '$lib/inventory';
+	import { refreshLabel } from '$lib/cooldown';
+	import { createRefresh } from '$lib/refresh.svelte';
 
 	const live = getLive();
 
@@ -127,6 +131,11 @@
 
 	onDestroy(() => clearTimeout(timer));
 
+	// Refresh: every running account rescans; each finished scan reloads
+	// live.games, and the first one reloads this list too.
+	const refresh = createRefresh({ post: () => api.scan(), signal: () => live.games, onland: () => void load() });
+	const refreshText = $derived(t(refreshLabel(refresh.busy, refresh.done, 'scan.refresh')));
+
 	function pick(kind: 'game' | 'account', v: string): void {
 		if (kind === 'game') game = v;
 		else account = v;
@@ -186,17 +195,29 @@
 
 <PageHead title={t('nav.inventory')} status={head} lead={stamp}>
 	{#snippet action()}
-		<span class="invlinks"
-			>{#each t('inventory.links', { twitch: '{twitch}', kick: '{kick}' }).split(/(\{twitch\}|\{kick\})/) as part, i (i)}{#if part === '{twitch}'}<a
-						class="tw"
-						href="https://www.twitch.tv/drops/inventory"
-						target="_blank"
-						rel="noopener">{t('inventory.link_twitch')}</a
-					>{:else if part === '{kick}'}<a class="ki" href="https://kick.com/drops/all-campaigns" target="_blank" rel="noopener"
-						>{t('inventory.link_kick')}</a
-					>{:else}{part}{/if}{/each}</span
-		>
+		<span class="acts">
+			<span class="invlinks"
+				>{#each t('inventory.links', { twitch: '{twitch}', kick: '{kick}' }).split(/(\{twitch\}|\{kick\})/) as part, i (i)}{#if part === '{twitch}'}<a
+							class="tw"
+							href="https://www.twitch.tv/drops/inventory"
+							target="_blank"
+							rel="noopener">{t('inventory.link_twitch')}</a
+						>{:else if part === '{kick}'}<a class="ki" href="https://kick.com/drops/all-campaigns" target="_blank" rel="noopener"
+							>{t('inventory.link_kick')}</a
+						>{:else}{part}{/if}{/each}</span
+			>
+			{#if refresh.failed}<small class="bad" role="alert">{t('points.refresh_failed')}</small>{/if}
+			<button
+				type="button"
+				class="btn rf"
+				class:spin={refresh.busy}
+				class:done={refresh.done}
+				disabled={refresh.busy}
+				onclick={() => refresh.run()}><Icon name="refresh" />{refreshText}</button
+			>
+		</span>
 	{/snippet}
+	<RewardCodes />
 	{#if progress.length > 0}
 		<section class="sec" aria-label={t('inventory.in_progress')}>
 			<div class="sec-h">
@@ -359,6 +380,16 @@
 <CampaignDrawer target={drawer} onclose={() => (drawer = null)} />
 
 <style>
+	.acts {
+		display: inline-flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 8px 12px;
+	}
+	.bad {
+		font-size: 12px;
+		color: var(--red);
+	}
 	.invlinks {
 		font-size: 13px;
 		font-weight: 500;

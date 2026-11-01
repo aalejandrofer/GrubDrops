@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DiscoverCampaign } from '$lib/api/types';
-import { filterGroups, gameSlug, groupByGame, isAdded, minutesLeft } from './discover';
+import { filterGroups, gameSlug, groupByGame, isAdded, minutesLeft, sortGroups } from './discover';
 
 const camp = (p: Partial<DiscoverCampaign> & Pick<DiscoverCampaign, 'id' | 'game'>): DiscoverCampaign => ({
 	platform: 'twitch',
@@ -97,6 +97,36 @@ describe('filterGroups', () => {
 	});
 	it('hides added games', () => {
 		expect(filterGroups(groups, { ...all, hideAdded: true }).map((g) => g.name)).toEqual(['Rust']);
+	});
+});
+
+describe('sortGroups', () => {
+	const groups = groupByGame(
+		[
+			camp({ id: 'a1', game: 'Apex Legends', starts_at: '2099-01-01T00:00:00Z', ends_at: '2099-02-01T00:00:00Z' }),
+			camp({ id: 'r1', game: 'Rust', starts_at: '2099-01-05T00:00:00Z', ends_at: '2099-03-01T00:00:00Z' }),
+			camp({ id: 'r2', game: 'Rust', starts_at: '2099-01-02T00:00:00Z', ends_at: '2099-01-10T00:00:00Z' }),
+			camp({ id: 'z1', game: 'Zula' })
+		],
+		[]
+	);
+
+	it('keeps games A to Z by name', () => {
+		expect(sortGroups(groups, 'name').map((g) => g.name)).toEqual(['Apex Legends', 'Rust', 'Zula']);
+	});
+	it('puts the newest start first, games and campaigns, unknown starts last', () => {
+		const out = sortGroups(groups, 'newest');
+		expect(out.map((g) => g.name)).toEqual(['Rust', 'Apex Legends', 'Zula']);
+		expect(out[0].campaigns.map((c) => c.id)).toEqual(['r1', 'r2']);
+	});
+	it('puts the soonest ending game first, open-ended last', () => {
+		expect(sortGroups(groups, 'ending').map((g) => g.name)).toEqual(['Rust', 'Apex Legends', 'Zula']);
+	});
+	it('does not mutate the input', () => {
+		const before = groups.map((g) => [g.name, g.campaigns.map((c) => c.id)]);
+		sortGroups(groups, 'newest');
+		sortGroups(groups, 'ending');
+		expect(groups.map((g) => [g.name, g.campaigns.map((c) => c.id)])).toEqual(before);
 	});
 });
 

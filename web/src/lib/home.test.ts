@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import type { Account, Claim, Game, Overview, Runner } from '$lib/api/types';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { Account, Claim, Game, Overview, PausedHolder, Runner } from '$lib/api/types';
+import { setLang } from '$lib/i18n/index.svelte';
 import accountsFx from '$lib/fixtures/accounts.json';
 import claims from '$lib/fixtures/claims.json';
 import games from '$lib/fixtures/games.json';
@@ -18,7 +19,10 @@ import {
 	normName,
 	notMining,
 	visibleCards,
-	type GameCard
+	waitBadge,
+	waitLine,
+	type GameCard,
+	type WaitFor
 } from './home';
 
 const G = () => structuredClone(games.games) as Game[];
@@ -70,7 +74,7 @@ describe('gameCards', () => {
 		expect(c[0].moreInUpNext).toBe(1);
 		expect(c[1].moreInUpNext).toBe(1);
 		expect(c[1].queued.map((t) => t.game)).toEqual(['Marvel Rivals']);
-		expect(c[1].waitFor).toEqual({ kind: 'account', account: 'hJune' });
+		expect(c[1].waitFor).toEqual({ kind: 'account', account: 'hJune', platform: 'twitch' });
 		expect(c[3].moreInUpNext).toBe(0);
 	});
 	it('an idle account with the drop queued waits for a live channel', () => {
@@ -87,7 +91,7 @@ describe('gameCards', () => {
 		const r = R();
 		r[2].up_next = [structuredClone(r[0].up_next[1])];
 		const c = gameCards(G(), r);
-		expect(c[1].waitFor).toEqual({ kind: 'account', account: 'hJune' });
+		expect(c[1].waitFor).toEqual({ kind: 'account', account: 'hJune', platform: 'twitch' });
 	});
 	it('nothing queued waits for nothing', () => {
 		const c = gameCards(G(), R());
@@ -114,6 +118,44 @@ describe('gameCards', () => {
 		const c = gameCards(G(), R(), new Set(['acc-hjune']));
 		expect(c.flatMap((x) => x.rows.map((y) => y.runner.account_id))).not.toContain('acc-hjune');
 		expect(c[1].queued).toHaveLength(0);
+	});
+	const tw: PausedHolder = { account_id: 'acc-tw', account_name: 'TTik3r', platform: 'twitch' };
+	const kk: PausedHolder = { account_id: 'acc-kk', account_name: 'kk', platform: 'kick' };
+	it('a game only paused accounts hold waits on them', () => {
+		const g = G();
+		g[3].state = 'paused';
+		g[3].paused_holders = [tw, kk];
+		const c = gameCards(g, R());
+		expect(c[3].waitFor).toEqual({ kind: 'paused', account: 'TTik3r', platform: 'twitch', more: 1 });
+		expect(c[3].queued).toHaveLength(0);
+	});
+	it('an unpaused account with the game queued beats paused holders', () => {
+		const g = G();
+		g[1].paused_holders = [tw];
+		const c = gameCards(g, R());
+		expect(c[1].waitFor).toEqual({ kind: 'account', account: 'hJune', platform: 'twitch' });
+	});
+	it('an idle unpaused account waiting for a live channel beats paused holders', () => {
+		const g = G();
+		g[1].paused_holders = [tw];
+		const r = R();
+		r[0].current = null;
+		r[0].state = 'idle';
+		expect(gameCards(g, r)[1].waitFor?.kind).toBe('live');
+	});
+	it("a paused account's own queue stays off the card; its holder entry shows it", () => {
+		const g = G();
+		g[1].paused_holders = [{ account_id: 'acc-hjune', account_name: 'hJune', platform: 'twitch' }];
+		const c = gameCards(g, R(), new Set(['acc-hjune']));
+		expect(c[1].queued).toHaveLength(0);
+		expect(c[1].waitFor).toEqual({ kind: 'paused', account: 'hJune', platform: 'twitch', more: 0 });
+	});
+	it('a signed out holder does not hide paused holders', () => {
+		const g = G();
+		g[3].paused_holders = [tw];
+		const r = R();
+		r[2].up_next = [{ ...structuredClone(r[0].up_next[0]), game: 'Delta Force' }];
+		expect(gameCards(g, r)[3].waitFor).toEqual({ kind: 'paused', account: 'TTik3r', platform: 'twitch', more: 0 });
 	});
 	it('idle accounts are on no card', () => {
 		const c = gameCards(G(), structuredClone(many) as Runner[]);
@@ -147,6 +189,14 @@ describe('notMining', () => {
 		r[1].current = null;
 		r[1].state = 'idle';
 		expect(ids(a, r)).toEqual(['acc-alt:idle', 'acc-kick:signed_out', 'acc-hjune:paused']);
+	});
+	it('lists sleeping accounts after idle ones', () => {
+		const r = R();
+		r[0].current = null;
+		r[0].state = 'sleep_window';
+		r[1].current = null;
+		r[1].state = 'idle';
+		expect(ids(A(), r)).toEqual(['acc-alt:idle', 'acc-hjune:sleep_window', 'acc-kick:signed_out']);
 	});
 	it('keeps account order within a state', () => {
 		const a = A();
@@ -259,6 +309,15 @@ describe('homeView', () => {
 		o.status.accounts_paused = 4;
 		expect(homeView({ ...base, overview: o, games: [] })).toBe('no_games');
 	});
+	it('the sleep window keeps the dashboard, over nothing live', () => {
+		const o = fourAccounts('sleep_window');
+		o.status.sleep_until = '2026-10-30T07:45:00Z';
+		expect(homeView({ ...base, overview: o })).toBe('sleep_window');
+		const g = G().map((x) => ({ ...x, state: 'no_campaign' as const }));
+		expect(homeView({ ...base, overview: o, games: g })).toBe('sleep_window');
+		o.status.accounts_paused = 4;
+		expect(homeView({ ...base, overview: o })).toBe('paused');
+	});
 	it('games chosen but no campaigns is nothing live', () => {
 		expect(homeView({ ...base, overview: O(nothing) })).toBe('nothing_live');
 		const g = G().map((x) => ({ ...x, state: 'no_campaign' as const }));
@@ -266,7 +325,7 @@ describe('homeView', () => {
 	});
 	it('no games with force watch channels keeps the dashboard', () => {
 		const o = fourAccounts('idle');
-		o.force_watch = { live: [], more: 0, total: 2 };
+		o.force_watch = { live: [], more: 0, total: 2, points: null, points_read: 'none', points_at: null };
 		expect(homeView({ ...base, overview: o, games: [] })).not.toBe('no_games');
 		expect(homeView({ ...base, overview: o, games: [] })).toBe('nothing_live');
 		o.force_watch = null;
@@ -275,7 +334,7 @@ describe('homeView', () => {
 	it('no games with force channels nobody can watch is no games', () => {
 		// The server reports no_games when no channel has an enabled account.
 		const o = fourAccounts('no_games');
-		o.force_watch = { live: [], more: 0, total: 2 };
+		o.force_watch = { live: [], more: 0, total: 2, points: null, points_read: 'none', points_at: null };
 		expect(homeView({ ...base, overview: o, games: [] })).toBe('no_games');
 	});
 	it('no games while an account force watches keeps the dashboard', () => {
@@ -360,6 +419,11 @@ describe('visibleCards', () => {
 		c[2].game = { id: '3', state: 'waiting' } as unknown as Game;
 		expect(visibleCards(c).shown.map((x) => x.rank)).toEqual([3, 1, 2]);
 	});
+	it('lists a paused game with the waiting games, before idle ones', () => {
+		const c = mk(3);
+		c[2].game = { id: '3', state: 'paused' } as unknown as Game;
+		expect(visibleCards(c).shown.map((x) => x.rank)).toEqual([3, 1, 2]);
+	});
 	it('sizes by display position', () => {
 		const r = visibleCards(mk(4, [4]));
 		expect(r.shown.map((c) => c.rank)).toEqual([4, 1, 2, 3]);
@@ -383,6 +447,34 @@ describe('visibleCards', () => {
 		const r = visibleCards(cards);
 		expect(r.shown.map((c) => c.rank)).toEqual([4, 5, 1, 2, 3]);
 		expect(r.hidden).toBe(0);
+	});
+});
+
+describe('waitBadge and waitLine', () => {
+	beforeEach(() => setLang('en'));
+	it('name the platform of the account the game waits for', () => {
+		const w = { kind: 'account', account: 'TTik3r', platform: 'kick' } as const;
+		expect(waitBadge(w)).toBe('Waiting for TTik3r (Kick)');
+		expect(waitLine(w)).toBe('Starts when TTik3r (Kick) is free.');
+	});
+	it('name a paused holder and its platform', () => {
+		const w = { kind: 'paused', account: 'TTik3r', platform: 'twitch', more: 0 } as const;
+		expect(waitBadge(w)).toBe('TTik3r (Twitch) paused');
+		expect(waitLine(w)).toBe('TTik3r (Twitch) paused. Resume to mine.');
+	});
+	it('count further paused holders', () => {
+		const w = { kind: 'paused', account: 'TTik3r', platform: 'twitch', more: 2 } as const;
+		expect(waitBadge(w)).toBe('TTik3r (Twitch) +2 paused');
+		expect(waitLine(w)).toBe('TTik3r (Twitch) +2 paused. Resume one to mine.');
+		expect(waitLine({ ...w, more: 1 })).toBe('TTik3r (Twitch) +1 paused. Resume one to mine.');
+	});
+	it('keep the live and generic texts', () => {
+		expect(waitBadge(null)).toBe('Waiting');
+		expect(waitLine(null)).toBe('Starts when an account is free.');
+		const live: WaitFor = { kind: 'live', channels: ['oilrats', 'b'], more: 1 };
+		expect(waitBadge(live)).toBe('Waiting for oilrats +2');
+		expect(waitLine(live)).toBe('Starts when one of oilrats, b +1 goes live.');
+		expect(waitBadge({ kind: 'live', channels: [], more: 0 })).toBe('Waiting for a live stream');
 	});
 });
 

@@ -1,5 +1,5 @@
 import type { Api } from '$lib/api/client';
-import type { Account, DeviceStart, Runner } from '$lib/api/types';
+import type { Account, DeviceStart, PointsMode, Runner } from '$lib/api/types';
 import { clock } from '$lib/format';
 import { t } from '$lib/i18n/index.svelte';
 import { prefs } from '$lib/prefs.svelte';
@@ -153,7 +153,33 @@ export function androidErrorKey(code: string | undefined): string {
 	return (code && ANDROID_ERRORS.get(code)) || 'accounts.android_failed';
 }
 
-export type AccountStatus = 'paused' | 'mining' | 'force_watching' | 'signed_out' | 'idle';
+/** Channel points modes the Points page offers, in order. off reads Drops only. */
+export const POINTS_CHOICES: { mode: PointsMode; label: string }[] = [
+	{ mode: 'off', label: 'accounts.points_off' },
+	{ mode: 'drops_points', label: 'accounts.points_drops' },
+	{ mode: 'points_only', label: 'accounts.points_only' }
+];
+
+/** True when the account's platform has channel points, so it gets the points mode picker and balances. Twitch only. */
+export function pointsSupported(a: Pick<Account, 'platform'>): boolean {
+	return a.platform === 'twitch';
+}
+
+/** True when the account claims channel points and runs its Force watch. Unknown modes are off. */
+export function pointsOn(a: Pick<Account, 'points_mode'>): boolean {
+	return a.points_mode === 'drops_points' || a.points_mode === 'points_only';
+}
+
+/**
+ * True when the account runs its Force watch: a Twitch account with points
+ * on, or any account on a platform without channel points (Kick), whatever
+ * mode is stored.
+ */
+export function forceWatchOn(a: Pick<Account, 'platform' | 'points_mode'>): boolean {
+	return !pointsSupported(a) || pointsOn(a);
+}
+
+export type AccountStatus = 'paused' | 'mining' | 'force_watching' | 'sleep_window' | 'signed_out' | 'idle';
 
 /** Signed out wins, then paused: a paused account without a session still needs a login. */
 export function accountStatus(a: Account, r: Runner | undefined): AccountStatus {
@@ -161,6 +187,7 @@ export function accountStatus(a: Account, r: Runner | undefined): AccountStatus 
 	if (!a.enabled) return 'paused';
 	if (r?.current && (r.state === 'watching' || r.state === 'claiming')) return 'mining';
 	if (r?.state === 'force_watching') return 'force_watching';
+	if (r?.state === 'sleep_window') return 'sleep_window';
 	return 'idle';
 }
 
@@ -182,27 +209,28 @@ const STATE_KEYS = {
 	awaiting_connect: 'accounts.state.awaiting_connect',
 	needs_login: 'accounts.state.needs_login',
 	no_games: 'accounts.state.no_games',
-	force_watching: 'accounts.state.force_watching'
+	force_watching: 'accounts.state.force_watching',
+	sleep_window: 'accounts.state.sleep_window',
+	no_channels: 'accounts.state.no_channels'
 } as const;
+
+const localClock = (iso: string) => clock(iso, prefs.zone, prefs.fmt);
+
+/** "Sleep window until 07:45", or plain "Sleep window" without a wake time. */
+export function sleepLine(until: string | null | undefined, time: (iso: string) => string = localClock): string {
+	return until ? t('accounts.sleep_line', { time: time(until) }) : t('accounts.state.sleep_window');
+}
 
 export function accountLine(
 	a: Account,
 	r: Runner | undefined,
-	time: (iso: string) => string = (iso) => clock(iso, prefs.zone, prefs.fmt)
+	time: (iso: string) => string = localClock
 ): string {
 	const status = accountStatus(a, r);
 	if (status === 'paused') return t('accounts.paused_line');
-	if (status === 'mining' && r?.current) {
-		const c = r.current;
-		return t('accounts.mining_line', {
-			game: c.game,
-			drop: c.benefit_name,
-			channel: r.channel,
-			m: c.minutes,
-			req: c.required_minutes
-		});
-	}
+	if (status === 'mining' && r?.current) return t('accounts.mining_line', { game: r.current.game });
 	if (status === 'force_watching' && r?.channel) return t('accounts.force_line', { channel: r.channel });
+	if (status === 'sleep_window') return sleepLine(r?.sleep_until, time);
 	if (status === 'signed_out') {
 		const at = a.auth?.checked_at;
 		return at ? t('accounts.expired_at', { time: time(at) }) : t('accounts.not_signed_in');

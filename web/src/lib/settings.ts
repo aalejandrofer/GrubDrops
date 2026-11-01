@@ -1,7 +1,8 @@
+import type { Settings } from '$lib/api/types';
 import { clock } from '$lib/format';
 import { t, tn } from '$lib/i18n/index.svelte';
 
-export const SECTIONS = ['general', 'accounts', 'engine', 'notifications', 'health', 'updates', 'password'] as const;
+export const SECTIONS = ['general', 'accounts', 'engine', 'experimental', 'notifications', 'health', 'updates', 'password'] as const;
 export type Section = (typeof SECTIONS)[number];
 
 export function sectionFromHash(hash: string): Section {
@@ -39,6 +40,18 @@ export function isTelegramChat(v: string): boolean {
 	return /^(-?[0-9]+|@[A-Za-z0-9_]{5,})$/.test(v);
 }
 
+/** Same rule as the server's validMentionID: digits only, or empty to turn the mention off. */
+export function isMentionID(v: string): boolean {
+	return v === '' || /^[0-9]{1,20}$/.test(v);
+}
+
+/** The share toggle works only with an Android and a TV Twitch login; without both it is disabled and says why. */
+export function shareCatalogToggle(s: Pick<Settings, 'share_catalog_available'>): { disabled: boolean; hint: string } {
+	return s.share_catalog_available
+		? { disabled: false, hint: 'settings.exp_share_catalog_sub' }
+		: { disabled: true, hint: 'settings.exp_share_catalog_needs' };
+}
+
 /** Minutes the server accepts for scan_interval_min. */
 export const SCAN_INTERVALS = [15, 30, 60, 180, 360, 720, 1440];
 
@@ -59,6 +72,18 @@ export function isProxyURL(v: string): boolean {
 	} catch {
 		return false;
 	}
+}
+
+/** Same rule as the server's ParseClock: a 24-hour "HH:MM". */
+export function isClock(v: string): boolean {
+	return /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(v);
+}
+
+/** i18n key for sleep window times the server would reject, or null when they can go. */
+export function sleepProblem(start: string, end: string): string | null {
+	if (!isClock(start) || !isClock(end)) return 'settings.sleep_invalid';
+	if (start === end) return 'settings.sleep_same';
+	return null;
 }
 
 /** A Twitch or Kick channel login: up to 25 letters, digits or underscores. Empty is allowed. */

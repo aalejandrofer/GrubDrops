@@ -68,14 +68,31 @@ type Deps struct {
 	ForceLive    func(platform, login string) *bool
 	ForceChanged func() // nil-safe; must return at once, the reload runs in the background
 
+	// Points: cached channel-points balances. Points nil serves 503.
+	// PointsEvery is the refresh interval reported to the UI; 0 = the
+	// points package default. PointsRefresh starts a read of every balance
+	// without blocking, or reports false and the cooldown left; nil serves
+	// 503.
+	Points        *store.PointsBalances
+	PointsEvery   time.Duration
+	PointsRefresh func() (bool, time.Duration)
+
+	// RewardCodes: Twitch reward codes, decrypted for the admin. Nil serves 503.
+	RewardCodes *store.RewardCodes
+
 	// Accounts and logins.
-	Sessions       *store.SessionStore
-	Registry       *platform.Registry
-	RootCtx        context.Context
-	Registrar      KickChannelRegistrar
-	AccountChanged func(id string)       // nil-safe
-	AccountRemoved func(id string)       // nil-safe
-	AccountRenamed func(id, name string) // nil-safe; must not block
+	Sessions  *store.SessionStore
+	Registry  *platform.Registry
+	RootCtx   context.Context
+	Registrar KickChannelRegistrar
+	// AccountChanged rebuilds the account's runner: create, pause or
+	// resume, login, own games list, Restart. Nil-safe.
+	AccountChanged func(id string)
+	// AccountSettingsChanged applies a saved skip sleep or points mode to
+	// the running runner without a rebuild. Nil-safe.
+	AccountSettingsChanged func(id string)
+	AccountRemoved         func(id string)       // nil-safe
+	AccountRenamed         func(id, name string) // nil-safe; must not block
 	// CheckLogin runs one account's auth probe now; nil serves 503.
 	CheckLogin func(ctx context.Context, id string) (authcheck.Result, error)
 
@@ -88,6 +105,9 @@ type Deps struct {
 	TelegramChatFallback  string
 	OnSettingsUpdate      func()            // nil-safe
 	SetZone               func(name string) // nil-safe
+	// ShareCatalogReady reports an enabled Android Twitch login to share
+	// from and an enabled TV one to share with. nil = not ready.
+	ShareCatalogReady func(ctx context.Context) bool
 
 	// Health and updates.
 	Ring         *mlog.Ring
@@ -111,6 +131,8 @@ type server struct {
 	canaryRerun atomic.Bool
 	// twitch holds the in-flight Twitch device logins, account ID -> *twitchFlow.
 	twitch sync.Map
+	// scan is POST /api/scan's cooldown.
+	scan scanGate
 }
 
 func newServer(d Deps) *server {
@@ -140,10 +162,12 @@ func (s *server) handler() http.Handler {
 		r.Mount("/api", s.api)
 	})
 
-	// Rewards was renamed Inventory; keep old bookmarks working.
-	r.Get("/rewards", func(w http.ResponseWriter, r *http.Request) {
+	// Drops, then Rewards, became Inventory; keep old bookmarks working.
+	toInventory := func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/inventory", http.StatusMovedPermanently)
-	})
+	}
+	r.Get("/rewards", toInventory)
+	r.Get("/drops", toInventory)
 
 	r.NotFound(s.spa())
 	return r
@@ -163,7 +187,10 @@ func (s *server) routesProtected(r chi.Router) {
 	s.routesEvents(r)
 	s.routesOverview(r)
 	s.routesGames(r)
+	s.routesScan(r)
 	s.routesForceWatch(r)
+	s.routesPoints(r)
+	s.routesRewards(r)
 	s.routesCampaigns(r)
 	s.routesDiscover(r)
 	s.routesClaims(r)

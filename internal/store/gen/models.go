@@ -22,6 +22,8 @@ type Account struct {
 	CustomName      string         `json:"custom_name"`
 	SortOrder       int64          `json:"sort_order"`
 	OwnGames        int64          `json:"own_games"`
+	SkipSleep       int64          `json:"skip_sleep"`
+	PointsMode      string         `json:"points_mode"`
 }
 
 type AccountCampaignLink struct {
@@ -189,12 +191,40 @@ type Notification struct {
 	SentAt      sql.NullInt64  `json:"sent_at"`
 }
 
+type PointsBalance struct {
+	AccountID string        `json:"account_id"`
+	Channel   string        `json:"channel"`
+	Balance   sql.NullInt64 `json:"balance"`
+	FetchedAt sql.NullInt64 `json:"fetched_at"`
+	CheckedAt int64         `json:"checked_at"`
+	Error     string        `json:"error"`
+	Failures  int64         `json:"failures"`
+}
+
 type Progress struct {
 	AccountID      string        `json:"account_id"`
 	BenefitID      string        `json:"benefit_id"`
 	MinutesWatched int64         `json:"minutes_watched"`
 	ClaimedAt      sql.NullInt64 `json:"claimed_at"`
 	UpdatedAt      int64         `json:"updated_at"`
+}
+
+type RewardCode struct {
+	ID              int64         `json:"id"`
+	AccountID       string        `json:"account_id"`
+	RewardKey       string        `json:"reward_key"`
+	Name            string        `json:"name"`
+	Game            string        `json:"game"`
+	Code            []byte        `json:"code"`
+	RedeemUrl       string        `json:"redeem_url"`
+	ExpiresAt       sql.NullInt64 `json:"expires_at"`
+	ReceivedAt      sql.NullInt64 `json:"received_at"`
+	FirstSeen       int64         `json:"first_seen"`
+	NotifiedAt      sql.NullInt64 `json:"notified_at"`
+	RemindedAt      sql.NullInt64 `json:"reminded_at"`
+	RedeemedAt      sql.NullInt64 `json:"redeemed_at"`
+	DismissedAt     sql.NullInt64 `json:"dismissed_at"`
+	NotifySkippedAt sql.NullInt64 `json:"notify_skipped_at"`
 }
 
 type Session struct {

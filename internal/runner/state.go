@@ -24,6 +24,13 @@ const (
 	// StateForceWatching watches a force-watch channel while the plan queue
 	// is empty. Snapshot.Channel is the login and Current is nil.
 	StateForceWatching State = "force_watching"
+	// StateSleepWindow is the user's daily sleep window: no watch, no scan
+	// until Snapshot.SleepUntil. StateSleeping means nothing is minable.
+	StateSleepWindow State = "sleep_window"
+	// StateNoChannels is a points-only account with no Force watch channel:
+	// nothing to watch. It idles, unlike StateNoGames: a force list edit or
+	// a points mode change wakes it.
+	StateNoChannels State = "no_channels"
 )
 
 // Notifier receives state, progress and claim events.
@@ -88,12 +95,27 @@ type Config struct {
 	// Preempt reports whether a rescan while watching may switch to a
 	// campaign that now outranks the current one. Read live; nil = never.
 	Preempt func() bool
+	// SleepUntil reports whether now is inside the account's sleep window
+	// and when it ends. Read live; nil = the account never sleeps.
+	// SettingsChanged makes a running runner check it at once.
+	SleepUntil func(now time.Time) (wake time.Time, in bool)
 	// ForceChannels is this account's forced logins, panel order; read live;
 	// nil = none. With the plan queue empty the runner watches the first
 	// live one.
 	ForceChannels func() []string
 	// ForceLookup reports one forced channel's live stream; nil = feature off.
 	ForceLookup func(ctx context.Context, login string) (platform.Stream, bool, error)
+	// PointsMode turns the channel-points bonus claim on for every watch
+	// (points.go) when the backend is a platform.PointsClaimer. Read live;
+	// nil, off, empty or unknown = no points requests. points_only also
+	// turns drops off: the runner watches only ForceChannels and never
+	// scans campaigns. SettingsChanged applies a change to the running
+	// watch.
+	PointsMode func() platform.PointsMode
+	// FollowRaids turns raid following on for every watch (raid.go) when
+	// the backend is a platform.RaidJoiner. Read live; nil = off.
+	// SettingsChanged applies a change to the running watch.
+	FollowRaids func() bool
 	// Hooks are nil-safe. Each may run on the Run goroutine or a PubSub
 	// goroutine and must not block for long. Payloads (Scan slices and maps,
 	// progress) are read-only and shared with the runner: copy before keeping
@@ -101,12 +123,19 @@ type Config struct {
 	OnScan     func(ctx context.Context, s Scan)
 	OnProgress func(ctx context.Context, accountID string, progress []platform.Progress)
 	OnBeat     func(ctx context.Context, accountID string) // after each successful Heartbeat
+	// OnPointsBalance gets the channel-points balance each claim attempt
+	// learns on the watched channel, claimed or not.
+	OnPointsBalance func(ctx context.Context, channel string, balance int)
 	// OnChange is nil-safe; called after every state change and progress update.
 	// It may be called concurrently from the backend PubSub goroutine and the
 	// Run goroutine, so implementations must be thread-safe.
 	OnChange              func(Snapshot)
 	TickInterval          time.Duration // <=0 -> DefaultTick
 	ProgressNotifyStepPct int           // 0 disables progress notifications
+	// InventorySweep runs the inventory sweep (inventory_sweep.go) beside
+	// Run: at start, then every InventorySweepEvery, outside the sleep
+	// window. False = never.
+	InventorySweep bool
 }
 
 // Snapshot is a copy of the runner's observable state.
@@ -118,7 +147,8 @@ type Snapshot struct {
 	ViewerCount                       int
 	MinutesWatched                    int
 	StartedAt, LastPollAt, LastScanAt time.Time
-	NextScanAt                        time.Time     // next scan by state: rescan pace, recheck deadline, zero when stopped or unscanned
+	NextScanAt                        time.Time     // next scan by state: rescan pace, recheck deadline, wake time, zero when stopped or unscanned
+	SleepUntil                        time.Time     // end of the sleep window in StateSleepWindow, else zero
 	UpNext                            []plan.Target // queue minus Current, with Config.Order applied at read time
 	Blocked                           []plan.Blocked
 }

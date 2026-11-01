@@ -43,9 +43,10 @@ type catalogData struct {
 }
 
 // Catalog lists every ACTIVE drop campaign on the account's drops dashboard
-// with its rewards, regardless of any game whitelist. It needs an
-// Android-client token. It has no side effects on mining state: no allow-list
-// capture and no PubSub. A campaign whose details fail keeps its row with no
+// with its rewards and channel allow-list, regardless of any game whitelist.
+// It needs an Android-client token. It has no side effects on mining state:
+// the allow-list rides on the campaign, never into this backend's capture,
+// and no PubSub. A campaign whose details fail keeps its row with no
 // benefits. Use a Backend dedicated to catalog reads, since it rebinds the
 // details user id to s.
 func (b *Backend) Catalog(ctx context.Context, s platform.Session) ([]platform.Campaign, error) {
@@ -107,12 +108,14 @@ func (b *Backend) Catalog(ctx context.Context, s platform.Session) ([]platform.C
 		go func() {
 			defer wg.Done()
 			for i := range jobs {
-				benefits, _, err := b.disc.fetchDetails(ctx, s, out[i].ID)
+				benefits, allowed, err := b.disc.fetchDetails(ctx, s, out[i].ID)
 				if err != nil {
 					slog.Debug("twitch catalog: campaign details failed", "campaign", out[i].ID, "err", err)
 					continue
 				}
 				out[i].Benefits = benefits
+				out[i].AllowedChannels = allowed
+				out[i].AllowedChannelCount = len(allowed)
 			}
 		}()
 	}

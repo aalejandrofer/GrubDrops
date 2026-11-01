@@ -33,6 +33,9 @@ type TelegramBot struct {
 	HTTP   *http.Client
 	// APIBase defaults to TelegramAPIBase when empty.
 	APIBase string
+	// MentionUserID is a numeric Telegram user ID mentioned on alert
+	// events through a tg://user link. Empty means no mention.
+	MentionUserID string
 }
 
 func NewTelegramBot(token, chatID string, filter *VerbosityFilter) *TelegramBot {
@@ -53,6 +56,9 @@ func (t *TelegramBot) Notify(ctx context.Context, event Event, fields map[string
 		return nil
 	}
 	text := buildTelegramText(event, fields)
+	if IsAlert(event) && ValidUserID(t.MentionUserID) {
+		text += "\n" + telegramMention(t.MentionUserID)
+	}
 	if img, _ := fields["image"].(string); img != "" && validImageURL(img) && len([]rune(text)) <= telegramCaptionLimit {
 		err := t.send(ctx, "sendPhoto", map[string]any{
 			"chat_id":    t.ChatID,
@@ -201,6 +207,33 @@ func buildTelegramText(event Event, fields map[string]any) string {
 		b.WriteString(s)
 	}
 
+	if event == EventRewardCode {
+		title := str("title")
+		if title == "" {
+			title = titleFor(event)
+		}
+		line("<b>" + esc(title) + "</b>")
+		if r := str("reward"); r != "" {
+			line(esc(r))
+		}
+		if acct := str("account_label"); acct != "" {
+			line("Account: " + esc(acct))
+		}
+		if g := str("reward_game"); g != "" {
+			line("Game: " + esc(g))
+		}
+		if code := str("code"); code != "" {
+			line("Code: <code>" + esc(code) + "</code>")
+		}
+		if u := str("redeem_url"); validLinkURL(u) {
+			line(`<a href="` + esc(u) + `">Redeem</a>`)
+		}
+		if exp := str("expires"); exp != "" {
+			line("Expires: " + esc(exp))
+		}
+		return b.String()
+	}
+
 	game := str("game")
 	drop := str("drop")
 	if game != "" || drop != "" {
@@ -275,6 +308,11 @@ func buildTelegramText(event Event, fields map[string]any) string {
 		line(esc(fmt.Sprintf("%s: %v", k, fields[k])))
 	}
 	return b.String()
+}
+
+// telegramMention links a user ID so Telegram notifies that user.
+func telegramMention(id string) string {
+	return `🔔 <a href="tg://user?id=` + html.EscapeString(id) + `">mention</a>`
 }
 
 func telegramChannel(platform, ch string) string {

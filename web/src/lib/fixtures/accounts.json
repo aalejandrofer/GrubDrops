@@ -10,6 +10,8 @@
 		"enabled": true,
 		"own_games": false,
 		"own_game_count": 0,
+		"skip_sleep": false,
+		"points_mode": "off",
 		"auth": {
 			"ok": true,
 			"detail": "token valid",
@@ -27,6 +29,8 @@
 		"enabled": true,
 		"own_games": false,
 		"own_game_count": 0,
+		"skip_sleep": false,
+		"points_mode": "off",
 		"auth": {
 			"ok": true,
 			"detail": "token valid",
@@ -44,6 +48,8 @@
 		"enabled": true,
 		"own_games": false,
 		"own_game_count": 0,
+		"skip_sleep": false,
+		"points_mode": "off",
 		"auth": {
 			"ok": false,
 			"detail": "session expired",

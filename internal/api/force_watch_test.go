@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/aalejandrofer/grubdrops/internal/platform"
 	"github.com/aalejandrofer/grubdrops/internal/runner"
 	"github.com/aalejandrofer/grubdrops/internal/store"
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
@@ -175,7 +176,7 @@ func TestOverview_ForceWatch(t *testing.T) {
 	// None live: empty lines, total still counts the list.
 	m = e.overview()
 	b, _ := json.Marshal(m["force_watch"])
-	assert.JSONEq(t, `{"live":[],"more":0,"total":5}`, string(b))
+	assert.JSONEq(t, `{"live":[],"more":0,"total":5,"points":null,"points_read":"none","points_at":null}`, string(b))
 
 	// Four live, the third watched: watched first, then panel order, two max.
 	for _, k := range []string{"twitch/one", "kick/two", "twitch/three", "kick/four"} {
@@ -189,9 +190,9 @@ func TestOverview_ForceWatch(t *testing.T) {
 	m = e.overview()
 	b, _ = json.Marshal(m["force_watch"])
 	assert.JSONEq(t, `{"live":[
-		{"platform":"twitch","channel":"three","watchers":["Alice"]},
-		{"platform":"twitch","channel":"one","watchers":[]}
-	],"more":2,"total":5}`, string(b))
+		{"platform":"twitch","channel":"three","watchers":["Alice"],"balance":null,"read":"none"},
+		{"platform":"twitch","channel":"one","watchers":[],"balance":null,"read":"none"}
+	],"more":2,"total":5,"points":null,"points_read":"none","points_at":null}`, string(b))
 }
 
 func TestOverview_ForceWatchWatchedUnknownIsLive(t *testing.T) {
@@ -204,7 +205,7 @@ func TestOverview_ForceWatchWatchedUnknownIsLive(t *testing.T) {
 		{AccountID: "a1", Platform: "twitch", State: runner.StateForceWatching, Channel: "one"},
 	}
 	b, _ := json.Marshal(e.overview()["force_watch"])
-	assert.JSONEq(t, `{"live":[{"platform":"twitch","channel":"one","watchers":["Alice"]}],"more":0,"total":2}`, string(b))
+	assert.JSONEq(t, `{"live":[{"platform":"twitch","channel":"one","watchers":["Alice"],"balance":null,"read":"none"}],"more":0,"total":2,"points":null,"points_read":"none","points_at":null}`, string(b))
 }
 
 func TestOverview_NoGamesButForceWatch(t *testing.T) {
@@ -222,10 +223,19 @@ func TestOverview_NoGamesButForceWatch(t *testing.T) {
 	assert.NotEqual(t, "no_games", st["state"])
 	assert.EqualValues(t, 0, st["accounts_mining"])
 
-	// A force list with nobody watching yet: still not no_games.
+	// A force list with nobody watching yet, assigned only to an account
+	// with points off: it never force watches, so no_games.
 	e.pool.snaps = nil
 	e.setForce([]store.ForceChannel{{Platform: "twitch", Channel: "one", Accounts: []string{"a1"}}})
-	assert.NotEqual(t, "no_games", state())
+	assert.Equal(t, "no_games", state(), "only a points-off account assigned")
+
+	// Points on, or points only (which needs no games): not no_games.
+	for _, mode := range []platform.PointsMode{platform.PointsDropsPoints, platform.PointsOnly} {
+		require.NoError(t, e.s.d.Q.SetAccountPointsMode(context.Background(), gen.SetAccountPointsModeParams{
+			PointsMode: string(mode), UpdatedAt: time.Now().Unix(), ID: "a1",
+		}))
+		assert.NotEqual(t, "no_games", state(), mode)
+	}
 
 	// Channels no account is assigned to cannot be watched: no_games.
 	e.setForce([]store.ForceChannel{
@@ -238,6 +248,24 @@ func TestOverview_NoGamesButForceWatch(t *testing.T) {
 	e.setForce([]store.ForceChannel{{Platform: "twitch", Channel: "one", Accounts: []string{"a1"}}})
 	require.NoError(t, e.s.d.Q.SetAccountEnabled(context.Background(), gen.SetAccountEnabledParams{ID: "a1", Enabled: 0}))
 	assert.Equal(t, "no_games", state(), "only a paused account assigned")
+}
+
+// A Kick account has no points mode: with its stored mode off it still
+// force watches, so a channel assigned to it keeps no games from stopping.
+func TestOverview_NoGamesKickForceWatchIgnoresPointsMode(t *testing.T) {
+	e := newResEnv(t, nil)
+	require.NoError(t, e.s.d.Chosen.Set(context.Background(), nil))
+	state := func() string { return e.overview()["status"].(map[string]any)["state"].(string) }
+	b2, err := e.s.d.Q.GetAccount(context.Background(), "b2")
+	require.NoError(t, err)
+	require.Equal(t, "off", b2.PointsMode)
+
+	e.setForce([]store.ForceChannel{{Platform: "kick", Channel: "two", Accounts: []string{"b2"}}})
+	assert.NotEqual(t, "no_games", state(), "a Kick account always may force watch")
+
+	// Paused, it cannot.
+	require.NoError(t, e.s.d.Q.SetAccountEnabled(context.Background(), gen.SetAccountEnabledParams{ID: "b2", Enabled: 0}))
+	assert.Equal(t, "no_games", state(), "only a paused Kick account assigned")
 }
 
 func TestPutForceWatch_NormalizesPlatform(t *testing.T) {

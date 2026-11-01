@@ -1,28 +1,33 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
+	import { beforeNavigate, replaceState } from '$app/navigation';
+	import { advanced, syncAdvanced } from '$lib/advanced.svelte';
 	import { api } from '$lib/app';
-	import type { Settings, SettingsPatch } from '$lib/api/types';
+	import type { Platform, Settings, SettingsPatch } from '$lib/api/types';
+	import { Autosave, type Phase } from '$lib/autosave';
+	import CountdownToast from '$lib/components/CountdownToast.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import PageHead from '$lib/components/PageHead.svelte';
 	import { t } from '$lib/i18n/index.svelte';
+	import { getLive } from '$lib/live-context';
 	import { applyPrefs } from '$lib/prefs.svelte';
 	import { SECTIONS, sectionFromHash, type Section } from '$lib/settings';
+	import { SECTION_LOOK, navDots, needLoginCount } from '$lib/settings-look';
 	import Accounts from './Accounts.svelte';
 	import Engine from './Engine.svelte';
+	import Experimental from './Experimental.svelte';
 	import General from './General.svelte';
 	import Health from './Health.svelte';
 	import Notifications from './Notifications.svelte';
 	import Password from './Password.svelte';
 	import Updates from './Updates.svelte';
 
-	const LABELS = {
-		general: 'settings.general',
-		accounts: 'settings.accounts',
-		engine: 'settings.engine',
-		notifications: 'settings.notifications',
-		health: 'settings.health',
-		updates: 'settings.updates',
-		password: 'settings.password'
-	} as const;
+	const live = getLive();
+	/** Failing canary platforms, reported up by the Health section. */
+	let canaryFailing = $state<Platform[]>([]);
+	const dots = $derived(navDots({ needLogin: needLoginCount(live.accounts, live.runners), canaryFailing }));
+	/** Dots are colour only, so screen readers get the state as text. */
+	const DOT_TEXT = { warn: 'settings.dot_warn', bad: 'settings.dot_bad' } as const;
 
 	let s = $state<Settings | null>(null);
 	let errs = $state<Record<string, boolean>>({});
@@ -33,13 +38,13 @@
 		if (!s) return false;
 		const prev = s;
 		errs[key] = false;
-		const { discord_webhook: hook, telegram_bot_token: tok, telegram_chat_id: chat, notify, ...plain } = patch;
+		const { discord_webhook: hook, telegram_bot_token: tok, telegram_chat_id: chat, notify, sleep, ...plain } = patch;
 		if (hook === undefined && tok === undefined && chat === undefined) {
-			s = { ...s, ...plain, notify: { ...s.notify, ...notify } } as Settings;
+			s = { ...s, ...plain, notify: { ...s.notify, ...notify }, sleep: { ...s.sleep, ...sleep } } as Settings;
 			applyPrefs(s);
 		}
 		try {
-			const body = await api.saveSettings(patch);
+			const body = await api.saveSettings(patch, leaving);
 			s = body;
 			applyPrefs(body);
 			return true;
@@ -50,6 +55,50 @@
 			return false;
 		}
 	}
+
+	// Typed fields save 10s after the last edit; the toast counts down.
+	let autoPhase = $state<Phase>('idle');
+	let autoNow = $state(Date.now());
+	const auto = new Autosave(() => {
+		autoPhase = auto.phase;
+		autoNow = Date.now();
+	});
+	const autoText = $derived(
+		autoPhase === 'wait'
+			? t('settings.autosave_in', { n: auto.secondsLeft(autoNow) })
+			: autoPhase === 'saving'
+				? t('accounts.saving_now')
+				: autoPhase === 'saved'
+					? t('accounts.saved')
+					: null
+	);
+	$effect(() => {
+		if (autoPhase !== 'wait') return;
+		const id = setInterval(() => (autoNow = Date.now()), 250);
+		return () => clearInterval(id);
+	});
+
+	/** True while the page unloads, so saves go out with keepalive. */
+	let leaving = false;
+	function flushNow(unload: boolean): void {
+		leaving = unload;
+		void auto.flush(unload);
+		leaving = false;
+	}
+
+	// Leaving with pending edits saves them at once. Edits that can't save ask first.
+	beforeNavigate((nav) => {
+		if (!auto.has()) return;
+		if (auto.invalid().length > 0) {
+			if (nav.willUnload) nav.cancel();
+			else if (!confirm(t('settings.autosave_leave'))) {
+				nav.cancel();
+				return;
+			}
+		}
+		flushNow(nav.willUnload);
+	});
+	onDestroy(() => auto.dispose());
 
 	/** A section link click or a hash on load wins over scroll tracking while the jump settles. */
 	let holdUntil = 0;
@@ -68,6 +117,12 @@
 
 	const loaded = $derived(s !== null);
 
+	/** The column that holds every section, so the Advanced pref reaches each one. */
+	let body = $state<HTMLElement>();
+	$effect(() => {
+		if (body) return syncAdvanced(body, advanced.expand);
+	});
+
 	/** The last section whose top has passed the line under the top bar, or the last one at the page bottom. */
 	function track(): void {
 		if (Date.now() < holdUntil) return;
@@ -75,12 +130,38 @@
 			active = SECTIONS[SECTIONS.length - 1];
 			return;
 		}
+		// Just under where a nav jump lands a section (its scroll-margin-top), plus some slack.
+		const line = (window.matchMedia('(max-width: 720px)').matches ? 140 : 92) + 40;
 		let cur: Section = 'general';
 		for (const id of SECTIONS) {
 			const el = document.getElementById(id);
-			if (el && el.getBoundingClientRect().top <= 120) cur = id;
+			if (el && el.getBoundingClientRect().top <= line) cur = id;
 		}
 		active = cur;
+	}
+
+	function jump(e: MouseEvent, id: Section): void {
+		e.preventDefault();
+		active = id;
+		// Hold the picked link through the smooth scroll; scrollend releases it early.
+		holdUntil = Date.now() + 2000;
+		replaceState(`#${id}`, {});
+		document.getElementById(id)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+	}
+
+	/** Phone: keep the active pill in view as the page scrolls. */
+	$effect(() => {
+		const el = document.getElementById(`sn-${active}`);
+		const row = el?.parentElement;
+		if (!el || !row || row.scrollWidth <= row.clientWidth) return;
+		row.scrollTo({ left: el.offsetLeft - row.clientWidth / 2 + el.offsetWidth / 2, behavior: 'smooth' });
+	});
+
+	/** A jump's scroll has landed: drop the hold and read the page again. */
+	function settle(): void {
+		if (holdUntil === 0) return;
+		holdUntil = 0;
+		track();
 	}
 
 	function onHash(): void {
@@ -99,31 +180,45 @@
 	});
 </script>
 
-<svelte:window onhashchange={onHash} onscroll={track} />
+<svelte:window onhashchange={onHash} onscroll={track} onscrollend={settle} onpagehide={() => auto.has() && flushNow(true)} />
 
 <PageHead title={t('nav.settings')} stamp={t('settings.stamp')}>
 	<div class="settings layout">
 		<nav class="subnav" aria-label={t('settings.nav_label')}>
 			{#each SECTIONS as id (id)}
-				<a href="#{id}" class:on={active === id} aria-current={active === id ? 'true' : undefined}>{t(LABELS[id])}</a>
+				{@const look = SECTION_LOOK[id]}
+				<a
+					id="sn-{id}"
+					href="#{id}"
+					class="hue-{look.hue}"
+					class:on={active === id}
+					aria-current={active === id ? 'true' : undefined}
+					onclick={(e) => jump(e, id)}
+				>
+					<span class="tile sm" aria-hidden="true"><Icon name={look.icon} size={13} /></span>
+					<span class="nm">{t(look.label)}</span>
+					{#if dots[id]}{@const d = dots[id]}<span class="dot {d}" aria-hidden="true"></span><span class="vh">, {t(DOT_TEXT[d])}</span>{/if}
+				</a>
 			{/each}
 		</nav>
-		<div>
+		<div bind:this={body}>
 			{#if s}<General {s} {save} {errs} />{:else}<section class="set" id="general"></section>{/if}
 			<Accounts />
-			{#if s}<Engine {s} {save} {errs} />{:else}<section class="set" id="engine"></section>{/if}
-			{#if s}<Notifications {s} {save} {errs} />{:else}<section class="set" id="notifications"></section>{/if}
-			{#if s}<Health {s} {save} {errs} />{:else}<Health />{/if}
+			{#if s}<Engine {s} {save} {errs} {auto} />{:else}<section class="set" id="engine"></section>{/if}
+			{#if s}<Experimental {s} {save} {errs} />{:else}<section class="set" id="experimental"></section>{/if}
+			{#if s}<Notifications {s} {save} {errs} {auto} />{:else}<section class="set" id="notifications"></section>{/if}
+			{#if s}<Health {s} {save} {errs} bind:failing={canaryFailing} />{:else}<Health bind:failing={canaryFailing} />{/if}
 			{#if s}<Updates {s} {save} {errs} />{:else}<section class="set" id="updates"></section>{/if}
-				<Password />
+			{#if s}<Password {s} {save} {errs} />{:else}<Password />{/if}
 		</div>
+		{#if autoText}<CountdownToast text={autoText} />{/if}
 	</div>
 </PageHead>
 
 <style>
 	.layout {
 		display: grid;
-		grid-template-columns: 180px minmax(0, 1fr);
+		grid-template-columns: 196px minmax(0, 820px);
 		gap: 40px;
 		align-items: start;
 	}
@@ -136,11 +231,15 @@
 	.subnav a {
 		display: flex;
 		align-items: center;
-		padding: 6px 10px;
-		border-radius: 6px;
+		gap: 10px;
+		padding: 5px 8px;
+		border-radius: 8px;
 		color: var(--t2);
 		font-size: 13.5px;
 		font-weight: 500;
+		transition:
+			background 0.15s,
+			color 0.15s;
 	}
 	.subnav a:hover {
 		color: var(--text);
@@ -148,16 +247,107 @@
 	}
 	.subnav a.on {
 		color: var(--text);
-		background: var(--surface-2);
-		box-shadow: inset 2px 0 0 var(--accent);
+		font-weight: 600;
+		background: color-mix(in srgb, var(--hue) 16%, transparent);
 	}
 	.subnav a:focus-visible {
-		outline: 2px solid var(--accent);
+		outline: 2px solid var(--hue);
 		outline-offset: 2px;
 	}
+	.nm {
+		flex: 1;
+	}
+	.dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		flex: none;
+	}
+	.dot.warn {
+		background: var(--amber);
+	}
+	.dot.bad {
+		background: var(--red);
+	}
+	/* Text only screen readers announce. */
+	.settings :global(.vh) {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
 
+	/* Every section, its nav link and its controls read --hue (text) and --fill (solid controls); accent until a hue class sets them. */
+	.settings {
+		--hue: var(--accent);
+		--fill: var(--hue);
+		/* Phone: the save toast sits under the top bar (52px) and the sticky pill row (57px). */
+		--toast-top-phone: 117px;
+	}
+	.settings :global(.tile) {
+		display: inline-grid;
+		place-items: center;
+		flex: none;
+		width: 30px;
+		height: 30px;
+		border-radius: 8px;
+		color: var(--hue);
+		background: color-mix(in srgb, var(--hue) var(--soft), transparent);
+	}
+	.settings :global(.tile.sm) {
+		width: 22px;
+		height: 22px;
+		border-radius: 6px;
+	}
+	.settings :global(.chip) {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		font-size: 12px;
+		font-weight: 500;
+		line-height: 18px;
+		padding: 1px 8px;
+		border-radius: 999px;
+		color: var(--t2);
+		background: var(--surface-3);
+		white-space: nowrap;
+	}
+	.settings :global(.chip::before) {
+		content: '';
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: currentColor;
+	}
+	.settings :global(.chip.ok) {
+		color: var(--green);
+		background: var(--green-soft);
+	}
+	.settings :global(.chip.bad) {
+		color: var(--chip-bad);
+		background: var(--red-soft);
+	}
+	.settings :global(.chip.warn) {
+		color: var(--amber);
+		background: var(--amber-soft);
+	}
+	.settings :global(.chip.info) {
+		color: var(--blue);
+		background: var(--blue-soft);
+	}
+	.settings :global(.chip.off) {
+		color: var(--t3);
+	}
+	.settings :global(.chip.off::before) {
+		background: transparent;
+		box-shadow: inset 0 0 0 1.5px currentColor;
+	}
+
+	/* A nav jump lands a section 40px under the 52px top bar. */
 	.settings :global(section.set) {
-		scroll-margin-top: 72px;
+		scroll-margin-top: 92px;
 		padding-bottom: 36px;
 		margin-bottom: 36px;
 		border-bottom: 1px solid var(--border-soft);
@@ -165,25 +355,6 @@
 	.settings :global(section.set:last-child) {
 		border-bottom: 0;
 		margin-bottom: 0;
-	}
-	.settings :global(.sec-head) {
-		display: flex;
-		align-items: flex-end;
-		justify-content: space-between;
-		gap: 12px;
-		flex-wrap: wrap;
-		margin-bottom: 14px;
-	}
-	.settings :global(.sec-head h2) {
-		margin: 0;
-		font-size: 15px;
-		font-weight: 600;
-		letter-spacing: -0.01em;
-	}
-	.settings :global(.sec-head p) {
-		margin: 2px 0 0;
-		color: var(--t2);
-		font-size: 13px;
 	}
 	.settings :global(.panel) {
 		border: 1px solid var(--border-soft);
@@ -240,10 +411,19 @@
 		opacity: 0.6;
 		cursor: default;
 	}
+	.settings :global(.btn.tint) {
+		color: var(--hue);
+		border-color: color-mix(in srgb, var(--hue) 45%, transparent);
+		background: color-mix(in srgb, var(--hue) 10%, transparent);
+	}
+	.settings :global(.btn.tint:hover:not(:disabled)) {
+		border-color: var(--hue);
+	}
 	.settings :global(.btn:focus-visible),
 	.settings :global(.sw:focus-visible),
-	.settings :global(.seg button:focus-visible) {
-		outline: 2px solid var(--accent);
+	.settings :global(.seg button:focus-visible),
+	.settings :global(summary:focus-visible) {
+		outline: 2px solid var(--hue);
 		outline-offset: 2px;
 	}
 	.settings :global(.sel) {
@@ -261,8 +441,8 @@
 	}
 	.settings :global(.sel:focus) {
 		outline: 0;
-		border-color: var(--accent);
-		box-shadow: 0 0 0 3px var(--accent-soft);
+		border-color: var(--hue);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue) 22%, transparent);
 	}
 	.settings :global(.seg) {
 		display: inline-flex;
@@ -284,15 +464,16 @@
 		cursor: pointer;
 	}
 	.settings :global(.seg button[aria-pressed='true']) {
-		background: var(--surface-3);
+		background: color-mix(in srgb, var(--fill) 18%, var(--surface-2));
 		color: var(--text);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fill) 55%, transparent);
 	}
 	.settings :global(.sw) {
 		position: relative;
 		width: 34px;
 		height: 20px;
 		border-radius: 10px;
-		border: 1px solid var(--border);
+		border: 1px solid var(--dim);
 		background: var(--surface-3);
 		flex: none;
 		padding: 0;
@@ -300,6 +481,12 @@
 		transition:
 			background 0.15s,
 			border-color 0.15s;
+	}
+	/* About a 44px tap area without a bigger switch. */
+	.settings :global(.sw::before) {
+		content: '';
+		position: absolute;
+		inset: -12px -8px;
 	}
 	.settings :global(.sw::after) {
 		content: '';
@@ -315,12 +502,12 @@
 			background 0.15s;
 	}
 	.settings :global(.sw[aria-checked='true']) {
-		background: var(--accent-strong);
-		border-color: var(--accent-strong);
+		background: var(--fill);
+		border-color: var(--fill);
 	}
 	.settings :global(.sw[aria-checked='true']::after) {
 		transform: translateX(14px);
-		background: #fff;
+		background: var(--knob);
 	}
 	.settings :global(.field) {
 		display: grid;
@@ -344,8 +531,8 @@
 	}
 	.settings :global(.inp:focus) {
 		outline: 0;
-		border-color: var(--accent);
-		box-shadow: 0 0 0 3px var(--accent-soft);
+		border-color: var(--hue);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--hue) 22%, transparent);
 	}
 	.settings :global(.inp:disabled) {
 		color: var(--t3);
@@ -404,7 +591,10 @@
 		color: var(--green);
 	}
 	.settings :global(.sub-h) {
-		margin: 18px 0 8px;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin: 22px 0 8px;
 		font-size: 12.5px;
 		font-weight: 600;
 		color: var(--t2);
@@ -445,10 +635,6 @@
 	.settings :global(details.adv > summary:hover) {
 		color: var(--text);
 	}
-	.settings :global(details.adv > summary:focus-visible) {
-		outline: 2px solid var(--accent);
-		outline-offset: 2px;
-	}
 	.settings :global(.sw:disabled) {
 		opacity: 0.45;
 		cursor: default;
@@ -459,15 +645,18 @@
 			grid-template-columns: minmax(0, 1fr);
 			gap: 16px;
 		}
+		/* Phone: the index is a sticky row of pills under the top bar. */
 		.subnav {
 			top: 52px;
-			z-index: 12;
+			z-index: 9;
 			display: flex;
+			gap: 6px;
 			overflow-x: auto;
 			scrollbar-width: none;
 			margin: 0 -16px;
-			padding: 8px 16px;
-			background: color-mix(in srgb, var(--bg) 95%, transparent);
+			padding: 10px 16px;
+			background: color-mix(in srgb, var(--bg) 94%, transparent);
+			backdrop-filter: blur(6px);
 			border-bottom: 1px solid var(--border-soft);
 		}
 		.subnav::-webkit-scrollbar {
@@ -475,13 +664,28 @@
 		}
 		.subnav a {
 			flex: none;
-			padding: 5px 10px;
+			gap: 7px;
+			min-height: 36px;
+			padding: 6px 12px 6px 7px;
+			border: 1px solid var(--border-soft);
+			border-radius: 999px;
 		}
 		.subnav a.on {
-			box-shadow: inset 0 -2px 0 var(--accent);
+			/* Same weight as idle pills so the row does not shift as you scroll. */
+			font-weight: 500;
+			border-color: color-mix(in srgb, var(--fill) 60%, transparent);
 		}
+		.subnav a:focus-visible {
+			outline-offset: -2px;
+		}
+		.subnav .tile {
+			width: 22px;
+			height: 22px;
+			border-radius: 50%;
+		}
+		/* 40px under the top bar and the pill row. */
 		.settings :global(section.set) {
-			scroll-margin-top: 112px;
+			scroll-margin-top: 140px;
 		}
 		.settings :global(.row) {
 			flex-wrap: wrap;
@@ -489,6 +693,19 @@
 		}
 		.settings :global(.two) {
 			grid-template-columns: 1fr;
+		}
+		/* Touch: controls reach about 36 to 40px. */
+		.settings :global(.btn) {
+			padding: 8px 14px;
+		}
+		.settings :global(.seg button) {
+			padding: 7px 14px;
+		}
+		.settings :global(.sel) {
+			height: 38px;
+		}
+		.settings :global(.inp) {
+			height: 40px;
 		}
 	}
 	@media (max-width: 420px) {

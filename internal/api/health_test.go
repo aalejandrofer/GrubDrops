@@ -118,7 +118,61 @@ func TestHealth_EventsCappedAt50(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(b, &got))
 	assert.Len(t, got.Events, 50)
-	assert.Equal(t, 80, got.Counts["all"])
+	assert.Equal(t, 50, got.Counts["all"])
+}
+
+// The chip counts cover the same newest 50 lines the list shows, so a
+// filter's count always matches its list.
+func TestHealth_CountsMatchListedWindow(t *testing.T) {
+	ring := mlog.NewRing(100)
+	for i := 0; i < 30; i++ {
+		ring.PushEvent(mlog.KindError, "ERROR", "old boom", nil)
+	}
+	for i := 0; i < 45; i++ {
+		ring.PushEvent(mlog.KindState, "INFO", "x", nil)
+	}
+	for i := 0; i < 5; i++ {
+		ring.PushEvent(mlog.KindError, "ERROR", "new boom", nil)
+	}
+	e := newHealthEnv(t, func(d *Deps) { d.Ring = ring })
+	for _, f := range []string{"all", "problems", "claims"} {
+		_, b := e.do("GET", "/api/health?filter="+f, "", nil)
+		var got struct {
+			Events []healthEvent  `json:"events"`
+			Counts map[string]int `json:"counts"`
+		}
+		require.NoError(t, json.Unmarshal(b, &got))
+		assert.Equal(t, map[string]int{"all": 50, "problems": 5, "claims": 0}, got.Counts, f)
+		assert.Len(t, got.Events, got.Counts[f], f)
+	}
+}
+
+// A passing sign-in check is not a problem; a failing one is, and its ok
+// field reaches the SPA.
+func TestHealth_AuthcheckProblemOnlyWhenFailed(t *testing.T) {
+	ring := mlog.NewRing(10)
+	ring.PushEvent(mlog.KindAuth, "INFO", "authcheck", map[string]any{"account": "a1", "ok": true, "msg": "ok"})
+	ring.PushEvent(mlog.KindAuth, "INFO", "authcheck", map[string]any{"account": "a2", "ok": false, "msg": "401"})
+	ring.PushEvent(mlog.KindAuth, "INFO", "kick utls verified", map[string]any{"account": "a3"})
+	ring.PushEvent(mlog.KindAuth, "WARN", "twitch device start failed", map[string]any{"account": "a4"})
+	e := newHealthEnv(t, func(d *Deps) { d.Ring = ring })
+
+	_, b := e.do("GET", "/api/health?filter=problems", "", nil)
+	var got struct {
+		Events []healthEvent  `json:"events"`
+		Counts map[string]int `json:"counts"`
+	}
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.Equal(t, 2, got.Counts["problems"])
+	require.Len(t, got.Events, 2)
+	assert.Equal(t, "a4", got.Events[0].AccountID)
+	assert.Equal(t, "a2", got.Events[1].AccountID)
+	assert.Equal(t, "false", got.Events[1].Fields["ok"])
+
+	_, b = e.do("GET", "/api/health", "", nil)
+	require.NoError(t, json.Unmarshal(b, &got))
+	require.Len(t, got.Events, 4)
+	assert.Equal(t, "true", got.Events[3].Fields["ok"])
 }
 
 func TestHealth_DebugHiddenFromEventsKeptInLog(t *testing.T) {

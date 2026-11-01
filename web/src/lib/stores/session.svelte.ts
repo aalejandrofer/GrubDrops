@@ -5,6 +5,7 @@ export interface SessionStore {
 	authed: boolean;
 	setupNeeded: boolean;
 	oidc: { enabled: boolean; name: string };
+	passwordLogin: boolean;
 	csrf: string;
 	version: string;
 	load(): Promise<void>;
@@ -16,6 +17,7 @@ export function createSession(api: Api): SessionStore {
 		authed: false,
 		setupNeeded: false,
 		oidc: { enabled: false, name: '' },
+		passwordLogin: true,
 		csrf: '',
 		version: '',
 		load: async () => {
@@ -23,6 +25,7 @@ export function createSession(api: Api): SessionStore {
 			s.authed = r.authed;
 			s.setupNeeded = r.setup_needed;
 			s.oidc = r.oidc;
+			s.passwordLogin = r.password_login !== false;
 			s.csrf = r.csrf_token;
 			s.version = r.version;
 			s.loaded = true;

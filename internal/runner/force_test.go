@@ -421,7 +421,9 @@ func TestForceWatch_ReadyClaimFailureBacksOff(t *testing.T) {
 	}
 }
 
-func TestForceWatch_RescanEndsIt(t *testing.T) {
+// A Rescan rechecks a force watch in place: with no drop to watch it keeps
+// its channel, with a watchable drop queued the drop wins at once.
+func TestForceWatch_RescanRechecksInPlace(t *testing.T) {
 	f := platformtest.NewFake()
 	setLive(f, "b", true)
 	r := newRunner(f, func(c *Config) {
@@ -435,13 +437,28 @@ func TestForceWatch_RescanEndsIt(t *testing.T) {
 		t.Fatalf("calls=%v", f.Calls)
 	}
 
+	lists := f.CallCount("List")
 	r.Rescan()
-	if !waitFor(func() bool { return hasCall(f, "Stop:b") && f.CallCount("Start:b") == 2 }, 2*time.Second) {
-		t.Fatalf("rescan did not restart the force watch: %v", f.Calls)
-	}
-	waitSnap(t, r, func(s Snapshot) bool { return s.State == StateForceWatching && s.Channel == "b" })
-	if f.CallCount("List") < 2 {
+	if !waitFor(func() bool { return f.CallCount("List") > lists }, 2*time.Second) {
 		t.Fatalf("no plan scan after Rescan: %v", f.Calls)
+	}
+	time.Sleep(20 * time.Millisecond)
+	forceOn(t, r, "b")
+	if hasCall(f, "Stop:b") || f.CallCount("Start:b") != 1 {
+		t.Fatalf("rescan restarted the force watch: %v", f.Calls)
+	}
+	if n := f.CallCount("Heartbeat:b"); n != 1 {
+		t.Fatalf("heartbeats=%d, want no beacon on rescan", n)
+	}
+
+	f.Mu.Lock()
+	f.Campaigns = []platform.Campaign{camp("c1", "Rust", "d1")}
+	f.Streams["c1"] = []platform.Stream{{Channel: "x", ViewerCount: 3}}
+	f.Mu.Unlock()
+	r.Rescan()
+	waitSnap(t, r, mining("d1"))
+	if !hasCall(f, "Stop:b") {
+		t.Fatalf("force watch not stopped for the drop: %v", f.Calls)
 	}
 }
 

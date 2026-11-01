@@ -1,0 +1,127 @@
+{
+	"refresh_every_sec": 3600,
+	"accounts": [
+		{
+			"id": "t1",
+			"name": "TTik3r",
+			"platform": "twitch",
+			"enabled": true,
+			"points_mode": "drops_points",
+			"balances_available": true,
+			"total": 16340
+		},
+		{
+			"id": "t2",
+			"name": "Phluses",
+			"platform": "twitch",
+			"enabled": true,
+			"points_mode": "points_only",
+			"balances_available": true,
+			"total": 58085
+		},
+		{
+			"id": "t3",
+			"name": "GrubAlt",
+			"platform": "twitch",
+			"enabled": false,
+			"points_mode": "off",
+			"balances_available": true,
+			"total": 310
+		},
+		{
+			"id": "k1",
+			"name": "TTik3r",
+			"platform": "kick",
+			"enabled": true,
+			"points_mode": "off",
+			"balances_available": false,
+			"total": null
+		}
+	],
+	"channels": [
+		{
+			"platform": "twitch",
+			"channel": "keshaeuw",
+			"live": true,
+			"balances": [
+				{
+					"account_id": "t1",
+					"status": "error",
+					"balance": 12450,
+					"fetched_at": "2026-10-31T08:00:00Z",
+					"checked_at": "2026-10-31T10:15:00Z",
+					"stale": true
+				},
+				{
+					"account_id": "t2",
+					"status": "ok",
+					"balance": 48210,
+					"fetched_at": "2026-10-31T09:57:00Z",
+					"checked_at": "2026-10-31T09:57:00Z",
+					"stale": false
+				},
+				{
+					"account_id": "t3",
+					"status": "off",
+					"balance": 310,
+					"fetched_at": "2026-10-28T10:00:00Z",
+					"checked_at": "2026-10-28T10:00:00Z",
+					"stale": true
+				}
+			]
+		},
+		{
+			"platform": "kick",
+			"channel": "xqc",
+			"live": true,
+			"balances": [
+				{
+					"account_id": "k1",
+					"status": "unavailable",
+					"balance": null,
+					"fetched_at": null,
+					"checked_at": null,
+					"stale": false
+				}
+			]
+		},
+		{
+			"platform": "twitch",
+			"channel": "caedrel",
+			"live": false,
+			"balances": [
+				{
+					"account_id": "t1",
+					"status": "ok",
+					"balance": 3890,
+					"fetched_at": "2026-10-31T09:40:00Z",
+					"checked_at": "2026-10-31T09:40:00Z",
+					"stale": false
+				},
+				{
+					"account_id": "t2",
+					"status": "ok",
+					"balance": 9875,
+					"fetched_at": "2026-10-31T09:20:00Z",
+					"checked_at": "2026-10-31T09:20:00Z",
+					"stale": false
+				}
+			]
+		},
+		{
+			"platform": "twitch",
+			"channel": "tarik",
+			"live": false,
+			"balances": [
+				{
+					"account_id": "t2",
+					"status": "pending",
+					"balance": null,
+					"fetched_at": null,
+					"checked_at": null,
+					"stale": false
+				}
+			]
+		}
+	]
+}

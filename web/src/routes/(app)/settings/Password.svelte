@@ -1,8 +1,27 @@
 <script lang="ts">
+	import NewPill from '$lib/components/NewPill.svelte';
 	import { api } from '$lib/app';
 	import { ApiError } from '$lib/api/client';
+	import type { Settings, SettingsPatch } from '$lib/api/types';
 	import { t } from '$lib/i18n/index.svelte';
 	import { passwordErrorKey, passwordProblem } from '$lib/settings';
+	import { SECTION_LOOK, passwordSwitch, ssoLine } from '$lib/settings-look';
+	import OidcGuide from './OidcGuide.svelte';
+	import SectionHead from './SectionHead.svelte';
+
+	let {
+		s,
+		save,
+		errs = {}
+	}: {
+		/** Settings for the sign-on rows; they hide until they load. */
+		s?: Settings;
+		save?: (key: string, p: SettingsPatch) => Promise<boolean>;
+		errs?: Record<string, boolean>;
+	} = $props();
+
+	let guide = $state(false);
+	const pw = $derived(s ? passwordSwitch(s) : null);
 
 	let pwCurrent = $state('');
 	let pwNew = $state('');
@@ -32,15 +51,41 @@
 	}
 </script>
 
-<section class="set" id="password" aria-labelledby="h-pw">
-	<div class="sec-head">
-		<div>
-			<h2 id="h-pw">{t('settings.password')}</h2>
-			<p>{t('settings.password_sub')}</p>
-		</div>
-	</div>
-	<form class="panel" onsubmit={changePassword}>
-		<div class="card-body">
+<section class="set hue-{SECTION_LOOK.password.hue}" id="password" aria-labelledby="h-pw">
+	<SectionHead sec="password" id="h-pw" blurb={t('settings.auth_sub')} />
+	<div class="panel">
+		{#if s && pw && save}
+			<div class="row">
+				<div class="lbl">
+					<b class="with-chip"
+						>{t('settings.sso')}
+						{#if s.sso.enabled}<span class="chip ok">{s.sso.name}</span>{:else}<span class="chip off">{t('settings.sso_off')}</span>{/if}</b
+					>
+					<small>{ssoLine(s.sso)}</small>
+				</div>
+				{#if !s.sso.enabled}<button type="button" class="btn" onclick={() => (guide = true)}>{t('settings.sso_setup')}</button>{/if}
+			</div>
+			<div class="row">
+				<div class="lbl">
+					<b id="pwl-l">{t('settings.password_login')}<NewPill since="2.3" /></b>
+					<small>{pw.hint}</small>
+					{#if errs.password_login_disabled}<small class="bad">{t('settings.save_failed')}</small>{/if}
+				</div>
+				{#if pw.toggle}
+					<button
+						type="button"
+						class="sw"
+						role="switch"
+						aria-checked={pw.on}
+						aria-labelledby="pwl-l"
+						onclick={() => save('password_login_disabled', { password_login_disabled: pw.on })}
+					></button>
+				{:else}
+					<span class="chip off">{t('settings.oidc_off')}</span>
+				{/if}
+			</div>
+		{/if}
+		<form class="card-body pwform" onsubmit={changePassword}>
 			<div class="field">
 				<label for="pw-cur">{t('settings.password_current')}</label>
 				<input class="inp" id="pw-cur" name="current-password" type="password" autocomplete="current-password" required bind:value={pwCurrent} />
@@ -61,6 +106,20 @@
 				</button>
 				{#if pwFeedback}<span class="feedback" class:bad={!pwFeedback.ok} role="status">{pwFeedback.text}</span>{/if}
 			</div>
-		</div>
-	</form>
+		</form>
+	</div>
+	<OidcGuide bind:open={guide} />
 </section>
+
+<style>
+	.lbl b.with-chip {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 2px 8px;
+	}
+	/* Keep the password fields a readable width on wide screens. */
+	.card-body.pwform {
+		grid-template-columns: minmax(0, 560px);
+	}
+</style>

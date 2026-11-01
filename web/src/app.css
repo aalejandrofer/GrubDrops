@@ -26,6 +26,24 @@
 	--twitch-fg: #a970ff;
 	--kick-fg: #53fc18;
 	--art-bg: #22262e;
+	/* Settings section hues (lib/settings-look.ts). Text-safe on --surface in both themes. */
+	--h-violet: #a371f7;
+	--h-blue: #58a6ff;
+	--h-amber: #e3b341;
+	--h-orange: #f0883e;
+	--h-pink: #f778ba;
+	--h-teal: #2fc4cf;
+	--h-green: #3fb950;
+	--h-red: #ff7b72;
+	--h-indigo: #8f9bff;
+	/* Switch knob on a hue-filled track, and the tint strength of hue tiles and chips. */
+	--knob: #0d1117;
+	--soft: 15%;
+	/* Readable text on a red chip's tint, and the Twitch avatar letter on its tint. */
+	--chip-bad: #ff7b72;
+	--twitch-av: #b88aff;
+	/* Readable text on a waiting chip's accent tint. */
+	--chip-wait: #b48cf8;
 	--radius: 8px;
 	--font: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
 	--mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -58,6 +76,30 @@
 	--twitch-fg: #7338d4;
 	--kick-fg: #1d6f00;
 	--art-bg: var(--surface-3);
+	--h-violet: #6b3bc4;
+	--h-blue: #0757b4;
+	--h-amber: #7a5200;
+	--h-orange: #9a3f00;
+	--h-pink: #9c2366;
+	--h-teal: #0b5f66;
+	--h-green: #146a2b;
+	--h-red: #b81d27;
+	--h-indigo: #3f46b8;
+	/* Solid fills (switches, pressed segments): brighter than the text hue, still >=4:1 against the knob. */
+	--f-violet: #7c4dd6;
+	--f-blue: #1f6feb;
+	--f-amber: #9a6700;
+	--f-orange: #c2410c;
+	--f-pink: #cf3b8a;
+	--f-teal: #0f8a94;
+	--f-green: #1a7f37;
+	--f-red: #c7333c;
+	--f-indigo: #5560e0;
+	--knob: #fff;
+	--soft: 13%;
+	--chip-bad: #9f1820;
+	--twitch-av: #6a2fc9;
+	--chip-wait: #6a2fc9;
 	color-scheme: light;
 }
 
@@ -87,10 +129,79 @@ a {
 	color: var(--kick-fg);
 }
 
+/* A hue class sets --hue (text, tiles, focus rings) and --fill (switches, pressed segments) for its subtree.
+   Dark has no --f-* tokens, so the fill falls back to the hue. */
+.hue-violet {
+	--hue: var(--h-violet);
+	--fill: var(--f-violet, var(--h-violet));
+}
+.hue-blue {
+	--hue: var(--h-blue);
+	--fill: var(--f-blue, var(--h-blue));
+}
+.hue-amber {
+	--hue: var(--h-amber);
+	--fill: var(--f-amber, var(--h-amber));
+}
+.hue-orange {
+	--hue: var(--h-orange);
+	--fill: var(--f-orange, var(--h-orange));
+}
+.hue-pink {
+	--hue: var(--h-pink);
+	--fill: var(--f-pink, var(--h-pink));
+}
+.hue-teal {
+	--hue: var(--h-teal);
+	--fill: var(--f-teal, var(--h-teal));
+}
+.hue-green {
+	--hue: var(--h-green);
+	--fill: var(--f-green, var(--h-green));
+}
+.hue-red {
+	--hue: var(--h-red);
+	--fill: var(--f-red, var(--h-red));
+}
+.hue-indigo {
+	--hue: var(--h-indigo);
+	--fill: var(--f-indigo, var(--h-indigo));
+}
+
 /* Set on <html> while a list row is being dragged (lib/drag.ts). */
 html.grub-dragging,
 html.grub-dragging * {
 	user-select: none;
 	-webkit-user-select: none;
 	cursor: grabbing !important;
+}
+
+/* A text refresh button (.btn.rf, lib/refresh.svelte.ts): amber and spinning
+   while busy, green for a moment once fresh data lands. */
+.btn.rf {
+	transition:
+		color 0.2s ease,
+		background-color 0.2s ease;
+}
+.btn.rf.spin[disabled] {
+	opacity: 1;
+	color: var(--amber);
+}
+.btn.rf.spin svg {
+	animation: rf-spin 0.9s linear infinite;
+}
+.btn.rf.done,
+.btn.rf.done:hover:not([disabled]) {
+	color: var(--green);
+	background: var(--green-soft);
+}
+@keyframes rf-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.btn.rf.spin svg {
+		animation: none;
+	}
 }

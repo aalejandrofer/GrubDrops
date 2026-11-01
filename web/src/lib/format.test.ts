@@ -6,6 +6,7 @@ import {
 	dayBucket,
 	etaShort,
 	formatInt,
+	msToNextMinute,
 	nextScanMin,
 	noteParts,
 	relTime,
@@ -20,12 +21,12 @@ const ago = (s: number) => new Date(now - s * 1000).toISOString();
 beforeEach(() => setLang('en'));
 
 test('relTime', () => {
-	expect(relTime(ago(41), now)).toBe('41 s ago');
+	expect(relTime(ago(41), now)).toBe('41s ago');
 	expect(relTime(ago(180), now)).toBe('3 min ago');
 	expect(relTime(ago(2 * 3600), now)).toBe('2 h ago');
 	expect(relTime(ago(4 * 86400), now)).toBe('4 d ago');
 	expect(relTime(null, now)).toBe('never');
-	expect(relTime(ago(-30), now)).toBe('0 s ago');
+	expect(relTime(ago(-30), now)).toBe('0s ago');
 });
 
 test('formatInt follows the language', () => {
@@ -108,4 +109,11 @@ test('noteParts splits release-note markdown into plain, bold and code', () => {
 	expect(noteParts('See [the docs](https://x.dev) now')).toEqual([{ text: 'See the docs now', kind: 'text' }]);
 	expect(noteParts('a ** b')).toEqual([{ text: 'a ** b', kind: 'text' }]);
 	expect(noteParts('')).toEqual([]);
+});
+
+test('msToNextMinute waits for the next whole minute', () => {
+	const min = Date.UTC(2026, 0, 1, 12, 34);
+	expect(msToNextMinute(min)).toBe(60_000);
+	expect(msToNextMinute(min + 1)).toBe(59_999);
+	expect(msToNextMinute(min + 45_500)).toBe(14_500);
 });

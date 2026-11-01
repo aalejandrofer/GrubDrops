@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Api } from '$lib/api/client';
-import type { Claim, ForceChannel, HealthEvent, Runner } from '$lib/api/types';
+import type { Claim, ForceChannel, HealthEvent, PointsResp, Runner } from '$lib/api/types';
 import { createLive, upsertBy, type EventSourceLike } from './live.svelte';
 
 class FakeSource implements EventSourceLike {
@@ -30,6 +30,7 @@ function setup(session: () => Promise<{ authed: boolean }> = async () => ({ auth
 		accounts: vi.fn(async () => []),
 		claims: vi.fn(async () => ({ total: 0, items: [], games: [], accounts: [] })),
 		forceWatch: vi.fn(async () => ({ channels: [] as ForceChannel[] })),
+		points: vi.fn(async (): Promise<PointsResp> => ({ refresh_every_sec: 3600, accounts: [], channels: [] })),
 		session: vi.fn(session)
 	};
 	const sources: FakeSource[] = [];
@@ -100,7 +101,7 @@ describe('live events', () => {
 		expect(api.accounts).not.toHaveBeenCalled();
 	});
 
-	it('accounts event refetches accounts, runners and overview', async () => {
+	it('accounts event refetches accounts, runners, games and overview', async () => {
 		const { api, cur } = setup();
 		cur().emit('accounts', {});
 		await settle();
@@ -109,7 +110,10 @@ describe('live events', () => {
 		expect(api.overview).toHaveBeenCalledTimes(1);
 		// A removed account leaves force watch on the server; reload the list.
 		expect(api.forceWatch).toHaveBeenCalledTimes(1);
-		expect(api.games).not.toHaveBeenCalled();
+		// Pausing or resuming changes which games read paused.
+		expect(api.games).toHaveBeenCalledTimes(1);
+		// Points mode and pause change which balances are read.
+		expect(api.points).toHaveBeenCalledTimes(1);
 	});
 
 	it('force_watch event refetches the list and overview', async () => {
@@ -121,7 +125,21 @@ describe('live events', () => {
 		expect(api.forceWatch).toHaveBeenCalledTimes(1);
 		expect(api.overview).toHaveBeenCalledTimes(1);
 		expect(api.games).not.toHaveBeenCalled();
+		expect(api.points).toHaveBeenCalledTimes(1);
 		expect(live.forceWatch).toEqual([c]);
+	});
+
+	it('points event refetches the balances and the overview', async () => {
+		const { api, live, cur } = setup();
+		const p: PointsResp = { refresh_every_sec: 3600, accounts: [], channels: [] };
+		api.points.mockResolvedValueOnce(p);
+		cur().emit('points', {});
+		await settle();
+		expect(api.points).toHaveBeenCalledTimes(1);
+		// The Home Points watch tile sums the balances; they live on the overview.
+		expect(api.overview).toHaveBeenCalledTimes(1);
+		expect(api.forceWatch).not.toHaveBeenCalled();
+		expect(live.points).toEqual(p);
 	});
 
 	it('a runner entering or leaving force watching refetches overview and the force list', async () => {
@@ -190,11 +208,11 @@ describe('live reconnect', () => {
 		await settle();
 		expect(live.unreachable).toBe(true);
 		pending.shift()!();
-		const before = [api.overview, api.runners, api.games, api.accounts, api.claims, api.forceWatch].map((m) => m.mock.calls.length);
+		const before = [api.overview, api.runners, api.games, api.accounts, api.claims, api.forceWatch, api.points].map((m) => m.mock.calls.length);
 		cur().onopen!();
 		await settle();
-		const after = [api.overview, api.runners, api.games, api.accounts, api.claims, api.forceWatch].map((m) => m.mock.calls.length);
-		expect(after.map((n, i) => n - before[i])).toEqual([1, 1, 1, 1, 1, 1]);
+		const after = [api.overview, api.runners, api.games, api.accounts, api.claims, api.forceWatch, api.points].map((m) => m.mock.calls.length);
+		expect(after.map((n, i) => n - before[i])).toEqual([1, 1, 1, 1, 1, 1, 1]);
 		expect(api.claims).toHaveBeenLastCalledWith({ limit: 10 });
 		expect(live.unreachable).toBe(false);
 		sources[1].onerror!();

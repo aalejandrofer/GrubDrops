@@ -1,3 +1,4 @@
+import { ApiError } from '$lib/api/client';
 import type { Platform, Runner, Target } from '$lib/api/types';
 
 export type Queue = {
@@ -10,9 +11,22 @@ export type Queue = {
 	canMine: boolean;
 };
 
-/** A signed-out or paused account cannot switch drops. */
+/** A signed-out, paused, sleeping or points-only account with no channel cannot switch drops. */
 export function canMineNow(r: Pick<Runner, 'state'>): boolean {
-	return r.state !== 'needs_login' && r.state !== 'no_games' && r.state !== 'idle';
+	return (
+		r.state !== 'needs_login' &&
+		r.state !== 'no_games' &&
+		r.state !== 'no_channels' &&
+		r.state !== 'idle' &&
+		r.state !== 'sleep_window'
+	);
+}
+
+/** i18n key for a failed Mine next request. */
+export function mineErrorKey(e: unknown): string {
+	return e instanceof ApiError && e.status === 409 && e.code === 'sleep_window'
+		? 'upnext.mine_sleep_window'
+		: 'upnext.mine_next_failed';
 }
 
 /** New array with the item at `from` moved to `to`. Out-of-range indexes return a plain copy. */

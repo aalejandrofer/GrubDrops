@@ -224,3 +224,68 @@ func TestBuildEmbed_Summary(t *testing.T) {
 	assert.Equal(t, "2026-03-08: 5 min", e["description"])
 	assert.Equal(t, "Daily summary", buildEmbed(EventSummary, nil)["title"])
 }
+
+func TestDiscordWebhook_MentionsUserOnAlertsOnly(t *testing.T) {
+	var mu sync.Mutex
+	var got []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var p map[string]any
+		require.NoError(t, json.Unmarshal(body, &p))
+		mu.Lock()
+		got = append(got, p)
+		mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	n := NewDiscordWebhook(srv.URL, nil)
+	n.MentionUserID = "123456789012345678"
+	for _, ev := range []Event{EventError, EventAuth, EventCanary, EventClaim, EventProgress, EventSummary, EventTest, EventState} {
+		require.NoError(t, n.Notify(context.Background(), ev, map[string]any{"account": "a"}))
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, got, 8)
+	for i, p := range got[:3] {
+		assert.Equal(t, "<@123456789012345678>", p["content"], "alert %d pings in content", i)
+		assert.Equal(t, map[string]any{"users": []any{"123456789012345678"}}, p["allowed_mentions"], "alert %d allows the user ping", i)
+	}
+	for i, p := range got[3:] {
+		_, hasContent := p["content"]
+		_, hasAllowed := p["allowed_mentions"]
+		assert.False(t, hasContent, "non-alert %d has no content", i)
+		assert.False(t, hasAllowed, "non-alert %d has no allowed_mentions", i)
+	}
+}
+
+func TestDiscordWebhook_NoMentionWhenUnsetOrInvalid(t *testing.T) {
+	var mu sync.Mutex
+	var got []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var p map[string]any
+		require.NoError(t, json.Unmarshal(body, &p))
+		mu.Lock()
+		got = append(got, p)
+		mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	for _, id := range []string{"", "@everyone", "12a"} {
+		n := NewDiscordWebhook(srv.URL, nil)
+		n.MentionUserID = id
+		require.NoError(t, n.Notify(context.Background(), EventError, map[string]any{"msg": "x"}))
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, got, 3)
+	for i, p := range got {
+		_, hasContent := p["content"]
+		_, hasAllowed := p["allowed_mentions"]
+		assert.False(t, hasContent, "case %d", i)
+		assert.False(t, hasAllowed, "case %d", i)
+	}
+}

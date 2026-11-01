@@ -15,6 +15,9 @@ func (n *NoopNotifier) Notify(_ context.Context, event Event, fields map[string]
 	}
 	args := []any{"event", event}
 	for k, v := range fields {
+		if SecretFields[k] {
+			v = "[redacted]"
+		}
 		args = append(args, k, v)
 	}
 	n.Logger.Debug("notify", args...)

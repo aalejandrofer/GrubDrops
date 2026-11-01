@@ -3,6 +3,7 @@ package collect
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"strings"
 	"sync"
@@ -299,6 +300,41 @@ func (c *Collector) RecordClaim(ctx context.Context, accountID string, t plan.Ta
 		return nil
 	}
 	c.last[accountID][t.Benefit.ID] = row
+	return nil
+}
+
+// LoggedClaim returns when benefitID was logged for the account and whether
+// the user marked it by hand. ok is false when the log has no row for it.
+func (c *Collector) LoggedClaim(ctx context.Context, accountID, benefitID string) (at time.Time, manual, ok bool, err error) {
+	e, err := c.Claims.Get(ctx, accountID, benefitID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, false, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, false, err
+	}
+	return e.ClaimedAt, e.Source == store.ClaimSourceManual, true, nil
+}
+
+// ForgetClaim deletes a logged claim the platform's inventory says never
+// happened, and turns its cached claimed drop state back to claimable so the
+// UI shows it before the next scan.
+func (c *Collector) ForgetClaim(ctx context.Context, accountID, benefitID string) error {
+	if _, err := c.Claims.Delete(ctx, accountID, benefitID); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	row, ok := c.last[accountID][benefitID]
+	if !ok || row.State != StateClaimed {
+		return nil
+	}
+	row.State, row.UpdatedAt = StateClaimable, c.now()
+	if err := c.States.Upsert(ctx, row); err != nil {
+		c.logErr("collect: flip forgotten claim state failed", accountID, err)
+		return nil
+	}
+	c.last[accountID][benefitID] = row
 	return nil
 }
 

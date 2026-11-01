@@ -1,5 +1,5 @@
 import type { Api } from '$lib/api/client';
-import type { Account, Claim, ForceChannel, GamesResp, HealthEvent, Overview, Runner } from '$lib/api/types';
+import type { Account, Claim, ForceChannel, GamesResp, HealthEvent, Overview, PointsResp, Runner } from '$lib/api/types';
 
 export interface EventSourceLike {
 	onopen: (() => void) | null;
@@ -28,6 +28,8 @@ export interface LiveStore {
 	log: HealthEvent[];
 	/** Force watch channels in rank order, or null before they load. */
 	forceWatch: ForceChannel[] | null;
+	/** Cached channel-points balances per Force watch channel, or null before they load. */
+	points: PointsResp | null;
 	/** The last overview or games load failed. Cleared by the next success. */
 	failed: { overview: boolean; games: boolean };
 	unreachable: boolean;
@@ -82,6 +84,7 @@ export function createLive(deps: LiveDeps): LiveStore {
 		recent: [],
 		log: [],
 		forceWatch: null,
+		points: null,
 		failed: { overview: false, games: false },
 		unreachable: false,
 		retryIn: 0,
@@ -131,13 +134,16 @@ export function createLive(deps: LiveDeps): LiveStore {
 	const loadForceWatch = async () => {
 		s.forceWatch = (await api.forceWatch()).channels;
 	};
+	const loadPoints = async () => {
+		s.points = await api.points();
+	};
 	const loadRecent = async () => {
 		s.recent = (await api.claims({ limit: MAX_RECENT })).items.slice(0, MAX_RECENT);
 	};
 
 	async function refetchAll(): Promise<void> {
 		await Promise.all(
-			[loadOverview, loadRunners, loadGames, loadAccounts, loadRecent, loadForceWatch].map((f) => quiet(f()))
+			[loadOverview, loadRunners, loadGames, loadAccounts, loadRecent, loadForceWatch, loadPoints].map((f) => quiet(f()))
 		);
 		touch();
 	}
@@ -205,13 +211,24 @@ export function createLive(deps: LiveDeps): LiveStore {
 			touch();
 			void quiet(loadAccounts());
 			void quiet(loadRunners());
+			// Pausing or resuming an account changes which games read paused.
+			void quiet(loadGames());
 			void quiet(loadOverview());
 			// A removed account drops out of its force watch channels.
 			void quiet(loadForceWatch());
+			// Points mode and pause change which balances are read.
+			void quiet(loadPoints());
 		});
 		src.addEventListener('force_watch', () => {
 			touch();
 			void quiet(loadForceWatch());
+			void quiet(loadOverview());
+			void quiet(loadPoints());
+		});
+		src.addEventListener('points', () => {
+			touch();
+			void quiet(loadPoints());
+			// The Home Points watch tile sums the balances; they live on the overview.
 			void quiet(loadOverview());
 		});
 		src.addEventListener('log', (ev) => {

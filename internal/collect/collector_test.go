@@ -286,6 +286,41 @@ func TestCollector_RecordClaimFlipsState(t *testing.T) {
 	require.True(t, ids["b1"])
 }
 
+// GRUB-58: the inventory sweep forgets a logged claim that never landed. The
+// row goes and the cached state reads claimable again; a manual row reads as
+// manual.
+func TestCollector_ForgetClaim(t *testing.T) {
+	c := newCollector(t)
+	ctx := context.Background()
+	s := cbaseScan()
+	s.Result.Queue = []plan.Target{ctarget("b1", 60, 60)}
+	c.OnScan(ctx, s)
+	require.NoError(t, c.RecordClaim(ctx, "a1", ctarget("b1", 60, 60), ""))
+
+	at, manual, ok, err := c.LoggedClaim(ctx, "a1", "b1")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.False(t, manual)
+	require.WithinDuration(t, time.Now(), at, time.Minute)
+
+	require.NoError(t, c.ForgetClaim(ctx, "a1", "b1"))
+	_, _, ok, err = c.LoggedClaim(ctx, "a1", "b1")
+	require.NoError(t, err)
+	require.False(t, ok)
+	ids, err := c.ClaimedBenefitIDs(ctx, "a1")
+	require.NoError(t, err)
+	require.False(t, ids["b1"])
+	require.Equal(t, StateClaimable, statesByBenefit(t, c)["b1"].State)
+
+	require.NoError(t, c.Claims.Record(ctx, store.ClaimEntry{
+		AccountID: "a1", BenefitID: "m1", Platform: "twitch", Source: store.ClaimSourceManual,
+	}))
+	_, manual, ok, err = c.LoggedClaim(ctx, "a1", "m1")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.True(t, manual)
+}
+
 func TestCollector_ConcurrentHooks(t *testing.T) {
 	c := newCollector(t)
 	ctx := context.Background()

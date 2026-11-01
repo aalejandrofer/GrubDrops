@@ -4,24 +4,30 @@
 	import type { Health, HealthEvent, Platform, Settings, SettingsPatch } from '$lib/api/types';
 	import { clock, relTime, uptime } from '$lib/format';
 	import { runNowState, type CanaryStamps } from '$lib/canary';
-	import { eventText, isProblem, kindLabel } from '$lib/health';
+	import { countFilters, eventText, kindChip, matchesFilter, type Filter } from '$lib/health';
+	import Icon from '$lib/components/Icon.svelte';
+	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { prefs } from '$lib/prefs.svelte';
 	import { CANARY_INTERVALS, isChannel, minutesLabel } from '$lib/settings';
+	import { SECTION_LOOK, failingCanaries } from '$lib/settings-look';
+	import SectionHead from './SectionHead.svelte';
 
 	let {
 		s,
 		save,
-		errs = {}
+		errs = {},
+		failing = $bindable([])
 	}: {
 		/** Settings for the Advanced block; it hides until they load. */
 		s?: Settings;
 		save?: (key: string, p: SettingsPatch) => Promise<boolean>;
 		errs?: Record<string, boolean>;
+		/** Platforms whose canary is failing, for the page's nav dot. */
+		failing?: Platform[];
 	} = $props();
 
-	type Filter = 'all' | 'problems' | 'claims';
 	const FILTERS: { id: Filter; key: string }[] = [
 		{ id: 'all', key: 'health.filter.all' },
 		{ id: 'problems', key: 'health.filter.problems' },
@@ -39,8 +45,10 @@
 
 	let h = $state<Health | null>(null);
 	let filter = $state<Filter>('all');
-	let events = $state<HealthEvent[]>([]);
-	let counts = $state({ all: 0, problems: 0, claims: 0 });
+	/** The newest MAX_EVENTS lines; the chips count them and the list filters them. */
+	let win = $state<HealthEvent[]>([]);
+	const events = $derived(win.filter((e) => matchesFilter(filter, e)));
+	const counts = $derived(countFilters(win));
 	let loadFailed = $state(false);
 	let expanded = $state(false);
 	let canaryBusy = $state(false);
@@ -53,19 +61,15 @@
 	let refetchTimer: ReturnType<typeof setTimeout> | undefined;
 	let clockTimer: ReturnType<typeof setInterval> | undefined;
 
-	const matches = (f: Filter, e: HealthEvent): boolean =>
-		f === 'all' || (f === 'problems' ? isProblem(e) : e.kind === 'claim');
-
-	async function load(f: Filter): Promise<void> {
+	async function load(): Promise<void> {
 		const mine = ++seq;
 		try {
-			const body = await api.health(f);
+			const body = await api.health('all');
 			if (mine !== seq) return;
 			h = body;
-			events = body.events;
-			counts = body.counts;
+			win = body.events;
 			loadFailed = false;
-			if (f === 'all') live.seedLog(body.events);
+			live.seedLog(body.events);
 			lastHead = live.log[0];
 		} catch {
 			if (mine === seq) loadFailed = true;
@@ -76,7 +80,6 @@
 		if (f === filter) return;
 		filter = f;
 		expanded = false;
-		void load(f);
 	}
 
 	async function runCanary(): Promise<void> {
@@ -100,7 +103,7 @@
 		clearTimeout(refetchTimer);
 		refetchTimer = setTimeout(async () => {
 			if (destroyed) return;
-			await load(filter);
+			await load();
 			if (destroyed) return;
 			const state = runNowState(before, h?.canary ?? [], Date.now() - clickedAt);
 			if (state === 'running') return poll(before, clickedAt);
@@ -110,7 +113,7 @@
 	}
 
 	onMount(() => {
-		void load('all');
+		void load();
 		clockTimer = setInterval(() => (now = Date.now()), 15000);
 	});
 	onDestroy(() => {
@@ -119,20 +122,20 @@
 		clearInterval(clockTimer);
 	});
 
-	/** A new live event bumps the chip counts and joins the list when it matches the chip. */
+	/** A new live event joins the window; the counts and the list follow it. */
 	$effect(() => {
 		const head = live.log[0];
 		untrack(() => {
 			if (!head || head === lastHead) return;
 			lastHead = head;
 			if (!h || head.level === 'DEBUG') return;
-			counts = {
-				all: counts.all + 1,
-				problems: counts.problems + (isProblem(head) ? 1 : 0),
-				claims: counts.claims + (head.kind === 'claim' ? 1 : 0)
-			};
-			if (matches(filter, head)) events = [head, ...events].slice(0, MAX_EVENTS);
+			win = [head, ...win].slice(0, MAX_EVENTS);
 		});
+	});
+
+	const canaryFailing = $derived(failingCanaries(h?.canary));
+	$effect(() => {
+		failing = canaryFailing;
 	});
 
 	const shownEvents = $derived(expanded ? events : events.slice(0, FOLDED_EVENTS));
@@ -171,31 +174,81 @@
 		if (e.key === 'Enter' && e.isTrusted && chDirty) void saveChannels();
 	}
 
-	const levelClass = (e: HealthEvent): string =>
-		e.level === 'ERROR' ? 'err' : e.level === 'WARN' ? 'warn' : e.kind === 'claim' ? 'ok' : 'info';
+	/** Saved canary channel per platform; undefined until settings load. */
+	const channelOf = (p: Platform): string | undefined => (s ? (p === 'twitch' ? s.canary.twitch_channel : s.canary.kick_channel).trim() : undefined);
+	/** Run now needs at least one saved channel. */
+	const noChannel = $derived(!!s && !channelOf('twitch') && !channelOf('kick'));
+	/** Platform of the account a log line is about, for the name colour. */
+	const platformOf = (e: HealthEvent): Platform | undefined => live.accounts.find((a) => a.id === e.account_id)?.platform;
 </script>
 
-<section class="set" id="health" aria-labelledby="h-hea">
-	<div class="sec-head">
-		<div>
-			<h2 id="h-hea">{t('settings.health')}</h2>
-			<p>{t('health.sub')}</p>
-		</div>
-	</div>
+<section class="set hue-{SECTION_LOOK.health.hue}" id="health" aria-labelledby="h-hea">
+	<SectionHead sec="health" id="h-hea" blurb={t('health.sub')}>
+		{#snippet chips()}
+			{#each canaryFailing as p, i (i)}<span class="chip bad">{t('health.chip_canary_failing', { platform: t(`accounts.${p}`) })}</span>{/each}
+		{/snippet}
+	</SectionHead>
 	{#if loadFailed}<p class="bad" role="alert">{t('health.load_failed')}</p>{/if}
 	{#if h}
-		<div class="panel stats">
-			<div><small class="ok">{t('health.miner')}</small><b>{minerLine}</b></div>
-			<div><small class={sidecars > 0 ? 'ok' : ''}>{t('health.sidecar')}</small><b>{tn('health.sidecars', sidecars)}</b></div>
-			<div><small class={h.last_scan_at ? 'ok' : ''}>{t('health.last_scan')}</small><b>{relTime(h.last_scan_at, now)}</b></div>
+		<div class="stats">
+			<div class="stat" class:ok={!!h.miner.started_at}><span>{t('health.miner')}</span><b>{minerLine}</b></div>
+			<div class="stat"><span>{t('health.sidecar')}</span><b>{tn('health.sidecars', sidecars)}</b></div>
+			<div class="stat"><span>{t('health.last_scan')}</span><b>{relTime(h.last_scan_at, now)}</b></div>
 		</div>
-		<div class="panel">
+
+		<div class="panel canary" id="set-canary">
+			<div class="row">
+				<div class="lbl">
+					<b>{t('health.canary')}</b>
+					<small>{t('health.canary_help')}</small>
+					{#if noChannel}<small>{t('health.canary_need_channel')}</small>{/if}
+					{#if canaryFailed}<small class="bad" role="alert">{t('health.run_failed')}</small>{/if}
+					{#if canaryNoResult}<small role="status">{t('health.canary_no_result')}</small>{/if}
+				</div>
+				{#if noChannel}
+					<span class="chip off">{t('settings.unavailable')}</span>
+				{:else}
+					<button type="button" class="btn tint" disabled={canaryBusy} onclick={runCanary}
+						><Icon name="refresh" size={13} />{canaryBusy ? t('health.canary_running') : t('health.run_now')}</button
+					>
+				{/if}
+			</div>
+			{#each PLATFORMS as p (p.id)}
+				{@const c = canaryOf(p.id)}
+				{@const ch = channelOf(p.id)}
+				<div class="row can">
+					<PlatformMark platform={p.id} />
+					<div class="lbl">
+						<b class:ch={!!ch}>{ch || t(p.key)}</b>
+						{#if ch === ''}
+							<small>{t('health.canary_no_channel')}</small>
+						{:else if c?.skipped}
+							<small>{t('health.canary_skipped', { platform: t(p.key) })}</small>
+						{:else if c && !c.ok && c.detail}
+							<small class="bad">{c.detail}</small>
+						{/if}
+					</div>
+					{#if ch === ''}
+						<span class="chip off">{t('settings.canary_off')}</span>
+					{:else if !c || (c.ok && !c.checked_at)}
+						<span class="chip off">{t('health.canary_none')}</span>
+					{:else if c.skipped}
+						<span class="chip off">{t('health.canary_skip')}</span>
+					{:else if c.ok}
+						<span class="chip ok">{t('health.canary_ok', { rel: relTime(c.checked_at, now) })}</span>
+					{:else}
+						<span class="chip bad">{t('health.canary_fail')}</span>
+					{/if}
+				</div>
+			{/each}
+		</div>
+
+		<div class="panel" id="set-log">
 			<div class="row filters">
-				<div class="chips" role="group" aria-label={t('health.filter_label')}>
+				<div class="lbl"><b>{t('health.activity')}</b></div>
+				<div class="seg" role="group" aria-label={t('health.filter_label')}>
 					{#each FILTERS as f (f.id)}
-						<button type="button" class="chip" class:on={filter === f.id} aria-pressed={filter === f.id} onclick={() => pick(f.id)}
-							>{t(f.key)}<span class="n">{counts[f.id]}</span></button
-						>
+						<button type="button" aria-pressed={filter === f.id} onclick={() => pick(f.id)}>{t(f.key)}<span class="n">{counts[f.id]}</span></button>
 					{/each}
 				</div>
 			</div>
@@ -204,11 +257,17 @@
 			{:else}
 				<ol class="log">
 					{#each shownEvents as e, i (`${e.at}-${i}`)}
-						<li class={levelClass(e)}>
+						{@const chip = kindChip(e)}
+						{@const pf = platformOf(e)}
+						<li class="ev">
 							<time>{e.at ? clock(e.at, prefs.zone, prefs.fmt) : ''}</time>
-							<span class="lv {levelClass(e)}"></span>
-							<span class="acc">{e.account_name || t('health.system')}</span>
-							<span class="msg">{#if e.kind}<span class="kind">{kindLabel(e.kind)}</span>{/if}{eventText(e)}</span>
+							<span class="chip plain {chip.tone}">{chip.label}</span>
+							<span class="msg"
+								>{#if e.account_name}<span class="who pf-name {pf ?? ''}">{e.account_name}</span>{:else}<span class="who sys"
+										>{t('health.system')}</span
+									>{/if}
+								{eventText(e)}</span
+							>
 						</li>
 					{/each}
 				</ol>
@@ -224,106 +283,69 @@
 			</div>
 		</div>
 	{/if}
-	{#if h || (s && save)}
+	{#if s && save}
 		<details class="adv">
 			<summary>{t('settings.advanced')}</summary>
-			{#if h}
-				<div class="panel canary">
-					<div class="row">
-						<div class="lbl">
-							<b class="tip-wrap"
-								>{t('health.canary')}<button type="button" class="tip" aria-label={t('health.canary')} aria-describedby="canary-tip">?</button><span
-									class="tip-text"
-									id="canary-tip"
-									role="tooltip">{t('health.canary_help')}</span
-								></b
-							>
-							{#if canaryFailed}<small class="bad" role="alert">{t('health.run_failed')}</small>{/if}
-							{#if canaryNoResult}<small role="status">{t('health.canary_no_result')}</small>{/if}
-						</div>
-						<button type="button" class="btn" disabled={canaryBusy} onclick={runCanary}>{canaryBusy ? t('health.canary_running') : t('health.run_now')}</button>
+			<div class="panel">
+				<div class="row">
+					<div class="lbl">
+						<b><label for="canary-int">{t('settings.canary_interval')}</label></b>
+						<small>{t('settings.canary_interval_sub')} {t('settings.after_restart')}</small>
+						{#if errs.canary_interval}<small class="bad">{t('settings.save_failed')}</small>{/if}
 					</div>
-					{#each PLATFORMS as p (p.id)}
-						{@const c = canaryOf(p.id)}
-						<div class="row">
-							<div class="lbl">
-								<b>{t(p.key)}</b>
-								{#if !c || (c.ok && !c.checked_at)}
-									<small>{t('health.canary_none')}</small>
-								{:else if c.skipped}
-									<small>{t('health.canary_skipped', { platform: t(p.key) })}</small>
-								{:else if c.ok}
-									<small class="good">{t('health.canary_ok', { rel: relTime(c.checked_at, now) })}</small>
-								{:else}
-									<small class="bad">{t('health.canary_fail', { detail: c.detail })}</small>
-								{/if}
-							</div>
-						</div>
-					{/each}
+					<select
+						class="sel"
+						id="canary-int"
+						autocomplete="off"
+						value={s.canary.interval_sec}
+						onchange={(e) => {
+							const v = Number(e.currentTarget.value);
+							if (e.isTrusted && s && v !== s.canary.interval_sec) void save('canary_interval', { canary: { ...s.canary, interval_sec: v } });
+						}}
+					>
+						{#each canaryIntervals as sec (sec)}<option value={sec}>{intervalLabel(sec)}</option>{/each}
+					</select>
 				</div>
-			{/if}
-			{#if s && save}
-				<div class="panel">
-					<div class="row">
-						<div class="lbl">
-							<b><label for="canary-int">{t('settings.canary_interval')}</label></b>
-							<small>{t('settings.canary_interval_sub')} {t('settings.after_restart')}</small>
-							{#if errs.canary_interval}<small class="bad">{t('settings.save_failed')}</small>{/if}
+				<div class="card-body">
+					<div class="two">
+						<div class="field">
+							<label for="canary-tw">{t('settings.canary_twitch')}</label>
+							<input
+								class="inp"
+								id="canary-tw"
+								type="text"
+								autocomplete="off"
+								spellcheck="false"
+								aria-invalid={chBad ? true : undefined}
+								bind:value={twitchCh}
+								oninput={() => ((chDirty = true), (chBad = false))}
+								onkeydown={chKey}
+							/>
 						</div>
-						<select
-							class="sel"
-							id="canary-int"
-							autocomplete="off"
-							value={s.canary.interval_sec}
-							onchange={(e) => {
-								const v = Number(e.currentTarget.value);
-								if (e.isTrusted && s && v !== s.canary.interval_sec) void save('canary_interval', { canary: { ...s.canary, interval_sec: v } });
-							}}
-						>
-							{#each canaryIntervals as sec (sec)}<option value={sec}>{intervalLabel(sec)}</option>{/each}
-						</select>
+						<div class="field">
+							<label for="canary-kick">{t('settings.canary_kick')}</label>
+							<input
+								class="inp"
+								id="canary-kick"
+								type="text"
+								autocomplete="off"
+								spellcheck="false"
+								placeholder={t('settings.canary_kick_ph')}
+								aria-invalid={chBad ? true : undefined}
+								bind:value={kickCh}
+								oninput={() => ((chDirty = true), (chBad = false))}
+								onkeydown={chKey}
+							/>
+						</div>
 					</div>
-					<div class="card-body">
-						<div class="two">
-							<div class="field">
-								<label for="canary-tw">{t('settings.canary_twitch')}</label>
-								<input
-									class="inp"
-									id="canary-tw"
-									type="text"
-									autocomplete="off"
-									spellcheck="false"
-									aria-invalid={chBad ? true : undefined}
-									bind:value={twitchCh}
-									oninput={() => ((chDirty = true), (chBad = false))}
-									onkeydown={chKey}
-								/>
-							</div>
-							<div class="field">
-								<label for="canary-kick">{t('settings.canary_kick')}</label>
-								<input
-									class="inp"
-									id="canary-kick"
-									type="text"
-									autocomplete="off"
-									spellcheck="false"
-									placeholder={t('settings.canary_kick_ph')}
-									aria-invalid={chBad ? true : undefined}
-									bind:value={kickCh}
-									oninput={() => ((chDirty = true), (chBad = false))}
-									onkeydown={chKey}
-								/>
-							</div>
-						</div>
-						<div class="inline wrap">
-							<button type="button" class="btn" disabled={!chDirty} onclick={saveChannels}>{t('accounts.save')}</button>
-						</div>
-						<small class="help">{t('settings.canary_channels_help')}</small>
-						{#if chBad}<span class="feedback bad" role="alert">{t('settings.canary_channel_invalid')}</span>{/if}
-						{#if errs.canary_channels}<span class="feedback bad">{t('settings.save_failed')}</span>{/if}
+					<div class="inline wrap">
+						<button type="button" class="btn" disabled={!chDirty} onclick={saveChannels}>{t('accounts.save')}</button>
 					</div>
+					<small class="help">{t('settings.canary_channels_help')}</small>
+					{#if chBad}<span class="feedback bad" role="alert">{t('settings.canary_channel_invalid')}</span>{/if}
+					{#if errs.canary_channels}<span class="feedback bad">{t('settings.save_failed')}</span>{/if}
 				</div>
-			{/if}
+			</div>
 		</details>
 	{/if}
 </section>
@@ -336,198 +358,121 @@
 		color: var(--t2);
 		font-size: 12px;
 	}
-	.good {
-		color: var(--green);
-	}
+	/* Status strip: three tiles, a green value when the miner runs. */
 	.stats {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		margin-bottom: 14px;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 10px;
+		margin-bottom: 12px;
 	}
-	.stats > div {
-		padding: 12px 16px;
+	.stat {
+		padding: 10px 14px;
+		border: 1px solid var(--border-soft);
+		border-radius: 10px;
+		background: var(--surface);
 		display: grid;
 		gap: 2px;
 		min-width: 0;
 	}
-	.stats > div + div {
-		border-left: 1px solid var(--border-soft);
-	}
-	.stats small {
-		color: var(--t2);
+	.stat span {
 		font-size: 12px;
-		display: flex;
-		align-items: center;
-		gap: 6px;
+		color: var(--t2);
 	}
-	.stats b {
-		font-size: 14px;
+	.stat b {
 		font-weight: 600;
+		font-size: 14px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
-	.stats .ok::before {
-		content: '';
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background: var(--green);
+	.stat.ok b {
+		color: var(--green);
 	}
 	.canary {
-		margin-bottom: 14px;
+		margin-bottom: 12px;
 	}
-	.tip-wrap {
-		position: relative;
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
+	.lbl small + small {
+		margin-top: 2px;
 	}
-	.tip {
-		display: inline-grid;
-		place-items: center;
-		width: 16px;
-		height: 16px;
-		padding: 0;
-		border: 1px solid var(--border);
-		border-radius: 50%;
-		background: none;
-		color: var(--t2);
-		font: 600 10.5px/1 inherit;
-		cursor: help;
-		margin-left: 6px;
+	.can {
+		padding-top: 9px;
+		padding-bottom: 9px;
 	}
-	.tip:hover,
-	.tip:focus-visible {
-		color: var(--text);
-		outline: none;
-		border-color: var(--t2);
-	}
-	.tip-text {
-		position: absolute;
-		top: calc(100% + 6px);
-		left: 0;
-		z-index: 5;
-		width: max-content;
-		max-width: min(300px, 70vw);
-		padding: 8px 10px;
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		background: var(--surface-3);
-		color: var(--text);
-		font-size: 12px;
-		font-weight: 400;
-		line-height: 1.45;
-		visibility: hidden;
-		opacity: 0;
-		transition: opacity 0.12s;
-	}
-	.tip-wrap:hover .tip-text,
-	.tip:focus-visible + .tip-text {
-		visibility: visible;
-		opacity: 1;
+	.can b.ch {
+		font-family: var(--mono);
+		font-size: 12.5px;
 	}
 	.filters {
-		padding: 10px 16px;
-	}
-	.chips {
-		display: flex;
-		gap: 6px;
 		flex-wrap: wrap;
+		gap: 8px 14px;
 	}
-	.chip {
-		font: inherit;
-		font-size: 12.5px;
-		font-weight: 500;
-		padding: 3px 10px;
-		border-radius: 12px;
-		border: 1px solid var(--border);
-		background: none;
-		color: var(--t2);
-		cursor: pointer;
-	}
-	.chip:hover {
-		color: var(--text);
-	}
-	.chip.on {
-		color: var(--text);
-		background: var(--surface-3);
-		border-color: var(--surface-3);
-	}
-	.chip:focus-visible,
-	.log-foot a:focus-visible {
-		outline: 2px solid var(--accent);
-		outline-offset: 2px;
-	}
-	.chip .n {
+	.seg .n {
+		margin-left: 6px;
 		color: var(--t3);
-		margin-left: 4px;
-		font-family: var(--mono);
 		font-size: 12px;
+		font-variant-numeric: tabular-nums;
 	}
+	.seg button[aria-pressed='true'] .n {
+		color: var(--t2);
+	}
+	/* Activity rows: time, kind chip, then who and what. */
 	.log {
 		list-style: none;
 		margin: 0;
-		padding: 6px 0;
+		padding: 0;
 		border-top: 1px solid var(--border-soft);
-		font: 12.5px/1.5 var(--mono);
 	}
-	.log li {
-		display: grid;
-		grid-template-columns: 56px 8px 104px minmax(0, 1fr);
-		gap: 10px;
+	.ev {
+		display: flex;
 		align-items: baseline;
-		padding: 6px 16px;
+		gap: 10px;
+		padding: 8px 16px;
+		min-width: 0;
 	}
-	.log li + li {
+	.ev + .ev {
 		border-top: 1px solid var(--border-soft);
 	}
-	.log li:hover {
-		background: var(--surface-2);
-	}
-	.log time {
+	.ev time {
+		font: 12px var(--mono);
 		color: var(--t3);
-		white-space: nowrap;
+		flex: none;
+		min-width: 40px;
 	}
-	.lv {
-		width: 7px;
-		height: 7px;
-		border-radius: 50%;
-		/* Centre on the first line, so a wrapped message keeps its dot at the top. */
-		align-self: start;
-		margin-top: calc(0.75em - 3.5px);
-	}
-	.lv.info {
-		background: var(--t3);
-	}
-	.lv.ok {
-		background: var(--green);
-	}
-	.lv.warn {
-		background: var(--amber);
-	}
-	.lv.err {
-		background: var(--red);
-	}
-	.acc {
-		color: var(--t2);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.msg {
-		color: var(--text);
-		overflow-wrap: anywhere;
-	}
-	.kind {
-		margin-right: 6px;
+	/* Kind reads as coloured text, no pill; .log .ev .chip.plain outranks the page's .settings .chip.warn pill. */
+	.log .ev .chip.plain {
+		flex: none;
+		min-width: 74px;
+		padding: 0;
+		border: 0;
+		border-radius: 0;
+		background: none;
 		font-weight: 600;
 	}
-	.log li.ok .msg {
-		color: var(--green);
+	.log .ev .chip.plain::before {
+		display: none;
 	}
-	.log li.warn .msg {
-		color: var(--amber);
+	/* Readable violet text on the accent tint; .ev lifts it over the page's base .chip rule. */
+	.ev .chip.violet {
+		color: #bc8cff;
 	}
-	.log li.err .msg {
-		color: var(--red);
+	:global(:root[data-theme='light']) .ev .chip.violet {
+		color: #6236b8;
+	}
+	.ev .chip.off {
+		color: var(--t2);
+	}
+	.msg {
+		font-size: 13px;
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+	.who {
+		font-weight: 500;
+		margin-right: 2px;
+	}
+	.sys {
+		color: var(--t3);
+		font-weight: 400;
 	}
 	.empty {
 		margin: 0;
@@ -540,6 +485,7 @@
 		display: block;
 		width: 100%;
 		padding: 8px 16px;
+		font: inherit;
 		font-size: 12px;
 		color: var(--t2);
 		text-align: left;
@@ -551,6 +497,11 @@
 	.more:hover {
 		color: var(--text);
 		background: var(--surface-2);
+	}
+	.more:focus-visible,
+	.log-foot a:focus-visible {
+		outline: 2px solid var(--hue);
+		outline-offset: -2px;
 	}
 	.log-foot {
 		display: flex;
@@ -570,23 +521,18 @@
 	}
 	@media (max-width: 720px) {
 		.stats {
-			grid-template-columns: 1fr;
+			grid-template-columns: 1fr 1fr;
 		}
-		.stats > div + div {
-			border-left: 0;
-			border-top: 1px solid var(--border-soft);
+		.stat:first-child {
+			grid-column: 1 / -1;
 		}
-		.log li {
-			grid-template-columns: 52px 8px minmax(0, 1fr);
-			gap: 8px;
-			padding: 6px 14px;
-		}
-		.acc {
-			grid-column: 3;
+		.ev {
+			flex-wrap: wrap;
+			row-gap: 4px;
+			padding: 8px 14px;
 		}
 		.msg {
-			grid-column: 3;
-			margin-top: -2px;
+			flex-basis: 100%;
 		}
 	}
 </style>

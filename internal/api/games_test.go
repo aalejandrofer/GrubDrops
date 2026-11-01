@@ -26,10 +26,22 @@ import (
 	"github.com/aalejandrofer/grubdrops/internal/store/gen"
 )
 
+// gamesFakePool counts RescanAll in rescans and SettingsChangedAll in live,
+// and records each RescanPlatform platform in plats.
 type gamesFakePool struct {
 	snaps   []runner.Snapshot
 	rescans *int
+	live    *int
+	plats   *[]string
 }
+
+func (p gamesFakePool) SettingsChangedAll() {
+	if p.live != nil {
+		*p.live++
+	}
+}
+func (gamesFakePool) MarkCollected(string, string)   {}
+func (gamesFakePool) MarkUncollected(string, string) {}
 
 func (p gamesFakePool) Snapshots() []runner.Snapshot { return p.snaps }
 func (gamesFakePool) SetOrder(string, []string)      {}
@@ -37,6 +49,11 @@ func (gamesFakePool) ResetOrder(string)              {}
 func (p gamesFakePool) RescanAll() {
 	if p.rescans != nil {
 		*p.rescans++
+	}
+}
+func (p gamesFakePool) RescanPlatform(plat, _ string) {
+	if p.plats != nil {
+		*p.plats = append(*p.plats, plat)
 	}
 }
 func (gamesFakePool) OrderFunc(string) func() []string { return nil }
@@ -52,6 +69,7 @@ type gamesEnv struct {
 	q       *gen.Queries
 	changed int
 	rescans int
+	plats   []string
 	csrf    string
 }
 
@@ -72,7 +90,7 @@ func newGamesEnv(t *testing.T, snaps ...runner.Snapshot) *gamesEnv {
 	s := newServer(Deps{
 		DB: db, Q: q, Session: sm, Version: "test", Hub: NewHub(),
 		SPA:    fstest.MapFS{"index.html": {Data: []byte("x")}},
-		Chosen: ge.chosen, Board: ge.board, Pool: gamesFakePool{snaps, &ge.rescans},
+		Chosen: ge.chosen, Board: ge.board, Pool: gamesFakePool{snaps: snaps, rescans: &ge.rescans, plats: &ge.plats},
 		GamesChanged: func() { ge.changed++ },
 		GamesSettle:  10 * time.Second,
 	})
@@ -390,4 +408,119 @@ func TestGames_NextScanAt(t *testing.T) {
 	require.NoError(t, json.Unmarshal(b, &got))
 	require.NotNil(t, got.NextScanAt)
 	assert.Equal(t, "2026-10-25T10:02:00Z", *got.NextScanAt)
+}
+
+// pausedEnv seeds a Twitch and a Kick account that share a name, the Twitch
+// one paused, and the games PUBG and Rust.
+func pausedEnv(t *testing.T, snaps ...runner.Snapshot) (*gamesEnv, platform.Campaign) {
+	t.Helper()
+	g := newGamesEnv(t, snaps...)
+	ctx := context.Background()
+	for _, a := range []gen.CreateAccountParams{
+		{ID: "tw", Platform: "twitch", DisplayName: "TTik3r", Status: "active", FingerprintJson: "{}", Enabled: 0},
+		{ID: "kk", Platform: "kick", DisplayName: "TTik3r", Status: "active", FingerprintJson: "{}", Enabled: 1},
+	} {
+		_, err := g.q.CreateAccount(ctx, a)
+		require.NoError(t, err)
+	}
+	require.NoError(t, g.chosen.Set(ctx, g.seed("PUBG: BATTLEGROUNDS", "Rust")))
+	pubg := platform.Campaign{
+		ID: "p1", Platform: "twitch", Game: "PUBG: BATTLEGROUNDS", Name: "PUBG Drops", Status: "active",
+		EndsAt: time.Now().Add(24 * time.Hour), Benefits: []platform.DropBenefit{{ID: "pb1", Name: "Crate", RequiredMinutes: 60}},
+	}
+	return g, pubg
+}
+
+func (g *gamesEnv) dropState(account, game, state string, ends time.Time) {
+	g.t.Helper()
+	require.NoError(g.t, (&store.DropStates{Q: g.q}).Upsert(context.Background(), store.DropState{
+		AccountID: account, Platform: "twitch", Game: game, CampaignID: "p1-" + state, CampaignName: "PUBG Drops",
+		BenefitID: "pb-" + state, BenefitName: "Crate", State: state, Minutes: 41, RequiredMinutes: 60,
+		EndsAt: ends, UpdatedAt: time.Now(),
+	}))
+}
+
+func (g *gamesEnv) games() gamesJSON {
+	g.t.Helper()
+	resp, b := g.do("GET", "/api/games", "", nil)
+	require.Equal(g.t, 200, resp.StatusCode)
+	var got gamesJSON
+	require.NoError(g.t, json.Unmarshal(b, &got))
+	return got
+}
+
+// After a restart a paused account has no scan, only its stored drop states:
+// a game only it holds reads paused and names it.
+func TestGames_PausedHolderFromStoredDropStates(t *testing.T) {
+	g, _ := pausedEnv(t)
+	g.dropState("tw", "PUBG: BATTLEGROUNDS", collect.StateAccruing, time.Now().Add(time.Hour))
+
+	got := g.games()
+	require.Len(t, got.Games, 2)
+	assert.Equal(t, "paused", got.Games[0].State)
+	assert.Equal(t, []pausedHolderJSON{{AccountID: "tw", AccountName: "TTik3r", Platform: "twitch"}}, got.Games[0].PausedHolders)
+	assert.Equal(t, "no_campaign", got.Games[1].State)
+	assert.Equal(t, []pausedHolderJSON{}, got.Games[1].PausedHolders)
+}
+
+// Ended, blocked and claimed drops are not held, and an enabled account's
+// stored rows never make a holder.
+func TestGames_PausedHolderSkipsDoneRows(t *testing.T) {
+	g, _ := pausedEnv(t)
+	g.dropState("tw", "PUBG: BATTLEGROUNDS", collect.StateBlocked, time.Now().Add(time.Hour))
+	g.dropState("tw", "PUBG: BATTLEGROUNDS", collect.StateClaimed, time.Now().Add(time.Hour))
+	g.dropState("tw", "PUBG: BATTLEGROUNDS", collect.StateEligible, time.Now().Add(-time.Hour))
+	g.dropState("kk", "Rust", collect.StateEligible, time.Now().Add(time.Hour))
+
+	got := g.games()
+	assert.Equal(t, "no_campaign", got.Games[0].State)
+	assert.Empty(t, got.Games[0].PausedHolders)
+	assert.Equal(t, "no_campaign", got.Games[1].State)
+	assert.Empty(t, got.Games[1].PausedHolders)
+}
+
+// An account paused mid-run keeps its last scan on the board. That queue no
+// longer makes the game waiting: it reads paused.
+func TestGames_PausedScanIsNotWaiting(t *testing.T) {
+	g, pubg := pausedEnv(t)
+	g.board.Observe(runner.Scan{AccountID: "tw", Platform: "twitch", At: time.Now(),
+		Campaigns: []platform.Campaign{pubg},
+		Result:    plan.Result{Queue: []plan.Target{{Campaign: pubg, Benefit: pubg.Benefits[0]}}},
+	})
+
+	got := g.games()
+	assert.Equal(t, "paused", got.Games[0].State)
+	assert.Equal(t, []pausedHolderJSON{{AccountID: "tw", AccountName: "TTik3r", Platform: "twitch"}}, got.Games[0].PausedHolders)
+}
+
+// An enabled account with the game queued wins: the game waits. The paused
+// holder is still listed.
+func TestGames_EnabledQueueBeatsPaused(t *testing.T) {
+	g, pubg := pausedEnv(t)
+	g.dropState("tw", "PUBG: BATTLEGROUNDS", collect.StateAccruing, time.Now().Add(time.Hour))
+	kick := pubg
+	kick.ID, kick.Platform = "pk", "kick"
+	g.board.Observe(runner.Scan{AccountID: "kk", Platform: "kick", At: time.Now(),
+		Campaigns: []platform.Campaign{kick},
+		Result:    plan.Result{Queue: []plan.Target{{Campaign: kick, Benefit: kick.Benefits[0]}}},
+	})
+
+	got := g.games()
+	assert.Equal(t, "waiting", got.Games[0].State)
+	assert.Len(t, got.Games[0].PausedHolders, 1)
+}
+
+// A game an enabled account mines reads mining whatever paused accounts hold.
+func TestGames_MiningBeatsPaused(t *testing.T) {
+	snap := runner.Snapshot{AccountID: "kk", Current: &plan.Target{Campaign: platform.Campaign{Game: "PUBG: BATTLEGROUNDS"}}}
+	g, _ := pausedEnv(t, snap)
+	g.dropState("tw", "PUBG: BATTLEGROUNDS", collect.StateAccruing, time.Now().Add(time.Hour))
+	assert.Equal(t, "mining", g.games().Games[0].State)
+}
+
+// A drop with no end time is still held.
+func TestGames_PausedHolderNoEnd(t *testing.T) {
+	g, _ := pausedEnv(t)
+	g.dropState("tw", "pubg-battlegrounds", collect.StateEligible, time.Time{})
+	assert.Equal(t, "paused", g.games().Games[0].State)
 }

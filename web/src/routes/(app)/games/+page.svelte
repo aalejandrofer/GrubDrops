@@ -1,14 +1,17 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
 	import { api } from '$lib/app';
 	import type { Game, SearchHit } from '$lib/api/types';
 	import BoxArt from '$lib/components/BoxArt.svelte';
+	import CountdownToast from '$lib/components/CountdownToast.svelte';
+	import Hint, { type HintExample } from '$lib/components/Hint.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import LinkRecheck from '$lib/components/LinkRecheck.svelte';
 	import PageHead from '$lib/components/PageHead.svelte';
 	import PlatformMark from '$lib/components/PlatformMark.svelte';
 	import { relTime } from '$lib/format';
 	import { byEndingSoonest, campaignLine, commitGames, dupePriority, linkErrorKey, linkHref, matchParts, moveGame, moveTarget, restartCountdown, suggestions, withoutId } from '$lib/games';
+	import { slugRange } from '$lib/hint';
 	import { t, tn } from '$lib/i18n/index.svelte';
 	import { getLive } from '$lib/live-context';
 	import { applyPrefs, prefs } from '$lib/prefs.svelte';
@@ -16,7 +19,6 @@
 	import { scanStamp } from '$lib/scan';
 	import { reorder } from '$lib/drag';
 	import AccountLists from './AccountLists.svelte';
-	import ForceWatch from './ForceWatch.svelte';
 	import CampaignDrawer, { type CampaignTarget } from '$lib/components/CampaignDrawer.svelte';
 
 	const live = getLive();
@@ -30,6 +32,7 @@
 	});
 
 	let q = $state('');
+	let qInput = $state<HTMLInputElement>();
 	let hits = $state<SearchHit[]>([]);
 	let searchFailed = $state(false);
 	let failed = $state(false);
@@ -144,6 +147,20 @@
 		}
 	}
 
+	const addExamples: HintExample[] = [
+		{ platform: 'twitch', label: 'twitch.tv/directory/category/rust', value: 'https://www.twitch.tv/directory/category/rust' },
+		{ platform: 'kick', label: 'kick.com/category/rust', value: 'https://kick.com/category/rust' }
+	];
+
+	/** Fills the search with the link and selects the game slug, so typing a game replaces it. */
+	async function pickExample(link: string): Promise<void> {
+		q = link;
+		onInput();
+		await tick();
+		qInput?.focus();
+		qInput?.setSelectionRange(...slugRange(link));
+	}
+
 	async function add(name: string): Promise<void> {
 		busy = name;
 		failed = false;
@@ -237,9 +254,11 @@
 			? t('home.state_mining')
 			: g.state === 'waiting'
 				? t('home.state_waiting')
-				: g.state === 'done'
-					? t('home.state_done')
-					: t('home.state_none');
+				: g.state === 'paused'
+					? t('home.state_paused')
+					: g.state === 'done'
+						? t('home.state_done')
+						: t('home.state_none');
 	}
 
 	onDestroy(() => {
@@ -279,8 +298,12 @@
 			</aside>
 			{#if live.accounts.length > 0}
 				<AccountLists />
-				<ForceWatch />
 			{/if}
+			<p class="fwlink">
+				{#each t('games.force_moved', { link: '{link}' }).split(/(\{link\})/) as part, i (i)}{#if part === '{link}'}<a
+							href="/points">{t('nav.points')}</a
+						>{:else}{part}{/if}{/each}
+			</p>
 		</div>
 		<div class="main">
 			<section class="add" aria-label={t('games.add_label')}>
@@ -289,6 +312,7 @@
 					<input
 						type="search"
 						bind:value={q}
+						bind:this={qInput}
 						oninput={onInput}
 						placeholder={t('games.add_ph')}
 						aria-label={t('games.add_label')}
@@ -323,20 +347,16 @@
 						{/each}
 					</ul>
 				{:else}
-					<p class="eg">{t('games.add_example', { url: 'https://www.twitch.tv/directory/category/rust' })}</p>
+					<Hint examples={addExamples} onpick={pickExample} />
 				{/if}
 				{#if dupe !== null}<p class="note" role="status">{t('games.already', { n: dupe })}</p>{/if}
 				{#if linkErr}<p class="err" role="alert">{t(linkErr)}</p>{/if}
 				{#if searchFailed}<p class="err" role="alert">{t('home.search_failed')}</p>{/if}
-				<details class="help">
-					<summary>{t('games.help_names_q')}</summary>
-					<p>{t('games.help_names')}</p>
-				</details>
 			</section>
 
 			{#if failed}<p class="err" role="alert">{t('games.save_failed')}</p>{/if}
 			{#if restartLeft !== null}
-				<p class="toast" role="status">{restartLeft > 0 ? t('games.toast_restart_in', { n: restartLeft }) : t('games.toast_restarting')}</p>
+				<CountdownToast text={restartLeft > 0 ? t('games.toast_restart_in', { n: restartLeft }) : t('games.toast_restarting')} />
 			{/if}
 
 			{#if live.games && games.length === 0}
@@ -547,10 +567,9 @@
 	.search input::placeholder {
 		color: var(--t3);
 	}
-	.eg {
-		margin: 6px 2px 0;
-		font-size: 11.5px;
-		color: var(--t3);
+	.search input::selection {
+		background: color-mix(in srgb, var(--accent) 35%, transparent);
+		color: var(--text);
 	}
 	.sugg {
 		margin: 6px 0 0;
@@ -621,28 +640,6 @@
 		border-color: transparent;
 		cursor: default;
 	}
-	.help {
-		margin: 6px 2px 0;
-		font-size: 12px;
-		color: var(--t3);
-	}
-	.help summary {
-		cursor: pointer;
-		width: fit-content;
-	}
-	.help summary:hover {
-		color: var(--t2);
-	}
-	.help summary:focus-visible {
-		outline: 2px solid var(--accent);
-		outline-offset: 2px;
-	}
-	.help p {
-		margin: 4px 0 0;
-		max-width: 60ch;
-		line-height: 1.45;
-		color: var(--t2);
-	}
 	.note {
 		margin: 8px 2px 0;
 		font-size: 12.5px;
@@ -685,6 +682,15 @@
 	}
 	.rail .err {
 		margin: 0 8px 6px;
+	}
+	.fwlink {
+		margin: 0;
+		padding: 0 8px;
+		font-size: 12px;
+		color: var(--t3);
+	}
+	.fwlink a {
+		color: var(--accent);
 	}
 	.seg button:disabled {
 		cursor: default;
@@ -873,8 +879,12 @@
 		background: var(--green-soft);
 	}
 	.state.waiting {
-		color: #b48cf8;
+		color: var(--chip-wait);
 		background: var(--accent-soft);
+	}
+	.state.paused {
+		color: var(--amber);
+		background: var(--amber-soft);
 	}
 	.state.no_campaign {
 		color: var(--t2);
@@ -1036,22 +1046,5 @@
 			grid-row: 2;
 			margin-top: -4px;
 		}
-	}
-	.toast {
-		position: fixed;
-		left: 50%;
-		bottom: 24px;
-		transform: translateX(-50%);
-		z-index: 50;
-		margin: 0;
-		padding: 10px 16px;
-		max-width: calc(100vw - 32px);
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		background: var(--surface-2);
-		color: var(--text);
-		font-size: 13px;
-		font-variant-numeric: tabular-nums;
-		box-shadow: 0 6px 24px rgb(0 0 0 / 0.25);
 	}
 </style>

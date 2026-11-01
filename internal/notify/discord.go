@@ -24,6 +24,11 @@ type DiscordWebhook struct {
 	// omitted from the payload (Discord then uses the webhook's own name).
 	Username  string
 	AvatarURL string
+
+	// MentionUserID is a Discord user ID pinged on alert events. A mention
+	// inside an embed never pings, so it goes in content with
+	// allowed_mentions. Empty means no mention.
+	MentionUserID string
 }
 
 func NewDiscordWebhook(url string, filter *VerbosityFilter) *DiscordWebhook {
@@ -62,6 +67,10 @@ func (d *DiscordWebhook) Notify(ctx context.Context, event Event, fields map[str
 	}
 	if d.AvatarURL != "" {
 		payload["avatar_url"] = d.AvatarURL
+	}
+	if IsAlert(event) && ValidUserID(d.MentionUserID) {
+		payload["content"] = "<@" + d.MentionUserID + ">"
+		payload["allowed_mentions"] = map[string]any{"users": []string{d.MentionUserID}}
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -114,6 +123,10 @@ func buildEmbed(event Event, fields map[string]any) map[string]any {
 	embed := map[string]any{
 		"color":     colorFor(event, fields),
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	if event == EventRewardCode {
+		return rewardCodeEmbed(embed, str)
 	}
 
 	game := str("game")
@@ -198,6 +211,55 @@ func buildEmbed(event Event, fields map[string]any) map[string]any {
 	return embed
 }
 
+// rewardCodeEmbed fills embed for a reward code: the reward as title,
+// linked to the redeem page, then account, code, redeem link and expiry.
+func rewardCodeEmbed(embed map[string]any, str func(string) string) map[string]any {
+	title := str("title")
+	if title == "" {
+		title = titleFor(EventRewardCode)
+	}
+	embed["author"] = map[string]any{"name": title}
+	embed["title"] = str("reward")
+	if embed["title"] == "" {
+		embed["title"] = title
+	}
+	url := str("redeem_url")
+	if validLinkURL(url) {
+		embed["url"] = url
+	} else {
+		url = ""
+	}
+	var ef []map[string]any
+	add := func(name, val string, inline bool) {
+		if val != "" {
+			ef = append(ef, map[string]any{"name": name, "value": val, "inline": inline})
+		}
+	}
+	add("Account", str("account_label"), true)
+	add("Game", str("reward_game"), true)
+	if code := str("code"); code != "" {
+		add("Code", "`"+strings.ReplaceAll(code, "`", "")+"`", false)
+	}
+	if url != "" {
+		add("Redeem", "[Open]("+url+")", true)
+	}
+	add("Expires", str("expires"), true)
+	if len(ef) > 0 {
+		embed["fields"] = ef
+	}
+	embed["footer"] = map[string]any{"text": "GrubDrops"}
+	return embed
+}
+
+// validLinkURL reports whether s is an absolute http or https URL with no
+// characters that would break a Markdown link.
+func validLinkURL(s string) bool {
+	if s == "" || strings.ContainsAny(s, " ()[]<>`\n") {
+		return false
+	}
+	return strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "http://")
+}
+
 // progressBar renders cur/req as a fixed 10-segment unicode bar. Returns
 // "" when req<=0 (nothing to chart). Over-full clamps to all-filled.
 func progressBar(cur, req int) string {
@@ -255,6 +317,8 @@ func titleFor(event Event) string {
 		return "Heartbeat health check failed"
 	case EventSummary:
 		return "Daily summary"
+	case EventRewardCode:
+		return "Reward code"
 	default:
 		return event
 	}
@@ -268,6 +332,9 @@ func colorFor(event Event, fields map[string]any) int {
 		return 0x23A55A
 	case EventError, EventCanary:
 		return 0xE74C3C
+	}
+	if event == EventRewardCode {
+		return 0x9146FF
 	}
 	if plat, _ := fields["platform"].(string); plat != "" {
 		switch plat {

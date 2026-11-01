@@ -113,7 +113,8 @@ Durations use Go syntax: `90s`, `30m`, `6h`.
 
 ### Single sign-on (OIDC)
 
-SSO turns on when the first four variables are set. Password login still works.
+SSO turns on when the first four variables are set. Password login still works
+unless you turn it off (see [SSO only](#sso-only)).
 
 | Var | Required | Purpose |
 |-----|----------|---------|
@@ -127,6 +128,40 @@ SSO turns on when the first four variables are set. Password login still works.
 
 > [!WARNING]
 > With no allowlist, anyone your identity provider signs in becomes an admin.
+
+#### SSO only
+
+The admin password still works next to SSO. To make SSO the only way in, turn
+off **Password sign-in** under Settings, Authentication. The switch shows only
+while SSO is configured. Settings, Authentication, Set up walks you through the
+setup. Password sign-in comes back on its own whenever SSO is not configured,
+including when the identity provider can't be reached at startup.
+
+If SSO is configured but you can't sign in with it, turn password sign-in back
+on from the Docker host. Either way works.
+
+Delete the setting's row in `miner.db` (key `settings:password_login_disabled`):
+
+```bash
+docker compose stop miner
+sudo sqlite3 data/miner.db "DELETE FROM kv WHERE key = 'settings:password_login_disabled';"
+docker compose start miner
+```
+
+Or start the miner with `GRUB_AUTH_BYPASS_LOCAL=1` and call the settings API
+from the host. Use the published port, not a reverse proxy: requests that
+carry `X-Forwarded-For` are not let through. The API needs the CSRF cookie and
+the matching `X-CSRF-Token` header:
+
+```bash
+TOKEN=$(curl -s -c grub.cookies http://localhost:8080/api/session \
+  | sed -n 's/.*"csrf_token":"\([^"]*\)".*/\1/p')
+curl -s -b grub.cookies -X PUT http://localhost:8080/api/settings \
+  -H "X-CSRF-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"password_login_disabled":false}'
+```
+
+Remove `GRUB_AUTH_BYPASS_LOCAL` again afterwards.
 
 ## How it works
 

@@ -345,6 +345,76 @@ func (p *Pool) RescanAll() {
 	}
 }
 
+// RescanPlatform asks every unit on platform plat that can scan, except
+// account except, to rebuild its plan now: an idle runner re-picks at once,
+// a watch rescans on its next poll.
+func (p *Pool) RescanPlatform(plat, except string) {
+	p.mu.Lock()
+	units := slices.Clone(p.units)
+	p.mu.Unlock()
+	for _, u := range units {
+		e := u.current()
+		if e.ID == except {
+			continue
+		}
+		r, ok := e.Unit.(interface{ Rescan() })
+		if ok && e.Unit.Snapshot().Platform == plat {
+			r.Rescan()
+		}
+	}
+}
+
+// unitOf returns the account's current unit, or nil.
+func (p *Pool) unitOf(accountID string) Unit {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, u := range p.units {
+		if u.entry.ID == accountID {
+			return u.entry.Unit
+		}
+	}
+	return nil
+}
+
+// SettingsChanged tells the account's runner that a setting it reads live
+// changed (skip sleep, points mode). A unit that is not a Runner ignores it:
+// its next build reads the row.
+func (p *Pool) SettingsChanged(accountID string) {
+	if r, ok := p.unitOf(accountID).(interface{ SettingsChanged() }); ok {
+		r.SettingsChanged()
+	}
+}
+
+// SettingsChangedAll tells every runner that an engine setting it reads
+// live changed (sleep window, timezone).
+func (p *Pool) SettingsChangedAll() {
+	p.mu.Lock()
+	units := slices.Clone(p.units)
+	p.mu.Unlock()
+	for _, u := range units {
+		if r, ok := u.current().Unit.(interface{ SettingsChanged() }); ok {
+			r.SettingsChanged()
+		}
+	}
+}
+
+// MarkCollected tells the account's runner the user marked benefitID
+// collected. A unit that is not a Runner ignores it: its next build reads
+// the claim log.
+func (p *Pool) MarkCollected(accountID, benefitID string) {
+	if r, ok := p.unitOf(accountID).(interface{ Collected(string) }); ok {
+		r.Collected(benefitID)
+	}
+}
+
+// MarkUncollected tells the account's runner the user marked benefitID
+// uncollected. A unit that is not a Runner ignores it.
+func (p *Pool) MarkUncollected(accountID, benefitID string) {
+	if r, ok := p.unitOf(accountID).(interface{ Uncollected(string) }); ok {
+		r.Uncollected(benefitID)
+	}
+}
+
 // ForceListChanged passes a force-list edit to the account's unit. It
 // reports false when the unit cannot take one.
 func (p *Pool) ForceListChanged(accountID string) bool {
@@ -399,7 +469,8 @@ type switcher interface {
 // comes back if the runner refuses. It returns the chosen benefit ID.
 //
 // The server picks the target: a client's Up next copy can be a scan behind,
-// and its first item may no longer be queued.
+// and its first item may no longer be queued. Inside the account's sleep
+// window it returns ErrSleepWindow.
 func (p *Pool) MineNow(accountID string) (string, error) {
 	p.mu.Lock()
 	var unit Unit
@@ -413,6 +484,9 @@ func (p *Pool) MineNow(accountID string) (string, error) {
 	sw, ok := unit.(switcher)
 	if !ok {
 		return "", ErrNotRunning
+	}
+	if sl, ok := unit.(interface{ InSleepWindow() bool }); ok && sl.InSleepWindow() {
+		return "", ErrSleepWindow
 	}
 	snap := sw.Snapshot()
 	if len(snap.UpNext) == 0 {

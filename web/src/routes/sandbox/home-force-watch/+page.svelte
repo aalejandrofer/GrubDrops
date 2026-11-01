@@ -7,6 +7,9 @@
 	<p><a href="/sandbox/">Sandbox</a> / home-force-watch</p>
 	<h1>Force watch on Home, three placements</h1>
 	<p class="sub">
+		Round 2, 2026-11-01: channel points on the Points watch tile, <a href="/sandbox/home-force-watch/points">points</a> (A, B, C). Round 1 below.
+	</p>
+	<p class="sub">
 		Static slice of Home. Switch the scene inside each mockup. Full page per variant: {#each variants as v, i (v.id)}{i ? ', ' : ''}<a
 				href={`/sandbox/home-force-watch/${v.id}`}>{v.id}</a
 			>{/each}.

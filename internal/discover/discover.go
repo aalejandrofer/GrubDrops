@@ -6,6 +6,7 @@ package discover
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -105,6 +106,17 @@ func (s *Service) NextRefresh() time.Time {
 	return s.snap.FetchedAt.Add(s.MinRefresh)
 }
 
+// Campaigns returns one platform's campaigns from the cached snapshot,
+// fetching as Get does when it is missing or stale. The slice is shared with
+// every other reader: callers copy before they change anything in it.
+func (s *Service) Campaigns(ctx context.Context, platformName string) ([]platform.Campaign, error) {
+	r, ok := s.Get(ctx, false).Results[platformName]
+	if !ok {
+		return nil, fmt.Errorf("discover: no %s source", platformName)
+	}
+	return r.Campaigns, r.Err
+}
+
 func failed(sn Snapshot) bool {
 	for _, r := range sn.Results {
 		if r.Err != nil {
@@ -192,7 +204,7 @@ func TwitchFetcher(list Accounts, get SessionFor, catalog Catalog) Fetcher {
 			return nil, err
 		}
 		for _, s := range ss {
-			if s.ClientID == twitch.ClientTV || s.AccessToken == "" {
+			if !androidSession(s) {
 				continue
 			}
 			camps, err := catalog(ctx, s)
@@ -203,6 +215,32 @@ func TwitchFetcher(list Accounts, get SessionFor, catalog Catalog) Fetcher {
 		}
 		return nil, ErrNeedsAndroid
 	}
+}
+
+// androidSession reports whether s can be tried for the drops dashboard:
+// a token that is not a TV-client one.
+func androidSession(s platform.Session) bool {
+	return s.ClientID != twitch.ClientTV && s.AccessToken != ""
+}
+
+// CanShareCatalog reports whether sharing the Android catalog with TV
+// logins can do anything: an enabled Twitch account has a session
+// TwitchFetcher would try, and another enabled one has a TV session.
+func CanShareCatalog(ctx context.Context, list Accounts, get SessionFor) bool {
+	ss, err := sessions(ctx, list, get, "twitch")
+	if err != nil {
+		return false
+	}
+	var android, tv bool
+	for _, s := range ss {
+		switch {
+		case androidSession(s):
+			android = true
+		case s.ClientID == twitch.ClientTV && s.AccessToken != "":
+			tv = true
+		}
+	}
+	return android && tv
 }
 
 // KickFetcher lists Kick campaigns with the first enabled Kick account's

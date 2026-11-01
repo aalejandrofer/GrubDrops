@@ -45,6 +45,11 @@ function endMs(c: DiscoverCampaign): number {
 	return Number.isFinite(at) ? at : Infinity;
 }
 
+function startMs(c: DiscoverCampaign): number {
+	const at = c.starts_at ? Date.parse(c.starts_at) : NaN;
+	return Number.isFinite(at) ? at : -Infinity;
+}
+
 /**
  * Campaigns grouped by game slug, games A to Z, campaigns soonest ending first.
  * Twitch box art wins: it is keyed by the Twitch game id.
@@ -107,6 +112,28 @@ export function filterGroups(groups: DiscoverGroup[], f: DiscoverFilter): Discov
 		out.push(camps === g.campaigns ? g : { ...g, campaigns: camps, platforms: [...new Set(camps.map((c) => c.platform))].sort() });
 	}
 	return out;
+}
+
+export type DiscoverSort = 'name' | 'newest' | 'ending';
+
+const byName = (a: DiscoverGroup, b: DiscoverGroup) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+
+/**
+ * Groups in the chosen order: A to Z, newest start first (campaigns too),
+ * or soonest ending first. Ties fall back to A to Z. Never mutates groups.
+ */
+export function sortGroups(groups: DiscoverGroup[], sort: DiscoverSort): DiscoverGroup[] {
+	if (sort === 'name') return [...groups].sort(byName);
+	if (sort === 'ending') {
+		const key = (g: DiscoverGroup) => Math.min(...g.campaigns.map(endMs));
+		return [...groups].sort((a, b) => key(a) - key(b) || byName(a, b));
+	}
+	const newest = groups.map((g) => ({
+		...g,
+		campaigns: [...g.campaigns].sort((a, b) => startMs(b) - startMs(a) || a.name.localeCompare(b.name))
+	}));
+	const key = (g: DiscoverGroup) => startMs(g.campaigns[0]);
+	return newest.sort((a, b) => key(b) - key(a) || byName(a, b));
 }
 
 /** Whole minutes until iso, floored at 0; null when there is no end. */

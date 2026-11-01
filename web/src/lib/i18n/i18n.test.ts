@@ -18,7 +18,7 @@ beforeEach(() => {
 });
 
 test('t interpolates {n}', () => {
-	expect(t('time.s_ago', { n: 41 })).toBe('41 s ago');
+	expect(t('time.s_ago', { n: 41 })).toBe('41s ago');
 });
 
 test('t falls back to en then key', () => {

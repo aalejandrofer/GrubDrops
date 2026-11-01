@@ -41,6 +41,8 @@ type settingsEnv struct {
 	updates int
 	zones   []string
 	rescans int
+	live    int
+	s       *server
 }
 
 func newSettingsEnv(t *testing.T) *settingsEnv {
@@ -50,10 +52,11 @@ func newSettingsEnv(t *testing.T) *settingsEnv {
 	t.Cleanup(func() { _ = db.Close() })
 	e := &settingsEnv{st: store.NewSettings(gen.New(db)), n: &fakeNotify{}}
 	s := &server{d: Deps{
-		Settings: e.st, Notifier: e.n, Pool: gamesFakePool{rescans: &e.rescans},
+		Settings: e.st, Notifier: e.n, Pool: gamesFakePool{rescans: &e.rescans, live: &e.live},
 		OnSettingsUpdate: func() { e.updates++ },
 		SetZone:          func(n string) { e.zones = append(e.zones, n) },
 	}}
+	e.s = s
 	r := chi.NewRouter()
 	s.routesSettings(r)
 	e.h = r
@@ -87,7 +90,7 @@ func TestSettings_GetMasksWebhook(t *testing.T) {
 	assert.Equal(t, "dark", got["theme"])
 	assert.Equal(t, true, got["update_auto"])
 	assert.Equal(t, "ordered", got["priority_mode"])
-	assert.Equal(t, map[string]any{"claim": true, "auth": false, "errors": true, "daily_summary": false, "progress": false, "canary": false}, got["notify"])
+	assert.Equal(t, map[string]any{"claim": true, "auth": false, "errors": true, "daily_summary": false, "progress": false, "canary": false, "reward_codes": true}, got["notify"])
 }
 
 func TestSettings_PutPartial(t *testing.T) {
@@ -150,6 +153,19 @@ func TestSettings_NotifyKeepsProgress(t *testing.T) {
 	assert.True(t, canary)
 	sum, _ := e.st.NotifyDailySummary(ctx)
 	assert.True(t, sum)
+}
+
+func TestSettings_RewardCodesToggle(t *testing.T) {
+	e := newSettingsEnv(t)
+	ctx := context.Background()
+	on, _ := e.st.NotifyRewardCodes(ctx)
+	assert.True(t, on, "on by default")
+	code, _ := e.do("PUT", "/settings", map[string]any{"notify": map[string]any{"reward_codes": false}})
+	require.Equal(t, 200, code)
+	on, _ = e.st.NotifyRewardCodes(ctx)
+	assert.False(t, on)
+	sum, _ := e.st.NotifyDailySummary(ctx)
+	assert.False(t, sum, "other toggles untouched")
 }
 
 func TestSettings_TimezoneCallsSetZone(t *testing.T) {
@@ -228,10 +244,15 @@ func TestSettings_ZoneEffective(t *testing.T) {
 	sh, err := time.LoadLocation("Asia/Shanghai")
 	require.NoError(t, err)
 	assert.Equal(t, "Asia/Shanghai", zone(build(func() *time.Location { return sh })))
-	local := time.Local
-	t.Cleanup(func() { time.Local = local })
-	time.Local = time.FixedZone("Local", 0)
-	assert.Equal(t, "UTC", zone(build(nil)))
+	// A zone named Local, as time.Local is with no TZ name, reads as UTC.
+	// Injected, not set on time.Local: other tests' goroutines read it.
+	assert.Equal(t, "UTC", zone(build(func() *time.Location { return time.FixedZone("Local", 0) })))
+	// No Zone falls back to time.Local.
+	want := time.Local.String()
+	if want == "Local" {
+		want = "UTC"
+	}
+	assert.Equal(t, want, zone(build(nil)))
 }
 
 func TestSettings_ScanAndPreempt(t *testing.T) {
@@ -381,4 +402,127 @@ func TestProxyTest(t *testing.T) {
 	code, b = e.do("POST", "/settings/proxy-test", map[string]any{})
 	assert.Equal(t, 502, code)
 	assert.Contains(t, string(b), "proxy_failed")
+}
+
+func TestSettings_MentionIDs(t *testing.T) {
+	e := newSettingsEnv(t)
+	ctx := context.Background()
+	code, b := e.do("PUT", "/settings", map[string]any{
+		"discord_mention_id":  " 123456789012345678 ",
+		"telegram_mention_id": "987654321",
+	})
+	require.Equal(t, 200, code)
+	var got settingsBody
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.Equal(t, "123456789012345678", got.DiscordMentionID)
+	assert.Equal(t, "987654321", got.TelegramMentionID)
+	assert.Equal(t, 1, e.updates, "a save rebuilds the notifier")
+
+	for _, bad := range []map[string]any{
+		{"discord_mention_id": "<@123>"},
+		{"discord_mention_id": "@everyone"},
+		{"discord_mention_id": "12a"},
+		{"discord_mention_id": "123456789012345678901"},
+		{"telegram_mention_id": "@grub_user"},
+		{"telegram_mention_id": "-100123"},
+		{"telegram_mention_id": `1"><b>`},
+	} {
+		code, _ = e.do("PUT", "/settings", bad)
+		assert.Equal(t, 400, code, bad)
+	}
+	d, _ := e.st.DiscordMentionID(ctx)
+	tg, _ := e.st.TelegramMentionID(ctx)
+	assert.Equal(t, "123456789012345678", d, "a rejected save keeps the old ID")
+	assert.Equal(t, "987654321", tg)
+
+	code, _ = e.do("PUT", "/settings", map[string]any{"discord_mention_id": "", "telegram_mention_id": ""})
+	require.Equal(t, 200, code)
+	d, _ = e.st.DiscordMentionID(ctx)
+	tg, _ = e.st.TelegramMentionID(ctx)
+	assert.Empty(t, d, "empty clears the mention")
+	assert.Empty(t, tg)
+}
+
+// Follow raids reads off by default, saves, and a change tells every
+// runner to apply it live; an unchanged value does not.
+func TestSettings_FollowRaids(t *testing.T) {
+	e := newSettingsEnv(t)
+	_, b := e.do("GET", "/settings", nil)
+	var got settingsBody
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.False(t, got.FollowRaids, "off by default")
+
+	code, b := e.do("PUT", "/settings", map[string]any{"follow_raids": true})
+	require.Equal(t, 200, code)
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.True(t, got.FollowRaids)
+	assert.Equal(t, 1, e.live, "a change applies to the running watches")
+	assert.Equal(t, 0, e.rescans, "no rescan")
+
+	code, _ = e.do("PUT", "/settings", map[string]any{"follow_raids": true})
+	require.Equal(t, 200, code)
+	assert.Equal(t, 1, e.live, "unchanged value")
+
+	code, b = e.do("PUT", "/settings", map[string]any{"follow_raids": false})
+	require.Equal(t, 200, code)
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.False(t, got.FollowRaids)
+	assert.Equal(t, 2, e.live)
+}
+
+// Sharing the Android catalog reads off by default, saves, and a change
+// rescans every runner so TV accounts list the shared campaigns now.
+func TestSettings_ExpShareCatalog(t *testing.T) {
+	e := newSettingsEnv(t)
+	_, b := e.do("GET", "/settings", nil)
+	var got settingsBody
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.False(t, got.ExpShareCatalog, "off by default")
+
+	code, b := e.do("PUT", "/settings", map[string]any{"exp_share_catalog": true})
+	require.Equal(t, 200, code)
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.True(t, got.ExpShareCatalog)
+	assert.Equal(t, 1, e.rescans, "a change rescans")
+	on, err := e.st.ExpShareCatalog(context.Background())
+	require.NoError(t, err)
+	assert.True(t, on)
+
+	code, _ = e.do("PUT", "/settings", map[string]any{"exp_share_catalog": true})
+	require.Equal(t, 200, code)
+	assert.Equal(t, 1, e.rescans, "unchanged value")
+
+	code, b = e.do("PUT", "/settings", map[string]any{"exp_share_catalog": false})
+	require.Equal(t, 200, code)
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.False(t, got.ExpShareCatalog)
+	assert.Equal(t, 2, e.rescans)
+}
+
+// share_catalog_available follows ShareCatalogReady, is false without it, and
+// the GET body sent back is accepted with the field ignored.
+func TestSettings_ShareCatalogAvailable(t *testing.T) {
+	e := newSettingsEnv(t)
+	_, b := e.do("GET", "/settings", nil)
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.Equal(t, false, got["share_catalog_available"], "no source wired")
+
+	android := false
+	e.s.d.ShareCatalogReady = func(context.Context) bool { return android }
+	_, b = e.do("GET", "/settings", nil)
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.Equal(t, false, got["share_catalog_available"])
+
+	android = true
+	_, b = e.do("GET", "/settings", nil)
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.Equal(t, true, got["share_catalog_available"])
+
+	code, _ := e.do("PUT", "/settings", map[string]any{"share_catalog_available": false, "exp_share_catalog": true})
+	require.Equal(t, 200, code, "read-only field is ignored")
+	_, b = e.do("GET", "/settings", nil)
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.Equal(t, true, got["share_catalog_available"])
+	assert.Equal(t, true, got["exp_share_catalog"])
 }

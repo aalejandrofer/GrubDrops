@@ -75,3 +75,9 @@ func TestHeartbeatUsesBoundClient(t *testing.T) {
 	// the (TV) client profile.
 	assert.Equal(t, "/chan", channelPagePath)
 }
+
+func TestSampledDiscovery_TVOnly(t *testing.T) {
+	var b Backend
+	assert.True(t, b.SampledDiscovery(platform.Session{ClientID: ClientTV}), "TV sessions walk sampled channels")
+	assert.False(t, b.SampledDiscovery(platform.Session{}), "Android sessions read the drops dashboard")
+}

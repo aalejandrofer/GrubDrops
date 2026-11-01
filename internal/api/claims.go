@@ -91,7 +91,8 @@ func pathParam(r *http.Request, key string) string {
 }
 
 // postClaim marks a planned drop collected by hand, so the runner stops
-// mining it. Only drops in the account's plan can be marked.
+// mining it: a watch on it ends and the runner picks again, any other watch
+// stays. Only drops in the account's plan can be marked.
 func (s *server) postClaim(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		AccountID string `json:"account_id"`
@@ -123,18 +124,19 @@ func (s *server) postClaim(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
 	}
-	s.accountChanged(a.ID)
+	s.d.Pool.MarkCollected(a.ID, t.Benefit.ID)
 	item := ClaimJSON(e, store.AccountName(a))
 	if s.d.Hub != nil {
 		s.d.Hub.Publish(Event{Name: EventClaim, Data: item})
+		s.d.Hub.Publish(Event{Name: EventAccounts, Data: struct{}{}})
 	}
 	writeJSON(w, http.StatusCreated, item)
 }
 
 // deleteClaim marks a drop uncollected: it forgets the claim and the
 // runner's skip, so the account may mine the drop again. A drop the platform
-// shows as claimed comes back on the next scan. The reload rebuilds the
-// runner, which reads its skips from the store again.
+// shows as claimed comes back on the next scan. The runner drops its skip
+// in memory and rescans; a watch stays.
 func (s *server) deleteClaim(w http.ResponseWriter, r *http.Request) {
 	acct, benefit := pathParam(r, "account"), pathParam(r, "benefit")
 	claimed, err := s.d.Claims.Delete(r.Context(), acct, benefit)
@@ -151,7 +153,9 @@ func (s *server) deleteClaim(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not_found")
 		return
 	}
-	s.accountChanged(acct)
+	if s.d.Pool != nil {
+		s.d.Pool.MarkUncollected(acct, benefit)
+	}
 	if s.d.Hub != nil {
 		// Refreshes the overview counts and the runners in every open tab.
 		s.d.Hub.Publish(Event{Name: EventAccounts, Data: struct{}{}})

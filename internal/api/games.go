@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -35,6 +36,13 @@ type needsLinkJSON struct {
 	URL         string `json:"url"`
 }
 
+// pausedHolderJSON is a paused account with a drop of the game left to mine.
+type pausedHolderJSON struct {
+	AccountID   string `json:"account_id"`
+	AccountName string `json:"account_name"`
+	Platform    string `json:"platform"`
+}
+
 type gameJSON struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -47,6 +55,9 @@ type gameJSON struct {
 	State      string             `json:"state"`
 	Campaigns  []gameCampaignJSON `json:"campaigns"`
 	NeedsLink  []needsLinkJSON    `json:"needs_link"`
+	// PausedHolders lists the paused accounts with a drop of the game left
+	// to mine, in account order.
+	PausedHolders []pausedHolderJSON `json:"paused_holders"`
 }
 
 type gamesJSON struct {
@@ -129,10 +140,12 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 	for _, a := range accts {
 		names[a.ID] = store.AccountName(a)
 	}
+	paused := pausedAccounts(accts)
+	holders := s.pausedHolders(r.Context(), games, statuses, accts, time.Now())
 	if s.d.Pool != nil {
 		snaps := s.d.Pool.Snapshots()
 		if acctsOK {
-			next = earliestNextScan(snaps, pausedAccounts(accts))
+			next = earliestNextScan(snaps, paused)
 		}
 		for _, snap := range snaps {
 			if snap.Current == nil {
@@ -150,6 +163,7 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 			ID: c.ID, Name: c.Name, Slug: c.Slug, TwitchName: c.TwitchName, Priority: i + 1,
 			BoxArtURL: boxArtURL(c.Name, c.TwitchGameID), State: "no_campaign",
 			Campaigns: []gameCampaignJSON{}, NeedsLink: []needsLinkJSON{},
+			PausedHolders: holders[i],
 		}
 		if i < len(statuses) {
 			if c.TwitchGameID == "" {
@@ -177,11 +191,17 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 				last = statuses[i].LastScanAt
 			}
 		}
+		// A paused account's last scan stays on the board, so only an
+		// enabled (or unknown) account's queue makes the game wait. A game
+		// only paused accounts hold reads paused: nothing mines it until one
+		// resumes.
 		switch {
 		case mining[i]:
 			g.State = "mining"
-		case i < len(statuses) && statuses[i].Queued:
+		case i < len(statuses) && queuedByActive(statuses[i].QueuedBy, paused):
 			g.State = "waiting"
+		case len(g.PausedHolders) > 0:
+			g.State = "paused"
 		case len(g.Campaigns) > 0:
 			// Every drop is claimed or skipped on every account.
 			g.State = "done"
@@ -191,6 +211,69 @@ func (s *server) gamesView(r *http.Request) (gamesJSON, error) {
 	out.LastScanAt = rfc3339(last)
 	out.NextScanAt = rfc3339(next)
 	return out, nil
+}
+
+// queuedByActive reports whether an account not in paused has a drop left.
+func queuedByActive(ids []string, paused map[string]bool) bool {
+	for _, id := range ids {
+		if !paused[id] {
+			return true
+		}
+	}
+	return false
+}
+
+// heldStates are the stored drop states with minutes left to mine or a
+// claim left to make.
+var heldStates = map[string]bool{
+	collect.StateEligible: true, collect.StateAccruing: true, collect.StateClaimable: true,
+}
+
+// pausedHolders lists, per game, the paused accounts with a drop of it left
+// to mine, in accts order. A paused account runs no scans, so it reads the
+// account's last board scan and, since that is gone after a restart, its
+// stored drop states. Drops past their end do not count. Every entry is
+// non-nil.
+func (s *server) pausedHolders(ctx context.Context, games []plan.Game, statuses []collect.GameStatus, accts []gen.Account, now time.Time) [][]pausedHolderJSON {
+	out := make([][]pausedHolderJSON, len(games))
+	for i := range out {
+		out[i] = []pausedHolderJSON{}
+	}
+	for _, a := range accts {
+		if a.Enabled != 0 {
+			continue
+		}
+		held := make([]bool, len(games))
+		for i, st := range statuses {
+			for _, id := range st.QueuedBy {
+				if id == a.ID {
+					held[i] = true
+				}
+			}
+		}
+		if s.d.Q != nil {
+			rows, err := s.d.Q.ListDropStatesForAccount(ctx, a.ID)
+			if err != nil {
+				slog.Warn("games: read paused drop states failed", "kind", "error", "account", a.ID, "err", err)
+			}
+			for _, r := range rows {
+				if !heldStates[r.State] || (r.EndsAt != 0 && r.EndsAt <= now.Unix()) {
+					continue
+				}
+				if i, ok := plan.Match(games, r.Game); ok {
+					held[i] = true
+				}
+			}
+		}
+		for i, h := range held {
+			if h {
+				out[i] = append(out[i], pausedHolderJSON{
+					AccountID: a.ID, AccountName: store.AccountName(a), Platform: a.Platform,
+				})
+			}
+		}
+	}
+	return out
 }
 
 func (s *server) handleGamesList(w http.ResponseWriter, r *http.Request) {

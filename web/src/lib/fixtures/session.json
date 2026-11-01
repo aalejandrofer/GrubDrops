@@ -5,6 +5,7 @@
 		"enabled": false,
 		"name": ""
 	},
+	"password_login": true,
 	"csrf_token": "fixture-csrf",
 	"version": "v2.0.0"
 }
